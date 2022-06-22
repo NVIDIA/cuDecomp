@@ -1,0 +1,16 @@
+---
+AllowShortIfStatementsOnASingleLine: true
+BasedOnStyle: LLVM
+ColumnLimit: 120
+CommentPragmas:  '^\\.+'
+DerivePointerAlignment: false
+Language: Cpp
+PointerAlignment: Left
+UseTab: Never
+AlignAfterOpenBracket: Align
+AlignTrailingComments: true
+AllowShortBlocksOnASingleLine: true
+AllowShortCaseLabelsOnASingleLine : true
+AllowShortIfStatementsOnASingleLine: true
+AllowShortLoopsOnASingleLine: true
+...

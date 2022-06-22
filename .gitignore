@@ -1,0 +1,12 @@
+*.o
+*.mod
+*.so
+benchmark/benchmark_*
+examples/cc/basic_usage/basic_usage
+examples/cc/basic_usage/basic_usage_autotune
+examples/cc/taylor_green/tg
+examples/fortran/basic_usage/basic_usage
+examples/fortran/basic_usage/basic_usage_autotune
+examples/fortran/poisson/poisson
+tests/cc/*_test_*
+tests/fortran/*_test_*

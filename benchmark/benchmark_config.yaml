@@ -1,0 +1,59 @@
+# Baseline configuration for testing
+# Runs all configurations and checks errors.
+benchmark_base_test: &benchmark_base_test
+  env_vars :
+    NVSHMEM_DISABLE_CUDA_VMM: 1
+    NVSHMEM_DISABLE_NCCL: 1
+
+  args : ['backend']
+
+  backend: [1, 2, 3, 4, 5, 6, 7]
+
+  out_of_place: [True, False]
+  managed_memory : [True, False]
+  axis_contiguous : [True, False]
+  run_autotuning : True
+  skip_correctness_testing : False
+
+# Baseline configuration for benchmarking.
+# Runs limited configuration set without error checking.
+benchmark_base: &benchmark_base
+  <<: *benchmark_base_test
+
+  out_of_place: [False]
+  managed_memory : [False]
+  axis_contiguous : [True, False]
+  run_autotuning : True
+  skip_correctness_testing : True
+
+benchmark_c2c_test:
+  <<: *benchmark_base_test
+  executable_prefix: './benchmark_c2c'
+
+benchmark_c2c_float_test:
+  <<: *benchmark_base_test
+  executable_prefix: './benchmark_c2c_f'
+
+benchmark_r2c_test:
+  <<: *benchmark_base_test
+  executable_prefix: './benchmark_r2c'
+
+benchmark_r2c_float_test:
+  <<: *benchmark_base_test
+  executable_prefix: './benchmark_r2c_f'
+
+benchmark_c2c:
+  <<: *benchmark_base
+  executable_prefix: './benchmark_c2c'
+
+benchmark_c2c_float:
+  <<: *benchmark_base
+  executable_prefix: './benchmark_c2c_f'
+
+benchmark_r2c:
+  <<: *benchmark_base
+  executable_prefix: './benchmark_r2c'
+
+benchmark_r2c_float:
+  <<: *benchmark_base
+  executable_prefix: './benchmark_r2c_f'
