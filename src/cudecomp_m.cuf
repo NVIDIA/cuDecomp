@@ -134,7 +134,7 @@ module cudecomp
 
     ! Transpose-specific options
     logical(c_bool) :: autotune_transpose_backend ! flag to enable transpose backend autotuning
-    logical(c_bool) :: transpose_use_inplace_buffers ! flag to control whether transpose autotuning uses in-place or out-of-place buffers 
+    logical(c_bool) :: transpose_use_inplace_buffers ! flag to control whether transpose autotuning uses in-place or out-of-place buffers
 
     ! Halo-specific options
     logical(c_bool) :: autotune_halo_backend ! flag to enable halo backend autotuning
@@ -753,11 +753,10 @@ contains
     logical(c_bool) :: periodic_c
 
     periodic_c = periodic
-    res = cudecompGetShiftedRankC(handle, grid_desc, axis, dim, displacement, periodic_c, shifted_rank)
+    res = cudecompGetShiftedRankC(handle, grid_desc, axis - 1, dim - 1, displacement, periodic_c, shifted_rank)
   end function cudecompGetShiftedRank
 
   ! Transpose functions
-
   function cudecompTransposeXToY(handle, grid_desc, &
        input, output, work, dtype, input_halo_extents_arg, output_halo_extents_arg, &
        stream_arg) result(res)
