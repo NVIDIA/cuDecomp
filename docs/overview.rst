@@ -5,7 +5,7 @@ What is cuDecomp?
 -----------------
 cuDecomp is a library for managing 1D (slab) and 2D (pencil) parallel decompositions of
 3D Cartesian spatial domains on NVIDIA GPUs, with routines to perform global transpositions and halo communication.
-The library is inspired by the `2DECOMP&FFT Fortran library <https://github.com/xcompact3d/2decomp_fft>`_ , a popular
+The library is inspired by the `2DECOMP&FFT Fortran library <https://github.com/xcompact3d/2decomp-fft>`_ , a popular
 decomposition library for numerical simulation codes, with a similar set of available transposition routines.
 While 2DECOMP&FFT and similar libraries in the past have been written to target CPU systems, this
 library is designed for GPU systems, leveraging CUDA-aware MPI and additional communication
