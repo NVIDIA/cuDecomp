@@ -45,7 +45,7 @@
 #include <nccl.h>
 
 #define CUDECOMP_MAJOR 0
-#define CUDECOMP_MINOR 1
+#define CUDECOMP_MINOR 2
 #define CUDECOMP_PATCH 0
 
 /**
