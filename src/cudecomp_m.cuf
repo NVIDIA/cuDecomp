@@ -589,11 +589,11 @@ contains
     type(cudecompPencilInfo) :: pencil_info  ! res%order is unit offset, x/y/z = 1/2/3
     integer(c_int) :: res
 
-    integer :: halo_extents_arg(3)
+    integer :: halo_extents_(3)
 
-    halo_extents_arg(:) = [0, 0, 0]
-    if (present(halo_extents)) halo_extents_arg = halo_extents
-    res = cudecompGetPencilInfoC(handle, grid_desc, pencil_info, axis - 1, halo_extents_arg)
+    halo_extents_(:) = [0, 0, 0]
+    if (present(halo_extents)) halo_extents_ = halo_extents
+    res = cudecompGetPencilInfoC(handle, grid_desc, pencil_info, axis - 1, halo_extents_)
     ! Update entries for Fortran indexing
     pencil_info%order = pencil_info%order + 1
     pencil_info%lo = pencil_info%lo + 1
@@ -771,19 +771,19 @@ contains
     integer, optional :: output_halo_extents(3)
     integer(c_int) :: res
 
-    integer(cuda_stream_kind) :: stream_arg
-    integer :: input_halo_extents_arg(3)
-    integer :: output_halo_extents_arg(3)
+    integer(cuda_stream_kind) :: stream_
+    integer :: input_halo_extents_(3)
+    integer :: output_halo_extents_(3)
 
-    stream_arg = 0
-    input_halo_extents_arg(:) = [0, 0, 0]
-    output_halo_extents_arg(:) = [0, 0, 0]
-    if (present(stream)) stream_arg = stream
-    if (present(input_halo_extents)) input_halo_extents_arg = input_halo_extents
-    if (present(output_halo_extents)) output_halo_extents_arg = output_halo_extents
+    stream_ = 0
+    input_halo_extents_(:) = [0, 0, 0]
+    output_halo_extents_(:) = [0, 0, 0]
+    if (present(stream)) stream_ = stream
+    if (present(input_halo_extents)) input_halo_extents_ = input_halo_extents
+    if (present(output_halo_extents)) output_halo_extents_ = output_halo_extents
     res =  cudecompTransposeXToY_C(handle, grid_desc, &
-           input, output, work, dtype, input_halo_extents_arg, output_halo_extents_arg, &
-           stream_arg)
+           input, output, work, dtype, input_halo_extents_, output_halo_extents_, &
+           stream_)
   end function cudecompTransposeXToY
 
   function cudecompTransposeYToZ(handle, grid_desc, &
@@ -800,19 +800,19 @@ contains
     integer, optional :: output_halo_extents(3)
     integer(c_int) :: res
 
-    integer(cuda_stream_kind) :: stream_arg
-    integer :: input_halo_extents_arg(3)
-    integer :: output_halo_extents_arg(3)
+    integer(cuda_stream_kind) :: stream_
+    integer :: input_halo_extents_(3)
+    integer :: output_halo_extents_(3)
 
-    stream_arg = 0
-    input_halo_extents_arg(:) = [0, 0, 0]
-    output_halo_extents_arg(:) = [0, 0, 0]
-    if (present(stream)) stream_arg = stream
-    if (present(input_halo_extents)) input_halo_extents_arg = input_halo_extents
-    if (present(output_halo_extents)) output_halo_extents_arg = output_halo_extents
+    stream_ = 0
+    input_halo_extents_(:) = [0, 0, 0]
+    output_halo_extents_(:) = [0, 0, 0]
+    if (present(stream)) stream_ = stream
+    if (present(input_halo_extents)) input_halo_extents_ = input_halo_extents
+    if (present(output_halo_extents)) output_halo_extents_ = output_halo_extents
     res = cudecompTransposeYToZ_C(handle, grid_desc, &
-          input, output, work, dtype, input_halo_extents_arg, output_halo_extents_arg, &
-          stream_arg)
+          input, output, work, dtype, input_halo_extents_, output_halo_extents_, &
+          stream_)
   end function cudecompTransposeYToZ
 
   function cudecompTransposeZToY(handle, grid_desc, &
@@ -829,19 +829,19 @@ contains
     integer, optional :: output_halo_extents(3)
     integer(c_int) :: res
 
-    integer(cuda_stream_kind) :: stream_arg
-    integer :: input_halo_extents_arg(3)
-    integer :: output_halo_extents_arg(3)
+    integer(cuda_stream_kind) :: stream_
+    integer :: input_halo_extents_(3)
+    integer :: output_halo_extents_(3)
 
-    stream_arg = 0
-    input_halo_extents_arg(:) = [0, 0, 0]
-    output_halo_extents_arg(:) = [0, 0, 0]
-    if (present(stream)) stream_arg = stream
-    if (present(input_halo_extents)) input_halo_extents_arg = input_halo_extents
-    if (present(output_halo_extents)) output_halo_extents_arg = output_halo_extents
+    stream_ = 0
+    input_halo_extents_(:) = [0, 0, 0]
+    output_halo_extents_(:) = [0, 0, 0]
+    if (present(stream)) stream_ = stream
+    if (present(input_halo_extents)) input_halo_extents_ = input_halo_extents
+    if (present(output_halo_extents)) output_halo_extents_ = output_halo_extents
     res = cudecompTransposeZToY_C(handle, grid_desc, &
-          input, output, work, dtype, input_halo_extents_arg, output_halo_extents_arg, &
-          stream_arg)
+          input, output, work, dtype, input_halo_extents_, output_halo_extents_, &
+          stream_)
   end function cudecompTransposeZToY
 
   function cudecompTransposeYToX(handle, grid_desc, &
@@ -858,19 +858,19 @@ contains
     integer, optional :: output_halo_extents(3)
     integer(c_int) :: res
 
-    integer(cuda_stream_kind) :: stream_arg
-    integer :: input_halo_extents_arg(3)
-    integer :: output_halo_extents_arg(3)
+    integer(cuda_stream_kind) :: stream_
+    integer :: input_halo_extents_(3)
+    integer :: output_halo_extents_(3)
 
-    stream_arg = 0
-    input_halo_extents_arg(:) = [0, 0, 0]
-    output_halo_extents_arg(:) = [0, 0, 0]
-    if (present(stream)) stream_arg = stream
-    if (present(input_halo_extents)) input_halo_extents_arg = input_halo_extents
-    if (present(output_halo_extents)) output_halo_extents_arg = output_halo_extents
+    stream_ = 0
+    input_halo_extents_(:) = [0, 0, 0]
+    output_halo_extents_(:) = [0, 0, 0]
+    if (present(stream)) stream_ = stream
+    if (present(input_halo_extents)) input_halo_extents_ = input_halo_extents
+    if (present(output_halo_extents)) output_halo_extents_ = output_halo_extents
     res = cudecompTransposeYToX_C(handle, grid_desc, &
-          input, output, work, dtype, input_halo_extents_arg, output_halo_extents_arg, &
-          stream_arg)
+          input, output, work, dtype, input_halo_extents_, output_halo_extents_, &
+          stream_)
   end function cudecompTransposeYToX
 
   ! Halo functions
@@ -889,16 +889,16 @@ contains
     integer(cuda_stream_kind), optional :: stream
     integer(c_int) :: res
 
-    integer(cuda_stream_kind) :: stream_arg
+    integer(cuda_stream_kind) :: stream_
     logical(c_bool) :: halo_periods_c(3)
 
     halo_periods_c(:) = halo_periods
 
-    stream_arg = 0
-    if (present(stream)) stream_arg = stream
+    stream_ = 0
+    if (present(stream)) stream_ = stream
     res = cudecompUpdateHalosX_C(handle, grid_desc, &
           input, work, dtype, halo_extents, halo_periods_c, &
-          dim - 1, stream_arg)
+          dim - 1, stream_)
   end function cudecompUpdateHalosX
 
   function cudecompUpdateHalosY(handle, grid_desc, &
@@ -916,16 +916,16 @@ contains
     integer(cuda_stream_kind), optional :: stream
     integer(c_int) :: res
 
-    integer(cuda_stream_kind) :: stream_arg
+    integer(cuda_stream_kind) :: stream_
     logical(c_bool) :: halo_periods_c(3)
 
     halo_periods_c(:) = halo_periods
 
-    stream_arg = 0
-    if (present(stream)) stream_arg = stream
+    stream_ = 0
+    if (present(stream)) stream_ = stream
     res = cudecompUpdateHalosY_C(handle, grid_desc, &
           input, work, dtype, halo_extents, halo_periods_c, &
-          dim - 1, stream_arg)
+          dim - 1, stream_)
   end function cudecompUpdateHalosY
 
   function cudecompUpdateHalosZ(handle, grid_desc, &
@@ -943,16 +943,16 @@ contains
     integer(cuda_stream_kind), optional :: stream
     integer(c_int) :: res
 
-    integer(cuda_stream_kind) :: stream_arg
+    integer(cuda_stream_kind) :: stream_
     logical(c_bool) :: halo_periods_c(3)
 
     halo_periods_c(:) = halo_periods
 
-    stream_arg = 0
-    if (present(stream)) stream_arg = stream
+    stream_ = 0
+    if (present(stream)) stream_ = stream
     res = cudecompUpdateHalosZ_C(handle, grid_desc, &
           input, work, dtype, halo_extents, halo_periods_c, &
-          dim - 1, stream_arg)
+          dim - 1, stream_)
   end function cudecompUpdateHalosZ
 
   ! Helper function to copy string
