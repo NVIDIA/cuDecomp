@@ -1,8 +1,8 @@
 tg: tg.o
-	${MPICXX} -o $@ $< ${LIBS}
+	${MPICXX} -o $@ $< ${BUILD_LIBS}
 
 tg.o: tg.cu
-	${NVCC} ${NVFLAGS} ${DEFINES} ${EXTRA_DEFINES} ${INCLUDES} -c -o $@ $<
+	${NVCC} ${NVFLAGS} ${BUILD_INCLUDES} -c -o $@ $<
 
 clean:
 	rm -f tg tg.o
