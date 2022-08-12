@@ -30,21 +30,21 @@ CUDECOMPLIB=${BUILDDIR}/lib/libcudecomp.so
 CUDECOMPFLIB=${BUILDDIR}/lib/libcudecomp_fort.so
 CUDECOMPMOD=${BUILDDIR}/cudecomp_m.o
 
-LIBS = -L${BUILDDIR}/lib -lcudecomp
-FLIBS = -L${BUILDDIR}/lib -lcudecomp -lcudecomp_fort
-INCLUDES = -I${BUILDDIR}/include
-
-INCLUDES += -I${PWD}/include -I${MPI_HOME}/include -I${CUDA_HOME}/include -I${NCCL_HOME}/include  -I${CUTENSOR_HOME}/include -I${CUDACXX_HOME}/include -I${NVSHMEM_HOME}/include
-BUILD_INCLUDES = -I${PWD}/include -I${MPI_HOME}/include -I${CUDA_HOME}/include -I${NCCL_HOME}/include  -I${CUTENSOR_HOME}/include -I${CUDACXX_HOME}/include -I${NVSHMEM_HOME}/include
-LIBS += -L${CUDA_HOME}/lib64 -L${CUTENSOR_HOME}/lib64 -L${NCCL_HOME}/lib -L${CUDA_HOME}/lib64/stubs -lnccl -lcutensor -lcufft -lcudart -lnvidia-ml
-FLIBS += -cudalib=nccl,cufft,cutensor -lstdc++ -L${CUDA_HOME}/lib64 -L${CUDA_HOME}/lib64/stubs -lnvidia-ml
+INCLUDES = -I${PWD}/include -I${MPI_HOME}/include -I${CUDA_HOME}/include -I${NCCL_HOME}/include  -I${CUTENSOR_HOME}/include -I${CUDACXX_HOME}/include -I${NVSHMEM_HOME}/include
+LIBS = -L${CUDA_HOME}/lib64 -L${CUTENSOR_HOME}/lib64 -L${NCCL_HOME}/lib -L${CUDA_HOME}/lib64/stubs -lnccl -lcutensor -lcudart
+FLIBS = -cudalib=nccl,cutensor -lstdc++ -L${CUDA_HOME}/lib64 -L${CUDA_HOME}/lib64/stubs
 
 ifeq ($(strip $(ENABLE_NVSHMEM)),1)
 DEFINES += -DENABLE_NVSHMEM -DNVSHMEM_USE_NCCL
 INCLUDES += -I${NVSHMEM_HOME}/include
-LIBS += -lcuda
-FLIBS += -lcuda
+LIBS += -lcuda -lnvidia-ml
+FLIBS += -lcuda -lnvidia-ml
+ifneq ("$(wildcard ${NVSHMEM_HOME}/lib/libnvshmem_host.so)","")
+LIBS += -L${NVSHMEM_HOME}/lib -lnvshmem_host
+STATIC_LIBS += ${NVSHMEM_HOME}/lib/libnvshmem_device.a
+else
 STATIC_LIBS += ${NVSHMEM_HOME}/lib/libnvshmem.a
+endif
 endif
 ifeq ($(strip $(ENABLE_NVTX)),1)
 DEFINES += -DENABLE_NVTX
@@ -58,13 +58,16 @@ LIBS += ${EXTRA_LIBS}
 FLIBS += ${EXTRA_LIBS}
 DEFINES += ${EXTRA_DEFINES}
 
-
 LIBTARGETS = ${CUDECOMPLIB}
 ifeq ($(strip $(BUILD_FORTRAN)),1)
 LIBTARGETS += ${CUDECOMPFLIB}
 endif
 
-export LIBS FLIBS INCLUDES DEFINES MPICXX MPIF90 NVCC CXXFLAGS NVFLAGS BUILD_FORTRAN
+BUILD_LIBS = -L${BUILDDIR}/lib -lcudecomp -L${CUDA_HOME}/lib64 -L${CUFFT_HOME}/lib64 -lcudart -lcufft
+BUILD_FLIBS = -L${BUILDDIR}/lib -lcudecomp -lcudecomp_fort -cudalib=cufft
+BUILD_INCLUDES = -I${BUILDDIR}/include -I${CUDA_HOME}/include -I${CUFFT_HOME}/include -I${PWD}/include
+
+export LIBS FLIBS BUILD_LIBS BUILD_FLIBS INCLUDES BUILD_INCLUDES DEFINES MPICXX MPIF90 NVCC CXXFLAGS NVFLAGS BUILD_FORTRAN
 
 .PHONY: all lib tests benchmark examples
 
@@ -85,27 +88,27 @@ examples: lib
 
 ${BUILDDIR}/autotune.o: src/autotune.cc  include/*.h include/internal/*.h
 	@mkdir -p ${BUILDDIR}
-	${MPICXX} -fPIC ${DEFINES} ${CXXFLAGS_O1} ${BUILD_INCLUDES} -c -o $@ $<
+	${MPICXX} -fPIC ${DEFINES} ${CXXFLAGS_O1} ${INCLUDES} -c -o $@ $<
 
 ${BUILDDIR}/%.o: src/%.cc  include/*.h include/internal/*.h
 	@mkdir -p ${BUILDDIR}
-	${MPICXX} -fPIC ${DEFINES} ${CXXFLAGS} ${BUILD_INCLUDES} -c -o $@ $<
+	${MPICXX} -fPIC ${DEFINES} ${CXXFLAGS} ${INCLUDES} -c -o $@ $<
 
 ${BUILDDIR}/%.o: src/%.cu  include/internal/*.cuh
 	@mkdir -p ${BUILDDIR}
-	${NVCC} -rdc=true -Xcompiler -fPIC ${DEFINES} ${NVFLAGS} ${BUILD_INCLUDES} -c -o $@ $<
+	${NVCC} -rdc=true -Xcompiler -fPIC ${DEFINES} ${NVFLAGS} ${INCLUDES} -c -o $@ $<
 
 ${CUDECOMPMOD}: src/cudecomp_m.cuf 
 	@mkdir -p ${BUILDDIR}/include
-	${MPIF90} -Mpreprocess -fPIC -module ${BUILDDIR}/include ${DEFINES} ${BUILD_INCLUDES} -c -o $@ $<
+	${MPIF90} -Mpreprocess -fPIC -module ${BUILDDIR}/include ${DEFINES} ${INCLUDES} -c -o $@ $<
 
 ${CUDECOMPLIB}: ${OBJ}
 	@mkdir -p ${BUILDDIR}/lib
-	${NVCC} -rdc=true -shared ${NVFLAGS} ${BUILD_INCLUDES} -o $@ $^ ${STATIC_LIBS}
+	${NVCC} -rdc=true -shared ${NVFLAGS} ${INCLUDES} ${LIBS} -o $@ $^ ${STATIC_LIBS}
 
 ${CUDECOMPFLIB}: ${CUDECOMPMOD}
 	@mkdir -p ${BUILDDIR}/lib
-	${MPIF90} -shared ${BUILD_INCLUDES} -o $@ $^
+	${MPIF90} -shared ${INCLUDES} -o $@ $^
 
 clean:
 	rm -f ${CUDECOMPLIB} ${CUDECOMPFLIB} ${BUILDDIR}/*.o ${BUILDDIR}/include/*.mod ${BUILDDIR}/include/*.h
