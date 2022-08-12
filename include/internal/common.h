@@ -55,6 +55,8 @@ struct cudecompHandle {
   int32_t local_rank;      // MPI rank
   int32_t local_nranks;    // MPI size
 
+  // Entries for NCCL management
+  int n_grid_descs_using_nccl = 0;      // Count of grid descriptors using NCCL
   ncclComm_t nccl_comm = nullptr;       // NCCL communicator (global)
   ncclComm_t nccl_local_comm = nullptr; // NCCL communicator (intranode)
 
