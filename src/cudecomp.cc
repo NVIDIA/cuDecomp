@@ -396,12 +396,17 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
       }
     }
 #endif
-    if (!transposeBackendRequiresNccl(grid_desc->config.transpose_comm_backend) &&
-        !haloBackendRequiresNccl(grid_desc->config.halo_comm_backend)) {
-      CHECK_NCCL(ncclCommDestroy(handle->nccl_comm));
-      handle->nccl_comm = nullptr;
-      CHECK_NCCL(ncclCommDestroy(handle->nccl_local_comm));
-      handle->nccl_local_comm = nullptr;
+    if (transposeBackendRequiresNccl(grid_desc->config.transpose_comm_backend) ||
+        haloBackendRequiresNccl(grid_desc->config.halo_comm_backend)) {
+      handle->n_grid_descs_using_nccl++;
+    } else {
+      // Destroy NCCL communicator to reclaim resources if not used
+      if (handle->nccl_comm && handle->nccl_local_comm && handle->n_grid_descs_using_nccl == 0) {
+        CHECK_NCCL(ncclCommDestroy(handle->nccl_comm));
+        handle->nccl_comm = nullptr;
+        CHECK_NCCL(ncclCommDestroy(handle->nccl_local_comm));
+        handle->nccl_local_comm = nullptr;
+      }
     }
 
     *grid_desc_in = grid_desc;
@@ -437,6 +442,19 @@ cudecompResult_t cudecompGridDescDestroy(cudecompHandle_t handle, cudecompGridDe
       if (e) { CHECK_CUDA(cudaEventDestroy(e)); }
     }
 
+    if (transposeBackendRequiresNccl(grid_desc->config.transpose_comm_backend) ||
+        haloBackendRequiresNccl(grid_desc->config.halo_comm_backend)) {
+      handle->n_grid_descs_using_nccl--;
+
+      // Destroy NCCL communicator to reclaim resources if not used
+      if (handle->nccl_comm && handle->nccl_local_comm && handle->n_grid_descs_using_nccl == 0) {
+        CHECK_NCCL(ncclCommDestroy(handle->nccl_comm));
+        handle->nccl_comm = nullptr;
+        CHECK_NCCL(ncclCommDestroy(handle->nccl_local_comm));
+        handle->nccl_local_comm = nullptr;
+      }
+    }
+
 #ifdef ENABLE_NVSHMEM
     if (transposeBackendRequiresNvshmem(grid_desc->config.transpose_comm_backend) ||
         haloBackendRequiresNvshmem(grid_desc->config.halo_comm_backend)) {
@@ -447,6 +465,14 @@ cudecompResult_t cudecompGridDescDestroy(cudecompHandle_t handle, cudecompGridDe
         nvshmem_team_destroy(grid_desc->col_comm_info.nvshmem_team);
       }
       handle->n_grid_descs_using_nvshmem--;
+
+      // Finalize nvshmem to reclaim symmetric heap memory if not used
+      if (handle->nvshmem_initialized && handle->n_grid_descs_using_nvshmem == 0) {
+        nvshmem_finalize();
+        handle->nvshmem_initialized = false;
+        handle->nvshmem_allocations.clear();
+        handle->nvshmem_allocation_size = 0;
+      }
     }
 #endif
 
