@@ -30,7 +30,7 @@ CUDECOMPLIB=${BUILDDIR}/lib/libcudecomp.so
 CUDECOMPFLIB=${BUILDDIR}/lib/libcudecomp_fort.so
 CUDECOMPMOD=${BUILDDIR}/cudecomp_m.o
 
-INCLUDES = -I${PWD}/include -I${MPI_HOME}/include -I${CUDA_HOME}/include -I${NCCL_HOME}/include  -I${CUTENSOR_HOME}/include -I${CUDACXX_HOME}/include -I${NVSHMEM_HOME}/include
+INCLUDES = -I${PWD}/include -I${MPI_HOME}/include -I${CUDA_HOME}/include -I${NCCL_HOME}/include  -I${CUTENSOR_HOME}/include -I${CUDACXX_HOME}/include
 LIBS = -L${CUDA_HOME}/lib64 -L${CUTENSOR_HOME}/lib64 -L${NCCL_HOME}/lib -L${CUDA_HOME}/lib64/stubs -lnccl -lcutensor -lcudart
 FLIBS = -cudalib=nccl,cutensor -lstdc++ -L${CUDA_HOME}/lib64 -L${CUDA_HOME}/lib64/stubs
 
