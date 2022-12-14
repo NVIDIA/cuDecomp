@@ -65,7 +65,7 @@ endif
 
 BUILD_LIBS = -L${BUILDDIR}/lib -lcudecomp -L${CUDA_HOME}/lib64 -L${CUFFT_HOME}/lib64 -lcudart -lcufft
 BUILD_FLIBS = -L${BUILDDIR}/lib -lcudecomp -lcudecomp_fort -cudalib=cufft
-BUILD_INCLUDES = -I${BUILDDIR}/include -I${CUDA_HOME}/include -I${CUFFT_HOME}/include -I${PWD}/include
+BUILD_INCLUDES = -I${BUILDDIR}/include -I${CUDA_HOME}/include -I${CUFFT_HOME}/include -I${PWD}/include -I${NCCL_HOME}/include
 
 export LIBS FLIBS BUILD_LIBS BUILD_FLIBS INCLUDES BUILD_INCLUDES DEFINES MPICXX MPIF90 NVCC CXXFLAGS NVFLAGS BUILD_FORTRAN
 
