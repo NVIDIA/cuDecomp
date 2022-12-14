@@ -31,14 +31,19 @@ CUDECOMPFLIB=${BUILDDIR}/lib/libcudecomp_fort.so
 CUDECOMPMOD=${BUILDDIR}/cudecomp_m.o
 
 INCLUDES = -I${PWD}/include -I${MPI_HOME}/include -I${CUDA_HOME}/include -I${NCCL_HOME}/include  -I${CUTENSOR_HOME}/include -I${CUDACXX_HOME}/include
-LIBS = -L${CUDA_HOME}/lib64 -L${CUTENSOR_HOME}/lib64 -L${NCCL_HOME}/lib -L${CUDA_HOME}/lib64/stubs -lnccl -lcutensor -lcudart
-FLIBS = -cudalib=nccl,cutensor -lstdc++ -L${CUDA_HOME}/lib64 -L${CUDA_HOME}/lib64/stubs
+LIBS = -L${CUDA_HOME}/lib64 -L${CUTENSOR_HOME}/lib64 -L${NCCL_HOME}/lib -lnccl -lcutensor -lcudart
+FLIBS = -cudalib=nccl,cutensor -lstdc++ -L${CUDA_HOME}/lib64
+BUILD_LIBS = -L${BUILDDIR}/lib -lcudecomp -L${CUDA_HOME}/lib64 -L${CUFFT_HOME}/lib64 -lcudart -lcufft
+BUILD_FLIBS = -L${BUILDDIR}/lib -lcudecomp -lcudecomp_fort -cudalib=cufft
+BUILD_INCLUDES = -I${BUILDDIR}/include -I${CUDA_HOME}/include -I${CUFFT_HOME}/include -I${PWD}/include -I${NCCL_HOME}/include
 
 ifeq ($(strip $(ENABLE_NVSHMEM)),1)
 DEFINES += -DENABLE_NVSHMEM -DNVSHMEM_USE_NCCL
 INCLUDES += -I${NVSHMEM_HOME}/include
-LIBS += -lcuda -lnvidia-ml
-FLIBS += -lcuda -lnvidia-ml
+LIBS += -L${CUDA_HOME}/lib64/stubs -lcuda -lnvidia-ml
+FLIBS += -L${CUDA_HOME}/lib64/stubs -lcuda -lnvidia-ml
+BUILD_LIBS += -L${CUDA_HOME}/lib64/stubs -lcuda -lnvidia-ml
+BUILD_FLIBS += -L${CUDA_HOME}/lib64/stubs -lcuda -lnvidia-ml
 ifneq ("$(wildcard ${NVSHMEM_HOME}/lib/libnvshmem_host.so)","")
 LIBS += -L${NVSHMEM_HOME}/lib -lnvshmem_host
 STATIC_LIBS += ${NVSHMEM_HOME}/lib/libnvshmem_device.a
@@ -62,10 +67,6 @@ LIBTARGETS = ${CUDECOMPLIB}
 ifeq ($(strip $(BUILD_FORTRAN)),1)
 LIBTARGETS += ${CUDECOMPFLIB}
 endif
-
-BUILD_LIBS = -L${BUILDDIR}/lib -lcudecomp -L${CUDA_HOME}/lib64 -L${CUFFT_HOME}/lib64 -lcudart -lcufft
-BUILD_FLIBS = -L${BUILDDIR}/lib -lcudecomp -lcudecomp_fort -cudalib=cufft
-BUILD_INCLUDES = -I${BUILDDIR}/include -I${CUDA_HOME}/include -I${CUFFT_HOME}/include -I${PWD}/include -I${NCCL_HOME}/include
 
 export LIBS FLIBS BUILD_LIBS BUILD_FLIBS INCLUDES BUILD_INCLUDES DEFINES MPICXX MPIF90 NVCC CXXFLAGS NVFLAGS BUILD_FORTRAN
 
