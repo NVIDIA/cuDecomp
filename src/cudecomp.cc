@@ -202,7 +202,7 @@ cudecompResult_t cudecompInit(cudecompHandle_t* handle_in, MPI_Comm mpi_comm) {
     CHECK_MPI(MPI_Comm_rank(mpi_comm, &handle->rank));
     CHECK_MPI(MPI_Comm_size(mpi_comm, &handle->nranks));
 
-    CHECK_MPI(MPI_Comm_split_type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL, &handle->mpi_local_comm));
+    CHECK_MPI(MPI_Comm_split_type(handle->mpi_comm, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL, &handle->mpi_local_comm));
     CHECK_MPI(MPI_Comm_rank(handle->mpi_local_comm, &handle->local_rank));
     CHECK_MPI(MPI_Comm_size(handle->mpi_local_comm, &handle->local_nranks));
 
@@ -678,7 +678,7 @@ cudecompResult_t cudecompMalloc(cudecompHandle_t handle, cudecompGridDesc_t grid
         haloBackendRequiresNvshmem(grid_desc->config.halo_comm_backend)) {
 #ifdef ENABLE_NVSHMEM
       // NVSHMEM requires allocations to be the same size for all ranks. Find maximum.
-      CHECK_MPI(MPI_Allreduce(MPI_IN_PLACE, &buffer_size_bytes, 1, MPI_LONG_LONG_INT, MPI_MAX, MPI_COMM_WORLD));
+      CHECK_MPI(MPI_Allreduce(MPI_IN_PLACE, &buffer_size_bytes, 1, MPI_LONG_LONG_INT, MPI_MAX, handle->mpi_comm));
 
       size_t nvshmem_free_size = handle->nvshmem_symmetric_size - handle->nvshmem_allocation_size;
       if (!handle->nvshmem_vmm && handle->rank == 0 && buffer_size_bytes > nvshmem_free_size) {

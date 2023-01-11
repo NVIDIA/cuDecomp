@@ -65,23 +65,21 @@ static std::vector<int> getFactors(int N) {
   return factors;
 }
 
-template <typename T> static std::vector<T> processTimings(std::vector<T> times, T scale = 1) {
+template <typename T> static std::vector<T> processTimings(cudecompHandle_t handle, std::vector<T> times, T scale = 1) {
   std::sort(times.begin(), times.end());
   double t_min = times[0];
-  CHECK_MPI(MPI_Allreduce(MPI_IN_PLACE, &t_min, 1, MPI_DOUBLE, MPI_MIN, MPI_COMM_WORLD));
+  CHECK_MPI(MPI_Allreduce(MPI_IN_PLACE, &t_min, 1, MPI_DOUBLE, MPI_MIN, handle->mpi_comm));
   double t_max = times[times.size() - 1];
-  CHECK_MPI(MPI_Allreduce(MPI_IN_PLACE, &t_max, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD));
+  CHECK_MPI(MPI_Allreduce(MPI_IN_PLACE, &t_max, 1, MPI_DOUBLE, MPI_MAX, handle->mpi_comm));
 
   double t_avg = std::accumulate(times.begin(), times.end(), T(0)) / times.size();
-  CHECK_MPI(MPI_Allreduce(MPI_IN_PLACE, &t_avg, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD));
-  int nranks;
-  CHECK_MPI(MPI_Comm_size(MPI_COMM_WORLD, &nranks));
-  t_avg /= nranks;
+  CHECK_MPI(MPI_Allreduce(MPI_IN_PLACE, &t_avg, 1, MPI_DOUBLE, MPI_SUM, handle->mpi_comm));
+  t_avg /= handle->nranks;
 
   for (auto& t : times) { t = (t - t_avg) * (t - t_avg); }
   double t_var = std::accumulate(times.begin(), times.end(), T(0)) / times.size();
-  CHECK_MPI(MPI_Allreduce(MPI_IN_PLACE, &t_var, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD));
-  t_var /= nranks;
+  CHECK_MPI(MPI_Allreduce(MPI_IN_PLACE, &t_var, 1, MPI_DOUBLE, MPI_SUM, handle->mpi_comm));
+  t_var /= handle->nranks;
   double t_std = std::sqrt(t_var);
 
   return {t_min * scale, t_max * scale, t_avg * scale, t_std * scale};
@@ -186,7 +184,7 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
     }
 
     // For nvshmem, buffers must be the same size. Find global maximums.
-    CHECK_MPI(MPI_Allreduce(MPI_IN_PLACE, &work_sz_new, 1, MPI_LONG_LONG_INT, MPI_MAX, MPI_COMM_WORLD));
+    CHECK_MPI(MPI_Allreduce(MPI_IN_PLACE, &work_sz_new, 1, MPI_LONG_LONG_INT, MPI_MAX, handle->mpi_comm));
 
     if (work_sz_new > work_sz) {
       work_sz = work_sz_new;
@@ -284,11 +282,11 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
         CHECK_CUDA(cudaEventElapsedTime(&trial_yx_times[i], events[3], events[4]));
         ts = te;
       }
-      auto times = processTimings(trial_times, 1000.);
-      auto xy_times = processTimings(trial_xy_times);
-      auto yz_times = processTimings(trial_yz_times);
-      auto zy_times = processTimings(trial_zy_times);
-      auto yx_times = processTimings(trial_yx_times);
+      auto times = processTimings(handle, trial_times, 1000.);
+      auto xy_times = processTimings(handle, trial_xy_times);
+      auto yz_times = processTimings(handle, trial_yz_times);
+      auto zy_times = processTimings(handle, trial_zy_times);
+      auto yx_times = processTimings(handle, trial_yx_times);
 
       if (handle->rank == 0) {
         printf("CUDECOMP:\tgrid: %d x %d, backend: %s \n"
@@ -450,7 +448,7 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
     }
 
     // For nvshmem, buffers must be the same size. Find global maximums.
-    CHECK_MPI(MPI_Allreduce(MPI_IN_PLACE, &work_sz_new, 1, MPI_LONG_LONG_INT, MPI_MAX, MPI_COMM_WORLD));
+    CHECK_MPI(MPI_Allreduce(MPI_IN_PLACE, &work_sz_new, 1, MPI_LONG_LONG_INT, MPI_MAX, handle->mpi_comm));
 
     if (work_sz_new > work_sz) {
       work_sz = work_sz_new;
@@ -557,7 +555,7 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
         trial_times[i] = te - ts;
         ts = te;
       }
-      auto times = processTimings(trial_times, 1000.);
+      auto times = processTimings(handle, trial_times, 1000.);
 
       if (handle->rank == 0) {
         printf("CUDECOMP:\tgrid: %d x %d, halo backend: %s \n"
