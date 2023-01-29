@@ -40,6 +40,7 @@
 #include <string>
 
 #include <cuda_runtime.h>
+#include <mpi.h>
 
 #define CUDECOMP_MAJOR 0
 #define CUDECOMP_MINOR 2
