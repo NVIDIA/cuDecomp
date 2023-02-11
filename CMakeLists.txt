@@ -73,11 +73,11 @@ target_link_libraries(cudecomp PRIVATE NVHPC::CUTENSOR)
 target_link_libraries(cudecomp PRIVATE NVHPC::NCCL)
 
 if (CUDECOMP_ENABLE_NVTX)
-  target_compile_definitions(cudecomp PRIVATE CUDECOMP_ENABLE_NVTX)
+  target_compile_definitions(cudecomp PRIVATE ENABLE_NVTX)
 endif()
 
 if (CUDECOMP_ENABLE_NVSHMEM)
-  target_compile_definitions(cudecomp PRIVATE CUDECOMP_ENABLE_NVSHMEM)
+  target_compile_definitions(cudecomp PRIVATE ENABLE_NVSHMEM)
 
   # Get NVSHMEM version from header
   file(READ ${NVHPC_NVSHMEM_INCLUDE_DIR}/nvshmem_version.h NVSHMEM_VERSION_RAW)
