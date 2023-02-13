@@ -78,6 +78,10 @@ endif()
 
 if (CUDECOMP_ENABLE_NVSHMEM)
   target_compile_definitions(cudecomp PRIVATE ENABLE_NVSHMEM)
+  target_include_directories(cudecomp
+    PRIVATE
+    ${NVHPC_NVSHMEM_INCLUDE_DIR}
+  )
 
   # Get NVSHMEM version from header
   file(READ ${NVHPC_NVSHMEM_INCLUDE_DIR}/nvshmem_version.h NVSHMEM_VERSION_RAW)
