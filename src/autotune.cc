@@ -155,7 +155,7 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
     // Skip any decompositions with empty pencils
     if (grid_desc->config.pdims[0] > std::min(grid_desc->config.gdims[0], grid_desc->config.gdims[1]) ||
         grid_desc->config.pdims[1] > std::min(grid_desc->config.gdims[1], grid_desc->config.gdims[2])) {
-        continue;
+      continue;
     }
 
     // Skip any uneven decompositions, if disabled
