@@ -30,6 +30,7 @@ module cudecomp
   use, intrinsic :: iso_c_binding
   use, intrinsic :: iso_fortran_env, only: int64, real32, real64
   use cudafor
+  private :: cudafor
 
   ! enumerators
 
@@ -601,6 +602,7 @@ contains
   end function cudecompGetPencilInfo
 
   function cudecompGetHaloWorkspaceSize(handle, grid_desc, axis, halo_extents, workspace_size) result(res)
+    implicit none
     type(cudecompHandle) :: handle
     type(cudecompGridDesc) :: grid_desc
     integer :: axis
