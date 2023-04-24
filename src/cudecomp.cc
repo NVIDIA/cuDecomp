@@ -344,8 +344,9 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
     for (auto& event : grid_desc->events) { CHECK_CUDA(cudaEventCreateWithFlags(&event, cudaEventDisableTiming)); }
 
     // Disable decompositions with empty pencils
-    if (!autotune_pdims && (std::max(grid_desc->config.pdims[0], grid_desc->config.pdims[1]) >
-                            std::min(grid_desc->config.gdims[1], grid_desc->config.gdims[2]))) {
+    if (!autotune_pdims &&
+        (grid_desc->config.pdims[0] > std::min(grid_desc->config.gdims_dist[0], grid_desc->config.gdims_dist[1]) ||
+         grid_desc->config.pdims[1] > std::min(grid_desc->config.gdims_dist[1], grid_desc->config.gdims_dist[2]))) {
       THROW_NOT_SUPPORTED("grid descriptor settings yields a distribution with empty pencils");
     }
 

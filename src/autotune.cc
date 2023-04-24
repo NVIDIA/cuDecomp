@@ -153,8 +153,8 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
     CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_z, 2, nullptr));
 
     // Skip any decompositions with empty pencils
-    if (grid_desc->config.pdims[0] > std::min(grid_desc->config.gdims[0], grid_desc->config.gdims[1]) ||
-        grid_desc->config.pdims[1] > std::min(grid_desc->config.gdims[1], grid_desc->config.gdims[2])) {
+    if (grid_desc->config.pdims[0] > std::min(grid_desc->config.gdims_dist[0], grid_desc->config.gdims_dist[1]) ||
+        grid_desc->config.pdims[1] > std::min(grid_desc->config.gdims_dist[1], grid_desc->config.gdims_dist[2])) {
       continue;
     }
 
