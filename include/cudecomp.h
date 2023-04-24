@@ -43,7 +43,7 @@
 #include <mpi.h>
 
 #define CUDECOMP_MAJOR 0
-#define CUDECOMP_MINOR 2
+#define CUDECOMP_MINOR 3
 #define CUDECOMP_PATCH 0
 
 /**
