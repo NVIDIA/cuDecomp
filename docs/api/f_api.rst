@@ -347,7 +347,7 @@ _____________________
 
   :p cudecompHandle handle [in]: The initialized cuDecomp library handle
   :p cudecompGridDesc grid_desc [in]: A cuDecomp grid descriptor.
-  :p cudecompPencilInfo grid_desc [out]: A cuDecomp pencil information structure.
+  :p cudecompPencilInfo pencil_info [out]: A cuDecomp pencil information structure.
   :p integer axis [in]: The domain axis the desired pencil is aligned with.
   :p integer halo_extents(3) [in, optional]: An array of three integers to define halo region extents of the pencil, in global order. The i-th entry in this array should contain the number of halo elements (per direction) expected in the along the i-th global domain axis. Symmetric halos are assumed (e.g. a value of one in halo_extents means there are 2 halo elements, one element on each side).
   :r cudecompResult res: :code:`CUDECOMP_RESULT_SUCCESS` on success or error code on failure.

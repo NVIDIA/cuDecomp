@@ -11,7 +11,7 @@ decomposition library for NVIDIA GPUs.
 
   * **Disclaimer**:
     This library is currently in a research-oriented state, and has been
-    released as a companion to a paper presented at the PASC22 conference (`link <https://pasc22.pasc-conference.org/program/schedule/presentation/?id=pap120&sess=sess176>`_).
+    released as a companion to a paper presented at the PASC22 conference (`link <https://dl.acm.org/doi/10.1145/3539781.3539797>`_).
     We are making it available here as it can be useful in other applications
     outside of this study or as benchmarking tool and usage example for various
     GPU communication libraries to perform transpose and halo communication. 
