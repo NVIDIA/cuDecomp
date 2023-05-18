@@ -54,7 +54,7 @@ static inline MPI_Datatype getMpiDataType(cuda::std::complex<double>) { return M
 template <typename T> static inline MPI_Datatype getMpiDataType() { return getMpiDataType(T(0)); }
 
 #ifdef ENABLE_NVSHMEM
-#define CUDECOMP_NVSHMEM_CHUNK_SZ (1024 * 1024 * 1024)
+#define CUDECOMP_NVSHMEM_CHUNK_SZ (static_cast<size_t>(1024 * 1024 * 1024))
 template <typename T>
 static void
 nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_desc, T* send_buff,
@@ -84,12 +84,12 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
       // Use host call for direct P2P accessible entries
       // Need to chunk host API calls due to 2 GiB limitation in API
       size_t send_bytes = send_counts[dst_rank] * sizeof(T);
-      int nchunks = (send_bytes + CUDECOMP_NVSHMEM_CHUNK_SZ - 1) / CUDECOMP_NVSHMEM_CHUNK_SZ;
-      for (int j = 0; j < nchunks; ++j) {
+      size_t nchunks = (send_bytes + CUDECOMP_NVSHMEM_CHUNK_SZ - 1) / CUDECOMP_NVSHMEM_CHUNK_SZ;
+      for (size_t j = 0; j < nchunks; ++j) {
         nvshmemx_putmem_nbi_on_stream(
             recv_buff + recv_offsets[dst_rank] + j * (CUDECOMP_NVSHMEM_CHUNK_SZ / sizeof(T)),
             send_buff + send_offsets[dst_rank] + j * (CUDECOMP_NVSHMEM_CHUNK_SZ / sizeof(T)),
-            std::min(static_cast<size_t>(CUDECOMP_NVSHMEM_CHUNK_SZ), send_bytes - j * CUDECOMP_NVSHMEM_CHUNK_SZ),
+            std::min(CUDECOMP_NVSHMEM_CHUNK_SZ, send_bytes - j * CUDECOMP_NVSHMEM_CHUNK_SZ),
             dst_rank_global, stream);
       }
       continue;
