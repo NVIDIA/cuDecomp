@@ -35,6 +35,7 @@ foreach(tgt ${transpose_test_targets_cc} ${halo_test_targets_cc})
     PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../../include
     ${MPI_CXX_INCLUDE_DIRS}
+    ${NVHPC_CUFFT_INCLUDE_DIR}
     ${NVHPC_CUDA_INCLUDE_DIR}
   )
   target_link_libraries(${tgt} PRIVATE MPI::MPI_CXX)
