@@ -20,6 +20,7 @@ foreach(tgt ${benchmark_targets})
 	                     PRIVATE
 			     ${CMAKE_CURRENT_SOURCE_DIR}/../include
 			     ${NVHPC_CUFFT_INCLUDE_DIR}
+			     ${NCCL_INCLUDE_DIR}
 			     ${MPI_CXX_INCLUDE_DIRS})
   target_link_libraries(${tgt} PRIVATE cudecomp)
   target_link_libraries(${tgt} PRIVATE NVHPC::CUFFT)

@@ -106,9 +106,10 @@ if (CUDECOMP_ENABLE_NVSHMEM)
     set(NVSHMEM_LIBRARY_DIR ${NVHPC_NVSHMEM_LIBRARY_DIR})
     string(REPLACE "/lib" "/include" NVSHMEM_INCLUDE_DIR ${NVHPC_NVSHMEM_LIBRARY_DIR})
   endif()
-endif()
 
-message(STATUS "Using NVSHMEM installation at: ${NVSHMEM_LIBRARY_DIR}")
+  message(STATUS "Using NVSHMEM installation at: ${NVSHMEM_LIBRARY_DIR}")
+
+endif()
 
 # Building cuDecomp shared lib
 add_library(cudecomp SHARED)
@@ -224,7 +225,7 @@ if (CUDECOMP_BUILD_FORTRAN)
     LINK_LIBRARIES MPI::MPI_Fortran
   )
   if (NOT TEST_F2C_RESULT)
-    message(STATUS "Could not link MPI_Comm_f2c. Setting -DMPICH.")
+    message(STATUS "Could not link MPI_Comm_f2c in Fortran module. Setting -DMPICH flag during module compilation.")
     target_compile_definitions(cudecomp_fort PRIVATE MPICH)
   endif()
 
