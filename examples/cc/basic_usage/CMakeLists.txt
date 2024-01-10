@@ -21,7 +21,7 @@ foreach(tgt ${basic_usage_targets_cc})
   if (CMAKE_VERSION VERSION_LESS 3.18)
     target_compile_options(${tgt} PRIVATE $<$<COMPILE_LANGUAGE:CUDA>: ${CUDA_CC_FLAGS}>)
   else()
-    set_target_properties(${tgt} PROPERTIES CUDA_ARCHITECTURES "${CUDA_CC_LIST}")
+    set_target_properties(${tgt} PROPERTIES CUDA_ARCHITECTURES "${CUDECOMP_CUDA_CC_LIST}")
   endif()
   target_include_directories(${tgt}
     PRIVATE
@@ -30,6 +30,7 @@ foreach(tgt ${basic_usage_targets_cc})
   )
   target_link_libraries(${tgt} PRIVATE MPI::MPI_CXX)
   target_link_libraries(${tgt} PRIVATE cudecomp)
+  set_target_properties(${tgt} PROPERTIES LINKER_LANGUAGE CXX)
 endforeach()
 
 install(

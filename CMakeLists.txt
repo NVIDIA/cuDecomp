@@ -8,7 +8,28 @@ option(CUDECOMP_BUILD_FORTRAN "Build Fortran bindings" ON)
 option(CUDECOMP_ENABLE_NVTX "Enable NVTX ranges" ON)
 option(CUDECOMP_ENABLE_NVSHMEM "Enable NVSHMEM" OFF)
 option(CUDECOMP_BUILD_EXTRAS "Build benchmark, examples, and tests" OFF)
-set(CUDECOMP_CUDA_CC_LIST "60;70;80" CACHE STRING "List of CUDA compute capabilities to build cuDecomp for.")
+set(CUDECOMP_CUDA_CC_LIST "70;80;90" CACHE STRING "List of CUDA compute capabilities to build cuDecomp for.")
+
+# Use NVHPC compilers by default
+set(CMAKE_CXX_COMPILER "nvc++")
+set(CMAKE_Fortran_COMPILER "nvfortran")
+
+# Locate and use NVHPC CMake configuration
+find_program(NVHPC_CXX_BIN "nvc++")
+string(REPLACE "compilers/bin/nvc++" "cmake" NVHPC_CMAKE_DIR ${NVHPC_CXX_BIN})
+set(CMAKE_PREFIX_PATH ${NVHPC_CMAKE_DIR})
+
+# Detect if Cray compiler wrappers are available. If so, use them to get
+# correct linking against CUDA-aware MPI libraries.
+find_program(CRAY_FTN_BIN "ftn")
+find_program(CRAY_CC_BIN "CC")
+
+if (CRAY_FTN_BIN)
+  set(CMAKE_Fortran_COMPILER ${CRAY_FTN_BIN})
+endif()
+if (CRAY_CC_BIN)
+  set(CMAKE_CXX_COMPILER ${CRAY_CC_BIN})
+endif()
 
 if (CUDECOMP_BUILD_FORTRAN)
   set(LANGS CXX CUDA Fortran)
@@ -20,6 +41,20 @@ project(cudecomp LANGUAGES ${LANGS})
 
 # MPI
 find_package(MPI REQUIRED)
+
+# FindMPI does not populate include variables when in a Cray environment.
+# Extract MPI includes from CC wrapper.
+if (CRAY_CC_BIN)
+  execute_process(
+    COMMAND ${CRAY_CC_BIN} --cray-print-opts=cflags
+    OUTPUT_VARIABLE CRAY_CC_INCLUDES_RAW
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+  )
+
+  string(REPLACE "-I" "" CRAY_CC_INCLUDES_RAW ${CRAY_CC_INCLUDES_RAW})
+  string(REPLACE " " ";" MPI_CXX_INCLUDE_DIRS ${CRAY_CC_INCLUDES_RAW})
+endif()
+
 # TODO: Check for MPICH to define `-DMPICH` flag
 
 # HPC SDK
@@ -29,7 +64,7 @@ else()
   find_package(NVHPC REQUIRED COMPONENTS CUDA MATH NCCL)
 endif()
 
-# Set up required include directory flags
+# Set up required include directory flags, NVHPC CMake config only defined library directories
 string(REPLACE "/lib64" "/include" NVHPC_CUDA_INCLUDE_DIR ${NVHPC_CUDA_LIBRARY_DIR})
 string(REPLACE "/lib64" "/include" NVHPC_CUFFT_INCLUDE_DIR ${NVHPC_MATH_LIBRARY_DIR})
 string(REPLACE "/lib64" "/include" NVHPC_CUTENSOR_INCLUDE_DIR ${NVHPC_MATH_LIBRARY_DIR})
@@ -84,7 +119,11 @@ if (CUDECOMP_ENABLE_NVSHMEM)
   )
 
   # Get NVSHMEM version from header
-  file(READ ${NVHPC_NVSHMEM_INCLUDE_DIR}/nvshmem_version.h NVSHMEM_VERSION_RAW)
+  if (EXISTS ${NVHPC_NVSHMEM_INCLUDE_DIR}/nvshmem_version.h)
+    file(READ ${NVHPC_NVSHMEM_INCLUDE_DIR}/nvshmem_version.h NVSHMEM_VERSION_RAW)
+  else()
+    file(READ ${NVHPC_NVSHMEM_INCLUDE_DIR}/common/nvshmem_version.h NVSHMEM_VERSION_RAW)
+  endif()
   string(REGEX MATCH "NVSHMEM_VENDOR_MAJOR_VERSION ([0-9]*)" _ ${NVSHMEM_VERSION_RAW})
   list(APPEND NVSHMEM_VERSION ${CMAKE_MATCH_1})
   string(REGEX MATCH "NVSHMEM_VENDOR_MINOR_VERSION ([0-9]*)" _ ${NVSHMEM_VERSION_RAW})
@@ -126,8 +165,6 @@ if (CUDECOMP_BUILD_FORTRAN)
   list(APPEND CUF_GPU_ARG "cuda${NVHPC_CUDA_VERSION}")
   list(JOIN CUF_GPU_ARG "," CUF_GPU_ARG)
 
-  #set(CMAKE_Fortran_MODULE_DIRECTORY ${CMAKE_BINARY_DIR}/fortran_modules)
-
   add_library(cudecomp_fort SHARED)
   set_target_properties(cudecomp_fort PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
   set_target_properties(cudecomp_fort PROPERTIES Fortran_MODULE_DIRECTORY ${CMAKE_BINARY_DIR}/include)
@@ -141,6 +178,18 @@ if (CUDECOMP_BUILD_FORTRAN)
   set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/src/cudecomp_m.cuf PROPERTIES LANGUAGE Fortran)
 
   target_link_libraries(cudecomp_fort PUBLIC MPI::MPI_Fortran)
+
+  # Test for MPI_Comm_f2c/c2f
+  try_compile(
+    TEST_F2C_RESULT
+    ${CMAKE_BINARY_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/cmake/test_mpi_f2c.f90
+    LINK_LIBRARIES MPI::MPI_Fortran
+  )
+  if (NOT TEST_F2C_RESULT)
+    message(STATUS "Could not link MPI_Comm_f2c. Setting -DMPICH.")
+    target_compile_definitions(cudecomp_fort PRIVATE MPICH)
+  endif()
 
   install(
     TARGETS cudecomp_fort
