@@ -21,18 +21,6 @@ find_program(NVHPC_CXX_BIN "nvc++")
 string(REPLACE "compilers/bin/nvc++" "cmake" NVHPC_CMAKE_DIR ${NVHPC_CXX_BIN})
 set(CMAKE_PREFIX_PATH ${NVHPC_CMAKE_DIR})
 
-# Detect if Cray compiler wrappers are available. If so, use them to get
-# correct linking against CUDA-aware MPI libraries.
-find_program(CRAY_FTN_BIN "ftn")
-find_program(CRAY_CC_BIN "CC")
-
-if (CRAY_FTN_BIN)
-  set(CMAKE_Fortran_COMPILER ${CRAY_FTN_BIN})
-endif()
-if (CRAY_CC_BIN)
-  set(CMAKE_CXX_COMPILER ${CRAY_CC_BIN})
-endif()
-
 if (CUDECOMP_BUILD_FORTRAN)
   set(LANGS CXX CUDA Fortran)
 else()
@@ -41,20 +29,34 @@ endif()
 
 project(cudecomp LANGUAGES ${LANGS})
 
+# Detect if Cray compiler wrappers are available to assess if in Cray environment.
+# We do not use the Cray compiler wrappers directly for greater flexibility.
+find_program(CRAY_CC_BIN "CC")
+
+if (CRAY_CC_BIN)
+  message(STATUS "Found Cray CC wrapper. Compiling for Cray programming environment.")
+endif()
+
 # MPI
 find_package(MPI REQUIRED)
 
-# FindMPI does not populate include variables when in a Cray environment.
-# Extract MPI includes from CC wrapper.
 if (CRAY_CC_BIN)
-  execute_process(
-    COMMAND ${CRAY_CC_BIN} --cray-print-opts=cflags
-    OUTPUT_VARIABLE CRAY_CC_INCLUDES_RAW
-    OUTPUT_STRIP_TRAILING_WHITESPACE
+  # FindMPI does not include Cray GTL (e.g. CUDA-aware) libs
+  # automatically in Cray environment. Locate it to include in linking.
+  string(REPLACE ":" ";" CRAY_LIB_PATHS $ENV{CRAY_LD_LIBRARY_PATH})
+  find_library(CRAY_MPI_GTL_CUDA_LIBRARY REQUIRED
+    NAMES mpi_gtl_cuda
+    HINTS ${CRAY_LIB_PATHS}
   )
 
-  string(REPLACE "-I" "" CRAY_CC_INCLUDES_RAW ${CRAY_CC_INCLUDES_RAW})
-  string(REPLACE " " ";" MPI_CXX_INCLUDE_DIRS ${CRAY_CC_INCLUDES_RAW})
+  # Cray GTL libs benefit from linking against gdrcopy, so also
+  # locating that library.
+  find_library(GDRCOPY_LIBRARY REQUIRED
+    NAMES gdrapi
+  )
+
+  message(STATUS "Found Cray GTL library: " ${CRAY_MPI_GTL_CUDA_LIBRARY})
+  message(STATUS "Found GDRCopy library: " ${GDRCOPY_LIBRARY})
 endif()
 
 # TODO: Check for MPICH to define `-DMPICH` flag
@@ -144,6 +146,11 @@ target_link_libraries(cudecomp PUBLIC NVHPC::CUDART)
 target_link_libraries(cudecomp PUBLIC MPI::MPI_CXX)
 target_link_libraries(cudecomp PRIVATE NVHPC::CUTENSOR)
 target_link_libraries(cudecomp PRIVATE ${NCCL_LIBRARY})
+if (CRAY_CC_BIN)
+  # In Cray environments, add links to GTL and GDRCopy libs for CUDA-aware support
+  target_link_libraries(cudecomp PRIVATE ${CRAY_MPI_GTL_CUDA_LIBRARY})
+  target_link_libraries(cudecomp PRIVATE ${GDRCOPY_LIBRARY})
+endif()
 
 if (CUDECOMP_ENABLE_NVTX)
   target_compile_definitions(cudecomp PRIVATE ENABLE_NVTX)
