@@ -35,7 +35,7 @@ $ cd build
 $ cmake ..
 $ make -j
 ```
-There are several build variables available to configure the CMake build which can be found at the top of the main [`CMakeLists.txt`](CMakeLists.txt) file. As an example,
+There are several build variables available to configure the CMake build which can be found at the top of the project [`CMakeLists.txt`](CMakeLists.txt) file. As an example,
 to configure the build to compile additional examples and enable NVSHMEM backends, you can run the following CMake command
 ```shell
 $ cmake -DCUDECOMP_BUILD_EXTRAS=1 -DCUDECOMP_ENABLE_NVSHMEM=1 ..
