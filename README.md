@@ -14,8 +14,9 @@ Please contact us or open a GitHub issue if you are interested in using this lib
 
 ## Build
 
+### Method 1: Makefile with Configuration file
 To build the library, you must first create a configuration file to point the installed to dependent library paths and enable/disable features.
- See the default [`nvhpcsdk.conf`](configs/nvhpcsdk.conf) for an example of settings to build the library using the [NVHPC SDK compilers and libraries](https://developer.nvidia.com/hpc-sdk).
+See the default [`nvhpcsdk.conf`](configs/nvhpcsdk.conf) for an example of settings to build the library using the [NVHPC SDK compilers and libraries](https://developer.nvidia.com/hpc-sdk).
 The [`configs/`](configs) directory also contains several sample build configuration files for a number of GPU compute clusters, like Perlmutter, Summit, and Marconi 100.
 
 With this configuration file created, you can build the library using the command
@@ -25,6 +26,21 @@ $ make -j CONFIGFILE=<path to your configuration file>
 ```
 
 The library will be compiled and installed in a newly created `build/` directory.
+
+### Method 2: CMake
+We also enable builds using CMake. A CMake build of the library without additional examples/tests can be completed using the following commands
+```shell
+$ mkdir build
+$ cd build
+$ cmake ..
+$ make -j
+```
+There are several build variables available to configure the CMake build which can be found at the top of the main [`CMakeLists.txt`](CMakeLists.txt) file. As an example,
+to configure the build to compile additional examples and enable NVSHMEM backends, you can run the following CMake command
+```shell
+$ cmake -DCUDECOMP_BUILD_EXTRAS=1 -DCUDECOMP_ENABLE_NVSHMEM=1 ..
+```
+
 
 ### Dependencies
 We strongly recommend building this library using NVHPC SDK compilers and libraries, as the SDK contains all required dependencies for this library and is the focus of our testing. Fortran features are only supported using NVHPC SDK compilers.
