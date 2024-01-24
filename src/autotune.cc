@@ -292,8 +292,7 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
       for (int i = 0; i < 4; ++i) {
         if (options->autotune_transpose_skip[i]) {
           t_skipped[i] = " (skipped)";
-        }
-        else {
+        } else {
           t_skipped[i] = "";
         }
       }
