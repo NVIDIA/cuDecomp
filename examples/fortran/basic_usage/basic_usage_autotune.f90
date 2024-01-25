@@ -74,11 +74,6 @@ program main
   call MPI_Comm_rank(MPI_COMM_WORLD, rank, ierr)
   call MPI_Comm_size(MPI_COMM_WORLD, nranks, ierr)
 
-  if (nranks /= 4) then
-    print*, "ERROR: This example requires 4 ranks to run. Exiting..."
-    call exit(1)
-  endif
-
   call MPI_Comm_split_Type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL, local_comm, ierr)
   call MPI_Comm_rank(local_comm, local_rank, ierr)
   ierr = cudaSetDevice(local_rank)
