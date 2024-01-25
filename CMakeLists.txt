@@ -12,8 +12,8 @@ option(CUDECOMP_ENABLE_NVTX "Enable NVTX ranges" ON)
 option(CUDECOMP_ENABLE_NVSHMEM "Enable NVSHMEM" OFF)
 option(CUDECOMP_BUILD_EXTRAS "Build benchmark, examples, and tests" OFF)
 set(CUDECOMP_CUDA_CC_LIST "70;80;90" CACHE STRING "List of CUDA compute capabilities to build cuDecomp for.")
-set(CUDECOMP_NCCL_PATH CACHE STRING "Path to search for NCCL installation. Use to override NVHPC provided NCCL version.")
-set(CUDECOMP_NVSHMEM_PATH CACHE STRING "Path to search for NVSHMEM installation. Use to override NVHPC provided NVSHMEM version.")
+set(CUDECOMP_NCCL_HOME CACHE STRING "Path to search for NCCL installation. Use to override NVHPC provided NCCL version.")
+set(CUDECOMP_NVSHMEM_HOME CACHE STRING "Path to search for NVSHMEM installation. Use to override NVHPC provided NVSHMEM version.")
 
 # Use NVHPC compilers by default
 set(CMAKE_CXX_COMPILER "nvc++")
@@ -73,15 +73,15 @@ string(REPLACE "/lib64" "/include" NVHPC_CUFFT_INCLUDE_DIR ${NVHPC_MATH_LIBRARY_
 string(REPLACE "/lib64" "/include" NVHPC_CUTENSOR_INCLUDE_DIR ${NVHPC_MATH_LIBRARY_DIR})
 
 # Get NCCL library (with optional override)
-if (CUDECOMP_NCCL_PATH)
+if (CUDECOMP_NCCL_HOME)
   find_path(NCCL_INCLUDE_DIR REQUIRED
     NAMES nccl.h
-    HINTS ${CUDECOMP_NCCL_PATH}/include
+    HINTS ${CUDECOMP_NCCL_HOME}/include
   )
 
   find_library(NCCL_LIBRARY REQUIRED
     NAMES nccl
-    HINTS ${CUDECOMP_NCCL_PATH}/lib
+    HINTS ${CUDECOMP_NCCL_HOME}/lib
   )
 else()
   find_package(NVHPC REQUIRED COMPONENTS NCCL)
@@ -96,15 +96,15 @@ message(STATUS "Using NCCL library: ${NCCL_LIBRARY}")
 
 if (CUDECOMP_ENABLE_NVSHMEM)
   # Get NVSHMEM library (with optional override)
-  if (CUDECOMP_NVSHMEM_PATH)
+  if (CUDECOMP_NVSHMEM_HOME)
     find_path(NVSHMEM_INCLUDE_DIR REQUIRED
       NAMES nvshmem.h
-      HINTS ${CUDECOMP_NVSHMEM_PATH}/include
+      HINTS ${CUDECOMP_NVSHMEM_HOME}/include
     )
 
     find_path(NVSHMEM_LIBRARY_DIR REQUIRED
       NAMES libnvshmem.a
-      HINTS ${CUDECOMP_NVSHMEM_PATH}/lib
+      HINTS ${CUDECOMP_NVSHMEM_HOME}/lib
     )
   else()
     find_package(NVHPC REQUIRED COMPONENTS NVSHMEM)
