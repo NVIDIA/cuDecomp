@@ -26,28 +26,33 @@
 ! OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 ! OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#if defined(R32)
-#define ARRTYPE real(real32)
-#define DTYPE CUDECOMP_FLOAT
-#define MODNAME halo_CUDECOMP_FLOAT_mod
-#elif defined(R64)
-#define ARRTYPE real(real64)
-#define DTYPE CUDECOMP_DOUBLE
-#define MODNAME halo_CUDECOMP_DOUBLE_mod
-#elif defined(C32)
-#define ARRTYPE complex(real32)
-#define DTYPE CUDECOMP_FLOAT_COMPLEX
-#define MODNAME halo_CUDECOMP_FLOAT_COMPLEX_mod
-#elif defined(C64)
-#define ARRTYPE complex(real64)
-#define DTYPE CUDECOMP_DOUBLE_COMPLEX
-#define MODNAME halo_CUDECOMP_DOUBLE_COMPLEX_mod
-#endif
-
 #define CHECK_CUDECOMP_EXIT(f) if (f /= CUDECOMP_RESULT_SUCCESS) call exit(1)
 #define CHECK_CUDA_EXIT(f) if (f /= cudaSuccess) call exit(1)
 
-module MODNAME
+#ifdef R32
+#define ARRTYPE real(real32)
+#define DTYPE CUDECOMP_FLOAT
+module halo_CUDECOMP_FLOAT_mod
+#endif
+
+#ifdef R64
+#define ARRTYPE real(real64)
+#define DTYPE CUDECOMP_DOUBLE
+module halo_CUDECOMP_DOUBLE_mod
+#endif
+
+#ifdef C32
+#define ARRTYPE complex(real32)
+#define DTYPE CUDECOMP_FLOAT_COMPLEX
+module halo_CUDECOMP_FLOAT_COMPLEX_mod
+#endif
+
+#ifdef C64
+#define ARRTYPE complex(real64)
+#define DTYPE CUDECOMP_DOUBLE_COMPLEX
+module halo_CUDECOMP_DOUBLE_COMPLEX_mod
+#endif
+
   use, intrinsic :: iso_fortran_env, only: real32, real64
   contains
   function compare_pencils(ref, res, pinfo) result(mismatch)
@@ -160,7 +165,7 @@ module MODNAME
     dst(1:count) = src(1:count)
 
   end subroutine flat_copy
-end module MODNAME
+end module
 
 program main
   use cudafor
@@ -168,7 +173,21 @@ program main
   use cudecomp
   use, intrinsic :: iso_fortran_env, only: real32, real64
 
-  use MODNAME
+#ifdef R32
+  use halo_CUDECOMP_FLOAT_mod
+#endif
+
+#ifdef R64
+  use halo_CUDECOMP_DOUBLE_mod
+#endif
+
+#ifdef C32
+  use halo_CUDECOMP_FLOAT_COMPLEX_mod
+#endif
+
+#ifdef C64
+  use halo_CUDECOMP_DOUBLE_COMPLEX_mod
+#endif
 
   implicit none
 
