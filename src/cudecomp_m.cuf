@@ -136,6 +136,7 @@ module cudecomp
     ! Transpose-specific options
     logical(c_bool) :: autotune_transpose_backend ! flag to enable transpose backend autotuning
     logical(c_bool) :: transpose_use_inplace_buffers ! flag to control whether transpose autotuning uses in-place or out-of-place buffers
+    logical(c_bool) :: autotune_transpose_skip(4) ! flag to skip certain transpose operations during autotuning
 
     ! Halo-specific options
     logical(c_bool) :: autotune_halo_backend ! flag to enable halo backend autotuning

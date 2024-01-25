@@ -192,6 +192,29 @@ flag is :code:`false`.
 
     options%transpose_use_inplace_buffers = .true.
 
+The :code:`autotune_transpose_skip` entry is an array of boolean flags that allows to skip certain
+transpose operations during autotuning. This option is meant for algorithms that only perform a subset
+of the four supported transposing operations. In this example, we autotune for the full set of
+operations, and therefore set all elements of :code:`autotune_transpose_skip` to :code:`false`.
+We should note that this is the default behavior, and thus there is no need to explicitly set
+the elements to :code:`false`.
+
+.. tabs::
+
+  .. code-tab:: c++
+
+    options.autotune_transpose_skip[0] = false; // do not skip X-to-Y transpose
+    options.autotune_transpose_skip[1] = false; // do not skip Y-to-Z transpose
+    options.autotune_transpose_skip[2] = false; // do not skip Z-to-Y transpose
+    options.autotune_transpose_skip[3] = false; // do not skip Y-to-X transpose
+
+  .. code-tab:: fortran
+
+    options%autotune_transpose_skip(1) = .false. ! do not skip X-to-Y transpose
+    options%autotune_transpose_skip(2) = .false. ! do not skip Y-to-Z transpose
+    options%autotune_transpose_skip(3) = .false. ! do not skip Z-to-Y transpose
+    options%autotune_transpose_skip(4) = .false. ! do not skip Y-to-X transpose
+
 Lastly, these are the options specific to halo communication backend autotuning.
 
 The :code:`autotune_halo_backend` entry is a boolean flag controlling whether the autotuner will autotune
