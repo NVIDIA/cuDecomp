@@ -135,7 +135,7 @@ By default, these flags are set to false and NCCL and NVSHMEM backends are enabl
 The :code:`skip_threshold` entry allows the autotuner to rapidly skip slow performing configurations. In particular,
 the autotuner will skip testing a configuration if :code:`skip_threshold * t > t_best`, where :code:`t` is the duration
 of the first timed trial for the configuration and :code:`t_best` is the average trial time of the current best configuration. 
-By default, the threshold is set to zero which disables any skipping. More aggresive skipping can be useful in cases where exhaustive
+By default, the threshold is set to zero which disables any skipping. More aggressive skipping can be useful in cases where exhaustive
 testing of all possible configurations is too expensive.
 
 .. tabs::

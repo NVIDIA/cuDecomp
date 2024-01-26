@@ -154,7 +154,7 @@ typedef struct {
   double skip_threshold;            ///< threshold used to skip testing slow configurations; skip configuration
                                     ///< if `skip_threshold * t > t_best`, where `t` is the duration of the first timed trial
                                     ///< for the configuration and `t_best` is the average trial time of the current best
-                                    ///< configuration. (default: 0.0)
+                                    ///< configuration (default: 0.0)
 
   // Transpose-specific options
   bool autotune_transpose_backend;    ///< flag to enable transpose backend autotuning (default: false)
