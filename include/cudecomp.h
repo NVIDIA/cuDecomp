@@ -140,6 +140,10 @@ typedef struct {
  */
 typedef struct {
   // General options
+  int32_t n_warmup_trials;          ///< number of warmup trials to run for each tested configuration during autotuning
+                                    ///< (default: 3)
+  int32_t n_trials;                 ///< number of timed trials to run for each tested configuration during autotuning
+                                    ///< (default: 5)
   cudecompAutotuneGridMode_t grid_mode; ///< which communication (transpose/halo) to use to autotune process grid
                                         ///< (default: CUDECOMP_AUTOTUNE_GRID_TRANSPOSE)
   cudecompDataType_t dtype;             ///< datatype to use during autotuning (default: CUDECOMP_DOUBLE)
@@ -147,6 +151,10 @@ typedef struct {
                                     ///< distributions of elements across processes (default: true)
   bool disable_nccl_backends;       ///< flag to disable NCCL backend options during autotuning (default: false)
   bool disable_nvshmem_backends;    ///< flag to disable NVSHMEM backend options during autotuning (default: false)
+  double skip_threshold;            ///< threshold used to skip testing slow configurations; skip configuration
+                                    ///< if skip_threshold * t > t_best, where t is the duration of the first timed trial
+                                    ///< for a configuration and t_best is the current best average configuration
+                                    ///< trial time. (default: 0.0)
 
   // Transpose-specific options
   bool autotune_transpose_backend;    ///< flag to enable transpose backend autotuning (default: false)

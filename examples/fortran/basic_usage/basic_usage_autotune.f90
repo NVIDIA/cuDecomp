@@ -98,9 +98,12 @@ program main
   call CHECK_CUDECOMP_EXIT(istat)
 
   ! General options
+  options%n_warmup_trials = 3
+  options%n_trials = 5
   options%dtype = CUDECOMP_DOUBLE
   options%disable_nccl_backends = .false.
   options%disable_nvshmem_backends = .false.
+  options%skip_threshold = 0.0
 
   ! Process grid autotuning options
   options%grid_mode = CUDECOMP_AUTOTUNE_GRID_TRANSPOSE
