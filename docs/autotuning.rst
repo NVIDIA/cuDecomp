@@ -88,6 +88,22 @@ Create an uninitialized autotune option struct and initialize it to defaults usi
 
 First, let's go over general autotuning options that effect process grid and communication backend autotuning.
 
+The :code:`n_warmup_trials` and :code:`n_trials` entries in the options struct control the number of warmup
+and timed trials run for each tested configuration respectively. Here we set them to their default values.
+
+.. tabs::
+
+  .. code-tab:: c++
+
+    options.n_warmup_trials = 3;
+    options.n_trials = 5;
+
+  .. code-tab:: fortran
+
+    options%n_warmup_trials = 3
+    options%n_trials = 5
+
+
 The :code:`dtype` entry in the options struct controls which data type cuDecomp will use for autotuning.
 
 .. tabs::
@@ -115,6 +131,22 @@ By default, these flags are set to false and NCCL and NVSHMEM backends are enabl
 
     options%disable_nccl_backends = .false.
     options%disable_nvshmem_backends = .false.
+
+The :code:`skip_threshold` entry allows the autotuner to rapidly skip slow performing configurations. In particular,
+the autotuner will skip testing a configuration if :code:`skip_threshold * t > t_best`, where :code:`t` is the duration
+of the first timed trial for the configuration and :code:`t_best` is the average trial time of the current best configuration. 
+By default, the threshold is set to zero which disables any skipping. More aggressive skipping can be useful in cases where exhaustive
+testing of all possible configurations is too expensive.
+
+.. tabs::
+
+  .. code-tab:: c++
+
+    options.skip_threshold = 0.0;
+
+  .. code-tab:: fortran
+
+    options%skip_threshold = 0.0
 
 Moving on, these are the options specific to process grid autotuning.
 

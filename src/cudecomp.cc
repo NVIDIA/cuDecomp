@@ -519,11 +519,14 @@ cudecompResult_t cudecompGridDescAutotuneOptionsSetDefaults(cudecompGridDescAuto
     if (!options) { THROW_INVALID_USAGE("options argument cannot be null"); }
 
     // General options
+    options->n_warmup_trials = 3;
+    options->n_trials = 5;
     options->grid_mode = CUDECOMP_AUTOTUNE_GRID_TRANSPOSE;
     options->dtype = CUDECOMP_DOUBLE;
     options->allow_uneven_decompositions = true;
     options->disable_nccl_backends = false;
     options->disable_nvshmem_backends = false;
+    options->skip_threshold = 0.0;
 
     // Transpose-specific options
     options->autotune_transpose_backend = false;

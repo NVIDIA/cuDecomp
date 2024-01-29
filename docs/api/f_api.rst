@@ -62,11 +62,14 @@ _________________________________
 
   A data structure defining autotuning options for grid descriptor creation.
 
+  :f integer n_warmup_trials: number of warmup trials to run for each tested configuration during autotuning
+  :f integer n_trials: number of timed trials to run for each tested configuration during autotuning
   :f cudecompAutotuneGridMode grid_mode: which communication (transpose/halo) to use to autotune process grid (default: CUDECOMP_AUTOTUNE_GRID_TRANSPOSE)
   :f cudecompDataType dtype: datatype to use during autotuning (default: CUDECOMP_DOUBLE)
   :f logical allow_uneven_distributions: flag to control whether autotuning allows process grids that result in uneven distributions of elements across processes (default: true)
   :f logical disable_nccl_backends: flag to disable NCCL backend options during autotuning (default: false)
   :f logical disable_nvshmem_backends: flag to disable NVSHMEM backend options during autotuning (default: false)
+  :f real(c_double) skip_threshold: threshold used to skip testing slow configurations; skip configuration if :code:`skip_threshold * t > t_best`, where :code:`t` is the duration of the first timed trial for the configuration and :code:`t_best` is the average trial time of the current best configuration (default: 0.0)
   :f logical autotune_transpose_backend: flag to enable transpose backend autotuning (default: false)
   :f logical autotune_halo_backend: flag to enable halo backend autotuning (default: false)
   :f logical transpose_use_inplace_buffers: flag to control whether transpose autotuning uses in-place or out-of-place buffers (default: false)

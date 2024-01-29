@@ -108,6 +108,9 @@ static void usage(const char* pname) {
           "\t-t|--ntrials <NTRIALS>\n"
           "\t\tNumber of trial iterations. (default: 5) \n"
           "\n"
+          "\t-k|--skip-threshold <THRESHOLD>\n"
+          "\t\tAutotuner skip threshold setting. (default: 0.0) \n"
+          "\n"
           "\t-b|--backend <INTEGER>\n"
           "\t\tCommunication backend to use. Choices: 0:AUTOTUNE, 1:MPI_P2P, 2:MPI_P2P_PL, 3:MPI_A2A, 4:NCCL, "
           "5:NCCL_PL, 6:NVSHMEM, 7:NVSHMEM_PL. (default: 0) \n"
@@ -147,6 +150,7 @@ int main(int argc, char** argv) {
   int nwarmup = 3;
   int ntrials = 5;
   bool skip_correctness_tests = false;
+  double skip_threshold = 0.0;
 
   while (1) {
     static struct option long_options[] = {{"gx", required_argument, 0, 'x'},
@@ -160,6 +164,7 @@ int main(int argc, char** argv) {
                                            {"acz", required_argument, 0, '3'},
                                            {"nwarmup", required_argument, 0, 'w'},
                                            {"ntrials", required_argument, 0, 't'},
+                                           {"skip-threshold", required_argument, 0, 'k'},
                                            {"out-of-place", no_argument, 0, 'o'},
                                            {"use-managed-memory", no_argument, 0, 'm'},
                                            {"skip-correctness-tests", no_argument, 0, 's'},
@@ -167,7 +172,7 @@ int main(int argc, char** argv) {
                                            {0, 0, 0, 0}};
 
     int option_index = 0;
-    int ch = getopt_long(argc, argv, "x:y:z:b:r:c:1:2:3:w:t:b:omsh", long_options, &option_index);
+    int ch = getopt_long(argc, argv, "x:y:z:b:r:c:1:2:3:w:t:k:b:omsh", long_options, &option_index);
     if (ch == -1) break;
 
     switch (ch) {
@@ -182,6 +187,7 @@ int main(int argc, char** argv) {
     case '3': axis_contiguous[2] = atoi(optarg); break;
     case 'w': nwarmup = atoi(optarg); break;
     case 't': ntrials = atoi(optarg); break;
+    case 'k': skip_threshold = atoi(optarg); break;
     case 'b': comm_backend = static_cast<cudecompTransposeCommBackend_t>(atoi(optarg)); break;
     case 'o': out_of_place = true; break;
     case 'm': use_managed_memory = true; break;
@@ -221,6 +227,7 @@ int main(int argc, char** argv) {
   } else {
     options.autotune_transpose_backend = true;
   }
+  options.skip_threshold = skip_threshold;
 
 #ifdef R2C
   cudecompGridDesc_t grid_desc_c; // complex grid
