@@ -24,6 +24,12 @@ find_program(NVHPC_CXX_BIN "nvc++")
 string(REPLACE "compilers/bin/nvc++" "cmake" NVHPC_CMAKE_DIR ${NVHPC_CXX_BIN})
 set(CMAKE_PREFIX_PATH ${NVHPC_CMAKE_DIR})
 
+# Limit optimization levels of CPU code compilation
+set(CMAKE_CXX_FLAGS_RELEASE "-O1 -DNDEBUG")
+set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O1 -g -DNDEBUG")
+set(CMAKE_Fortran_FLAGS_RELEASE "-O1 -DNDEBUG")
+set(CMAKE_Fortran_FLAGS_RELWITHDEBINFO "-O1 -g -DNDEBUG")
+
 if (CUDECOMP_BUILD_FORTRAN)
   set(LANGS CXX CUDA Fortran)
 else()
