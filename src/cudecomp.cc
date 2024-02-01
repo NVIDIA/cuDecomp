@@ -207,7 +207,15 @@ cudecompResult_t cudecompInit(cudecompHandle_t* handle_in, MPI_Comm mpi_comm) {
     CHECK_MPI(MPI_Comm_size(handle->mpi_local_comm, &handle->local_nranks));
 
     // Initialize cuTENSOR library
+#if CUTENSOR_MAJOR >= 2
+    CHECK_CUTENSOR(cutensorCreate(&handle->cutensor_handle));
+    CHECK_CUTENSOR(cutensorCreatePlanPreference(handle->cutensor_handle,
+                                                &handle->cutensor_plan_pref,
+                                                CUTENSOR_ALGO_DEFAULT,
+                                                CUTENSOR_JIT_MODE_NONE));
+#else
     CHECK_CUTENSOR(cutensorInit(&handle->cutensor_handle));
+#endif
 
     // Gather extra MPI info from all communicator ranks
     gatherGlobalMPIInfo(handle);
@@ -242,6 +250,11 @@ cudecompResult_t cudecompFinalize(cudecompHandle_t handle) {
     }
 #endif
     CHECK_MPI(MPI_Comm_free(&handle->mpi_local_comm));
+
+#if CUTENSOR_MAJOR >= 2
+    CHECK_CUTENSOR(cutensorDestroy(handle->cutensor_handle));
+    CHECK_CUTENSOR(cutensorDestroyPlanPreference(handle->cutensor_plan_pref));
+#endif
 
     handle = nullptr;
     delete handle;

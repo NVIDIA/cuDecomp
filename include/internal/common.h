@@ -63,6 +63,9 @@ struct cudecompHandle {
   cudaStream_t pl_stream = nullptr; // stream used for pipelined backends
 
   cutensorHandle_t cutensor_handle; // cuTENSOR handle;
+#if CUTENSOR_MAJOR >= 2
+  cutensorPlanPreference_t  cutensor_plan_pref; // cuTENSOR plan preference;
+#endif
 
   std::vector<std::array<char, MPI_MAX_PROCESSOR_NAME>> hostnames; // list of hostnames by rank
   std::vector<int32_t> rank_to_local_rank;                         // list of local rank mappings

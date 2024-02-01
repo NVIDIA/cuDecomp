@@ -190,7 +190,7 @@ extern "C" {
 /**
  * @brief Initializes the cuDecomp library from an existing MPI communicator
  *
- * @param[out] handle A pointer to an uninitialized cutensorHandle_t
+ * @param[out] handle A pointer to an uninitialized cudecompHandle_t
  * @param[in] mpi_comm MPI communicator containing ranks to use with cuDecomp
  *
  * @return CUDECOMP_RESULT_SUCCESS on success or error code on failure.
