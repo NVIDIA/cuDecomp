@@ -32,6 +32,7 @@
 #define TRANSPOSE_H
 
 #include <array>
+#include <cstdint>
 #include <vector>
 
 #include <cuda_runtime.h>
@@ -67,6 +68,75 @@ template <typename T> static inline bool anyNonzeros(const std::array<T, 3>& arr
   return (arr[0] != T(0) || arr[1] != T(0) || arr[2] != T(0));
 }
 
+#if CUTENSOR_MAJOR >= 2
+static inline cutensorDataType_t getCutensorDataType(float) { return CUTENSOR_R_32F; }
+static inline cutensorDataType_t getCutensorDataType(double) { return CUTENSOR_R_64F; }
+static inline cutensorDataType_t getCutensorDataType(cuda::std::complex<float>) { return CUTENSOR_C_32F; }
+static inline cutensorDataType_t getCutensorDataType(cuda::std::complex<double>) { return CUTENSOR_C_64F; }
+template <typename T> static inline cutensorDataType_t getCutensorDataType() { return getCutensorDataType(T(0)); }
+
+static inline cutensorComputeDescriptor_t getCutensorComputeType(cutensorDataType_t cutensor_dtype) {
+  switch (cutensor_dtype) {
+    case CUTENSOR_R_32F:
+    case CUTENSOR_C_32F:
+      return CUTENSOR_COMPUTE_DESC_32F;
+    case CUTENSOR_R_64F:
+    case CUTENSOR_C_64F:
+    default:
+      return CUTENSOR_COMPUTE_DESC_64F;
+  }
+}
+
+template <typename T>
+static inline uint32_t getAlignment(const T* ptr) {
+  auto i_ptr = reinterpret_cast<std::uintptr_t>(ptr);
+  for (uint32_t d = 16; d > 0; d >>= 1) {
+    if (i_ptr % d == 0) return d;
+  }
+  return 1;
+}
+
+template <typename T>
+static void localPermute(const cudecompHandle_t handle, const std::array<int64_t, 3>& extent_in,
+                         const std::array<int32_t, 3>& order_out, const std::array<int64_t, 3>& strides_in,
+                         const std::array<int64_t, 3>& strides_out, T* input, T* output, cudaStream_t stream) {
+  cutensorDataType_t cutensor_type = getCutensorDataType<T>();
+
+  std::array<int32_t, 3> order_in{0, 1, 2};
+  std::array<int64_t, 3> extent_out;
+  for (int i = 0; i < 3; ++i) {
+    extent_out[i] = extent_in[order_out[i]];
+    if (extent_out[i] == 0) return;
+  }
+
+  auto strides_in_ptr = anyNonzeros(strides_in) ? strides_in.data() : nullptr;
+  auto strides_out_ptr = anyNonzeros(strides_out) ? strides_out.data() : nullptr;
+
+  cutensorTensorDescriptor_t desc_in;
+  CHECK_CUTENSOR(cutensorCreateTensorDescriptor(handle->cutensor_handle, &desc_in, 3, extent_in.data(), strides_in_ptr,
+                                                cutensor_type, getAlignment(input)));
+  cutensorTensorDescriptor_t desc_out;
+  CHECK_CUTENSOR(cutensorCreateTensorDescriptor(handle->cutensor_handle, &desc_out, 3, extent_out.data(), strides_out_ptr,
+                                                cutensor_type, getAlignment(output)));
+
+  cutensorOperationDescriptor_t desc_op;
+  CHECK_CUTENSOR(cutensorCreatePermutation(handle->cutensor_handle, &desc_op, desc_in, order_in.data(), CUTENSOR_OP_IDENTITY,
+                 desc_out, order_out.data(), getCutensorComputeType(cutensor_type)));
+
+  cutensorPlan_t  plan;
+  CHECK_CUTENSOR(cutensorCreatePlan(handle->cutensor_handle, &plan, desc_op, handle->cutensor_plan_pref, 0));
+
+  T one(1);
+  CHECK_CUTENSOR(cutensorPermute(handle->cutensor_handle, plan, &one, input, output, stream));
+
+  CHECK_CUTENSOR(cutensorDestroyTensorDescriptor(desc_in));
+  CHECK_CUTENSOR(cutensorDestroyTensorDescriptor(desc_out));
+  CHECK_CUTENSOR(cutensorDestroyOperationDescriptor(desc_op));
+  CHECK_CUTENSOR(cutensorDestroyPlan(plan));
+}
+
+#else
+
 static inline cudaDataType_t getCudaDataType(float) { return CUDA_R_32F; }
 static inline cudaDataType_t getCudaDataType(double) { return CUDA_R_64F; }
 static inline cudaDataType_t getCudaDataType(cuda::std::complex<float>) { return CUDA_C_32F; }
@@ -100,6 +170,7 @@ static void localPermute(const cudecompHandle_t handle, const std::array<int64_t
   CHECK_CUTENSOR(cutensorPermutation(&handle->cutensor_handle, &one, input, &desc_in, order_in.data(), output,
                                      &desc_out, order_out.data(), cuda_type, stream));
 }
+#endif
 
 template <typename T>
 static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, const cudecompGridDesc_t grid_desc,
