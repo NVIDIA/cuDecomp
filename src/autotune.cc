@@ -120,6 +120,12 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
 #endif
   }
 
+
+  bool need_data2 = false;
+  for (int i = 0; i < 4; ++ i) {
+    if (!options->transpose_use_inplace_buffers[i]) need_data2 = true;
+  }
+
   std::vector<int> pdim0_list;
   if (autotune_pdims) {
     pdim0_list = getFactors(handle->nranks);
@@ -174,7 +180,7 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
       data_sz = data_sz_new;
       if (data) CHECK_CUDA(cudaFree(data));
       CHECK_CUDA(cudaMalloc(&data, data_sz));
-      if (!options->transpose_use_inplace_buffers) {
+      if (need_data2) {
         if (data2) CHECK_CUDA(cudaFree(data2));
         CHECK_CUDA(cudaMalloc(&data2, data_sz));
       }
@@ -234,9 +240,6 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
 
     for (auto& comm : comm_backend_list) {
       grid_desc->config.transpose_comm_backend = comm;
-      void* din = data;
-      void* dout = data2;
-      if (options->transpose_use_inplace_buffers) { dout = data; }
       void* w = work;
 #ifdef ENABLE_NVSHMEM
       if (transposeBackendRequiresNvshmem(comm)) { w = work_nvshmem; }
@@ -244,10 +247,22 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
 
       // Warmup
       for (int i = 0; i < options->n_warmup_trials; ++i) {
-        if (!options->autotune_transpose_skip[0]) CHECK_CUDECOMP(cudecompTransposeXToY(handle, grid_desc, din, dout, w, options->dtype, nullptr, nullptr, 0));
-        if (!options->autotune_transpose_skip[1]) CHECK_CUDECOMP(cudecompTransposeYToZ(handle, grid_desc, din, dout, w, options->dtype, nullptr, nullptr, 0));
-        if (!options->autotune_transpose_skip[2]) CHECK_CUDECOMP(cudecompTransposeZToY(handle, grid_desc, din, dout, w, options->dtype, nullptr, nullptr, 0));
-        if (!options->autotune_transpose_skip[3]) CHECK_CUDECOMP(cudecompTransposeYToX(handle, grid_desc, din, dout, w, options->dtype, nullptr, nullptr, 0));
+        if (!options->autotune_transpose_skip[0]) {
+          CHECK_CUDECOMP(cudecompTransposeXToY(handle, grid_desc, data, options->transpose_use_inplace_buffers[0] ? data : data2, w,
+                                               options->dtype, nullptr, nullptr, 0));
+        }
+        if (!options->autotune_transpose_skip[1]) {
+          CHECK_CUDECOMP(cudecompTransposeYToZ(handle, grid_desc, data, options->transpose_use_inplace_buffers[1] ? data : data2, w,
+                                               options->dtype, nullptr, nullptr, 0));
+        }
+        if (!options->autotune_transpose_skip[2]) {
+          CHECK_CUDECOMP(cudecompTransposeZToY(handle, grid_desc, data, options->transpose_use_inplace_buffers[2] ? data : data2, w,
+                                               options->dtype, nullptr, nullptr, 0));
+        }
+        if (!options->autotune_transpose_skip[3]) {
+          CHECK_CUDECOMP(cudecompTransposeYToX(handle, grid_desc, data, options->transpose_use_inplace_buffers[3] ? data : data2, w,
+                                               options->dtype, nullptr, nullptr, 0));
+        }
       }
 
       // Trials
@@ -262,13 +277,25 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
       double ts = MPI_Wtime();
       for (int i = 0; i < options->n_trials; ++i) {
         CHECK_CUDA(cudaEventRecord(events[0], 0));
-        if (!options->autotune_transpose_skip[0]) CHECK_CUDECOMP(cudecompTransposeXToY(handle, grid_desc, din, dout, w, options->dtype, nullptr, nullptr, 0));
+        if (!options->autotune_transpose_skip[0]) {
+          CHECK_CUDECOMP(cudecompTransposeXToY(handle, grid_desc, data, options->transpose_use_inplace_buffers[0] ? data : data2, w,
+                                               options->dtype, nullptr, nullptr, 0));
+        }
         CHECK_CUDA(cudaEventRecord(events[1], 0));
-        if (!options->autotune_transpose_skip[1]) CHECK_CUDECOMP(cudecompTransposeYToZ(handle, grid_desc, din, dout, w, options->dtype, nullptr, nullptr, 0));
+        if (!options->autotune_transpose_skip[1]) {
+          CHECK_CUDECOMP(cudecompTransposeYToZ(handle, grid_desc, data, options->transpose_use_inplace_buffers[1] ? data : data2, w,
+                                               options->dtype, nullptr, nullptr, 0));
+        }
         CHECK_CUDA(cudaEventRecord(events[2], 0));
-        if (!options->autotune_transpose_skip[2]) CHECK_CUDECOMP(cudecompTransposeZToY(handle, grid_desc, din, dout, w, options->dtype, nullptr, nullptr, 0));
+        if (!options->autotune_transpose_skip[2]) {
+          CHECK_CUDECOMP(cudecompTransposeZToY(handle, grid_desc, data, options->transpose_use_inplace_buffers[2] ? data : data2, w,
+                                               options->dtype, nullptr, nullptr, 0));
+        }
         CHECK_CUDA(cudaEventRecord(events[3], 0));
-        if (!options->autotune_transpose_skip[3]) CHECK_CUDECOMP(cudecompTransposeYToX(handle, grid_desc, din, dout, w, options->dtype, nullptr, nullptr, 0));
+        if (!options->autotune_transpose_skip[3]) {
+          CHECK_CUDECOMP(cudecompTransposeYToX(handle, grid_desc, data, options->transpose_use_inplace_buffers[3] ? data : data2, w,
+                                               options->dtype, nullptr, nullptr, 0));
+        }
         CHECK_CUDA(cudaEventRecord(events[4], 0));
         CHECK_CUDA(cudaDeviceSynchronize());
         CHECK_MPI(MPI_Barrier(handle->mpi_comm));
@@ -368,7 +395,7 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
   }
 
   CHECK_CUDA(cudaFree(data));
-  if (!options->transpose_use_inplace_buffers) { CHECK_CUDA(cudaFree(data2)); }
+  if (need_data2) { CHECK_CUDA(cudaFree(data2)); }
 
   // Delete cuda events
   for (auto& event : events) { CHECK_CUDA(cudaEventDestroy(event)); }

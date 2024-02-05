@@ -220,7 +220,9 @@ int main(int argc, char** argv) {
   cudecompGridDescAutotuneOptions_t options;
   CHECK_CUDECOMP_EXIT(cudecompGridDescAutotuneOptionsSetDefaults(&options));
   options.dtype = get_cudecomp_datatype(complex_t(0));
-  options.transpose_use_inplace_buffers = !out_of_place;
+  for (int i = 0; i < 4; ++i) {
+    options.transpose_use_inplace_buffers[i] = !out_of_place;
+  }
 
   if (comm_backend != 0) {
     config.transpose_comm_backend = comm_backend;
