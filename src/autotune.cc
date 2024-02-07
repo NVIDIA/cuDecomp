@@ -122,7 +122,7 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
 
 
   bool need_data2 = false;
-  for (int i = 0; i < 4; ++ i) {
+  for (int i = 0; i < 4; ++i) {
     if (!options->transpose_use_inplace_buffers[i]) need_data2 = true;
   }
 
