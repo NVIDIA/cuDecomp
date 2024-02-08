@@ -247,14 +247,22 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
 
       // Warmup
       for (int i = 0; i < options->n_warmup_trials; ++i) {
-        CHECK_CUDECOMP(cudecompTransposeXToY(handle, grid_desc, data, options->transpose_use_inplace_buffers[0] ? data : data2, w,
-                                             options->dtype, nullptr, nullptr, 0));
-        CHECK_CUDECOMP(cudecompTransposeYToZ(handle, grid_desc, data, options->transpose_use_inplace_buffers[1] ? data : data2, w,
-                                             options->dtype, nullptr, nullptr, 0));
-        CHECK_CUDECOMP(cudecompTransposeZToY(handle, grid_desc, data, options->transpose_use_inplace_buffers[2] ? data : data2, w,
-                                             options->dtype, nullptr, nullptr, 0));
-        CHECK_CUDECOMP(cudecompTransposeYToX(handle, grid_desc, data, options->transpose_use_inplace_buffers[3] ? data : data2, w,
-                                             options->dtype, nullptr, nullptr, 0));
+        if (options->transpose_op_weights[0] != 0.0) {
+          CHECK_CUDECOMP(cudecompTransposeXToY(handle, grid_desc, data, options->transpose_use_inplace_buffers[0] ? data : data2, w,
+                                               options->dtype, nullptr, nullptr, 0));
+        }
+        if (options->transpose_op_weights[1] != 0.0) {
+          CHECK_CUDECOMP(cudecompTransposeYToZ(handle, grid_desc, data, options->transpose_use_inplace_buffers[1] ? data : data2, w,
+                                               options->dtype, nullptr, nullptr, 0));
+        }
+        if (options->transpose_op_weights[2] != 0.0) {
+          CHECK_CUDECOMP(cudecompTransposeZToY(handle, grid_desc, data, options->transpose_use_inplace_buffers[2] ? data : data2, w,
+                                               options->dtype, nullptr, nullptr, 0));
+        }
+        if (options->transpose_op_weights[3] != 0.0) {
+          CHECK_CUDECOMP(cudecompTransposeYToX(handle, grid_desc, data, options->transpose_use_inplace_buffers[3] ? data : data2, w,
+                                               options->dtype, nullptr, nullptr, 0));
+        }
       }
 
       // Trials
@@ -270,29 +278,39 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
       double ts = MPI_Wtime();
       for (int i = 0; i < options->n_trials; ++i) {
         CHECK_CUDA(cudaEventRecord(events[0], 0));
-        CHECK_CUDECOMP(cudecompTransposeXToY(handle, grid_desc, data, options->transpose_use_inplace_buffers[0] ? data : data2, w,
-                                             options->dtype, nullptr, nullptr, 0));
+        if (options->transpose_op_weights[0] != 0.0) {
+          CHECK_CUDECOMP(cudecompTransposeXToY(handle, grid_desc, data, options->transpose_use_inplace_buffers[0] ? data : data2, w,
+                                               options->dtype, nullptr, nullptr, 0));
+        }
         CHECK_CUDA(cudaEventRecord(events[1], 0));
-        CHECK_CUDECOMP(cudecompTransposeYToZ(handle, grid_desc, data, options->transpose_use_inplace_buffers[1] ? data : data2, w,
-                                             options->dtype, nullptr, nullptr, 0));
+        if (options->transpose_op_weights[1] != 0.0) {
+          CHECK_CUDECOMP(cudecompTransposeYToZ(handle, grid_desc, data, options->transpose_use_inplace_buffers[1] ? data : data2, w,
+                                               options->dtype, nullptr, nullptr, 0));
+        }
         CHECK_CUDA(cudaEventRecord(events[2], 0));
-        CHECK_CUDECOMP(cudecompTransposeZToY(handle, grid_desc, data, options->transpose_use_inplace_buffers[2] ? data : data2, w,
-                                             options->dtype, nullptr, nullptr, 0));
+        if (options->transpose_op_weights[2] != 0.0) {
+          CHECK_CUDECOMP(cudecompTransposeZToY(handle, grid_desc, data, options->transpose_use_inplace_buffers[2] ? data : data2, w,
+                                               options->dtype, nullptr, nullptr, 0));
+        }
         CHECK_CUDA(cudaEventRecord(events[3], 0));
-        CHECK_CUDECOMP(cudecompTransposeYToX(handle, grid_desc, data, options->transpose_use_inplace_buffers[3] ? data : data2, w,
-                                             options->dtype, nullptr, nullptr, 0));
+        if (options->transpose_op_weights[3] != 0.0) {
+          CHECK_CUDECOMP(cudecompTransposeYToX(handle, grid_desc, data, options->transpose_use_inplace_buffers[3] ? data : data2, w,
+                                               options->dtype, nullptr, nullptr, 0));
+        }
         CHECK_CUDA(cudaEventRecord(events[4], 0));
         CHECK_CUDA(cudaDeviceSynchronize());
         CHECK_MPI(MPI_Barrier(handle->mpi_comm));
 
-        CHECK_CUDA(cudaEventElapsedTime(&trial_xy_times[i], events[0], events[1]));
-        CHECK_CUDA(cudaEventElapsedTime(&trial_yz_times[i], events[1], events[2]));
-        CHECK_CUDA(cudaEventElapsedTime(&trial_zy_times[i], events[2], events[3]));
-        CHECK_CUDA(cudaEventElapsedTime(&trial_yx_times[i], events[3], events[4]));
+        if (options->transpose_op_weights[0] != 0.0) CHECK_CUDA(cudaEventElapsedTime(&trial_xy_times[i], events[0], events[1]));
+        if (options->transpose_op_weights[1] != 0.0) CHECK_CUDA(cudaEventElapsedTime(&trial_yz_times[i], events[1], events[2]));
+        if (options->transpose_op_weights[2] != 0.0) CHECK_CUDA(cudaEventElapsedTime(&trial_zy_times[i], events[2], events[3]));
+        if (options->transpose_op_weights[3] != 0.0) CHECK_CUDA(cudaEventElapsedTime(&trial_yx_times[i], events[3], events[4]));
+
         trial_times[i] = trial_xy_times[i] +
                          trial_yz_times[i] +
                          trial_zy_times[i] +
                          trial_yx_times[i];
+
         trial_times_w[i] = options->transpose_op_weights[0] * trial_xy_times[i] +
                            options->transpose_op_weights[1] * trial_yz_times[i] +
                            options->transpose_op_weights[2] * trial_zy_times[i] +
@@ -318,6 +336,15 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
       auto zy_times = processTimings(handle, trial_zy_times);
       auto yx_times = processTimings(handle, trial_yx_times);
 
+      const char *t_skipped[4];
+      for (int i = 0; i < 4; ++i) {
+        if (options->transpose_op_weights[i] == 0.0) {
+          t_skipped[i] = " (skipped)";
+        } else {
+          t_skipped[i] = "";
+        }
+      }
+
       if (handle->rank == 0) {
         if (skip_case) {
           printf("CUDECOMP:\tgrid: %d x %d, backend: %s \n"
@@ -328,16 +355,17 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
           printf("CUDECOMP:\tgrid: %d x %d, backend: %s \n"
                  "CUDECOMP:\tTotal time min/max/avg/std [ms]: %f/%f/%f/%f\n"
                  "CUDECOMP:\t           min/max/avg/std [ms]: %f/%f/%f/%f (weighted)\n"
-                 "CUDECOMP:\tTransposeXY time min/max/avg/std [ms]: %f/%f/%f/%f\n"
-                 "CUDECOMP:\tTransposeYZ time min/max/avg/std [ms]: %f/%f/%f/%f\n"
-                 "CUDECOMP:\tTransposeZY time min/max/avg/std [ms]: %f/%f/%f/%f\n"
-                 "CUDECOMP:\tTransposeYX time min/max/avg/std [ms]: %f/%f/%f/%f\n",
+                 "CUDECOMP:\tTransposeXY time min/max/avg/std [ms]: %f/%f/%f/%f%s\n"
+                 "CUDECOMP:\tTransposeYZ time min/max/avg/std [ms]: %f/%f/%f/%f%s\n"
+                 "CUDECOMP:\tTransposeZY time min/max/avg/std [ms]: %f/%f/%f/%f%s\n"
+                 "CUDECOMP:\tTransposeYX time min/max/avg/std [ms]: %f/%f/%f/%f%s\n",
                  grid_desc->config.pdims[0], grid_desc->config.pdims[1],
                  cudecompTransposeCommBackendToString(grid_desc->config.transpose_comm_backend), times[0], times[1],
                  times[2], times[3], times_w[0], times_w[1], times_w[2], times_w[3],
-                 xy_times[0], xy_times[1], xy_times[2], xy_times[3], yz_times[0], yz_times[1],
-                 yz_times[2], yz_times[3], zy_times[0], zy_times[1], zy_times[2], zy_times[3],
-                 yx_times[0], yx_times[1], yx_times[2], yx_times[3]);
+                 xy_times[0], xy_times[1], xy_times[2], xy_times[3], t_skipped[0], yz_times[0], yz_times[1],
+                 yz_times[2], yz_times[3], t_skipped[1], zy_times[0], zy_times[1], zy_times[2], zy_times[3], t_skipped[2],
+                 yx_times[0], yx_times[1], yx_times[2], yx_times[3], t_skipped[3]);
+
         }
       }
 
