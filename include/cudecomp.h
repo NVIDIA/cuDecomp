@@ -157,14 +157,14 @@ typedef struct {
                                     ///< configuration (default: 0.0)
 
   // Transpose-specific options
-  bool autotune_transpose_backend;    ///< flag to enable transpose backend autotuning (default: false)
+  bool autotune_transpose_backend;       ///< flag to enable transpose backend autotuning (default: false)
   bool transpose_use_inplace_buffers[4]; ///< flag to control whether transpose autotuning uses in-place or out-of-place
                                          ///< buffers during autotuning by transpose operation, considering
                                          ///< the following order: X-to-Y, Y-to-Z, Z-to-Y, Y-to-X
                                          ///< (default: [false, false, false, false])
-  bool autotune_transpose_skip[4];    ///< flag to skip certain transpose operations during autotuning, considering
-                                      ///< the following order: X-to-Y, Y-to-Z, Z-to-Y, Y-to-X
-                                      ///< (default: [false, false, false, false])
+  double transpose_op_weights[4];        ///< multiplicative weight to apply to trial time contribution by transpose operation
+                                         ///< in the following order: X-to-Y, Y-to-Z, Z-to-Y, Y-to-X
+                                         ///< (default: [1.0, 1.0, 1.0, 1.0])
 
   // Halo-specific options
   bool autotune_halo_backend; ///< flag to enable halo backend autotuning (default: false)
