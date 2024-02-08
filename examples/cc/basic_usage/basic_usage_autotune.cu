@@ -152,7 +152,10 @@ int main(int argc, char** argv) {
 
   // Transpose communication backend autotuning options
   options.autotune_transpose_backend = true;
-  options.transpose_use_inplace_buffers = true;
+  options.transpose_use_inplace_buffers[0] = true;
+  options.transpose_use_inplace_buffers[1] = true;
+  options.transpose_use_inplace_buffers[2] = true;
+  options.transpose_use_inplace_buffers[3] = true;
   options.autotune_transpose_skip[0] = false;
   options.autotune_transpose_skip[1] = false;
   options.autotune_transpose_skip[2] = false;

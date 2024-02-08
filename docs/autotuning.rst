@@ -195,8 +195,8 @@ this example, we set it to true to enable transpose backend autotuning.
 
     options%autotune_transpose_backend = .true.
 
-The :code:`transpose_use_inplace_buffers` entry is a boolean flag that controls whether the transpose
-communication during autotuning is performed in-place or out-of-place. This choice can impact transpose
+The :code:`transpose_use_inplace_buffers` entry is an array of boolean flags that controls whether the transpose
+communication during autotuning is performed in-place or out-of-place, on a per operation basis. This choice can impact transpose
 performance due to some optimized paths that skip intermediate local operations in some situations,
 depending on the input/output buffer locations.
 
@@ -211,18 +211,24 @@ contain the same data elements from the global grid. Since the transpose is in-p
 is already the output buffer, and no operation is performed. In contrast, an out-of-place transpose
 would require a copy of data between the input and output buffers.
 
-In this example, we use in-place buffers so we can set this flag to :code:`true`. By default, this
-flag is :code:`false`.
+In this example, we use in-place buffers for all transpose operations so we can set all elements of :code:`transpose_use_inplace_buffers` to :code:`true`.
+By default, the entries are set to :code:`false` and out-of-place buffers are used during autotuning.
 
 .. tabs::
 
   .. code-tab:: c++
 
-    options.transpose_use_inplace_buffers = true;
+    options.transpose_use_inplace_buffers[0] = true; // use in-place buffers for X-to-Y transpose
+    options.transpose_use_inplace_buffers[1] = true; // use in-place buffers for Y-to-Z transpose
+    options.transpose_use_inplace_buffers[2] = true; // use in-place buffers for Z-to-Y transpose
+    options.transpose_use_inplace_buffers[3] = true; // use in-place buffers for Y-to-X transpose
 
   .. code-tab:: fortran
 
-    options%transpose_use_inplace_buffers = .true.
+    options%transpose_use_inplace_buffers(1) = .true. ! use in-place buffers for X-to-Y transpose
+    options%transpose_use_inplace_buffers(2) = .true. ! use in-place buffers for Y-to-Z transpose
+    options%transpose_use_inplace_buffers(3) = .true. ! use in-place buffers for Z-to-Y transpose
+    options%transpose_use_inplace_buffers(4) = .true. ! use in-place buffers for Y-to-X transpose
 
 The :code:`autotune_transpose_skip` entry is an array of boolean flags that allows to skip certain
 transpose operations during autotuning. This option is meant for algorithms that only perform a subset

@@ -72,7 +72,7 @@ _________________________________
   :f real(c_double) skip_threshold: threshold used to skip testing slow configurations; skip configuration if :code:`skip_threshold * t > t_best`, where :code:`t` is the duration of the first timed trial for the configuration and :code:`t_best` is the average trial time of the current best configuration (default: 0.0)
   :f logical autotune_transpose_backend: flag to enable transpose backend autotuning (default: false)
   :f logical autotune_halo_backend: flag to enable halo backend autotuning (default: false)
-  :f logical transpose_use_inplace_buffers: flag to control whether transpose autotuning uses in-place or out-of-place buffers (default: false)
+  :f logical transpose_use_inplace_buffers(4): flag to control whether transpose autotuning uses in-place or out-of-place buffers by operation, considering the following order: X-to-Y, Y-to-Z, Z-to-Y, Y-to-X (default: [false, false, false, false])
   :f logical autotune_transpose_skip(4): flag to skip certain transpose operations during autotuning, considering the following order: X-to-Y, Y-to-Z, Z-to-Y, Y-to-X (default: [false, false, false, false])
   :f integer halo_extents(3): extents for halo autotuning (default: [0, 0, 0])
   :f logical halo_periods(3): periodicity for halo autotuning (default: [false, false, false])

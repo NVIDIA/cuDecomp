@@ -158,8 +158,10 @@ typedef struct {
 
   // Transpose-specific options
   bool autotune_transpose_backend;    ///< flag to enable transpose backend autotuning (default: false)
-  bool transpose_use_inplace_buffers; ///< flag to control whether transpose autotuning uses in-place or out-of-place
-                                      ///< buffers (default: false)
+  bool transpose_use_inplace_buffers[4]; ///< flag to control whether transpose autotuning uses in-place or out-of-place
+                                         ///< buffers during autotuning by transpose operation, considering
+                                         ///< the following order: X-to-Y, Y-to-Z, Z-to-Y, Y-to-X
+                                         ///< (default: [false, false, false, false])
   bool autotune_transpose_skip[4];    ///< flag to skip certain transpose operations during autotuning, considering
                                       ///< the following order: X-to-Y, Y-to-Z, Z-to-Y, Y-to-X
                                       ///< (default: [false, false, false, false])
