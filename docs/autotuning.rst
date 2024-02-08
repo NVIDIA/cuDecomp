@@ -230,28 +230,36 @@ By default, the entries are set to :code:`false` and out-of-place buffers are us
     options%transpose_use_inplace_buffers(3) = .true. ! use in-place buffers for Z-to-Y transpose
     options%transpose_use_inplace_buffers(4) = .true. ! use in-place buffers for Y-to-X transpose
 
-The :code:`autotune_transpose_skip` entry is an array of boolean flags that allows to skip certain
-transpose operations during autotuning. This option is meant for algorithms that only perform a subset
-of the four supported transposing operations. In this example, we autotune for the full set of
-operations, and therefore set all elements of :code:`autotune_transpose_skip` to :code:`false`.
+The :code:`transpose_op_weights` entry is an array of floating point weights that enable adjusting the
+contribution of the different transpose operations to the trial timings used by the autotuner. By default,
+the trial timings used by the autotuner are an unweighted sum of the X-to-Y, Y-to-Z, Z-to-Y, and Y-to-X transpose timings.
+The entries in :code:`transpose_op_weights` are multiplicative weights that are applied to the
+contribution of each transpose operation to the total trial timing.
+This option is meant for programs that may invoke the different transpose operations an unequal
+number of times and may want the autotuner to emphasize the more frequently invoked transpose operations
+when measuring the performance of a backend and process grid configuration. For example, setting
+the weight to zero for one of the transpose operations will indicate to the autotuner that the timing
+of that operation should not contribute to the trial time sum.
+In this example, we autotune using the full set of transpose
+operations, and therefore set all elements of :code:`transpose_op_weights` to :code:`1.0`.
 We should note that this is the default behavior, and thus there is no need to explicitly set
-the elements to :code:`false`.
+the elements to :code:`1.0` generally.
 
 .. tabs::
 
   .. code-tab:: c++
 
-    options.autotune_transpose_skip[0] = false; // do not skip X-to-Y transpose
-    options.autotune_transpose_skip[1] = false; // do not skip Y-to-Z transpose
-    options.autotune_transpose_skip[2] = false; // do not skip Z-to-Y transpose
-    options.autotune_transpose_skip[3] = false; // do not skip Y-to-X transpose
+    options.transpose_op_weights[0] = 1.0; // apply 1.0 multiplier to X-to-Y transpose timings
+    options.transpose_op_weights[1] = 1.0; // apply 1.0 multiplier to Y-to-Z transpose timings
+    options.transpose_op_weights[2] = 1.0; // apply 1.0 multiplier to Z-to-Y transpose timings
+    options.transpose_op_weights[3] = 1.0; // apply 1.0 multiplier to Y-to-X transpose timings
 
   .. code-tab:: fortran
 
-    options%autotune_transpose_skip(1) = .false. ! do not skip X-to-Y transpose
-    options%autotune_transpose_skip(2) = .false. ! do not skip Y-to-Z transpose
-    options%autotune_transpose_skip(3) = .false. ! do not skip Z-to-Y transpose
-    options%autotune_transpose_skip(4) = .false. ! do not skip Y-to-X transpose
+    options%transpose_op_weights(1) = 1.0 ! apply 1.0 multiplier to X-to-Y transpose timings
+    options%transpose_op_weights(2) = 1.0 ! apply 1.0 multiplier to Y-to-Z transpose timings
+    options%transpose_op_weights(3) = 1.0 ! apply 1.0 multiplier to Z-to-Y transpose timings
+    options%transpose_op_weights(4) = 1.0 ! apply 1.0 multiplier to Y-to-X transpose timings
 
 Lastly, these are the options specific to halo communication backend autotuning.
 
