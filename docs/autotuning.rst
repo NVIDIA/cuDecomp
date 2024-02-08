@@ -225,10 +225,10 @@ By default, the entries are set to :code:`false` and out-of-place buffers are us
 
   .. code-tab:: fortran
 
-    options%transpose_use_inplace_buffers(0) = .true. ! use in-place buffers for X-to-Y transpose
-    options%transpose_use_inplace_buffers(1) = .true. ! use in-place buffers for Y-to-Z transpose
-    options%transpose_use_inplace_buffers(2) = .true. ! use in-place buffers for Z-to-Y transpose
-    options%transpose_use_inplace_buffers(3) = .true. ! use in-place buffers for Y-to-X transpose
+    options%transpose_use_inplace_buffers(1) = .true. ! use in-place buffers for X-to-Y transpose
+    options%transpose_use_inplace_buffers(2) = .true. ! use in-place buffers for Y-to-Z transpose
+    options%transpose_use_inplace_buffers(3) = .true. ! use in-place buffers for Z-to-Y transpose
+    options%transpose_use_inplace_buffers(4) = .true. ! use in-place buffers for Y-to-X transpose
 
 The :code:`autotune_transpose_skip` entry is an array of boolean flags that allows to skip certain
 transpose operations during autotuning. This option is meant for algorithms that only perform a subset
