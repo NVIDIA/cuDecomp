@@ -238,8 +238,9 @@ contribution of each transpose operation to the total trial timing.
 This option is meant for programs that may invoke the different transpose operations an unequal
 number of times and may want the autotuner to emphasize the more frequently invoked transpose operations
 when measuring the performance of a backend and process grid configuration. For example, setting
-the weight to zero for one of the transpose operations will indicate to the autotuner that the timing
-of that operation should not contribute to the trial time sum.
+the weight to :code:`0.0` for one of the transpose operations will indicate to the autotuner that the timing
+of that operation should not contribute to the trial time sum. On a related note, the autotuner will skip running
+any transpose operation with a weight of :code:`0.0` for efficiency.
 In this example, we autotune using the full set of transpose
 operations, and therefore set all elements of :code:`transpose_op_weights` to :code:`1.0`.
 We should note that this is the default behavior, and thus there is no need to explicitly set
