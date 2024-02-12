@@ -545,7 +545,7 @@ cudecompResult_t cudecompGridDescAutotuneOptionsSetDefaults(cudecompGridDescAuto
     options->autotune_transpose_backend = false;
     for (int i = 0; i < 4; ++i) {
       options->transpose_use_inplace_buffers[i] = false;
-      options->autotune_transpose_skip[i] = false;
+      options->transpose_op_weights[i] = 1.0;
     }
 
     // Halo-specific options
