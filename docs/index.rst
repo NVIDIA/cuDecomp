@@ -29,7 +29,7 @@ Table of Contents
    basic_usage
    autotuning
    nvshmem
-   api
+   env_vars
 
 
 Indices and tables

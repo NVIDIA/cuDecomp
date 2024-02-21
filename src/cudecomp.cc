@@ -151,6 +151,12 @@ static void gatherGlobalMPIInfo(cudecompHandle_t& handle) {
                           handle->mpi_comm));
 }
 
+static void getCudecompEnvVars(cudecompHandle_t& handle) {
+  // Check CUDECOMP_ENABLE_NCCL_UBR (NCCL user buffer registration)
+  char* nccl_enable_ubr_str = std::getenv("CUDECOMP_ENABLE_NCCL_UBR");
+  if (nccl_enable_ubr_str) { handle->nccl_enable_ubr = std::strtol(nccl_enable_ubr_str, nullptr, 10) == 1; }
+}
+
 #ifdef ENABLE_NVSHMEM
 static void inspectNvshmemEnvVars(cudecompHandle_t& handle) {
   // Check NVSHMEM_DISABLE_CUDA_VMM
@@ -219,6 +225,9 @@ cudecompResult_t cudecompInit(cudecompHandle_t* handle_in, MPI_Comm mpi_comm) {
 
     // Gather extra MPI info from all communicator ranks
     gatherGlobalMPIInfo(handle);
+
+    // Gather cuDecomp environment variable settings
+    getCudecompEnvVars(handle);
 
     handle->initialized = true;
     cudecomp_initialized = true;
@@ -720,6 +729,19 @@ cudecompResult_t cudecompMalloc(cudecompHandle_t handle, cudecompGridDesc_t grid
 #endif
     } else {
       CHECK_CUDA(cudaMalloc(buffer, buffer_size_bytes));
+#if NCCL_VERSION_CODE >= NCCL_VERSION(2,19,0)
+      if (transposeBackendRequiresNccl(grid_desc->config.transpose_comm_backend) ||
+          haloBackendRequiresNccl(grid_desc->config.halo_comm_backend)) {
+
+        if (handle->nccl_enable_ubr) {
+          void* nccl_ubr_handle;
+          CHECK_NCCL(ncclCommRegister(handle->nccl_comm, buffer, buffer_size_bytes, &nccl_ubr_handle));
+          handle->nccl_ubr_handles[*buffer].push_back(std::make_pair(handle->nccl_comm, nccl_ubr_handle));
+          CHECK_NCCL(ncclCommRegister(handle->nccl_local_comm, buffer, buffer_size_bytes, &nccl_ubr_handle));
+          handle->nccl_ubr_handles[*buffer].push_back(std::make_pair(handle->nccl_local_comm, nccl_ubr_handle));
+        }
+      }
+#endif
     }
 
   } catch (const cudecomp::BaseException& e) {
@@ -734,6 +756,19 @@ cudecompResult_t cudecompFree(cudecompHandle_t handle, cudecompGridDesc_t grid_d
   try {
     checkHandle(handle);
     checkGridDesc(grid_desc);
+
+#if NCCL_VERSION_CODE >= NCCL_VERSION(2,19,0)
+    if (transposeBackendRequiresNccl(grid_desc->config.transpose_comm_backend) ||
+        haloBackendRequiresNccl(grid_desc->config.halo_comm_backend)) {
+
+      if (handle->nccl_ubr_handles.count(buffer) != 0) {
+        for (const auto &entry : handle->nccl_ubr_handles[buffer]) {
+          CHECK_NCCL(ncclCommDeregister(entry.first, entry.second));
+        }
+        handle->nccl_ubr_handles.erase(buffer);
+      }
+    }
+#endif
 
     if (transposeBackendRequiresNvshmem(grid_desc->config.transpose_comm_backend) ||
         haloBackendRequiresNvshmem(grid_desc->config.halo_comm_backend)) {
