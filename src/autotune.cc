@@ -98,6 +98,8 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
   bool autotune_pdims = (grid_desc->config.pdims[0] == 0 && grid_desc->config.pdims[1] == 0);
 
   std::vector<cudecompTransposeCommBackend_t> comm_backend_list;
+  bool need_nccl = false;
+  std::array<void*, 2> nccl_work_ubr_handles{nullptr, nullptr};
   bool need_nvshmem = false;
   if (autotune_comm) {
     comm_backend_list = {CUDECOMP_TRANSPOSE_COMM_MPI_P2P, CUDECOMP_TRANSPOSE_COMM_MPI_P2P_PL,
@@ -105,6 +107,7 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
     if (!options->disable_nccl_backends) {
       comm_backend_list.push_back(CUDECOMP_TRANSPOSE_COMM_NCCL);
       comm_backend_list.push_back(CUDECOMP_TRANSPOSE_COMM_NCCL_PL);
+      need_nccl = true;
     }
 #ifdef ENABLE_NVSHMEM
     if (!options->disable_nvshmem_backends) {
@@ -115,6 +118,7 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
 #endif
   } else {
     comm_backend_list = {grid_desc->config.transpose_comm_backend};
+    if (transposeBackendRequiresNccl(comm_backend_list[0])) { need_nccl = true; }
 #ifdef ENABLE_NVSHMEM
     if (transposeBackendRequiresNvshmem(comm_backend_list[0])) { need_nvshmem = true; }
 #endif
@@ -193,7 +197,16 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
       work_sz = work_sz_new;
       if (need_nvshmem) {
 #ifdef ENABLE_NVSHMEM
-        if (work && work != work_nvshmem) CHECK_CUDA(cudaFree(work));
+        if (work && work != work_nvshmem) {
+          CHECK_CUDA(cudaFree(work));
+#if NCCL_VERSION_CODE >= NCCL_VERSION(2,19,0)
+          if (nccl_work_ubr_handles[0]) {
+            CHECK_NCCL(ncclCommDeregister(handle->nccl_comm, nccl_work_ubr_handles[0]));
+            CHECK_NCCL(ncclCommDeregister(handle->nccl_local_comm, nccl_work_ubr_handles[1]));
+            nccl_work_ubr_handles = {nullptr, nullptr};
+          }
+#endif
+        }
         // Temporarily set backend to force nvshmem_malloc patch in cudecompMalloc/Free
         auto tmp = grid_desc->config.transpose_comm_backend;
         grid_desc->config.transpose_comm_backend = CUDECOMP_TRANSPOSE_COMM_NVSHMEM;
@@ -212,11 +225,32 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
           cudaGetLastError(); // Reset CUDA error state
         } else {
           CHECK_CUDA(ret);
+#if NCCL_VERSION_CODE >= NCCL_VERSION(2,19,0)
+          if (need_nccl && handle->nccl_enable_ubr) {
+            CHECK_NCCL(ncclCommRegister(handle->nccl_comm, work, work_sz, &nccl_work_ubr_handles[0]));
+            CHECK_NCCL(ncclCommRegister(handle->nccl_local_comm, work, work_sz, &nccl_work_ubr_handles[1]));
+          }
+#endif
         }
 #endif
       } else {
-        if (work) CHECK_CUDA(cudaFree(work));
+        if (work) {
+          CHECK_CUDA(cudaFree(work));
+#if NCCL_VERSION_CODE >= NCCL_VERSION(2,19,0)
+          if (nccl_work_ubr_handles[0]) {
+            CHECK_NCCL(ncclCommDeregister(handle->nccl_comm, nccl_work_ubr_handles[0]));
+            CHECK_NCCL(ncclCommDeregister(handle->nccl_local_comm, nccl_work_ubr_handles[1]));
+            nccl_work_ubr_handles = {nullptr, nullptr};
+          }
+#endif
+        }
         CHECK_CUDA(cudaMalloc(&work, work_sz));
+#if NCCL_VERSION_CODE >= NCCL_VERSION(2,19,0)
+        if (need_nccl && handle->nccl_enable_ubr) {
+          CHECK_NCCL(ncclCommRegister(handle->nccl_comm, work, work_sz, &nccl_work_ubr_handles[0]));
+          CHECK_NCCL(ncclCommRegister(handle->nccl_local_comm, work, work_sz, &nccl_work_ubr_handles[1]));
+        }
+#endif
       }
     }
 
@@ -394,7 +428,16 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
 
   // Free test data and workspace
   if (need_nvshmem) {
-    if (work != work_nvshmem) { CHECK_CUDA(cudaFree(work)); }
+    if (work != work_nvshmem) {
+      CHECK_CUDA(cudaFree(work));
+#if NCCL_VERSION_CODE >= NCCL_VERSION(2,19,0)
+      if (nccl_work_ubr_handles[0]) {
+        CHECK_NCCL(ncclCommDeregister(handle->nccl_comm, nccl_work_ubr_handles[0]));
+        CHECK_NCCL(ncclCommDeregister(handle->nccl_local_comm, nccl_work_ubr_handles[1]));
+        nccl_work_ubr_handles = {nullptr, nullptr};
+      }
+#endif
+    }
 #ifdef ENABLE_NVSHMEM
     // Temporarily set backend to force nvshmem_malloc patch in cudecompMalloc/Free
     auto tmp = grid_desc->config.transpose_comm_backend;
@@ -404,6 +447,13 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
 #endif
   } else {
     CHECK_CUDA(cudaFree(work));
+#if NCCL_VERSION_CODE >= NCCL_VERSION(2,19,0)
+    if (nccl_work_ubr_handles[0]) {
+      CHECK_NCCL(ncclCommDeregister(handle->nccl_comm, nccl_work_ubr_handles[0]));
+      CHECK_NCCL(ncclCommDeregister(handle->nccl_local_comm, nccl_work_ubr_handles[1]));
+      nccl_work_ubr_handles = {nullptr, nullptr};
+    }
+#endif
   }
 
   CHECK_CUDA(cudaFree(data));
@@ -444,10 +494,15 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
   bool autotune_pdims = (grid_desc->config.pdims[0] == 0 && grid_desc->config.pdims[1] == 0);
 
   std::vector<cudecompHaloCommBackend_t> comm_backend_list;
+  bool need_nccl = false;
+  std::array<void*, 2> nccl_work_ubr_handles{nullptr, nullptr};
   bool need_nvshmem = false;
   if (autotune_comm) {
     comm_backend_list = {CUDECOMP_HALO_COMM_MPI, CUDECOMP_HALO_COMM_MPI_BLOCKING};
-    if (!options->disable_nccl_backends) { comm_backend_list.push_back(CUDECOMP_HALO_COMM_NCCL); }
+    if (!options->disable_nccl_backends) {
+      comm_backend_list.push_back(CUDECOMP_HALO_COMM_NCCL);
+      need_nccl = true;
+    }
 #ifdef ENABLE_NVSHMEM
     if (!options->disable_nvshmem_backends) {
       comm_backend_list.push_back(CUDECOMP_HALO_COMM_NVSHMEM);
@@ -457,6 +512,7 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
 #endif
   } else {
     comm_backend_list = {grid_desc->config.halo_comm_backend};
+    if (haloBackendRequiresNccl(comm_backend_list[0])) { need_nccl = true; }
 #ifdef ENABLE_NVSHMEM
     if (haloBackendRequiresNvshmem(comm_backend_list[0])) { need_nvshmem = true; }
 #endif
@@ -523,7 +579,16 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
       work_sz = work_sz_new;
       if (need_nvshmem) {
 #ifdef ENABLE_NVSHMEM
-        if (work && work != work_nvshmem) CHECK_CUDA(cudaFree(work));
+        if (work && work != work_nvshmem) {
+          CHECK_CUDA(cudaFree(work));
+#if NCCL_VERSION_CODE >= NCCL_VERSION(2,19,0)
+          if (nccl_work_ubr_handles[0]) {
+            CHECK_NCCL(ncclCommDeregister(handle->nccl_comm, nccl_work_ubr_handles[0]));
+            CHECK_NCCL(ncclCommDeregister(handle->nccl_local_comm, nccl_work_ubr_handles[1]));
+            nccl_work_ubr_handles = {nullptr, nullptr};
+          }
+#endif
+        }
         // Temporarily set backend to force nvshmem_malloc patch in cudecompMalloc/Free
         auto tmp = grid_desc->config.halo_comm_backend;
         grid_desc->config.halo_comm_backend = CUDECOMP_HALO_COMM_NVSHMEM;
@@ -542,11 +607,32 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
           cudaGetLastError(); // Reset CUDA error state
         } else {
           CHECK_CUDA(ret);
+#if NCCL_VERSION_CODE >= NCCL_VERSION(2,19,0)
+          if (need_nccl && handle->nccl_enable_ubr) {
+            CHECK_NCCL(ncclCommRegister(handle->nccl_comm, work, work_sz, &nccl_work_ubr_handles[0]));
+            CHECK_NCCL(ncclCommRegister(handle->nccl_local_comm, work, work_sz, &nccl_work_ubr_handles[1]));
+          }
+#endif
         }
 #endif
       } else {
-        if (work) CHECK_CUDA(cudaFree(work));
+        if (work) {
+          CHECK_CUDA(cudaFree(work));
+#if NCCL_VERSION_CODE >= NCCL_VERSION(2,19,0)
+          if (nccl_work_ubr_handles[0]) {
+            CHECK_NCCL(ncclCommDeregister(handle->nccl_comm, nccl_work_ubr_handles[0]));
+            CHECK_NCCL(ncclCommDeregister(handle->nccl_local_comm, nccl_work_ubr_handles[1]));
+            nccl_work_ubr_handles = {nullptr, nullptr};
+          }
+#endif
+        }
         CHECK_CUDA(cudaMalloc(&work, work_sz));
+#if NCCL_VERSION_CODE >= NCCL_VERSION(2,19,0)
+        if (need_nccl && handle->nccl_enable_ubr) {
+          CHECK_NCCL(ncclCommRegister(handle->nccl_comm, work, work_sz, &nccl_work_ubr_handles[0]));
+          CHECK_NCCL(ncclCommRegister(handle->nccl_local_comm, work, work_sz, &nccl_work_ubr_handles[1]));
+        }
+#endif
       }
     }
 
@@ -680,7 +766,16 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
 
   // Free test data and workspace
   if (need_nvshmem) {
-    if (work != work_nvshmem) { CHECK_CUDA(cudaFree(work)); }
+    if (work != work_nvshmem) {
+      CHECK_CUDA(cudaFree(work));
+#if NCCL_VERSION_CODE >= NCCL_VERSION(2,19,0)
+      if (nccl_work_ubr_handles[0]) {
+        CHECK_NCCL(ncclCommDeregister(handle->nccl_comm, nccl_work_ubr_handles[0]));
+        CHECK_NCCL(ncclCommDeregister(handle->nccl_local_comm, nccl_work_ubr_handles[1]));
+        nccl_work_ubr_handles = {nullptr, nullptr};
+      }
+#endif
+    }
 #ifdef ENABLE_NVSHMEM
     // Temporarily set backend to force nvshmem_malloc patch in cudecompMalloc/Free
     auto tmp = grid_desc->config.halo_comm_backend;
@@ -690,6 +785,13 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
 #endif
   } else {
     CHECK_CUDA(cudaFree(work));
+#if NCCL_VERSION_CODE >= NCCL_VERSION(2,19,0)
+    if (nccl_work_ubr_handles[0]) {
+      CHECK_NCCL(ncclCommDeregister(handle->nccl_comm, nccl_work_ubr_handles[0]));
+      CHECK_NCCL(ncclCommDeregister(handle->nccl_local_comm, nccl_work_ubr_handles[1]));
+      nccl_work_ubr_handles = {nullptr, nullptr};
+    }
+#endif
   }
 
   CHECK_CUDA(cudaFree(data));

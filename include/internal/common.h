@@ -36,6 +36,7 @@
 #include <map>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include <cuda_runtime.h>
@@ -59,6 +60,8 @@ struct cudecompHandle {
   int n_grid_descs_using_nccl = 0;      // Count of grid descriptors using NCCL
   ncclComm_t nccl_comm = nullptr;       // NCCL communicator (global)
   ncclComm_t nccl_local_comm = nullptr; // NCCL communicator (intranode)
+  bool nccl_enable_ubr = false;         // Flag to control NCCL user buffer registration usage
+  std::unordered_map<void*, std::vector<std::pair<ncclComm_t, void*>>> nccl_ubr_handles; // map of allocated buffer address to NCCL registration handle(s)
 
   cudaStream_t pl_stream = nullptr; // stream used for pipelined backends
 

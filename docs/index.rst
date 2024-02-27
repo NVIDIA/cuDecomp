@@ -30,6 +30,7 @@ Table of Contents
    autotuning
    nvshmem
    api
+   env_vars
 
 
 Indices and tables
