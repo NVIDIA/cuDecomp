@@ -16,11 +16,15 @@ set(CUDECOMP_NCCL_HOME CACHE STRING "Path to search for NCCL installation. Use t
 set(CUDECOMP_NVSHMEM_HOME CACHE STRING "Path to search for NVSHMEM installation. Use to override NVHPC provided NVSHMEM version.")
 
 # Use NVHPC compilers by default
-set(CMAKE_CXX_COMPILER "nvc++")
-set(CMAKE_Fortran_COMPILER "nvfortran")
+find_program(NVHPC_CXX_BIN "nvc++" REQUIRED)
+set(CMAKE_CXX_COMPILER ${NVHPC_CXX_BIN})
+
+if (CUDECOMP_BUILD_FORTRAN)
+  find_program(NVHPC_Fortran_BIN "nvfortran" REQUIRED)
+  set(CMAKE_Fortran_COMPILER ${NVHPC_Fortran_BIN})
+endif()
 
 # Locate and use NVHPC CMake configuration
-find_program(NVHPC_CXX_BIN "nvc++")
 string(REPLACE "compilers/bin/nvc++" "cmake" NVHPC_CMAKE_DIR ${NVHPC_CXX_BIN})
 set(CMAKE_PREFIX_PATH ${NVHPC_CMAKE_DIR})
 
