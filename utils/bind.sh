@@ -100,13 +100,11 @@ readonly local_node=$(( local_rank / gpus_per_node ))
 
 declare -a ibdevs=()
 case "${cluster}" in
-    circe)
-        # Need to specialize for circe because IB detection is hard
-        ibdevs=(mlx5_1 mlx5_2 mlx5_3 mlx5_4 mlx5_7 mlx5_8 mlx5_9 mlx5_10)
-        ;;
    selene)
-        # Need to specialize for selene because IB detection is hard
         ibdevs=(mlx5_0 mlx5_1 mlx5_2 mlx5_3 mlx5_6 mlx5_7 mlx5_8 mlx5_9)
+        ;;
+   eos)
+        ibdevs=(mlx5_0 mlx5_3 mlx5_4 mlx5_5 mlx5_6 mlx5_9 mlx5_10 mlx5_11)
         ;;
     '')
         if ibstat_out="$(ibstat -l 2>/dev/null | sort -V)" ; then
