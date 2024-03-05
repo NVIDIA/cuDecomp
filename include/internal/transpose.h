@@ -77,18 +77,15 @@ template <typename T> static inline cutensorDataType_t getCutensorDataType() { r
 
 static inline cutensorComputeDescriptor_t getCutensorComputeType(cutensorDataType_t cutensor_dtype) {
   switch (cutensor_dtype) {
-    case CUTENSOR_R_32F:
-    case CUTENSOR_C_32F:
-      return CUTENSOR_COMPUTE_DESC_32F;
-    case CUTENSOR_R_64F:
-    case CUTENSOR_C_64F:
-    default:
-      return CUTENSOR_COMPUTE_DESC_64F;
+  case CUTENSOR_R_32F:
+  case CUTENSOR_C_32F: return CUTENSOR_COMPUTE_DESC_32F;
+  case CUTENSOR_R_64F:
+  case CUTENSOR_C_64F:
+  default: return CUTENSOR_COMPUTE_DESC_64F;
   }
 }
 
-template <typename T>
-static inline uint32_t getAlignment(const T* ptr) {
+template <typename T> static inline uint32_t getAlignment(const T* ptr) {
   auto i_ptr = reinterpret_cast<std::uintptr_t>(ptr);
   for (uint32_t d = 16; d > 0; d >>= 1) {
     if (i_ptr % d == 0) return d;
@@ -116,14 +113,15 @@ static void localPermute(const cudecompHandle_t handle, const std::array<int64_t
   CHECK_CUTENSOR(cutensorCreateTensorDescriptor(handle->cutensor_handle, &desc_in, 3, extent_in.data(), strides_in_ptr,
                                                 cutensor_type, getAlignment(input)));
   cutensorTensorDescriptor_t desc_out;
-  CHECK_CUTENSOR(cutensorCreateTensorDescriptor(handle->cutensor_handle, &desc_out, 3, extent_out.data(), strides_out_ptr,
-                                                cutensor_type, getAlignment(output)));
+  CHECK_CUTENSOR(cutensorCreateTensorDescriptor(handle->cutensor_handle, &desc_out, 3, extent_out.data(),
+                                                strides_out_ptr, cutensor_type, getAlignment(output)));
 
   cutensorOperationDescriptor_t desc_op;
-  CHECK_CUTENSOR(cutensorCreatePermutation(handle->cutensor_handle, &desc_op, desc_in, order_in.data(), CUTENSOR_OP_IDENTITY,
-                 desc_out, order_out.data(), getCutensorComputeType(cutensor_type)));
+  CHECK_CUTENSOR(cutensorCreatePermutation(handle->cutensor_handle, &desc_op, desc_in, order_in.data(),
+                                           CUTENSOR_OP_IDENTITY, desc_out, order_out.data(),
+                                           getCutensorComputeType(cutensor_type)));
 
-  cutensorPlan_t  plan;
+  cutensorPlan_t plan;
   CHECK_CUTENSOR(cutensorCreatePlan(handle->cutensor_handle, &plan, desc_op, handle->cutensor_plan_pref, 0));
 
   T one(1);
