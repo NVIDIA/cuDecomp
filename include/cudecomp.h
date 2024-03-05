@@ -43,8 +43,8 @@
 #include <mpi.h>
 
 #define CUDECOMP_MAJOR 0
-#define CUDECOMP_MINOR 3
-#define CUDECOMP_PATCH 1
+#define CUDECOMP_MINOR 4
+#define CUDECOMP_PATCH 0
 
 /**
  * @brief This enum lists the different available transpose backend options.
