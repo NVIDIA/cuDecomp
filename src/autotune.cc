@@ -99,7 +99,9 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
 
   std::vector<cudecompTransposeCommBackend_t> comm_backend_list;
   bool need_nccl = false;
+#if NCCL_VERSION_CODE >= NCCL_VERSION(2, 19, 0)
   std::array<void*, 2> nccl_work_ubr_handles{nullptr, nullptr};
+#endif
   bool need_nvshmem = false;
   if (autotune_comm) {
     comm_backend_list = {CUDECOMP_TRANSPOSE_COMM_MPI_P2P, CUDECOMP_TRANSPOSE_COMM_MPI_P2P_PL,
@@ -224,12 +226,12 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
           cudaGetLastError(); // Reset CUDA error state
         } else {
           CHECK_CUDA(ret);
-#if NCCL_VERSION_CODE >= NCCL_VERSION(2, 19, 0)
           if (need_nccl && handle->nccl_enable_ubr) {
+#if NCCL_VERSION_CODE >= NCCL_VERSION(2, 19, 0)
             CHECK_NCCL(ncclCommRegister(handle->nccl_comm, work, work_sz, &nccl_work_ubr_handles[0]));
             CHECK_NCCL(ncclCommRegister(handle->nccl_local_comm, work, work_sz, &nccl_work_ubr_handles[1]));
-          }
 #endif
+          }
         }
 #endif
       } else {
@@ -244,12 +246,12 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
 #endif
         }
         CHECK_CUDA(cudaMalloc(&work, work_sz));
-#if NCCL_VERSION_CODE >= NCCL_VERSION(2, 19, 0)
         if (need_nccl && handle->nccl_enable_ubr) {
+#if NCCL_VERSION_CODE >= NCCL_VERSION(2, 19, 0)
           CHECK_NCCL(ncclCommRegister(handle->nccl_comm, work, work_sz, &nccl_work_ubr_handles[0]));
           CHECK_NCCL(ncclCommRegister(handle->nccl_local_comm, work, work_sz, &nccl_work_ubr_handles[1]));
-        }
 #endif
+        }
       }
     }
 
@@ -502,7 +504,9 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
 
   std::vector<cudecompHaloCommBackend_t> comm_backend_list;
   bool need_nccl = false;
+#if NCCL_VERSION_CODE >= NCCL_VERSION(2, 19, 0)
   std::array<void*, 2> nccl_work_ubr_handles{nullptr, nullptr};
+#endif
   bool need_nvshmem = false;
   if (autotune_comm) {
     comm_backend_list = {CUDECOMP_HALO_COMM_MPI, CUDECOMP_HALO_COMM_MPI_BLOCKING};
@@ -614,12 +618,12 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
           cudaGetLastError(); // Reset CUDA error state
         } else {
           CHECK_CUDA(ret);
-#if NCCL_VERSION_CODE >= NCCL_VERSION(2, 19, 0)
           if (need_nccl && handle->nccl_enable_ubr) {
+#if NCCL_VERSION_CODE >= NCCL_VERSION(2, 19, 0)
             CHECK_NCCL(ncclCommRegister(handle->nccl_comm, work, work_sz, &nccl_work_ubr_handles[0]));
             CHECK_NCCL(ncclCommRegister(handle->nccl_local_comm, work, work_sz, &nccl_work_ubr_handles[1]));
-          }
 #endif
+          }
         }
 #endif
       } else {
@@ -634,12 +638,12 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
 #endif
         }
         CHECK_CUDA(cudaMalloc(&work, work_sz));
-#if NCCL_VERSION_CODE >= NCCL_VERSION(2, 19, 0)
         if (need_nccl && handle->nccl_enable_ubr) {
+#if NCCL_VERSION_CODE >= NCCL_VERSION(2, 19, 0)
           CHECK_NCCL(ncclCommRegister(handle->nccl_comm, work, work_sz, &nccl_work_ubr_handles[0]));
           CHECK_NCCL(ncclCommRegister(handle->nccl_local_comm, work, work_sz, &nccl_work_ubr_handles[1]));
-        }
 #endif
+        }
       }
     }
 
