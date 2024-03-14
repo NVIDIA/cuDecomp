@@ -139,12 +139,19 @@ if (CMAKE_VERSION VERSION_LESS 3.18)
 else()
   set_target_properties(cudecomp PROPERTIES CUDA_ARCHITECTURES "${CUDECOMP_CUDA_CC_LIST}")
 endif()
+
+target_compile_options(cudecomp PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:--ptxas-options=-v >)
+
 target_sources(cudecomp
   PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/src/autotune.cc
   ${CMAKE_CURRENT_SOURCE_DIR}/src/cudecomp_kernels.cu
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/cudecomp_kernels_rdc.cu
   ${CMAKE_CURRENT_SOURCE_DIR}/src/cudecomp.cc
 )
+
+set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/src/cudecomp_kernels_rdc.cu PROPERTIES COMPILE_FLAGS -rdc=true)
+set_target_properties(cudecomp PROPERTIES CUDA_RESOLVE_DEVICE_SYMBOLS ON)
 
 target_include_directories(cudecomp
   PRIVATE
@@ -201,8 +208,6 @@ if (CUDECOMP_ENABLE_NVSHMEM)
     target_link_libraries(cudecomp PUBLIC -L${NVHPC_CUDA_LIBRARY_DIR}/stubs -lnvidia-ml)
   endif()
   target_link_libraries(cudecomp PUBLIC -L${NVHPC_CUDA_LIBRARY_DIR}/stubs -lcuda)
-  set_target_properties(cudecomp PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
-  set_target_properties(cudecomp PROPERTIES CUDA_RESOLVE_DEVICE_SYMBOLS ON)
 endif()
 
 set_target_properties(cudecomp PROPERTIES PUBLIC_HEADER ${CMAKE_CURRENT_SOURCE_DIR}/include/cudecomp.h)

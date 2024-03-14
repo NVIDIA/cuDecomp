@@ -22,7 +22,7 @@ TESTDIR=${PWD}/tests
 EXAMPLEDIR=${PWD}/examples
 BENCHMARKDIR=${PWD}/benchmark
 
-OBJ=${BUILDDIR}/cudecomp.o ${BUILDDIR}/cudecomp_kernels.o ${BUILDDIR}/autotune.o
+OBJ=${BUILDDIR}/cudecomp.o ${BUILDDIR}/cudecomp_kernels.o ${BUILDDIR}/cudecomp_kernels_rdc.o ${BUILDDIR}/autotune.o
 TESTS_CC=${TESTDIR}/cc/test ${TESTDIR}/cc/fft_test
 TESTS_F90=${TESTDIR}/fortran/test ${TESTDIR}/fortran/fft_test
 
@@ -95,9 +95,13 @@ ${BUILDDIR}/%.o: src/%.cc  include/*.h include/internal/*.h
 	@mkdir -p ${BUILDDIR}
 	${MPICXX} -fPIC ${DEFINES} ${CXXFLAGS} ${INCLUDES} -c -o $@ $<
 
-${BUILDDIR}/%.o: src/%.cu  include/internal/*.cuh
+${BUILDDIR}/cudecomp_kernels_rdc.o: src/cudecomp_kernels_rdc.cu  include/internal/*.cuh
 	@mkdir -p ${BUILDDIR}
 	${NVCC} -rdc=true -Xcompiler -fPIC ${DEFINES} ${NVFLAGS} ${INCLUDES} -c -o $@ $<
+
+${BUILDDIR}/%.o: src/%.cu  include/internal/*.cuh
+	@mkdir -p ${BUILDDIR}
+	${NVCC} -Xcompiler -fPIC ${DEFINES} ${NVFLAGS} ${INCLUDES} -c -o $@ $<
 
 ${CUDECOMPMOD}: src/cudecomp_m.cuf 
 	@mkdir -p ${BUILDDIR}/include
@@ -105,7 +109,7 @@ ${CUDECOMPMOD}: src/cudecomp_m.cuf
 
 ${CUDECOMPLIB}: ${OBJ}
 	@mkdir -p ${BUILDDIR}/lib
-	${NVCC} -rdc=true -shared ${NVFLAGS} ${INCLUDES} ${LIBS} -o $@ $^ ${STATIC_LIBS}
+	${NVCC} -shared ${NVFLAGS} ${INCLUDES} ${LIBS} -o $@ $^ ${STATIC_LIBS}
 
 ${CUDECOMPFLIB}: ${CUDECOMPMOD}
 	@mkdir -p ${BUILDDIR}/lib
