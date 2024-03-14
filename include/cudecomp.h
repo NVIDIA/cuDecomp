@@ -43,8 +43,8 @@
 #include <mpi.h>
 
 #define CUDECOMP_MAJOR 0
-#define CUDECOMP_MINOR 3
-#define CUDECOMP_PATCH 1
+#define CUDECOMP_MINOR 4
+#define CUDECOMP_PATCH 0
 
 /**
  * @brief This enum lists the different available transpose backend options.
@@ -140,10 +140,10 @@ typedef struct {
  */
 typedef struct {
   // General options
-  int32_t n_warmup_trials;          ///< number of warmup trials to run for each tested configuration during autotuning
-                                    ///< (default: 3)
-  int32_t n_trials;                 ///< number of timed trials to run for each tested configuration during autotuning
-                                    ///< (default: 5)
+  int32_t n_warmup_trials; ///< number of warmup trials to run for each tested configuration during autotuning
+                           ///< (default: 3)
+  int32_t n_trials;        ///< number of timed trials to run for each tested configuration during autotuning
+                           ///< (default: 5)
   cudecompAutotuneGridMode_t grid_mode; ///< which communication (transpose/halo) to use to autotune process grid
                                         ///< (default: CUDECOMP_AUTOTUNE_GRID_TRANSPOSE)
   cudecompDataType_t dtype;             ///< datatype to use during autotuning (default: CUDECOMP_DOUBLE)
@@ -152,9 +152,9 @@ typedef struct {
   bool disable_nccl_backends;       ///< flag to disable NCCL backend options during autotuning (default: false)
   bool disable_nvshmem_backends;    ///< flag to disable NVSHMEM backend options during autotuning (default: false)
   double skip_threshold;            ///< threshold used to skip testing slow configurations; skip configuration
-                                    ///< if `skip_threshold * t > t_best`, where `t` is the duration of the first timed trial
-                                    ///< for the configuration and `t_best` is the average trial time of the current best
-                                    ///< configuration (default: 0.0)
+                         ///< if `skip_threshold * t > t_best`, where `t` is the duration of the first timed trial
+                         ///< for the configuration and `t_best` is the average trial time of the current best
+                         ///< configuration (default: 0.0)
 
   // Transpose-specific options
   bool autotune_transpose_backend;       ///< flag to enable transpose backend autotuning (default: false)
@@ -162,9 +162,9 @@ typedef struct {
                                          ///< buffers during autotuning by transpose operation, considering
                                          ///< the following order: X-to-Y, Y-to-Z, Z-to-Y, Y-to-X
                                          ///< (default: [false, false, false, false])
-  double transpose_op_weights[4];        ///< multiplicative weight to apply to trial time contribution by transpose operation
-                                         ///< in the following order: X-to-Y, Y-to-Z, Z-to-Y, Y-to-X
-                                         ///< (default: [1.0, 1.0, 1.0, 1.0])
+  double transpose_op_weights[4]; ///< multiplicative weight to apply to trial time contribution by transpose operation
+                                  ///< in the following order: X-to-Y, Y-to-Z, Z-to-Y, Y-to-X
+                                  ///< (default: [1.0, 1.0, 1.0, 1.0])
 
   // Halo-specific options
   bool autotune_halo_backend; ///< flag to enable halo backend autotuning (default: false)

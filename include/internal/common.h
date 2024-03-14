@@ -61,13 +61,14 @@ struct cudecompHandle {
   ncclComm_t nccl_comm = nullptr;       // NCCL communicator (global)
   ncclComm_t nccl_local_comm = nullptr; // NCCL communicator (intranode)
   bool nccl_enable_ubr = false;         // Flag to control NCCL user buffer registration usage
-  std::unordered_map<void*, std::vector<std::pair<ncclComm_t, void*>>> nccl_ubr_handles; // map of allocated buffer address to NCCL registration handle(s)
+  std::unordered_map<void*, std::vector<std::pair<ncclComm_t, void*>>>
+      nccl_ubr_handles; // map of allocated buffer address to NCCL registration handle(s)
 
   cudaStream_t pl_stream = nullptr; // stream used for pipelined backends
 
   cutensorHandle_t cutensor_handle; // cuTENSOR handle;
 #if CUTENSOR_MAJOR >= 2
-  cutensorPlanPreference_t  cutensor_plan_pref; // cuTENSOR plan preference;
+  cutensorPlanPreference_t cutensor_plan_pref; // cuTENSOR plan preference;
 #endif
 
   std::vector<std::array<char, MPI_MAX_PROCESSOR_NAME>> hostnames; // list of hostnames by rank

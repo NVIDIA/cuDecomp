@@ -216,10 +216,8 @@ cudecompResult_t cudecompInit(cudecompHandle_t* handle_in, MPI_Comm mpi_comm) {
     // Initialize cuTENSOR library
 #if CUTENSOR_MAJOR >= 2
     CHECK_CUTENSOR(cutensorCreate(&handle->cutensor_handle));
-    CHECK_CUTENSOR(cutensorCreatePlanPreference(handle->cutensor_handle,
-                                                &handle->cutensor_plan_pref,
-                                                CUTENSOR_ALGO_DEFAULT,
-                                                CUTENSOR_JIT_MODE_NONE));
+    CHECK_CUTENSOR(cutensorCreatePlanPreference(handle->cutensor_handle, &handle->cutensor_plan_pref,
+                                                CUTENSOR_ALGO_DEFAULT, CUTENSOR_JIT_MODE_NONE));
 #else
     CHECK_CUTENSOR(cutensorInit(&handle->cutensor_handle));
 #endif
@@ -730,7 +728,7 @@ cudecompResult_t cudecompMalloc(cudecompHandle_t handle, cudecompGridDesc_t grid
 #endif
     } else {
       CHECK_CUDA(cudaMalloc(buffer, buffer_size_bytes));
-#if NCCL_VERSION_CODE >= NCCL_VERSION(2,19,0)
+#if NCCL_VERSION_CODE >= NCCL_VERSION(2, 19, 0)
       if (transposeBackendRequiresNccl(grid_desc->config.transpose_comm_backend) ||
           haloBackendRequiresNccl(grid_desc->config.halo_comm_backend)) {
 
@@ -758,12 +756,12 @@ cudecompResult_t cudecompFree(cudecompHandle_t handle, cudecompGridDesc_t grid_d
     checkHandle(handle);
     checkGridDesc(grid_desc);
 
-#if NCCL_VERSION_CODE >= NCCL_VERSION(2,19,0)
+#if NCCL_VERSION_CODE >= NCCL_VERSION(2, 19, 0)
     if (transposeBackendRequiresNccl(grid_desc->config.transpose_comm_backend) ||
         haloBackendRequiresNccl(grid_desc->config.halo_comm_backend)) {
 
       if (handle->nccl_ubr_handles.count(buffer) != 0) {
-        for (const auto &entry : handle->nccl_ubr_handles[buffer]) {
+        for (const auto& entry : handle->nccl_ubr_handles[buffer]) {
           CHECK_NCCL(ncclCommDeregister(entry.first, entry.second));
         }
         handle->nccl_ubr_handles.erase(buffer);

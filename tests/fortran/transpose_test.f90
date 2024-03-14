@@ -172,7 +172,7 @@ program main
   ARRTYPE, pointer, device:: input(:), output(:)
   integer :: dtype = DTYPE
 
-  integer :: i, j, k, idt
+  integer :: i, j, k, idt, iarg
   logical :: skip_next
   character(len=16) :: arg
 
@@ -231,15 +231,18 @@ program main
         skip_next = .true.
       case('--acx')
         call get_command_argument(i+1, arg)
-        read(arg, *) axis_contiguous(1)
+        read(arg, *) iarg
+        axis_contiguous(1) = iarg
         skip_next = .true.
       case('--acy')
         call get_command_argument(i+1, arg)
-        read(arg, *) axis_contiguous(2)
+        read(arg, *) iarg
+        axis_contiguous(2) = iarg
         skip_next = .true.
       case('--acz')
         call get_command_argument(i+1, arg)
-        read(arg, *) axis_contiguous(3)
+        read(arg, *) iarg
+        axis_contiguous(3) = iarg
         skip_next = .true.
       case('--gdx')
         call get_command_argument(i+1, arg)

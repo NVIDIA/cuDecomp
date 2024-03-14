@@ -99,7 +99,9 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
 
   std::vector<cudecompTransposeCommBackend_t> comm_backend_list;
   bool need_nccl = false;
+#if NCCL_VERSION_CODE >= NCCL_VERSION(2, 19, 0)
   std::array<void*, 2> nccl_work_ubr_handles{nullptr, nullptr};
+#endif
   bool need_nvshmem = false;
   if (autotune_comm) {
     comm_backend_list = {CUDECOMP_TRANSPOSE_COMM_MPI_P2P, CUDECOMP_TRANSPOSE_COMM_MPI_P2P_PL,
@@ -123,7 +125,6 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
     if (transposeBackendRequiresNvshmem(comm_backend_list[0])) { need_nvshmem = true; }
 #endif
   }
-
 
   bool need_data2 = false;
   for (int i = 0; i < 4; ++i) {
@@ -199,7 +200,7 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
 #ifdef ENABLE_NVSHMEM
         if (work && work != work_nvshmem) {
           CHECK_CUDA(cudaFree(work));
-#if NCCL_VERSION_CODE >= NCCL_VERSION(2,19,0)
+#if NCCL_VERSION_CODE >= NCCL_VERSION(2, 19, 0)
           if (nccl_work_ubr_handles[0]) {
             CHECK_NCCL(ncclCommDeregister(handle->nccl_comm, nccl_work_ubr_handles[0]));
             CHECK_NCCL(ncclCommDeregister(handle->nccl_local_comm, nccl_work_ubr_handles[1]));
@@ -225,18 +226,18 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
           cudaGetLastError(); // Reset CUDA error state
         } else {
           CHECK_CUDA(ret);
-#if NCCL_VERSION_CODE >= NCCL_VERSION(2,19,0)
           if (need_nccl && handle->nccl_enable_ubr) {
+#if NCCL_VERSION_CODE >= NCCL_VERSION(2, 19, 0)
             CHECK_NCCL(ncclCommRegister(handle->nccl_comm, work, work_sz, &nccl_work_ubr_handles[0]));
             CHECK_NCCL(ncclCommRegister(handle->nccl_local_comm, work, work_sz, &nccl_work_ubr_handles[1]));
-          }
 #endif
+          }
         }
 #endif
       } else {
         if (work) {
           CHECK_CUDA(cudaFree(work));
-#if NCCL_VERSION_CODE >= NCCL_VERSION(2,19,0)
+#if NCCL_VERSION_CODE >= NCCL_VERSION(2, 19, 0)
           if (nccl_work_ubr_handles[0]) {
             CHECK_NCCL(ncclCommDeregister(handle->nccl_comm, nccl_work_ubr_handles[0]));
             CHECK_NCCL(ncclCommDeregister(handle->nccl_local_comm, nccl_work_ubr_handles[1]));
@@ -245,12 +246,12 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
 #endif
         }
         CHECK_CUDA(cudaMalloc(&work, work_sz));
-#if NCCL_VERSION_CODE >= NCCL_VERSION(2,19,0)
         if (need_nccl && handle->nccl_enable_ubr) {
+#if NCCL_VERSION_CODE >= NCCL_VERSION(2, 19, 0)
           CHECK_NCCL(ncclCommRegister(handle->nccl_comm, work, work_sz, &nccl_work_ubr_handles[0]));
           CHECK_NCCL(ncclCommRegister(handle->nccl_local_comm, work, work_sz, &nccl_work_ubr_handles[1]));
-        }
 #endif
+        }
       }
     }
 
@@ -282,19 +283,23 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
       // Warmup
       for (int i = 0; i < options->n_warmup_trials; ++i) {
         if (options->transpose_op_weights[0] != 0.0) {
-          CHECK_CUDECOMP(cudecompTransposeXToY(handle, grid_desc, data, options->transpose_use_inplace_buffers[0] ? data : data2, w,
+          CHECK_CUDECOMP(cudecompTransposeXToY(handle, grid_desc, data,
+                                               options->transpose_use_inplace_buffers[0] ? data : data2, w,
                                                options->dtype, nullptr, nullptr, 0));
         }
         if (options->transpose_op_weights[1] != 0.0) {
-          CHECK_CUDECOMP(cudecompTransposeYToZ(handle, grid_desc, data, options->transpose_use_inplace_buffers[1] ? data : data2, w,
+          CHECK_CUDECOMP(cudecompTransposeYToZ(handle, grid_desc, data,
+                                               options->transpose_use_inplace_buffers[1] ? data : data2, w,
                                                options->dtype, nullptr, nullptr, 0));
         }
         if (options->transpose_op_weights[2] != 0.0) {
-          CHECK_CUDECOMP(cudecompTransposeZToY(handle, grid_desc, data, options->transpose_use_inplace_buffers[2] ? data : data2, w,
+          CHECK_CUDECOMP(cudecompTransposeZToY(handle, grid_desc, data,
+                                               options->transpose_use_inplace_buffers[2] ? data : data2, w,
                                                options->dtype, nullptr, nullptr, 0));
         }
         if (options->transpose_op_weights[3] != 0.0) {
-          CHECK_CUDECOMP(cudecompTransposeYToX(handle, grid_desc, data, options->transpose_use_inplace_buffers[3] ? data : data2, w,
+          CHECK_CUDECOMP(cudecompTransposeYToX(handle, grid_desc, data,
+                                               options->transpose_use_inplace_buffers[3] ? data : data2, w,
                                                options->dtype, nullptr, nullptr, 0));
         }
       }
@@ -313,37 +318,42 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
       for (int i = 0; i < options->n_trials; ++i) {
         CHECK_CUDA(cudaEventRecord(events[0], 0));
         if (options->transpose_op_weights[0] != 0.0) {
-          CHECK_CUDECOMP(cudecompTransposeXToY(handle, grid_desc, data, options->transpose_use_inplace_buffers[0] ? data : data2, w,
+          CHECK_CUDECOMP(cudecompTransposeXToY(handle, grid_desc, data,
+                                               options->transpose_use_inplace_buffers[0] ? data : data2, w,
                                                options->dtype, nullptr, nullptr, 0));
         }
         CHECK_CUDA(cudaEventRecord(events[1], 0));
         if (options->transpose_op_weights[1] != 0.0) {
-          CHECK_CUDECOMP(cudecompTransposeYToZ(handle, grid_desc, data, options->transpose_use_inplace_buffers[1] ? data : data2, w,
+          CHECK_CUDECOMP(cudecompTransposeYToZ(handle, grid_desc, data,
+                                               options->transpose_use_inplace_buffers[1] ? data : data2, w,
                                                options->dtype, nullptr, nullptr, 0));
         }
         CHECK_CUDA(cudaEventRecord(events[2], 0));
         if (options->transpose_op_weights[2] != 0.0) {
-          CHECK_CUDECOMP(cudecompTransposeZToY(handle, grid_desc, data, options->transpose_use_inplace_buffers[2] ? data : data2, w,
+          CHECK_CUDECOMP(cudecompTransposeZToY(handle, grid_desc, data,
+                                               options->transpose_use_inplace_buffers[2] ? data : data2, w,
                                                options->dtype, nullptr, nullptr, 0));
         }
         CHECK_CUDA(cudaEventRecord(events[3], 0));
         if (options->transpose_op_weights[3] != 0.0) {
-          CHECK_CUDECOMP(cudecompTransposeYToX(handle, grid_desc, data, options->transpose_use_inplace_buffers[3] ? data : data2, w,
+          CHECK_CUDECOMP(cudecompTransposeYToX(handle, grid_desc, data,
+                                               options->transpose_use_inplace_buffers[3] ? data : data2, w,
                                                options->dtype, nullptr, nullptr, 0));
         }
         CHECK_CUDA(cudaEventRecord(events[4], 0));
         CHECK_CUDA(cudaDeviceSynchronize());
         CHECK_MPI(MPI_Barrier(handle->mpi_comm));
 
-        if (options->transpose_op_weights[0] != 0.0) CHECK_CUDA(cudaEventElapsedTime(&trial_xy_times[i], events[0], events[1]));
-        if (options->transpose_op_weights[1] != 0.0) CHECK_CUDA(cudaEventElapsedTime(&trial_yz_times[i], events[1], events[2]));
-        if (options->transpose_op_weights[2] != 0.0) CHECK_CUDA(cudaEventElapsedTime(&trial_zy_times[i], events[2], events[3]));
-        if (options->transpose_op_weights[3] != 0.0) CHECK_CUDA(cudaEventElapsedTime(&trial_yx_times[i], events[3], events[4]));
+        if (options->transpose_op_weights[0] != 0.0)
+          CHECK_CUDA(cudaEventElapsedTime(&trial_xy_times[i], events[0], events[1]));
+        if (options->transpose_op_weights[1] != 0.0)
+          CHECK_CUDA(cudaEventElapsedTime(&trial_yz_times[i], events[1], events[2]));
+        if (options->transpose_op_weights[2] != 0.0)
+          CHECK_CUDA(cudaEventElapsedTime(&trial_zy_times[i], events[2], events[3]));
+        if (options->transpose_op_weights[3] != 0.0)
+          CHECK_CUDA(cudaEventElapsedTime(&trial_yx_times[i], events[3], events[4]));
 
-        trial_times[i] = trial_xy_times[i] +
-                         trial_yz_times[i] +
-                         trial_zy_times[i] +
-                         trial_yx_times[i];
+        trial_times[i] = trial_xy_times[i] + trial_yz_times[i] + trial_zy_times[i] + trial_yx_times[i];
 
         trial_times_w[i] = options->transpose_op_weights[0] * trial_xy_times[i] +
                            options->transpose_op_weights[1] * trial_yz_times[i] +
@@ -370,7 +380,7 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
       auto zy_times = processTimings(handle, trial_zy_times);
       auto yx_times = processTimings(handle, trial_yx_times);
 
-      const char *t_skipped[4];
+      const char* t_skipped[4];
       for (int i = 0; i < 4; ++i) {
         if (options->transpose_op_weights[i] == 0.0) {
           t_skipped[i] = " (skipped)";
@@ -395,11 +405,10 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
                  "CUDECOMP:\tTransposeYX time min/max/avg/std [ms]: %f/%f/%f/%f%s\n",
                  grid_desc->config.pdims[0], grid_desc->config.pdims[1],
                  cudecompTransposeCommBackendToString(grid_desc->config.transpose_comm_backend), times[0], times[1],
-                 times[2], times[3], times_w[0], times_w[1], times_w[2], times_w[3],
-                 xy_times[0], xy_times[1], xy_times[2], xy_times[3], t_skipped[0], yz_times[0], yz_times[1],
-                 yz_times[2], yz_times[3], t_skipped[1], zy_times[0], zy_times[1], zy_times[2], zy_times[3], t_skipped[2],
-                 yx_times[0], yx_times[1], yx_times[2], yx_times[3], t_skipped[3]);
-
+                 times[2], times[3], times_w[0], times_w[1], times_w[2], times_w[3], xy_times[0], xy_times[1],
+                 xy_times[2], xy_times[3], t_skipped[0], yz_times[0], yz_times[1], yz_times[2], yz_times[3],
+                 t_skipped[1], zy_times[0], zy_times[1], zy_times[2], zy_times[3], t_skipped[2], yx_times[0],
+                 yx_times[1], yx_times[2], yx_times[3], t_skipped[3]);
         }
       }
 
@@ -430,7 +439,7 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
   if (need_nvshmem) {
     if (work != work_nvshmem) {
       CHECK_CUDA(cudaFree(work));
-#if NCCL_VERSION_CODE >= NCCL_VERSION(2,19,0)
+#if NCCL_VERSION_CODE >= NCCL_VERSION(2, 19, 0)
       if (nccl_work_ubr_handles[0]) {
         CHECK_NCCL(ncclCommDeregister(handle->nccl_comm, nccl_work_ubr_handles[0]));
         CHECK_NCCL(ncclCommDeregister(handle->nccl_local_comm, nccl_work_ubr_handles[1]));
@@ -447,7 +456,7 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
 #endif
   } else {
     CHECK_CUDA(cudaFree(work));
-#if NCCL_VERSION_CODE >= NCCL_VERSION(2,19,0)
+#if NCCL_VERSION_CODE >= NCCL_VERSION(2, 19, 0)
     if (nccl_work_ubr_handles[0]) {
       CHECK_NCCL(ncclCommDeregister(handle->nccl_comm, nccl_work_ubr_handles[0]));
       CHECK_NCCL(ncclCommDeregister(handle->nccl_local_comm, nccl_work_ubr_handles[1]));
@@ -471,9 +480,9 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
   grid_desc->config.pdims[1] = pdims_best[1];
 
   if (handle->rank == 0) {
-    printf("CUDECOMP: SELECTED: grid: %d x %d, backend: %s, Avg. time (weighted) [ms]: %f\n", grid_desc->config.pdims[0],
-           grid_desc->config.pdims[1], cudecompTransposeCommBackendToString(grid_desc->config.transpose_comm_backend),
-           t_best);
+    printf("CUDECOMP: SELECTED: grid: %d x %d, backend: %s, Avg. time (weighted) [ms]: %f\n",
+           grid_desc->config.pdims[0], grid_desc->config.pdims[1],
+           cudecompTransposeCommBackendToString(grid_desc->config.transpose_comm_backend), t_best);
   }
 
   CHECK_MPI(MPI_Barrier(handle->mpi_comm));
@@ -495,7 +504,9 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
 
   std::vector<cudecompHaloCommBackend_t> comm_backend_list;
   bool need_nccl = false;
+#if NCCL_VERSION_CODE >= NCCL_VERSION(2, 19, 0)
   std::array<void*, 2> nccl_work_ubr_handles{nullptr, nullptr};
+#endif
   bool need_nvshmem = false;
   if (autotune_comm) {
     comm_backend_list = {CUDECOMP_HALO_COMM_MPI, CUDECOMP_HALO_COMM_MPI_BLOCKING};
@@ -581,7 +592,7 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
 #ifdef ENABLE_NVSHMEM
         if (work && work != work_nvshmem) {
           CHECK_CUDA(cudaFree(work));
-#if NCCL_VERSION_CODE >= NCCL_VERSION(2,19,0)
+#if NCCL_VERSION_CODE >= NCCL_VERSION(2, 19, 0)
           if (nccl_work_ubr_handles[0]) {
             CHECK_NCCL(ncclCommDeregister(handle->nccl_comm, nccl_work_ubr_handles[0]));
             CHECK_NCCL(ncclCommDeregister(handle->nccl_local_comm, nccl_work_ubr_handles[1]));
@@ -607,18 +618,18 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
           cudaGetLastError(); // Reset CUDA error state
         } else {
           CHECK_CUDA(ret);
-#if NCCL_VERSION_CODE >= NCCL_VERSION(2,19,0)
           if (need_nccl && handle->nccl_enable_ubr) {
+#if NCCL_VERSION_CODE >= NCCL_VERSION(2, 19, 0)
             CHECK_NCCL(ncclCommRegister(handle->nccl_comm, work, work_sz, &nccl_work_ubr_handles[0]));
             CHECK_NCCL(ncclCommRegister(handle->nccl_local_comm, work, work_sz, &nccl_work_ubr_handles[1]));
-          }
 #endif
+          }
         }
 #endif
       } else {
         if (work) {
           CHECK_CUDA(cudaFree(work));
-#if NCCL_VERSION_CODE >= NCCL_VERSION(2,19,0)
+#if NCCL_VERSION_CODE >= NCCL_VERSION(2, 19, 0)
           if (nccl_work_ubr_handles[0]) {
             CHECK_NCCL(ncclCommDeregister(handle->nccl_comm, nccl_work_ubr_handles[0]));
             CHECK_NCCL(ncclCommDeregister(handle->nccl_local_comm, nccl_work_ubr_handles[1]));
@@ -627,12 +638,12 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
 #endif
         }
         CHECK_CUDA(cudaMalloc(&work, work_sz));
-#if NCCL_VERSION_CODE >= NCCL_VERSION(2,19,0)
         if (need_nccl && handle->nccl_enable_ubr) {
+#if NCCL_VERSION_CODE >= NCCL_VERSION(2, 19, 0)
           CHECK_NCCL(ncclCommRegister(handle->nccl_comm, work, work_sz, &nccl_work_ubr_handles[0]));
           CHECK_NCCL(ncclCommRegister(handle->nccl_local_comm, work, work_sz, &nccl_work_ubr_handles[1]));
-        }
 #endif
+        }
       }
     }
 
@@ -722,7 +733,6 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
             break;
           }
         }
-
       }
       auto times = processTimings(handle, trial_times, 1000.);
 
@@ -768,7 +778,7 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
   if (need_nvshmem) {
     if (work != work_nvshmem) {
       CHECK_CUDA(cudaFree(work));
-#if NCCL_VERSION_CODE >= NCCL_VERSION(2,19,0)
+#if NCCL_VERSION_CODE >= NCCL_VERSION(2, 19, 0)
       if (nccl_work_ubr_handles[0]) {
         CHECK_NCCL(ncclCommDeregister(handle->nccl_comm, nccl_work_ubr_handles[0]));
         CHECK_NCCL(ncclCommDeregister(handle->nccl_local_comm, nccl_work_ubr_handles[1]));
@@ -785,7 +795,7 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
 #endif
   } else {
     CHECK_CUDA(cudaFree(work));
-#if NCCL_VERSION_CODE >= NCCL_VERSION(2,19,0)
+#if NCCL_VERSION_CODE >= NCCL_VERSION(2, 19, 0)
     if (nccl_work_ubr_handles[0]) {
       CHECK_NCCL(ncclCommDeregister(handle->nccl_comm, nccl_work_ubr_handles[0]));
       CHECK_NCCL(ncclCommDeregister(handle->nccl_local_comm, nccl_work_ubr_handles[1]));

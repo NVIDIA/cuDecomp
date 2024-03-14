@@ -72,8 +72,6 @@ if (CRAY_CC_BIN)
   message(STATUS "Found GDRCopy library: " ${GDRCOPY_LIBRARY})
 endif()
 
-# TODO: Check for MPICH to define `-DMPICH` flag
-
 # HPC SDK
 find_package(NVHPC REQUIRED COMPONENTS CUDA MATH)
 
