@@ -35,30 +35,6 @@
 
 namespace cudecomp {
 
-#ifdef ENABLE_NVSHMEM
-void cudecomp_nvshmem_alltoallv(const cudecompNvshmemA2AParams<float>& params, cudaStream_t stream) {
-  cudecomp_nvshmem_alltoallv_k<<<1, CUDECOMP_CUDA_NTHREADS, 0, stream>>>(params);
-  CHECK_CUDA_LAUNCH();
-}
-
-void cudecomp_nvshmem_alltoallv(const cudecompNvshmemA2AParams<double>& params, cudaStream_t stream) {
-  cudecomp_nvshmem_alltoallv_k<<<1, CUDECOMP_CUDA_NTHREADS, 0, stream>>>(params);
-  CHECK_CUDA_LAUNCH();
-}
-
-void cudecomp_nvshmem_alltoallv(const cudecompNvshmemA2AParams<cuda::std::complex<float>>& params,
-                                cudaStream_t stream) {
-  cudecomp_nvshmem_alltoallv_k<<<1, CUDECOMP_CUDA_NTHREADS, 0, stream>>>(params);
-  CHECK_CUDA_LAUNCH();
-}
-
-void cudecomp_nvshmem_alltoallv(const cudecompNvshmemA2AParams<cuda::std::complex<double>>& params,
-                                cudaStream_t stream) {
-  cudecomp_nvshmem_alltoallv_k<<<1, CUDECOMP_CUDA_NTHREADS, 0, stream>>>(params);
-  CHECK_CUDA_LAUNCH();
-}
-#endif
-
 void cudecomp_batched_d2d_memcpy_3d(cudecompBatchedD2DMemcpy3DParams<float>& params, cudaStream_t stream) {
   size_t N = params.extents[0][0] * params.extents[1][0] * params.extents[2][0];
   for (int i = 1; i < params.ncopies; ++i) {
