@@ -76,9 +76,9 @@ endif()
 find_package(NVHPC REQUIRED COMPONENTS CUDA MATH)
 
 # Set up required include directory flags, NVHPC CMake config only defined library directories
-string(REPLACE "/lib64" "/include" NVHPC_CUDA_INCLUDE_DIR ${NVHPC_CUDA_LIBRARY_DIR})
-string(REPLACE "/lib64" "/include" NVHPC_CUFFT_INCLUDE_DIR ${NVHPC_MATH_LIBRARY_DIR})
-string(REPLACE "/lib64" "/include" NVHPC_CUTENSOR_INCLUDE_DIR ${NVHPC_MATH_LIBRARY_DIR})
+string(REGEX REPLACE "(.+)(\/lib64)$" "\\1/include" NVHPC_CUDA_INCLUDE_DIR ${NVHPC_CUDA_LIBRARY_DIR})
+string(REGEX REPLACE "(.+)(\/lib64)$" "\\1/include" NVHPC_CUFFT_INCLUDE_DIR ${NVHPC_MATH_LIBRARY_DIR})
+string(REGEX REPLACE "(.+)(\/lib64)$" "\\1/include" NVHPC_CUTENSOR_INCLUDE_DIR ${NVHPC_MATH_LIBRARY_DIR})
 
 # Get NCCL library (with optional override)
 if (CUDECOMP_NCCL_HOME)
@@ -97,7 +97,7 @@ else()
     NAMES nccl
     HINTS ${NVHPC_NCCL_LIBRARY_DIR}
   )
-  string(REPLACE "/lib" "/include" NCCL_INCLUDE_DIR ${NVHPC_NCCL_LIBRARY_DIR})
+  string(REGEX REPLACE "(.+)(\/lib)$" "\\1/include" NCCL_INCLUDE_DIR ${NVHPC_NCCL_LIBRARY_DIR})
 endif()
 
 message(STATUS "Using NCCL library: ${NCCL_LIBRARY}")
@@ -117,7 +117,7 @@ if (CUDECOMP_ENABLE_NVSHMEM)
   else()
     find_package(NVHPC REQUIRED COMPONENTS NVSHMEM)
     set(NVSHMEM_LIBRARY_DIR ${NVHPC_NVSHMEM_LIBRARY_DIR})
-    string(REPLACE "/lib" "/include" NVSHMEM_INCLUDE_DIR ${NVHPC_NVSHMEM_LIBRARY_DIR})
+    string(REGEX REPLACE "(.+)(\/lib)$" "\\1/include" NVSHMEM_INCLUDE_DIR ${NVHPC_NVSHMEM_LIBRARY_DIR})
   endif()
 
   message(STATUS "Using NVSHMEM installation at: ${NVSHMEM_LIBRARY_DIR}")
