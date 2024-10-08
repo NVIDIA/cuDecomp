@@ -182,7 +182,9 @@ if (CUDECOMP_ENABLE_NVSHMEM)
   )
 
   # Get NVSHMEM version from header
-  if (EXISTS ${NVSHMEM_INCLUDE_DIR}/nvshmem_version.h)
+  if (EXISTS ${NVSHMEM_INCLUDE_DIR}/non_abi/nvshmem_version.h)
+    file(READ ${NVSHMEM_INCLUDE_DIR}/non_abi/nvshmem_version.h NVSHMEM_VERSION_RAW)
+  elseif (EXISTS ${NVSHMEM_INCLUDE_DIR}/nvshmem_version.h)
     file(READ ${NVSHMEM_INCLUDE_DIR}/nvshmem_version.h NVSHMEM_VERSION_RAW)
   else()
     file(READ ${NVSHMEM_INCLUDE_DIR}/common/nvshmem_version.h NVSHMEM_VERSION_RAW)
