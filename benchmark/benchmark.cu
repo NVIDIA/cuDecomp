@@ -187,7 +187,7 @@ int main(int argc, char** argv) {
     case '3': axis_contiguous[2] = atoi(optarg); break;
     case 'w': nwarmup = atoi(optarg); break;
     case 't': ntrials = atoi(optarg); break;
-    case 'k': skip_threshold = atoi(optarg); break;
+    case 'k': skip_threshold = atof(optarg); break;
     case 'b': comm_backend = static_cast<cudecompTransposeCommBackend_t>(atoi(optarg)); break;
     case 'o': out_of_place = true; break;
     case 'm': use_managed_memory = true; break;
