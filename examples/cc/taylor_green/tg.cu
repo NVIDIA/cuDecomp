@@ -269,6 +269,27 @@ __global__ static void sumsq(int N, const real_t* U_r0, const real_t* U_r1, cons
   sumsq[i] = (u * u + v * v + w * w);
 }
 
+__global__ static void velmax(int N, const real_t* U_r0, const real_t* U_r1, const real_t* U_r2, real_t* velmax,
+                              cudecompPencilInfo_t info) {
+
+  const int64_t i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i >= info.size) return;
+
+  int64_t gx[3];
+  get_gx(info, i, gx);
+  if (gx[0] >= N || gx[1] >= N || gx[2] >= N) {
+    // Set padded element entries to zero
+    velmax[i] = 0;
+    return;
+  }
+
+  real_t u = U_r0[i] / (N * N * N); // Scaling cuFFT result
+  real_t v = U_r1[i] / (N * N * N);
+  real_t w = U_r2[i] / (N * N * N);
+
+  velmax[i] = N * (std::abs(u)+ std::abs(v) + std::abs(w));
+}
+
 __global__ static void spectrum(const complex_t* Uh_c0,const  complex_t* Uh_c1,const  complex_t* Uh_c2,
                                 real_t* K0, real_t* K1, real_t* K2, real_t* ek,
                                 cudecompPencilInfo_t info) {
@@ -297,7 +318,7 @@ public:
   // Timestepping scheme
   enum TimeScheme { RK1, RK4 };
 
-  TGSolver(int N, real_t nu, real_t dt, TimeScheme tscheme = RK1) : N(N), nu(nu), dt(dt), tscheme(tscheme){};
+  TGSolver(int N, real_t nu, real_t dt, real_t cfl, TimeScheme tscheme = RK1) : N(N), nu(nu), dt(dt), cfl(cfl), tscheme(tscheme){};
   void finalize() {
     // Free memory
     for (int i = 0; i < 3; ++i) {
@@ -436,7 +457,10 @@ public:
 
     // Set up CUB arrays
     CHECK_CUDA_EXIT(cudaMallocManaged(&cub_sum, sizeof(real_t)));
-    CHECK_CUDA_EXIT(cub::DeviceReduce::Sum(cub_work, cub_work_sz, U_r[0], cub_sum, pinfo_x_r.size));
+    size_t cub_work_sz_sum, cub_work_sz_max;
+    CHECK_CUDA_EXIT(cub::DeviceReduce::Sum(cub_work, cub_work_sz_sum, U_r[0], cub_sum, pinfo_x_r.size));
+    CHECK_CUDA_EXIT(cub::DeviceReduce::Max(cub_work, cub_work_sz_max, U_r[0], cub_sum, pinfo_x_r.size));
+    cub_work_sz = std::max(cub_work_sz_sum, cub_work_sz_max);
     CHECK_CUDA_EXIT(cudaMalloc(&cub_work, cub_work_sz));
 
     // Set timestepping variables
@@ -500,13 +524,16 @@ public:
   }
 
   void step() {
+    if (cfl > 0.0) {
+      dt = get_dt(cfl);
+    }
     switch (tscheme) {
     case RK1: update_rk1(); break;
     case RK4: update_rk4(); break;
     default: std::cerr << "Unknown TimeScheme provided." << std::endl;
     }
 
-    flowtime += dt;
+    flowtime_ += dt;
   }
 
   void print_stats() {
@@ -544,7 +571,7 @@ public:
     // Print statistics
     if (rank == 0) {
       std::cout << std::fixed;
-      std::cout << "flow time: " << std::setprecision(5) << flowtime << " ";
+      std::cout << "flow time: " << std::setprecision(5) << flowtime_ << " ";
       std::cout << " ke: " << std::setprecision(14) << ke << " ";
       std::cout << " enstrophy: " << std::setprecision(14) << enst << std::endl;
     }
@@ -573,14 +600,13 @@ public:
       std::ofstream g;
       g.open(ss.str());
       g << std::scientific << std::setprecision(12);
-      g << "time: " << flowtime << std::endl;
+      g << "time: " << flowtime_ << std::endl;
       for (int i = 0; i < num_shells; ++i) {
         g << ek[i] / (N * N * N) << std::endl; // Scale cuFFT result
       }
       g.close();
     }
   }
-
 
   // Simple solution write to CSV (readable by ParaView)
   void write_solution(std::string prefix) {
@@ -610,6 +636,10 @@ public:
       g << std::setprecision(12) << U_cpu_r[2][i] / (N * N * N) << std::endl;
     }
     g.close();
+  }
+
+  real_t flowtime() {
+    return flowtime_;
   }
 
 private:
@@ -728,12 +758,27 @@ private:
     backward(U_c, U_r);
   }
 
+  real_t get_dt(real_t cfl) {
+    velmax<<<(pinfo_x_r.size + 256 - 1) / 256, 256>>>(N, U_r[0], U_r[1], U_r[2], dU_r[0], pinfo_x_r);
+    CHECK_CUDA_LAUNCH_EXIT();
+
+    CHECK_CUDA_EXIT(cub::DeviceReduce::Max(cub_work, cub_work_sz, dU_r[0], cub_sum, pinfo_x_r.size));;
+    CHECK_CUDA_EXIT(cudaDeviceSynchronize());
+    real_t velmax = *cub_sum;
+    if (nranks > 1) {
+      CHECK_MPI_EXIT(MPI_Allreduce(MPI_IN_PLACE, &velmax, 1, get_mpi_datatype(velmax), MPI_MAX, mpi_comm));
+    }
+
+    return cfl / velmax;
+  }
+
   // Solver settings
   int N;
   real_t nu;
   real_t dt;
+  real_t cfl;
   TimeScheme tscheme;
-  real_t flowtime = 0;
+  real_t flowtime_ = 0;
 
   // MPI variables
   int rank, local_rank, nranks;
@@ -800,8 +845,10 @@ static void usage(const char* pname) {
       "options:\n"
       "\t-n|--N\n"
       "\t\tDimension of grid. (default: 256) \n"
-      "\t-i|--niter (-i)\n"
+      "\t-i|--niter)\n"
       "\t\tNumber of iterations to run. (default: 1000) \n"
+      "\t-m|--max_flowtime)\n"
+      "\t\tMaximum flow time to run. (default: unlimited) \n"
       "\t-p|--printfreq\n"
       "\t\tFrequency of printing stats. (default: 100) \n"
       "\t-s|--specfreq\n"
@@ -811,7 +858,9 @@ static void usage(const char* pname) {
       "\t-v|--nu\n"
       "\t\tFluid viscosity. (default: 0.000625) \n"
       "\t-t|--dt\n"
-      "\t\tTimestep. (default: 0.001) \n",
+      "\t\tFixed timestep. (default: 0.001) \n"
+      "\t-c|--cfl\n"
+      "\t\tCFL value to use for timestepping, overrides fixed timestep setting. (default: 0.0, use fixed timestep) \n",
       bname);
   exit(EXIT_SUCCESS);
 }
@@ -824,6 +873,7 @@ int main(int argc, char** argv) {
   // Parse command-line arguments
   int N = 256;
   int niter = 1000;
+  real_t max_flowtime = -1.0;
   int printfreq = 100;
   int specfreq = 0;
   std::string csvfile;
@@ -831,31 +881,36 @@ int main(int argc, char** argv) {
   // Physical parameters
   real_t nu = 0.000625;
   real_t dt = 0.001;
+  real_t cfl = 0.0;
 
   while (1) {
     static struct option long_options[] = {{"N", required_argument, 0, 'n'},
                                            {"niter", required_argument, 0, 'i'},
+                                           {"max_flowtime", required_argument, 0, 'm'},
                                            {"printfreq", required_argument, 0, 'p'},
                                            {"specreq", required_argument, 0, 's'},
                                            {"csvfile", required_argument, 0, 'o'},
                                            {"nu", required_argument, 0, 'v'},
                                            {"dt", required_argument, 0, 't'},
+                                           {"cfl", required_argument, 0, 'c'},
                                            {"help", no_argument, 0, 'h'},
                                            {0, 0, 0, 0}};
 
     int option_index = 0;
-    int ch = getopt_long(argc, argv, "n:i:p:s:o:v:t:h", long_options, &option_index);
+    int ch = getopt_long(argc, argv, "n:i:m:p:s:o:v:t:c:h", long_options, &option_index);
     if (ch == -1) break;
 
     switch (ch) {
     case 0: break;
     case 'n': N = atoi(optarg); break;
     case 'i': niter = atoi(optarg); break;
+    case 'm': max_flowtime = atof(optarg); break;
     case 'p': printfreq = atoi(optarg); break;
     case 's': specfreq = atoi(optarg); break;
     case 'o': csvfile = std::string(optarg); break;
     case 'v': nu = atof(optarg); break;
     case 't': dt = atof(optarg); break;
+    case 'c': cfl = atof(optarg); break;
     case 'h': usage(argv[0]); break;
     case '?': exit(EXIT_FAILURE);
     default: fprintf(stderr, "unknown option: %c\n", ch); exit(EXIT_FAILURE);
@@ -864,7 +919,7 @@ int main(int argc, char** argv) {
 
 
   // Construct and initialize solver
-  TGSolver solver(N, nu, dt, TGSolver::TimeScheme::RK4);
+  TGSolver solver(N, nu, dt, cfl, TGSolver::TimeScheme::RK4);
   solver.initialize(MPI_COMM_WORLD);
   solver.print_stats();
   if (specfreq > 0) solver.write_spectrum_sample(0);
@@ -876,6 +931,7 @@ int main(int argc, char** argv) {
   double ts_step = MPI_Wtime();
   int count = 0;
   for (int i = 0; i < niter; ++i) {
+
     solver.step();
     count++;
 
@@ -894,6 +950,12 @@ int main(int argc, char** argv) {
     if (i > 0 && (i + 1) % specfreq == 0) {
       if (specfreq > 0) solver.write_spectrum_sample(i + 1);
     }
+
+    if (max_flowtime >= 0 && solver.flowtime() >= max_flowtime) {
+      if (specfreq > 0) solver.write_spectrum_sample(i + 1);
+      break;
+    }
+
   }
   CHECK_CUDA_EXIT(cudaDeviceSynchronize());
   CHECK_MPI_EXIT(MPI_Barrier(MPI_COMM_WORLD));
