@@ -119,6 +119,9 @@ static cudecompDataType_t get_cudecomp_datatype(double) { return CUDECOMP_DOUBLE
 static cudecompDataType_t get_cudecomp_datatype(cuda::std::complex<float>) { return CUDECOMP_FLOAT_COMPLEX; }
 static cudecompDataType_t get_cudecomp_datatype(cuda::std::complex<double>) { return CUDECOMP_DOUBLE_COMPLEX; }
 
+static MPI_Datatype get_mpi_datatype(float) { return MPI_FLOAT; }
+static MPI_Datatype get_mpi_datatype(double) { return MPI_DOUBLE; }
+
 // CUDA kernels
 template <typename T, typename TS>
 __global__ static void scale(T* U0, T* U1, T* U2, TS scale_factor, cudecompPencilInfo_t info) {
@@ -264,6 +267,29 @@ __global__ static void sumsq(int N, const real_t* U_r0, const real_t* U_r1, cons
   real_t w = U_r2[i] / (N * N * N);
 
   sumsq[i] = (u * u + v * v + w * w);
+}
+
+__global__ static void spectrum(const complex_t* Uh_c0,const  complex_t* Uh_c1,const  complex_t* Uh_c2,
+                                real_t* K0, real_t* K1, real_t* K2, real_t* ek,
+                                cudecompPencilInfo_t info) {
+
+  const int64_t i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i >= info.size) return;
+
+  int64_t gx[3];
+  get_gx(info, i, gx);
+  real_t kx = K0[gx[0]];
+  real_t ky = K1[gx[1]];
+  real_t kz = K2[gx[2]];
+  complex_t Uhu = Uh_c0[i];
+  complex_t Uhv = Uh_c1[i];
+  complex_t Uhw = Uh_c2[i];
+
+  real_t kk = kx * kx + ky * ky + kz * kz;
+  int shell = int(std::sqrt(kk) + 0.5);
+
+  real_t uu = (kx == 0 ? 0.5 : 1.0) * (abs(Uhu) * abs(Uhu) + abs(Uhv)* abs(Uhv) + abs(Uhw) * abs(Uhw));
+  atomicAdd(&ek[shell],  uu);
 }
 
 class TGSolver {
@@ -449,6 +475,10 @@ public:
     for (int i = 0; i < N / 2 + 1; ++i) { K[0][i] = i; }
     K[0][N / 2] *= -1;
 
+    // Spectrum
+    int num_shells = int(std::sqrt(9*N*N + 4*N + 4) / 4) + 1;
+    CHECK_CUDA_EXIT(cudaMallocManaged(&ek, num_shells * sizeof(real_t)));
+
     // Initialize U (physical space)
     real_t dx = 2 * PI / N;
     real_t dy = 2 * PI / N;
@@ -519,6 +549,38 @@ public:
       std::cout << " enstrophy: " << std::setprecision(14) << enst << std::endl;
     }
   }
+
+  // Write spectrum
+  void write_spectrum_sample(int idx) {
+    // Compute spectrum per rank
+    int num_shells = int(std::sqrt(9*N*N + 4*N + 4) / 4) + 1;
+    CHECK_CUDA_EXIT(cudaMemset(ek, 0, num_shells * sizeof(real_t)));
+    spectrum<<<(pinfo_z_c.size + 256 - 1) / 256, 256>>>(Uh_c[0][0], Uh_c[0][1], Uh_c[0][2],
+                                                        K[0], K[1], K[2], ek, pinfo_z_c);
+    CHECK_CUDA_LAUNCH_EXIT();
+    CHECK_CUDA_EXIT(cudaDeviceSynchronize());
+
+    if (nranks > 1) {
+      CHECK_MPI_EXIT(MPI_Reduce((rank == 0) ? MPI_IN_PLACE : ek, ek, num_shells, get_mpi_datatype(real_t(0)),
+                                MPI_SUM, 0, mpi_comm));
+    }
+
+    if (rank == 0) {
+      std::stringstream ss;
+      ss << "spectrum_" << std::setfill('0') << std::setw(8) << idx << ".txt";
+
+      std::cout << "writing spectrum sample to " << ss.str() << "..." << std::endl;
+      std::ofstream g;
+      g.open(ss.str());
+      g << std::scientific << std::setprecision(12);
+      g << "time: " << flowtime << std::endl;
+      for (int i = 0; i < num_shells; ++i) {
+        g << ek[i] / (N * N * N) << std::endl; // Scale cuFFT result
+      }
+      g.close();
+    }
+  }
+
 
   // Simple solution write to CSV (readable by ParaView)
   void write_solution(std::string prefix) {
@@ -708,6 +770,7 @@ private:
   std::array<real_t*, 3> U_r, dU_r;    // real pointers (aliased);
   std::array<complex_t*, 3> U_c, dU_c; // complex pointers (aliased)
   std::array<real_t*, 3> K;            // wavenumbers
+  real_t* ek;                          // energy spectrum
 
   std::vector<std::array<void*, 3>> Uh;
   std::vector<std::array<real_t*, 3>> Uh_r;
@@ -741,8 +804,14 @@ static void usage(const char* pname) {
       "\t\tNumber of iterations to run. (default: 1000) \n"
       "\t-p|--printfreq\n"
       "\t\tFrequency of printing stats. (default: 100) \n"
+      "\t-s|--specfreq\n"
+      "\t\tFrequency of computing and writing energy spectrum data. (default: 0, no write) \n"
       "\t-o|--csv_prefix\n"
-      "\t\tFile prefix to write final solution to, in CSV format as <csv_prefix>_<rank>.csv. (default: no write) \n",
+      "\t\tFile prefix to write final solution to, in CSV format as <csv_prefix>_<rank>.csv. (default: no write) \n"
+      "\t-v|--nu\n"
+      "\t\tFluid viscosity. (default: 0.000625) \n"
+      "\t-t|--dt\n"
+      "\t\tTimestep. (default: 0.001) \n",
       bname);
   exit(EXIT_SUCCESS);
 }
@@ -756,18 +825,26 @@ int main(int argc, char** argv) {
   int N = 256;
   int niter = 1000;
   int printfreq = 100;
+  int specfreq = 0;
   std::string csvfile;
+
+  // Physical parameters
+  real_t nu = 0.000625;
+  real_t dt = 0.001;
 
   while (1) {
     static struct option long_options[] = {{"N", required_argument, 0, 'n'},
                                            {"niter", required_argument, 0, 'i'},
                                            {"printfreq", required_argument, 0, 'p'},
+                                           {"specreq", required_argument, 0, 's'},
                                            {"csvfile", required_argument, 0, 'o'},
+                                           {"nu", required_argument, 0, 'v'},
+                                           {"dt", required_argument, 0, 't'},
                                            {"help", no_argument, 0, 'h'},
                                            {0, 0, 0, 0}};
 
     int option_index = 0;
-    int ch = getopt_long(argc, argv, "n:i:p:o:h", long_options, &option_index);
+    int ch = getopt_long(argc, argv, "n:i:p:s:o:v:t:h", long_options, &option_index);
     if (ch == -1) break;
 
     switch (ch) {
@@ -775,21 +852,22 @@ int main(int argc, char** argv) {
     case 'n': N = atoi(optarg); break;
     case 'i': niter = atoi(optarg); break;
     case 'p': printfreq = atoi(optarg); break;
+    case 's': specfreq = atoi(optarg); break;
     case 'o': csvfile = std::string(optarg); break;
+    case 'v': nu = atof(optarg); break;
+    case 't': dt = atof(optarg); break;
     case 'h': usage(argv[0]); break;
     case '?': exit(EXIT_FAILURE);
     default: fprintf(stderr, "unknown option: %c\n", ch); exit(EXIT_FAILURE);
     }
   }
 
-  // Physical parameters
-  real_t nu = 0.000625;
-  real_t dt = 0.001;
 
   // Construct and initialize solver
   TGSolver solver(N, nu, dt, TGSolver::TimeScheme::RK4);
   solver.initialize(MPI_COMM_WORLD);
   solver.print_stats();
+  if (specfreq > 0) solver.write_spectrum_sample(0);
 
   // Run simulation
   CHECK_CUDA_EXIT(cudaDeviceSynchronize());
@@ -811,6 +889,10 @@ int main(int argc, char** argv) {
       CHECK_CUDA_EXIT(cudaDeviceSynchronize());
       CHECK_MPI_EXIT(MPI_Barrier(MPI_COMM_WORLD));
       ts_step = MPI_Wtime();
+    }
+
+    if (i > 0 && (i + 1) % specfreq == 0) {
+      if (specfreq > 0) solver.write_spectrum_sample(i + 1);
     }
   }
   CHECK_CUDA_EXIT(cudaDeviceSynchronize());
