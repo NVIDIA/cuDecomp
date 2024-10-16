@@ -283,9 +283,11 @@ __global__ static void velmax(int N, const real_t* U_r0, const real_t* U_r1, con
     return;
   }
 
-  real_t u = U_r0[i] / (N * N * N); // Scaling cuFFT result
-  real_t v = U_r1[i] / (N * N * N);
-  real_t w = U_r2[i] / (N * N * N);
+  real_t scaling = real_t(1.0) / (N * N * N);
+
+  real_t u = U_r0[i] * scaling; // Scaling cuFFT result
+  real_t v = U_r1[i] * scaling;
+  real_t w = U_r2[i] * scaling;
 
   velmax[i] = N * (std::abs(u)+ std::abs(v) + std::abs(w));
 }
@@ -318,7 +320,7 @@ public:
   // Timestepping scheme
   enum TimeScheme { RK1, RK4 };
 
-  TGSolver(int N, real_t nu, real_t dt, real_t cfl, TimeScheme tscheme = RK1) : N(N), nu(nu), dt(dt), cfl(cfl), tscheme(tscheme){};
+  TGSolver(int N, real_t nu, real_t dt, real_t cfl, TimeScheme tscheme = RK1) : N(N), nu(nu), dt_(dt), cfl(cfl), tscheme(tscheme){};
   void finalize() {
     // Free memory
     for (int i = 0; i < 3; ++i) {
@@ -525,7 +527,7 @@ public:
 
   void step() {
     if (cfl > 0.0) {
-      dt = get_dt(cfl);
+      dt_ = get_dt(cfl);
     }
     switch (tscheme) {
     case RK1: update_rk1(); break;
@@ -533,10 +535,10 @@ public:
     default: std::cerr << "Unknown TimeScheme provided." << std::endl;
     }
 
-    flowtime_ += dt;
+    flowtime_ += dt_;
   }
 
-  void print_stats() {
+  void print_stats(const std::string& logfile) {
     // Compute enstrophy
     // Recompute curl and transform to physical space (z-pencil -> x-pencil).
     curl<<<(pinfo_z_c.size + 256 - 1) / 256, 256>>>(Uh_c[0][0], Uh_c[0][1], Uh_c[0][2], dU_c[0], dU_c[1], dU_c[2], K[0],
@@ -573,7 +575,19 @@ public:
       std::cout << std::fixed;
       std::cout << "flow time: " << std::setprecision(5) << flowtime_ << " ";
       std::cout << " ke: " << std::setprecision(14) << ke << " ";
-      std::cout << " enstrophy: " << std::setprecision(14) << enst << std::endl;
+      std::cout << " enstrophy: " << std::setprecision(14) << enst << " ";
+      std::cout << " dt: " << std::setprecision(14) << dt_ << std::endl;
+
+      if (logfile.size() != 0) {
+        std::ofstream g;
+        g.open(logfile, std::ofstream::out | std::ofstream::app);
+        g << std::scientific << std::setprecision(12);
+        g  << flowtime_ << ",";
+        g  << ke << ",";
+        g  << enst << ",";
+        g  << dt_ << std::endl;
+        g.close();
+      }
     }
   }
 
@@ -642,6 +656,10 @@ public:
     return flowtime_;
   }
 
+  real_t dt() {
+    return dt_;
+  }
+
 private:
   void forward(std::array<real_t*, 3>& U_r, std::array<complex_t*, 3>& U_c) {
     for (int i = 0; i < 3; ++i) {
@@ -693,7 +711,7 @@ private:
   void update_rk1() {
     compute_rhs(Uh_c[0]);
     update_Uh<<<(pinfo_z_c.size + 256 - 1) / 256, 256>>>(dU_c[0], dU_c[1], dU_c[2], Uh_c[0][0], Uh_c[0][1], Uh_c[0][2],
-                                                         Uh_c[0][0], Uh_c[0][1], Uh_c[0][2], dt, pinfo_z_c);
+                                                         Uh_c[0][0], Uh_c[0][1], Uh_c[0][2], dt_, pinfo_z_c);
     CHECK_CUDA_LAUNCH_EXIT();
 
     // Get physical U (z-pencil -> x-pencil)
@@ -718,7 +736,7 @@ private:
       if (i < 3) {
         update_Uh<<<(pinfo_z_c.size + 256 - 1) / 256, 256>>>(dU_c[0], dU_c[1], dU_c[2], Uh_c[0][0], Uh_c[0][1],
                                                              Uh_c[0][2], Uh_c[1][0], Uh_c[1][1], Uh_c[1][2],
-                                                             rk_b[i] * dt, pinfo_z_c);
+                                                             rk_b[i] * dt_, pinfo_z_c);
         CHECK_CUDA_LAUNCH_EXIT();
 
         // Get physical U (z-pencil -> x-pencil)
@@ -733,19 +751,19 @@ private:
         // First stage: assign to Uh_c[2]
         update_Uh<<<(pinfo_z_c.size + 256 - 1) / 256, 256>>>(dU_c[0], dU_c[1], dU_c[2], Uh_c[0][0], Uh_c[0][1],
                                                              Uh_c[0][2], Uh_c[2][0], Uh_c[2][1], Uh_c[2][2],
-                                                             rk_a[i] * dt, pinfo_z_c);
+                                                             rk_a[i] * dt_, pinfo_z_c);
         CHECK_CUDA_LAUNCH_EXIT();
       } else if (i == 3) {
         // Last stage: assign to Uh_c[0]
         update_Uh<<<(pinfo_z_c.size + 256 - 1) / 256, 256>>>(dU_c[0], dU_c[1], dU_c[2], Uh_c[2][0], Uh_c[2][1],
                                                              Uh_c[2][2], Uh_c[0][0], Uh_c[0][1], Uh_c[0][2],
-                                                             rk_a[i] * dt, pinfo_z_c);
+                                                             rk_a[i] * dt_, pinfo_z_c);
         CHECK_CUDA_LAUNCH_EXIT();
       } else {
         // Middle stages: accumulate in Uh_c[2]
         update_Uh<<<(pinfo_z_c.size + 256 - 1) / 256, 256>>>(dU_c[0], dU_c[1], dU_c[2], Uh_c[2][0], Uh_c[2][1],
                                                              Uh_c[2][2], Uh_c[2][0], Uh_c[2][1], Uh_c[2][2],
-                                                             rk_a[i] * dt, pinfo_z_c);
+                                                             rk_a[i] * dt_, pinfo_z_c);
         CHECK_CUDA_LAUNCH_EXIT();
       }
     }
@@ -775,7 +793,7 @@ private:
   // Solver settings
   int N;
   real_t nu;
-  real_t dt;
+  real_t dt_;
   real_t cfl;
   TimeScheme tscheme;
   real_t flowtime_ = 0;
@@ -850,9 +868,11 @@ static void usage(const char* pname) {
       "\t-m|--max_flowtime)\n"
       "\t\tMaximum flow time to run. (default: unlimited) \n"
       "\t-p|--printfreq\n"
-      "\t\tFrequency of printing stats. (default: 100) \n"
+      "\t\tFrequency (in iterations) of printing stats. (default: 100) \n"
       "\t-s|--specfreq\n"
-      "\t\tFrequency of computing and writing energy spectrum data. (default: 0, no write) \n"
+      "\t\tFrequency (in flowtime) of computing and writing energy spectrum data. (default: 0, no write) \n"
+      "\t-o|--logfile\n"
+      "\t\tFile to write time history of kinetic energy and enstrophy to. (default: no write) \n"
       "\t-o|--csv_prefix\n"
       "\t\tFile prefix to write final solution to, in CSV format as <csv_prefix>_<rank>.csv. (default: no write) \n"
       "\t-v|--nu\n"
@@ -875,8 +895,9 @@ int main(int argc, char** argv) {
   int niter = 1000;
   real_t max_flowtime = -1.0;
   int printfreq = 100;
-  int specfreq = 0;
+  real_t specfreq = 0.0;
   std::string csvfile;
+  std::string logfile;
 
   // Physical parameters
   real_t nu = 0.000625;
@@ -888,7 +909,8 @@ int main(int argc, char** argv) {
                                            {"niter", required_argument, 0, 'i'},
                                            {"max_flowtime", required_argument, 0, 'm'},
                                            {"printfreq", required_argument, 0, 'p'},
-                                           {"specreq", required_argument, 0, 's'},
+                                           {"specfreq", required_argument, 0, 's'},
+                                           {"logfile", required_argument, 0, 'l'},
                                            {"csvfile", required_argument, 0, 'o'},
                                            {"nu", required_argument, 0, 'v'},
                                            {"dt", required_argument, 0, 't'},
@@ -897,7 +919,7 @@ int main(int argc, char** argv) {
                                            {0, 0, 0, 0}};
 
     int option_index = 0;
-    int ch = getopt_long(argc, argv, "n:i:m:p:s:o:v:t:c:h", long_options, &option_index);
+    int ch = getopt_long(argc, argv, "n:i:m:p:s:l:o:v:t:c:h", long_options, &option_index);
     if (ch == -1) break;
 
     switch (ch) {
@@ -906,7 +928,8 @@ int main(int argc, char** argv) {
     case 'i': niter = atoi(optarg); break;
     case 'm': max_flowtime = atof(optarg); break;
     case 'p': printfreq = atoi(optarg); break;
-    case 's': specfreq = atoi(optarg); break;
+    case 's': specfreq = atof(optarg); break;
+    case 'l': logfile = std::string(optarg); break;
     case 'o': csvfile = std::string(optarg); break;
     case 'v': nu = atof(optarg); break;
     case 't': dt = atof(optarg); break;
@@ -921,7 +944,15 @@ int main(int argc, char** argv) {
   // Construct and initialize solver
   TGSolver solver(N, nu, dt, cfl, TGSolver::TimeScheme::RK4);
   solver.initialize(MPI_COMM_WORLD);
-  solver.print_stats();
+
+  if (logfile.size() != 0) {
+    std::ofstream g;
+    g.open(logfile, std::ofstream::out);
+    g  << "flowtime, ke, enstrophy, dt" << std::endl;
+    g.close();
+  }
+
+  solver.print_stats(logfile);
   if (specfreq > 0) solver.write_spectrum_sample(0);
 
   // Run simulation
@@ -941,14 +972,14 @@ int main(int argc, char** argv) {
       double te_step = MPI_Wtime();
       if (rank == 0) printf("Average iteration time: %f ms\n", (te_step - ts_step) * 1000 / count);
       count = 0;
-      solver.print_stats();
+      solver.print_stats(logfile);
       CHECK_CUDA_EXIT(cudaDeviceSynchronize());
       CHECK_MPI_EXIT(MPI_Barrier(MPI_COMM_WORLD));
       ts_step = MPI_Wtime();
     }
 
-    if (i > 0 && (i + 1) % specfreq == 0) {
-      if (specfreq > 0) solver.write_spectrum_sample(i + 1);
+    if (specfreq > 0 && std::fmod(solver.flowtime(), specfreq) < solver.dt()) {
+      solver.write_spectrum_sample(i + 1);
     }
 
     if (max_flowtime >= 0 && solver.flowtime() >= max_flowtime) {
