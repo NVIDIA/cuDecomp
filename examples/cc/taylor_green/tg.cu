@@ -866,7 +866,7 @@ static void usage(const char* pname) {
       "\t-i|--niter)\n"
       "\t\tNumber of iterations to run. (default: 1000) \n"
       "\t-m|--max_flowtime)\n"
-      "\t\tMaximum flow time to run. (default: unlimited) \n"
+      "\t\tMaximum flow time to run, overrides number of iterations setting. (default: unlimited) \n"
       "\t-p|--printfreq\n"
       "\t\tFrequency (in iterations) of printing stats. (default: 100) \n"
       "\t-s|--specfreq\n"
@@ -961,7 +961,8 @@ int main(int argc, char** argv) {
   double ts = MPI_Wtime();
   double ts_step = MPI_Wtime();
   int count = 0;
-  for (int i = 0; i < niter; ++i) {
+  int i = 0;
+  while (true) {
 
     solver.step();
     count++;
@@ -978,7 +979,7 @@ int main(int argc, char** argv) {
       ts_step = MPI_Wtime();
     }
 
-    bool should_break = (max_flowtime >= 0 && solver.flowtime() >= max_flowtime);
+    bool should_break = (max_flowtime >= 0) ? (solver.flowtime() >= max_flowtime) : (i == niter - 1);
 
     if (specfreq > 0 &&
         (std::fmod(solver.flowtime(), specfreq) < solver.dt() || should_break)) {
@@ -986,6 +987,7 @@ int main(int argc, char** argv) {
     }
 
     if (should_break) break;
+    i++;
   }
 
   CHECK_CUDA_EXIT(cudaDeviceSynchronize());
