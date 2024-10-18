@@ -248,7 +248,7 @@ __global__ static void update_Uh(const complex_t* dU_c0, const complex_t* dU_c1,
   Uh_c2[i] = Uh0_c2[i] + dt * dU_c2[i];
 }
 
-__global__ static void sumsq(int N, const real_t* U_r0, const real_t* U_r1, const real_t* U_r2, real_t* sumsq,
+__global__ static void sumsq(int64_t N, const real_t* U_r0, const real_t* U_r1, const real_t* U_r2, real_t* sumsq,
                              cudecompPencilInfo_t info) {
 
   const int64_t i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -269,7 +269,7 @@ __global__ static void sumsq(int N, const real_t* U_r0, const real_t* U_r1, cons
   sumsq[i] = (u * u + v * v + w * w);
 }
 
-__global__ static void velmax(int N, const real_t* U_r0, const real_t* U_r1, const real_t* U_r2, real_t* velmax,
+__global__ static void velmax(int64_t N, const real_t* U_r0, const real_t* U_r1, const real_t* U_r2, real_t* velmax,
                               cudecompPencilInfo_t info) {
 
   const int64_t i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -978,16 +978,16 @@ int main(int argc, char** argv) {
       ts_step = MPI_Wtime();
     }
 
-    if (specfreq > 0 && std::fmod(solver.flowtime(), specfreq) < solver.dt()) {
+    bool should_break = (max_flowtime >= 0 && solver.flowtime() >= max_flowtime);
+
+    if (specfreq > 0 &&
+        (std::fmod(solver.flowtime(), specfreq) < solver.dt() || should_break)) {
       solver.write_spectrum_sample(i + 1);
     }
 
-    if (max_flowtime >= 0 && solver.flowtime() >= max_flowtime) {
-      if (specfreq > 0) solver.write_spectrum_sample(i + 1);
-      break;
-    }
-
+    if (should_break) break;
   }
+
   CHECK_CUDA_EXIT(cudaDeviceSynchronize());
   CHECK_MPI_EXIT(MPI_Barrier(MPI_COMM_WORLD));
   double te = MPI_Wtime();
