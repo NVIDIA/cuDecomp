@@ -30,7 +30,7 @@ endforeach()
 target_compile_definitions(benchmark_r2c PRIVATE R2C)
 target_compile_definitions(benchmark_c2c PRIVATE C2C)
 target_compile_definitions(benchmark_r2c_f PRIVATE R2C USE_FLOAT)
-target_compile_definitions(benchmark_c2c_f PRIVATE R2C USE_FLOAT)
+target_compile_definitions(benchmark_c2c_f PRIVATE C2C USE_FLOAT)
 
 install(
   TARGETS ${benchmark_targets}
