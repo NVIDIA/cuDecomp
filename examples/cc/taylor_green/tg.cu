@@ -119,6 +119,9 @@ static cudecompDataType_t get_cudecomp_datatype(double) { return CUDECOMP_DOUBLE
 static cudecompDataType_t get_cudecomp_datatype(cuda::std::complex<float>) { return CUDECOMP_FLOAT_COMPLEX; }
 static cudecompDataType_t get_cudecomp_datatype(cuda::std::complex<double>) { return CUDECOMP_DOUBLE_COMPLEX; }
 
+static MPI_Datatype get_mpi_datatype(float) { return MPI_FLOAT; }
+static MPI_Datatype get_mpi_datatype(double) { return MPI_DOUBLE; }
+
 // CUDA kernels
 template <typename T, typename TS>
 __global__ static void scale(T* U0, T* U1, T* U2, TS scale_factor, cudecompPencilInfo_t info) {
@@ -245,7 +248,7 @@ __global__ static void update_Uh(const complex_t* dU_c0, const complex_t* dU_c1,
   Uh_c2[i] = Uh0_c2[i] + dt * dU_c2[i];
 }
 
-__global__ static void sumsq(int N, const real_t* U_r0, const real_t* U_r1, const real_t* U_r2, real_t* sumsq,
+__global__ static void sumsq(int64_t N, const real_t* U_r0, const real_t* U_r1, const real_t* U_r2, real_t* sumsq,
                              cudecompPencilInfo_t info) {
 
   const int64_t i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -266,12 +269,58 @@ __global__ static void sumsq(int N, const real_t* U_r0, const real_t* U_r1, cons
   sumsq[i] = (u * u + v * v + w * w);
 }
 
+__global__ static void velmax(int64_t N, const real_t* U_r0, const real_t* U_r1, const real_t* U_r2, real_t* velmax,
+                              cudecompPencilInfo_t info) {
+
+  const int64_t i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i >= info.size) return;
+
+  int64_t gx[3];
+  get_gx(info, i, gx);
+  if (gx[0] >= N || gx[1] >= N || gx[2] >= N) {
+    // Set padded element entries to zero
+    velmax[i] = 0;
+    return;
+  }
+
+  real_t scaling = real_t(1.0) / (N * N * N);
+
+  real_t u = U_r0[i] * scaling; // Scaling cuFFT result
+  real_t v = U_r1[i] * scaling;
+  real_t w = U_r2[i] * scaling;
+
+  velmax[i] = N * (std::abs(u)+ std::abs(v) + std::abs(w));
+}
+
+__global__ static void spectrum(const complex_t* Uh_c0,const  complex_t* Uh_c1,const  complex_t* Uh_c2,
+                                real_t* K0, real_t* K1, real_t* K2, real_t* ek,
+                                cudecompPencilInfo_t info) {
+
+  const int64_t i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i >= info.size) return;
+
+  int64_t gx[3];
+  get_gx(info, i, gx);
+  real_t kx = K0[gx[0]];
+  real_t ky = K1[gx[1]];
+  real_t kz = K2[gx[2]];
+  complex_t Uhu = Uh_c0[i];
+  complex_t Uhv = Uh_c1[i];
+  complex_t Uhw = Uh_c2[i];
+
+  real_t kk = kx * kx + ky * ky + kz * kz;
+  int shell = int(std::sqrt(kk) + 0.5);
+
+  real_t uu = (kx == 0 ? 0.5 : 1.0) * (abs(Uhu) * abs(Uhu) + abs(Uhv)* abs(Uhv) + abs(Uhw) * abs(Uhw));
+  atomicAdd(&ek[shell],  uu);
+}
+
 class TGSolver {
 public:
   // Timestepping scheme
   enum TimeScheme { RK1, RK4 };
 
-  TGSolver(int N, real_t nu, real_t dt, TimeScheme tscheme = RK1) : N(N), nu(nu), dt(dt), tscheme(tscheme){};
+  TGSolver(int N, real_t nu, real_t dt, real_t cfl, TimeScheme tscheme = RK1) : N(N), nu(nu), dt_(dt), cfl(cfl), tscheme(tscheme){};
   void finalize() {
     // Free memory
     for (int i = 0; i < 3; ++i) {
@@ -410,7 +459,10 @@ public:
 
     // Set up CUB arrays
     CHECK_CUDA_EXIT(cudaMallocManaged(&cub_sum, sizeof(real_t)));
-    CHECK_CUDA_EXIT(cub::DeviceReduce::Sum(cub_work, cub_work_sz, U_r[0], cub_sum, pinfo_x_r.size));
+    size_t cub_work_sz_sum, cub_work_sz_max;
+    CHECK_CUDA_EXIT(cub::DeviceReduce::Sum(cub_work, cub_work_sz_sum, U_r[0], cub_sum, pinfo_x_r.size));
+    CHECK_CUDA_EXIT(cub::DeviceReduce::Max(cub_work, cub_work_sz_max, U_r[0], cub_sum, pinfo_x_r.size));
+    cub_work_sz = std::max(cub_work_sz_sum, cub_work_sz_max);
     CHECK_CUDA_EXIT(cudaMalloc(&cub_work, cub_work_sz));
 
     // Set timestepping variables
@@ -449,6 +501,10 @@ public:
     for (int i = 0; i < N / 2 + 1; ++i) { K[0][i] = i; }
     K[0][N / 2] *= -1;
 
+    // Spectrum
+    int num_shells = int(std::sqrt(9*N*N + 4*N + 4) / 4) + 1;
+    CHECK_CUDA_EXIT(cudaMallocManaged(&ek, num_shells * sizeof(real_t)));
+
     // Initialize U (physical space)
     real_t dx = 2 * PI / N;
     real_t dy = 2 * PI / N;
@@ -470,16 +526,19 @@ public:
   }
 
   void step() {
+    if (cfl > 0.0) {
+      dt_ = get_dt(cfl);
+    }
     switch (tscheme) {
     case RK1: update_rk1(); break;
     case RK4: update_rk4(); break;
     default: std::cerr << "Unknown TimeScheme provided." << std::endl;
     }
 
-    flowtime += dt;
+    flowtime_ += dt_;
   }
 
-  void print_stats() {
+  void print_stats(const std::string& logfile) {
     // Compute enstrophy
     // Recompute curl and transform to physical space (z-pencil -> x-pencil).
     curl<<<(pinfo_z_c.size + 256 - 1) / 256, 256>>>(Uh_c[0][0], Uh_c[0][1], Uh_c[0][2], dU_c[0], dU_c[1], dU_c[2], K[0],
@@ -514,9 +573,52 @@ public:
     // Print statistics
     if (rank == 0) {
       std::cout << std::fixed;
-      std::cout << "flow time: " << std::setprecision(5) << flowtime << " ";
+      std::cout << "flow time: " << std::setprecision(5) << flowtime_ << " ";
       std::cout << " ke: " << std::setprecision(14) << ke << " ";
-      std::cout << " enstrophy: " << std::setprecision(14) << enst << std::endl;
+      std::cout << " enstrophy: " << std::setprecision(14) << enst << " ";
+      std::cout << " dt: " << std::setprecision(14) << dt_ << std::endl;
+
+      if (logfile.size() != 0) {
+        std::ofstream g;
+        g.open(logfile, std::ofstream::out | std::ofstream::app);
+        g << std::scientific << std::setprecision(12);
+        g  << flowtime_ << ",";
+        g  << ke << ",";
+        g  << enst << ",";
+        g  << dt_ << std::endl;
+        g.close();
+      }
+    }
+  }
+
+  // Write spectrum
+  void write_spectrum_sample(int idx) {
+    // Compute spectrum per rank
+    int num_shells = int(std::sqrt(9*N*N + 4*N + 4) / 4) + 1;
+    CHECK_CUDA_EXIT(cudaMemset(ek, 0, num_shells * sizeof(real_t)));
+    spectrum<<<(pinfo_z_c.size + 256 - 1) / 256, 256>>>(Uh_c[0][0], Uh_c[0][1], Uh_c[0][2],
+                                                        K[0], K[1], K[2], ek, pinfo_z_c);
+    CHECK_CUDA_LAUNCH_EXIT();
+    CHECK_CUDA_EXIT(cudaDeviceSynchronize());
+
+    if (nranks > 1) {
+      CHECK_MPI_EXIT(MPI_Reduce((rank == 0) ? MPI_IN_PLACE : ek, ek, num_shells, get_mpi_datatype(real_t(0)),
+                                MPI_SUM, 0, mpi_comm));
+    }
+
+    if (rank == 0) {
+      std::stringstream ss;
+      ss << "spectrum_" << std::setfill('0') << std::setw(8) << idx << ".txt";
+
+      std::cout << "writing spectrum sample to " << ss.str() << "..." << std::endl;
+      std::ofstream g;
+      g.open(ss.str());
+      g << std::scientific << std::setprecision(12);
+      g << "time: " << flowtime_ << std::endl;
+      for (int i = 0; i < num_shells; ++i) {
+        g << ek[i] / (N * N * N) << std::endl; // Scale cuFFT result
+      }
+      g.close();
     }
   }
 
@@ -548,6 +650,14 @@ public:
       g << std::setprecision(12) << U_cpu_r[2][i] / (N * N * N) << std::endl;
     }
     g.close();
+  }
+
+  real_t flowtime() {
+    return flowtime_;
+  }
+
+  real_t dt() {
+    return dt_;
   }
 
 private:
@@ -601,7 +711,7 @@ private:
   void update_rk1() {
     compute_rhs(Uh_c[0]);
     update_Uh<<<(pinfo_z_c.size + 256 - 1) / 256, 256>>>(dU_c[0], dU_c[1], dU_c[2], Uh_c[0][0], Uh_c[0][1], Uh_c[0][2],
-                                                         Uh_c[0][0], Uh_c[0][1], Uh_c[0][2], dt, pinfo_z_c);
+                                                         Uh_c[0][0], Uh_c[0][1], Uh_c[0][2], dt_, pinfo_z_c);
     CHECK_CUDA_LAUNCH_EXIT();
 
     // Get physical U (z-pencil -> x-pencil)
@@ -626,7 +736,7 @@ private:
       if (i < 3) {
         update_Uh<<<(pinfo_z_c.size + 256 - 1) / 256, 256>>>(dU_c[0], dU_c[1], dU_c[2], Uh_c[0][0], Uh_c[0][1],
                                                              Uh_c[0][2], Uh_c[1][0], Uh_c[1][1], Uh_c[1][2],
-                                                             rk_b[i] * dt, pinfo_z_c);
+                                                             rk_b[i] * dt_, pinfo_z_c);
         CHECK_CUDA_LAUNCH_EXIT();
 
         // Get physical U (z-pencil -> x-pencil)
@@ -641,19 +751,19 @@ private:
         // First stage: assign to Uh_c[2]
         update_Uh<<<(pinfo_z_c.size + 256 - 1) / 256, 256>>>(dU_c[0], dU_c[1], dU_c[2], Uh_c[0][0], Uh_c[0][1],
                                                              Uh_c[0][2], Uh_c[2][0], Uh_c[2][1], Uh_c[2][2],
-                                                             rk_a[i] * dt, pinfo_z_c);
+                                                             rk_a[i] * dt_, pinfo_z_c);
         CHECK_CUDA_LAUNCH_EXIT();
       } else if (i == 3) {
         // Last stage: assign to Uh_c[0]
         update_Uh<<<(pinfo_z_c.size + 256 - 1) / 256, 256>>>(dU_c[0], dU_c[1], dU_c[2], Uh_c[2][0], Uh_c[2][1],
                                                              Uh_c[2][2], Uh_c[0][0], Uh_c[0][1], Uh_c[0][2],
-                                                             rk_a[i] * dt, pinfo_z_c);
+                                                             rk_a[i] * dt_, pinfo_z_c);
         CHECK_CUDA_LAUNCH_EXIT();
       } else {
         // Middle stages: accumulate in Uh_c[2]
         update_Uh<<<(pinfo_z_c.size + 256 - 1) / 256, 256>>>(dU_c[0], dU_c[1], dU_c[2], Uh_c[2][0], Uh_c[2][1],
                                                              Uh_c[2][2], Uh_c[2][0], Uh_c[2][1], Uh_c[2][2],
-                                                             rk_a[i] * dt, pinfo_z_c);
+                                                             rk_a[i] * dt_, pinfo_z_c);
         CHECK_CUDA_LAUNCH_EXIT();
       }
     }
@@ -666,12 +776,27 @@ private:
     backward(U_c, U_r);
   }
 
+  real_t get_dt(real_t cfl) {
+    velmax<<<(pinfo_x_r.size + 256 - 1) / 256, 256>>>(N, U_r[0], U_r[1], U_r[2], dU_r[0], pinfo_x_r);
+    CHECK_CUDA_LAUNCH_EXIT();
+
+    CHECK_CUDA_EXIT(cub::DeviceReduce::Max(cub_work, cub_work_sz, dU_r[0], cub_sum, pinfo_x_r.size));;
+    CHECK_CUDA_EXIT(cudaDeviceSynchronize());
+    real_t velmax = *cub_sum;
+    if (nranks > 1) {
+      CHECK_MPI_EXIT(MPI_Allreduce(MPI_IN_PLACE, &velmax, 1, get_mpi_datatype(velmax), MPI_MAX, mpi_comm));
+    }
+
+    return cfl / velmax;
+  }
+
   // Solver settings
   int N;
   real_t nu;
-  real_t dt;
+  real_t dt_;
+  real_t cfl;
   TimeScheme tscheme;
-  real_t flowtime = 0;
+  real_t flowtime_ = 0;
 
   // MPI variables
   int rank, local_rank, nranks;
@@ -708,6 +833,7 @@ private:
   std::array<real_t*, 3> U_r, dU_r;    // real pointers (aliased);
   std::array<complex_t*, 3> U_c, dU_c; // complex pointers (aliased)
   std::array<real_t*, 3> K;            // wavenumbers
+  real_t* ek;                          // energy spectrum
 
   std::vector<std::array<void*, 3>> Uh;
   std::vector<std::array<real_t*, 3>> Uh_r;
@@ -737,12 +863,24 @@ static void usage(const char* pname) {
       "options:\n"
       "\t-n|--N\n"
       "\t\tDimension of grid. (default: 256) \n"
-      "\t-i|--niter (-i)\n"
+      "\t-i|--niter)\n"
       "\t\tNumber of iterations to run. (default: 1000) \n"
+      "\t-m|--max_flowtime)\n"
+      "\t\tMaximum flow time to run, overrides number of iterations setting. (default: unlimited) \n"
       "\t-p|--printfreq\n"
-      "\t\tFrequency of printing stats. (default: 100) \n"
-      "\t-o|--csv_prefix\n"
-      "\t\tFile prefix to write final solution to, in CSV format as <csv_prefix>_<rank>.csv. (default: no write) \n",
+      "\t\tFrequency (in iterations) of printing stats. (default: 100) \n"
+      "\t-s|--specfreq\n"
+      "\t\tFrequency (in flowtime) of computing and writing energy spectrum data. (default: 0, no write) \n"
+      "\t-l|--logfile\n"
+      "\t\tFile to write time history of kinetic energy and enstrophy to. (default: no write) \n"
+      "\t-o|--csvfile\n"
+      "\t\tFile prefix to write final solution to, in CSV format as <csvfile>_<rank>.csv. (default: no write) \n"
+      "\t-v|--nu\n"
+      "\t\tFluid viscosity. (default: 0.000625) \n"
+      "\t-t|--dt\n"
+      "\t\tFixed timestep. (default: 0.001) \n"
+      "\t-c|--cfl\n"
+      "\t\tCFL value to use for timestepping, overrides fixed timestep setting. (default: 0.0, use fixed timestep) \n",
       bname);
   exit(EXIT_SUCCESS);
 }
@@ -755,41 +893,67 @@ int main(int argc, char** argv) {
   // Parse command-line arguments
   int N = 256;
   int niter = 1000;
+  real_t max_flowtime = -1.0;
   int printfreq = 100;
+  real_t specfreq = 0.0;
   std::string csvfile;
+  std::string logfile;
+
+  // Physical parameters
+  real_t nu = 0.000625;
+  real_t dt = 0.001;
+  real_t cfl = 0.0;
 
   while (1) {
     static struct option long_options[] = {{"N", required_argument, 0, 'n'},
                                            {"niter", required_argument, 0, 'i'},
+                                           {"max_flowtime", required_argument, 0, 'm'},
                                            {"printfreq", required_argument, 0, 'p'},
+                                           {"specfreq", required_argument, 0, 's'},
+                                           {"logfile", required_argument, 0, 'l'},
                                            {"csvfile", required_argument, 0, 'o'},
+                                           {"nu", required_argument, 0, 'v'},
+                                           {"dt", required_argument, 0, 't'},
+                                           {"cfl", required_argument, 0, 'c'},
                                            {"help", no_argument, 0, 'h'},
                                            {0, 0, 0, 0}};
 
     int option_index = 0;
-    int ch = getopt_long(argc, argv, "n:i:p:o:h", long_options, &option_index);
+    int ch = getopt_long(argc, argv, "n:i:m:p:s:l:o:v:t:c:h", long_options, &option_index);
     if (ch == -1) break;
 
     switch (ch) {
     case 0: break;
     case 'n': N = atoi(optarg); break;
     case 'i': niter = atoi(optarg); break;
+    case 'm': max_flowtime = atof(optarg); break;
     case 'p': printfreq = atoi(optarg); break;
+    case 's': specfreq = atof(optarg); break;
+    case 'l': logfile = std::string(optarg); break;
     case 'o': csvfile = std::string(optarg); break;
+    case 'v': nu = atof(optarg); break;
+    case 't': dt = atof(optarg); break;
+    case 'c': cfl = atof(optarg); break;
     case 'h': usage(argv[0]); break;
     case '?': exit(EXIT_FAILURE);
     default: fprintf(stderr, "unknown option: %c\n", ch); exit(EXIT_FAILURE);
     }
   }
 
-  // Physical parameters
-  real_t nu = 0.000625;
-  real_t dt = 0.001;
 
   // Construct and initialize solver
-  TGSolver solver(N, nu, dt, TGSolver::TimeScheme::RK4);
+  TGSolver solver(N, nu, dt, cfl, TGSolver::TimeScheme::RK4);
   solver.initialize(MPI_COMM_WORLD);
-  solver.print_stats();
+
+  if (logfile.size() != 0) {
+    std::ofstream g;
+    g.open(logfile, std::ofstream::out);
+    g  << "flowtime, ke, enstrophy, dt" << std::endl;
+    g.close();
+  }
+
+  solver.print_stats(logfile);
+  if (specfreq > 0) solver.write_spectrum_sample(0);
 
   // Run simulation
   CHECK_CUDA_EXIT(cudaDeviceSynchronize());
@@ -797,7 +961,9 @@ int main(int argc, char** argv) {
   double ts = MPI_Wtime();
   double ts_step = MPI_Wtime();
   int count = 0;
-  for (int i = 0; i < niter; ++i) {
+  int i = 0;
+  while (true) {
+
     solver.step();
     count++;
 
@@ -807,12 +973,23 @@ int main(int argc, char** argv) {
       double te_step = MPI_Wtime();
       if (rank == 0) printf("Average iteration time: %f ms\n", (te_step - ts_step) * 1000 / count);
       count = 0;
-      solver.print_stats();
+      solver.print_stats(logfile);
       CHECK_CUDA_EXIT(cudaDeviceSynchronize());
       CHECK_MPI_EXIT(MPI_Barrier(MPI_COMM_WORLD));
       ts_step = MPI_Wtime();
     }
+
+    bool should_break = (max_flowtime >= 0) ? (solver.flowtime() >= max_flowtime) : (i == niter - 1);
+
+    if (specfreq > 0 &&
+        (std::fmod(solver.flowtime(), specfreq) < solver.dt() || should_break)) {
+      solver.write_spectrum_sample(i + 1);
+    }
+
+    if (should_break) break;
+    i++;
   }
+
   CHECK_CUDA_EXIT(cudaDeviceSynchronize());
   CHECK_MPI_EXIT(MPI_Barrier(MPI_COMM_WORLD));
   double te = MPI_Wtime();
