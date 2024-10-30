@@ -44,7 +44,7 @@
 
 #define CUDECOMP_MAJOR 0
 #define CUDECOMP_MINOR 4
-#define CUDECOMP_PATCH 1
+#define CUDECOMP_PATCH 2
 
 /**
  * @brief This enum lists the different available transpose backend options.
