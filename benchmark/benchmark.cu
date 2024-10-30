@@ -120,7 +120,9 @@ static void usage(const char* pname) {
           "\t-m|--use-managed-memory\n"
           "\t\tFlag to test operation with managed memory.\n"
           "\t-s|--skip-correctness-tests\n"
-          "\t\tFlag to skip checking results for correctness.\n\n",
+          "\t\tFlag to skip checking results for correctness.\n"
+          "\t-n|--no-slab-opt\n"
+          "\t\tFlag to disable slab optimizations (e.g. 2D local FFTs, transpose skipping).\n\n",
           bname);
   exit(EXIT_SUCCESS);
 }
@@ -151,6 +153,7 @@ int main(int argc, char** argv) {
   int ntrials = 5;
   bool skip_correctness_tests = false;
   double skip_threshold = 0.0;
+  bool no_slab_opt = false;
 
   while (1) {
     static struct option long_options[] = {{"gx", required_argument, 0, 'x'},
@@ -168,11 +171,12 @@ int main(int argc, char** argv) {
                                            {"out-of-place", no_argument, 0, 'o'},
                                            {"use-managed-memory", no_argument, 0, 'm'},
                                            {"skip-correctness-tests", no_argument, 0, 's'},
+                                           {"no-slab-opt", no_argument, 0, 'n'},
                                            {"help", no_argument, 0, 'h'},
                                            {0, 0, 0, 0}};
 
     int option_index = 0;
-    int ch = getopt_long(argc, argv, "x:y:z:b:r:c:1:2:3:w:t:k:b:omsh", long_options, &option_index);
+    int ch = getopt_long(argc, argv, "x:y:z:b:r:c:1:2:3:w:t:k:b:omsnh", long_options, &option_index);
     if (ch == -1) break;
 
     switch (ch) {
@@ -192,6 +196,7 @@ int main(int argc, char** argv) {
     case 'o': out_of_place = true; break;
     case 'm': use_managed_memory = true; break;
     case 's': skip_correctness_tests = true; break;
+    case 'n': no_slab_opt = true; break;
     case 'h':
       if (rank == 0) { usage(argv[0]); }
       exit(EXIT_SUCCESS);
@@ -287,20 +292,28 @@ int main(int argc, char** argv) {
   // Setup cuFFT
   bool slab_xy = false;
   bool slab_yz = false;
+  bool slab_xyz = false;
 #ifdef R2C
   // x-axis real-to-complex
   cufftHandle cufft_plan_r2c_x;
   CHECK_CUFFT_EXIT(cufftCreate(&cufft_plan_r2c_x));
   CHECK_CUFFT_EXIT(cufftSetAutoAllocation(cufft_plan_r2c_x, 0));
-  size_t work_sz_r2c_x;
+  size_t work_sz_r2c_x = 0;
 
   // x-axis complex-to-real
   cufftHandle cufft_plan_c2r_x;
   CHECK_CUFFT_EXIT(cufftCreate(&cufft_plan_c2r_x));
   CHECK_CUFFT_EXIT(cufftSetAutoAllocation(cufft_plan_c2r_x, 0));
-  size_t work_sz_c2r_x;
+  size_t work_sz_c2r_x = 0;
 
-  if (config.pdims[0] == 1) {
+  if (!no_slab_opt && config.pdims[0] == 1 && config.pdims[1] == 1) {
+    // single rank, x-y-z slab: use 3D FFT
+    slab_xyz = true;
+    CHECK_CUFFT_EXIT(cufftMakePlan3d(cufft_plan_r2c_x, gx, gy, gz, get_cufft_type_r2c(real_t(0)),
+                                     &work_sz_r2c_x));
+    CHECK_CUFFT_EXIT(cufftMakePlan3d(cufft_plan_c2r_x, gx, gy, gz, get_cufft_type_c2r(real_t(0)),
+                                     &work_sz_c2r_x));
+  } else if (!no_slab_opt && config.pdims[0] == 1) {
     // x-y slab: use 2D FFT
     slab_xy = true;
     std::array<int, 2> n{gx, gy};
@@ -321,9 +334,14 @@ int main(int argc, char** argv) {
   cufftHandle cufft_plan_c2c_x;
   CHECK_CUFFT_EXIT(cufftCreate(&cufft_plan_c2c_x));
   CHECK_CUFFT_EXIT(cufftSetAutoAllocation(cufft_plan_c2c_x, 0));
-  size_t work_sz_c2c_x;
+  size_t work_sz_c2c_x = 0;
 
-  if (config.pdims[0] == 1) {
+  if (!no_slab_opt && config.pdims[0] == 1 && config.pdims[1] == 1) {
+    // single rank, x-y-z slab: use 3D FFT
+    slab_xyz = true;
+    CHECK_CUFFT_EXIT(cufftMakePlan3d(cufft_plan_c2c_x, gx, gy, gz, get_cufft_type_c2c(real_t(0)),
+                                     &work_sz_c2c_x));
+  } else if (!no_slab_opt && config.pdims[0] == 1) {
     // x-y slab: use 2D FFT
     slab_xy = true;
     std::array<int, 2> n{gy, gx};
@@ -342,8 +360,8 @@ int main(int argc, char** argv) {
   cufftHandle cufft_plan_c2c_y;
   CHECK_CUFFT_EXIT(cufftCreate(&cufft_plan_c2c_y));
   CHECK_CUFFT_EXIT(cufftSetAutoAllocation(cufft_plan_c2c_y, 0));
-  size_t work_sz_c2c_y;
-  if (config.pdims[1] == 1) {
+  size_t work_sz_c2c_y = 0;
+  if (!no_slab_opt && !slab_xyz && config.pdims[1] == 1) {
     // y-z slab: use 2D FFT
     slab_yz = true;
     if (axis_contiguous[1]) {
@@ -380,7 +398,7 @@ int main(int argc, char** argv) {
   cufftHandle cufft_plan_c2c_z;
   CHECK_CUFFT_EXIT(cufftCreate(&cufft_plan_c2c_z));
   CHECK_CUFFT_EXIT(cufftSetAutoAllocation(cufft_plan_c2c_z, 0));
-  size_t work_sz_c2c_z;
+  size_t work_sz_c2c_z = 0;
   if (axis_contiguous[2]) {
     CHECK_CUFFT_EXIT(cufftMakePlan1d(cufft_plan_c2c_z, gz, get_cufft_type_c2c(real_t(0)),
                                      pinfo_z_c.shape[1] * pinfo_z_c.shape[2], &work_sz_c2c_z));
@@ -490,10 +508,13 @@ int main(int argc, char** argv) {
 #else
     CHECK_CUFFT_EXIT(cufftXtExec(cufft_plan_c2c_x, input, input, CUFFT_FORWARD));
 #endif
-    CHECK_CUDECOMP_EXIT(cudecompTransposeXToY(handle, grid_desc_c, input, output, work_c_d,
-                                              get_cudecomp_datatype(complex_t(0)), nullptr, nullptr, 0));
 
-    if (!slab_xy) {
+    if (!slab_xyz) {
+      CHECK_CUDECOMP_EXIT(cudecompTransposeXToY(handle, grid_desc_c, input, output, work_c_d,
+                                                get_cudecomp_datatype(complex_t(0)), nullptr, nullptr, 0));
+    }
+
+    if (!slab_xy && !slab_xyz) {
       if (axis_contiguous[1] || slab_yz) {
         CHECK_CUFFT_EXIT(cufftXtExec(cufft_plan_c2c_y, output, output, CUFFT_FORWARD));
       } else {
@@ -510,12 +531,12 @@ int main(int argc, char** argv) {
 #endif
 
     // For y-z slab case, no need to perform yz transposes or z-axis FFT
-    if (!slab_yz) {
+    if (!slab_yz && !slab_xyz) {
       CHECK_CUDECOMP_EXIT(cudecompTransposeYToZ(handle, grid_desc_c, input, output, work_c_d,
                                                 get_cudecomp_datatype(complex_t(0)), nullptr, nullptr, 0));
     }
 
-    if (!slab_yz) {
+    if (!slab_yz && !slab_xyz) {
       CHECK_CUFFT_EXIT(cufftXtExec(cufft_plan_c2c_z, output, output, CUFFT_FORWARD));
       CHECK_CUFFT_EXIT(cufftXtExec(cufft_plan_c2c_z, output, output, CUFFT_INVERSE));
     }
@@ -525,12 +546,12 @@ int main(int argc, char** argv) {
     if (out_of_place) std::swap(input_r, output_r);
 #endif
 
-    if (!slab_yz) {
+    if (!slab_yz && !slab_xyz) {
       CHECK_CUDECOMP_EXIT(cudecompTransposeZToY(handle, grid_desc_c, input, output, work_c_d,
                                                 get_cudecomp_datatype(complex_t(0)), nullptr, nullptr, 0));
     }
 
-    if (!slab_xy) {
+    if (!slab_xy && !slab_xyz) {
       if (axis_contiguous[1] || slab_yz) {
         CHECK_CUFFT_EXIT(cufftXtExec(cufft_plan_c2c_y, output, output, CUFFT_INVERSE));
       } else {
@@ -546,8 +567,10 @@ int main(int argc, char** argv) {
     if (out_of_place) std::swap(input_r, output_r);
 #endif
 
-    CHECK_CUDECOMP_EXIT(cudecompTransposeYToX(handle, grid_desc_c, input, output, work_c_d,
-                                              get_cudecomp_datatype(complex_t(0)), nullptr, nullptr, 0));
+    if (!slab_xyz) {
+      CHECK_CUDECOMP_EXIT(cudecompTransposeYToX(handle, grid_desc_c, input, output, work_c_d,
+                                                get_cudecomp_datatype(complex_t(0)), nullptr, nullptr, 0));
+    }
 #ifdef R2C
     CHECK_CUFFT_EXIT(cufftXtExec(cufft_plan_c2r_x, output, output_r, CUFFT_INVERSE));
 #else
@@ -650,6 +673,7 @@ int main(int argc, char** argv) {
            static_cast<int>(axis_contiguous[1]), static_cast<int>(axis_contiguous[2]));
     printf("\t Out of place: %s \n", (out_of_place) ? "true" : "false");
     printf("\t Managed memory: %s \n", (use_managed_memory) ? "true" : "false");
+    printf("\t Slab optimizations: %s \n", (slab_xy || slab_yz || slab_xyz) ? "true" : "false");
     printf("\t Time min/max/avg/std [ms]: %f/%f/%f/%f \n", times[0], times[1], times[2], times[3]);
     printf("\t Throughput min/max/avg/std [GFLOPS/s]: %f/%f/%f/%f \n", flops[0], flops[1], flops[2], flops[3]);
     if (skip_correctness_tests) {
