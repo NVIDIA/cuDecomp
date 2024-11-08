@@ -54,7 +54,7 @@ extern "C" {
 /**
  * @brief This enum lists the different available transpose backend options.
  */
-typedef enum cudecompTransposeCommBackend_t_enum {
+typedef enum {
   CUDECOMP_TRANSPOSE_COMM_MPI_P2P = 1,    ///< MPI backend using peer-to-peer algorithm (i.e.,MPI_Isend/MPI_Irecv)
   CUDECOMP_TRANSPOSE_COMM_MPI_P2P_PL = 2, ///< MPI backend using peer-to-peer algorithm with pipelining
   CUDECOMP_TRANSPOSE_COMM_MPI_A2A = 3,    ///< MPI backend using MPI_Alltoallv
@@ -67,7 +67,7 @@ typedef enum cudecompTransposeCommBackend_t_enum {
 /**
  * @brief This enum lists the different available halo backend options.
  */
-typedef enum cudecompHaloCommBackend_t_enum {
+typedef enum {
   CUDECOMP_HALO_COMM_MPI = 1,             ///< MPI backend
   CUDECOMP_HALO_COMM_MPI_BLOCKING = 2,    ///< MPI backend with blocking between each peer transfer
   CUDECOMP_HALO_COMM_NCCL = 3,            ///< NCCL backend
@@ -78,7 +78,7 @@ typedef enum cudecompHaloCommBackend_t_enum {
 /**
  * @brief This enum defines the data types supported.
  */
-typedef enum cudecompDataType_t_enum {
+typedef enum {
   CUDECOMP_FLOAT = -1,         ///< Single-precision real
   CUDECOMP_DOUBLE = -2,        ///< Double-precision real
   CUDECOMP_FLOAT_COMPLEX = -3, ///< Single-precision complex (interleaved)
@@ -88,7 +88,7 @@ typedef enum cudecompDataType_t_enum {
 /**
  * @brief This enum defines the modes available for process grid autotuning.
  */
-typedef enum cudecompAutotuneGridMode_t_enum {
+typedef enum {
   CUDECOMP_AUTOTUNE_GRID_TRANSPOSE = 0, ///< Use transpose communication to autotune process grid dimensions
   CUDECOMP_AUTOTUNE_GRID_HALO = 1       ///< Use halo communication to autotune process grid dimensions
 } cudecompAutotuneGridMode_t;
@@ -97,7 +97,7 @@ typedef enum cudecompAutotuneGridMode_t_enum {
  * @brief This enum defines the possible values return values from cuDecomp. Most functions in the cuDecomp library
  * will return one of these values to indicate if an operation has completed successfully or an error occured.
  */
-typedef enum cudecompResult_t_enum {
+typedef enum {
   CUDECOMP_RESULT_SUCCESS = 0,        ///< The operation completed successfully
   CUDECOMP_RESULT_INVALID_USAGE = 1,  ///< A user error, typically an invalid argument
   CUDECOMP_RESULT_NOT_SUPPORTED = 2,  ///< A user error, requesting an invalid or unsupported operation configuration
@@ -189,7 +189,6 @@ typedef struct {
   int32_t halo_extents[3]; ///< halo extents by dimension (in global order)
   int64_t size;            ///< number of elements in pencil (including halo elements)
 } cudecompPencilInfo_t;
-
 
 // cuDecomp initialization/finalization functions
 /**
