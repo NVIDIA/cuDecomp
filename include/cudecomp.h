@@ -37,8 +37,6 @@
 #ifndef CUDECOMP_H
 #define CUDECOMP_H
 
-#include <string>
-
 #include <cuda_runtime.h>
 #include <mpi.h>
 
@@ -46,10 +44,17 @@
 #define CUDECOMP_MINOR 4
 #define CUDECOMP_PATCH 2
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#include <stdint.h>
+#include <stdbool.h>
+
 /**
  * @brief This enum lists the different available transpose backend options.
  */
-enum cudecompTransposeCommBackend_t {
+typedef enum {
   CUDECOMP_TRANSPOSE_COMM_MPI_P2P = 1,    ///< MPI backend using peer-to-peer algorithm (i.e.,MPI_Isend/MPI_Irecv)
   CUDECOMP_TRANSPOSE_COMM_MPI_P2P_PL = 2, ///< MPI backend using peer-to-peer algorithm with pipelining
   CUDECOMP_TRANSPOSE_COMM_MPI_A2A = 3,    ///< MPI backend using MPI_Alltoallv
@@ -57,42 +62,42 @@ enum cudecompTransposeCommBackend_t {
   CUDECOMP_TRANSPOSE_COMM_NCCL_PL = 5,    ///< NCCL backend with pipelining
   CUDECOMP_TRANSPOSE_COMM_NVSHMEM = 6,    ///< NVSHMEM backend
   CUDECOMP_TRANSPOSE_COMM_NVSHMEM_PL = 7  ///< NVSHMEM backend with pipelining
-};
+} cudecompTransposeCommBackend_t;
 
 /**
  * @brief This enum lists the different available halo backend options.
  */
-enum cudecompHaloCommBackend_t {
+typedef enum {
   CUDECOMP_HALO_COMM_MPI = 1,             ///< MPI backend
   CUDECOMP_HALO_COMM_MPI_BLOCKING = 2,    ///< MPI backend with blocking between each peer transfer
   CUDECOMP_HALO_COMM_NCCL = 3,            ///< NCCL backend
   CUDECOMP_HALO_COMM_NVSHMEM = 4,         ///< NVSHMEM backend
   CUDECOMP_HALO_COMM_NVSHMEM_BLOCKING = 5 ///< NVSHMEM backend with blocking between each peer transfer
-};
+} cudecompHaloCommBackend_t;
 
 /**
  * @brief This enum defines the data types supported.
  */
-enum cudecompDataType_t {
+typedef enum {
   CUDECOMP_FLOAT = -1,         ///< Single-precision real
   CUDECOMP_DOUBLE = -2,        ///< Double-precision real
   CUDECOMP_FLOAT_COMPLEX = -3, ///< Single-precision complex (interleaved)
   CUDECOMP_DOUBLE_COMPLEX = -4 ///< Double-precision complex (interleaved)
-};
+} cudecompDataType_t;
 
 /**
  * @brief This enum defines the modes available for process grid autotuning.
  */
-enum cudecompAutotuneGridMode_t {
+typedef enum {
   CUDECOMP_AUTOTUNE_GRID_TRANSPOSE = 0, ///< Use transpose communication to autotune process grid dimensions
   CUDECOMP_AUTOTUNE_GRID_HALO = 1       ///< Use halo communication to autotune process grid dimensions
-};
+} cudecompAutotuneGridMode_t;
 
 /**
  * @brief This enum defines the possible values return values from cuDecomp. Most functions in the cuDecomp library
  * will return one of these values to indicate if an operation has completed successfully or an error occured.
  */
-enum cudecompResult_t {
+typedef enum {
   CUDECOMP_RESULT_SUCCESS = 0,        ///< The operation completed successfully
   CUDECOMP_RESULT_INVALID_USAGE = 1,  ///< A user error, typically an invalid argument
   CUDECOMP_RESULT_NOT_SUPPORTED = 2,  ///< A user error, requesting an invalid or unsupported operation configuration
@@ -102,7 +107,7 @@ enum cudecompResult_t {
   CUDECOMP_RESULT_MPI_ERROR = 6,      ///< An error occurred in the MPI library
   CUDECOMP_RESULT_NCCL_ERROR = 7,     ///< An error occured in the NCCL library
   CUDECOMP_RESULT_NVSHMEM_ERROR = 8   ///< An error occured in the NVSHMEM library
-};
+} cudecompResult_t;
 
 /**
  * @brief A pointer to a cuDecomp internal handle structure.
@@ -185,9 +190,6 @@ typedef struct {
   int64_t size;            ///< number of elements in pencil (including halo elements)
 } cudecompPencilInfo_t;
 
-#ifdef __cplusplus
-extern "C" {
-#endif
 // cuDecomp initialization/finalization functions
 /**
  * @brief Initializes the cuDecomp library from an existing MPI communicator
