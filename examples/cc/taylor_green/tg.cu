@@ -289,7 +289,7 @@ __global__ static void velmax(int64_t N, const real_t* U_r0, const real_t* U_r1,
   real_t v = U_r1[i] * scaling;
   real_t w = U_r2[i] * scaling;
 
-  velmax[i] = N * (std::abs(u)+ std::abs(v) + std::abs(w));
+  velmax[i] = std::sqrt(u*u + v*v + w*w);
 }
 
 __global__ static void spectrum(const complex_t* Uh_c0,const  complex_t* Uh_c1,const  complex_t* Uh_c2,
@@ -787,7 +787,8 @@ private:
       CHECK_MPI_EXIT(MPI_Allreduce(MPI_IN_PLACE, &velmax, 1, get_mpi_datatype(velmax), MPI_MAX, mpi_comm));
     }
 
-    return cfl / velmax;
+    real_t dx = 2 * PI / N;
+    return cfl * dx / velmax;
   }
 
   // Solver settings
