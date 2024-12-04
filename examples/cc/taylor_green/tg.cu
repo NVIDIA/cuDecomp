@@ -962,6 +962,7 @@ int main(int argc, char** argv) {
   double ts = MPI_Wtime();
   double ts_step = MPI_Wtime();
   int count = 0;
+  int spec_count = 0;
   int i = 0;
   while (true) {
 
@@ -980,13 +981,13 @@ int main(int argc, char** argv) {
       ts_step = MPI_Wtime();
     }
 
-    bool should_break = (max_flowtime >= 0) ? (solver.flowtime() >= max_flowtime) : (i == niter - 1);
-
     if (specfreq > 0 &&
-        (std::fmod(solver.flowtime(), specfreq) < solver.dt() || should_break)) {
-      solver.write_spectrum_sample(i + 1);
+        solver.flowtime() >= (spec_count + 1) * specfreq ) {
+      solver.write_spectrum_sample(spec_count + 1);
+      spec_count++;
     }
 
+    bool should_break = (max_flowtime >= 0) ? (solver.flowtime() >= max_flowtime) : (i == niter - 1);
     if (should_break) break;
     i++;
   }

@@ -161,8 +161,9 @@ program taylor_green
       status=cudaDeviceSynchronize()
       call MPI_Barrier(MPI_COMM_WORLD,ierr)
       ts_step = MPI_Wtime()
-      if( maxtime > 0._rp .and. flowtime >= maxtime ) exit
     end if
+
+    if( maxtime > 0._rp .and. flowtime >= maxtime ) exit
 
   end do
 
@@ -370,7 +371,7 @@ subroutine print_stats
   call mpi_reduce(sumsql, sumsq, 1, MPI_REAL_RP, MPI_SUM, 0, MPI_COMM_WORLD, ierr)
   ke = 0.5_rp * sumsq / N3
 
-  if (rank == 0) write(*,"(' Flowtime: ',F9.6,' Kinetic Energy: ',F9.6,' Enstrophy: ',F9.6,' dt: ',F9.6)") flowtime,ke,enst,dt
+  if (rank == 0) write(*,"(' flowtime: ',F8.5,' ke: ',F16.14,' enstrophy: ',F17.14,' dt: ',F16.14)") flowtime,ke,enst,dt
 end subroutine
 
 subroutine write_spectrum_sample(idx)
@@ -642,7 +643,7 @@ subroutine initialize
   end do
 
   if (rank == 0) then
-    write(*,"('Running on ', i0, ' x ', i0, ' x ', i0, ' spatial grid (w/o padding) ...')") N, N, N
+    write(*,"('running on ', i0, ' x ', i0, ' x ', i0, ' spatial grid...')") N, N, N
   end if
 
   CHECK_CUDECOMP_EXIT(cudecompInit(handle, MPI_COMM_WORLD))
@@ -663,11 +664,6 @@ subroutine initialize
   CHECK_CUDECOMP_EXIT(cudecompGridDescCreate(handle, gridDescC, gridDescConfigC, optionsC))
 
   pdims = gridDescConfigC%pdims
-
-  if (rank == 0) then
-    write(*,"('Running on ', i0, ' x ', i0, ' process grid ...')") pdims(1), pdims(2)
-    write(*,"('Using ', a, ' backend ...')") cudecompTransposeCommBackendToString(gridDescConfigC%transpose_comm_backend)
-  end if
 
   CHECK_CUDECOMP_EXIT(cudecompGridDescConfigSetDefaults(gridDescConfigR))
   gridDescConfigR%pdims = pdims
