@@ -273,6 +273,7 @@ if (CUDECOMP_BUILD_EXTRAS)
     add_subdirectory(tests/fortran)
     add_subdirectory(examples/fortran/basic_usage)
     add_subdirectory(examples/fortran/poisson)
+    add_subdirectory(examples/fortran/taylor_green)
   endif()
 endif()
 
