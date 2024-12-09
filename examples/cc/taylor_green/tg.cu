@@ -320,7 +320,7 @@ public:
   // Timestepping scheme
   enum TimeScheme { RK1, RK4 };
 
-  TGSolver(int N, real_t nu, real_t dt, real_t cfl, TimeScheme tscheme = RK1) : N(N), nu(nu), dt_(dt), cfl(cfl), tscheme(tscheme){};
+  TGSolver(int64_t N, real_t nu, real_t dt, real_t cfl, TimeScheme tscheme = RK1) : N(N), nu(nu), dt_(dt), cfl(cfl), tscheme(tscheme){};
   void finalize() {
     // Free memory
     for (int i = 0; i < 3; ++i) {
@@ -349,7 +349,7 @@ public:
     CHECK_MPI_EXIT(MPI_Comm_rank(mpi_local_comm, &local_rank));
     CHECK_CUDA_EXIT(cudaSetDevice(local_rank));
 
-    if (rank == 0) printf("running on %d x %d x %d spatial grid...\n", N, N, N);
+    if (rank == 0) printf("running on %d x %d x %d spatial grid...\n", (int) N, (int) N, (int) N);
 
     // Initialize cuDecomp
     cudecompInit(&handle, mpi_comm);
@@ -368,13 +368,13 @@ public:
     options.dtype = get_cudecomp_datatype(complex_t(0));
     options.autotune_transpose_backend = true;
 
-    std::array<int, 3> gdim_c{N / 2 + 1, N, N};
+    std::array<int, 3> gdim_c{(int) N / 2 + 1, (int) N, (int) N};
     config.gdims[0] = gdim_c[0];
     config.gdims[1] = gdim_c[1];
     config.gdims[2] = gdim_c[2];
     cudecompGridDescCreate(handle, &grid_desc_c, &config, &options);
 
-    std::array<int, 3> gdim_r{(N / 2 + 1) * 2, N, N}; // with padding for in-place operation
+    std::array<int, 3> gdim_r{((int) N / 2 + 1) * 2, (int) N, (int) N}; // with padding for in-place operation
     config.gdims[0] = gdim_r[0];
     config.gdims[1] = gdim_r[1];
     config.gdims[2] = gdim_r[2];
@@ -792,7 +792,7 @@ private:
   }
 
   // Solver settings
-  int N;
+  int64_t N;
   real_t nu;
   real_t dt_;
   real_t cfl;
@@ -892,7 +892,7 @@ int main(int argc, char** argv) {
   CHECK_MPI_EXIT(MPI_Comm_rank(MPI_COMM_WORLD, &rank));
 
   // Parse command-line arguments
-  int N = 256;
+  int64_t N = 256;
   int niter = 1000;
   real_t max_flowtime = -1.0;
   int printfreq = 100;
