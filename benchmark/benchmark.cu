@@ -104,17 +104,13 @@ static void usage(const char* pname) {
           "\t\tColumn dimension of process grid. (default: 0, autotune) \n"
           "\t-w|--nwarmup <NWARMUP>\n"
           "\t\tNumber of warmup iterations. (default: 3)\n"
-          "\n"
           "\t-t|--ntrials <NTRIALS>\n"
           "\t\tNumber of trial iterations. (default: 5) \n"
-          "\n"
           "\t-k|--skip-threshold <THRESHOLD>\n"
           "\t\tAutotuner skip threshold setting. (default: 0.0) \n"
-          "\n"
           "\t-b|--backend <INTEGER>\n"
           "\t\tCommunication backend to use. Choices: 0:AUTOTUNE, 1:MPI_P2P, 2:MPI_P2P_PL, 3:MPI_A2A, 4:NCCL, "
           "5:NCCL_PL, 6:NVSHMEM, 7:NVSHMEM_PL. (default: 0) \n"
-          "\n"
           "\t-o|--out-of-place\n"
           "\t\tFlag to test out of place operation. \n"
           "\t-m|--use-managed-memory\n"
@@ -124,6 +120,7 @@ static void usage(const char* pname) {
           "\t-n|--no-slab-opt\n"
           "\t\tFlag to disable slab optimizations (e.g. 2D local FFTs, transpose skipping).\n\n",
           bname);
+  CHECK_MPI_EXIT(MPI_Finalize());
   exit(EXIT_SUCCESS);
 }
 
