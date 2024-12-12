@@ -45,9 +45,10 @@ $ cmake -DCUDECOMP_BUILD_EXTRAS=1 -DCUDECOMP_ENABLE_NVSHMEM=1 ..
 ### Dependencies
 We strongly recommend building this library using NVHPC SDK compilers and libraries, as the SDK contains all required dependencies for this library and is the focus of our testing. Fortran features are only supported using NVHPC SDK compilers.
 
-One exception is NVSHMEM, which uses a bootstrapping layer that depends on your MPI installation. The NVSHMEM library packaged within NVHPC
+One exception is cuDecomp builds using NVSHMEM versions older than v3.0, which require the use of a bootstrapping layer that depends on your MPI distribution. The NVSHMEM library packaged within NVHPC SDK
 supports OpenMPI only. If you require usage of a different MPI implementation (e.g. Spectrum MPI or Cray MPICH), you need to either build
-NVSHMEM against your desired MPI implementation, or build a custom MPI bootstrap layer. Please refer to this [NVSHMEM documentation section](https://docs.nvidia.com/hpc-sdk/nvshmem/install-guide/index.html#use-nvshmem-mpi) for more details.
+NVSHMEM against your desired MPI implementation, or build a custom MPI bootstrap layer separately. Please refer to this [NVSHMEM documentation section](https://docs.nvidia.com/hpc-sdk/nvshmem/install-guide/index.html#use-nvshmem-mpi) for more details.
+For cuDecomp builds using NVSHMEM v3.0+, this additional MPI boostrapping layer is no longer required.
 
 Additionally, this library utilizes CUDA-aware MPI and is only compatible with MPI libraries with these features enabled.
 
