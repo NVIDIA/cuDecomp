@@ -71,6 +71,26 @@ static ncclComm_t ncclCommFromMPIComm(MPI_Comm mpi_comm) {
   return nccl_comm;
 }
 
+static void initNvshmemFromMPIComm(MPI_Comm mpi_comm) {
+  int rank, nranks;
+  CHECK_MPI(MPI_Comm_rank(mpi_comm, &rank));
+  CHECK_MPI(MPI_Comm_size(mpi_comm, &nranks));
+
+  nvshmemx_init_attr_t attr;
+#if NVSHMEM_VENDOR_MAJOR_VERSION >= 3
+  nvshmemx_uniqueid_t id;
+  if (rank == 0) nvshmemx_get_uniqueid(&id);
+  CHECK_MPI(MPI_Bcast(&id, sizeof(id), MPI_BYTE, 0, mpi_comm));
+  CHECK_MPI(MPI_Barrier(mpi_comm));
+  nvshmemx_set_attr_uniqueid_args(rank, nranks, &id, &attr);
+  nvshmemx_init_attr(NVSHMEMX_INIT_WITH_UNIQUEID, &attr);
+#else
+  attr.mpi_comm = &mpi_comm;
+  nvshmemx_init_attr(NVSHMEMX_INIT_WITH_MPI_COMM, &attr);
+#endif
+
+}
+
 static void checkTransposeCommBackend(cudecompTransposeCommBackend_t comm_backend) {
   switch (comm_backend) {
   case CUDECOMP_TRANSPOSE_COMM_NCCL:
@@ -346,9 +366,7 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
 #ifdef ENABLE_NVSHMEM
       if (!handle->nvshmem_initialized) {
         inspectNvshmemEnvVars(handle);
-        nvshmemx_init_attr_t attr;
-        attr.mpi_comm = &handle->mpi_comm;
-        nvshmemx_init_attr(NVSHMEMX_INIT_WITH_MPI_COMM, &attr);
+        initNvshmemFromMPIComm(handle->mpi_comm);
         handle->nvshmem_initialized = true;
         handle->nvshmem_allocation_size = 0;
       }
