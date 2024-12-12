@@ -13,22 +13,7 @@ This library is currently in a research-oriented state, and has been released as
 Please contact us or open a GitHub issue if you are interested in using this library in your own solvers and have questions on usage and/or feature requests.
 
 ## Build
-
-### Method 1: Makefile with Configuration file (deprecated)
-To build the library, you must first create a configuration file to point the installed to dependent library paths and enable/disable features.
-See the default [`nvhpcsdk.conf`](configs/nvhpcsdk.conf) for an example of settings to build the library using the [NVHPC SDK compilers and libraries](https://developer.nvidia.com/hpc-sdk).
-The [`configs/`](configs) directory also contains several sample build configuration files for a number of GPU compute clusters, like Perlmutter, Summit, and Marconi 100.
-
-With this configuration file created, you can build the library using the command
-
-```shell
-$ make -j CONFIGFILE=<path to your configuration file>
-```
-
-The library will be compiled and installed in a newly created `build/` directory. This build method is deprecated and will be removed in a future release.
-
-### Method 2: CMake (recommended)
-We also enable builds using CMake. A CMake build of the library without additional examples/tests can be completed using the following commands
+You can build this library using CMake. A CMake build of the library without additional examples/tests can be completed using the following commands
 ```shell
 $ mkdir build
 $ cd build
