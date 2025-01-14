@@ -71,6 +71,7 @@ static ncclComm_t ncclCommFromMPIComm(MPI_Comm mpi_comm) {
   return nccl_comm;
 }
 
+#ifdef ENABLE_NVSHMEM
 static void initNvshmemFromMPIComm(MPI_Comm mpi_comm) {
   int rank, nranks;
   CHECK_MPI(MPI_Comm_rank(mpi_comm, &rank));
@@ -88,8 +89,8 @@ static void initNvshmemFromMPIComm(MPI_Comm mpi_comm) {
   attr.mpi_comm = &mpi_comm;
   nvshmemx_init_attr(NVSHMEMX_INIT_WITH_MPI_COMM, &attr);
 #endif
-
 }
+#endif
 
 static void checkTransposeCommBackend(cudecompTransposeCommBackend_t comm_backend) {
   switch (comm_backend) {
