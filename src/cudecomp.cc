@@ -31,6 +31,7 @@
 #include <algorithm>
 #include <iostream>
 #include <numeric>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -157,6 +158,25 @@ static void checkConfig(cudecompHandle_t handle, const cudecompGridDescConfig_t*
     if (config->pdims[0] != 0 || config->pdims[1] != 0) { THROW_INVALID_USAGE("pdims values are invalid"); }
   } else if (pdims_prod != handle->nranks) {
     THROW_INVALID_USAGE("product of pdims values must equal number of ranks");
+  }
+
+  bool mem_order_set = true;
+  for (int i = 0; i < 3; ++i) {
+    for (int j = 0; j < 3; ++j) {
+      if (config->transpose_mem_order[i][j] < 0) mem_order_set = false;
+    }
+  }
+
+  if (mem_order_set) {
+    for (int i = 0; i < 3; ++i) {
+      std::set<int32_t> order_vals;
+      for (int j = 0; j < 3; ++j) {
+        order_vals.insert(config->transpose_mem_order[i][j]);
+      }
+      if (order_vals.size() != 3 || *order_vals.begin() != 0 || *order_vals.rbegin() != 2) {
+        THROW_INVALID_USAGE("transpose_mem_order setting is invalid");
+      }
+    }
   }
 }
 
@@ -329,6 +349,33 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
     grid_desc->config = *config;
     auto comm_backend = grid_desc->config.transpose_comm_backend;
     auto halo_comm_backend = grid_desc->config.halo_comm_backend;
+
+    // Check for transpose_mem_order settings (overrides transpose_axis_contiguous setting)
+    bool mem_order_set = true;
+    for (int i = 0; i < 3; ++i) {
+      for (int j = 0; j < 3; ++j) {
+        if (grid_desc->config.transpose_mem_order[i][j] < 0) mem_order_set = false;
+      }
+    }
+
+    // If transpose_mem_order not used, set based on transpose_axis_contiguous settings)
+    if (!mem_order_set) {
+      for (int axis = 0; axis < 3; ++axis) {
+        for (int i = 0; i < 3; ++i) {
+          if (grid_desc->config.transpose_axis_contiguous[axis]) {
+            grid_desc->config.transpose_mem_order[axis][i] = (axis + i) % 3;
+          } else {
+            grid_desc->config.transpose_mem_order[axis][i] = i;
+          }
+        }
+      }
+    }
+
+    for (int i = 0; i < 3; ++i) {
+      for (int j = 0; j < 3; ++j) {
+        printf("transpose_mem_order[%d][%d] = %d\n", i, j, grid_desc->config.transpose_mem_order[i][j]);
+      }
+    }
 
     grid_desc->config.transpose_axis_contiguous[0] = false; // For x-axis, always set to false.
 
@@ -541,7 +588,12 @@ cudecompResult_t cudecompGridDescConfigSetDefaults(cudecompGridDescConfig_t* con
 
     // Transpose Options
     config->transpose_comm_backend = CUDECOMP_TRANSPOSE_COMM_MPI_P2P;
-    for (int i = 0; i < 3; ++i) { config->transpose_axis_contiguous[i] = false; }
+    for (int i = 0; i < 3; ++i) {
+      config->transpose_axis_contiguous[i] = false;
+      for (int j = 0; j < 3; ++j) {
+        config->transpose_mem_order[i][j] = -1;
+      }
+    }
 
     // Halo Options
     config->halo_comm_backend = CUDECOMP_HALO_COMM_MPI;
@@ -603,11 +655,12 @@ cudecompResult_t cudecompGetPencilInfo(cudecompHandle_t handle, cudecompGridDesc
 
     // Setup order (and inverse)
     for (int i = 0; i < 3; ++i) {
-      if (grid_desc->config.transpose_axis_contiguous[axis]) {
-        pencil_info->order[i] = (axis + i) % 3;
-      } else {
-        pencil_info->order[i] = i;
-      }
+      //if (grid_desc->config.transpose_axis_contiguous[axis]) {
+      //  pencil_info->order[i] = (axis + i) % 3;
+      //} else {
+      //  pencil_info->order[i] = i;
+      //}
+      pencil_info->order[i] = grid_desc->config.transpose_mem_order[axis][i];
       invorder[pencil_info->order[i]] = i;
     }
 
