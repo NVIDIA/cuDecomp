@@ -146,6 +146,7 @@ program main
   logical :: axis_contiguous(3)
   integer :: gdims_dist(3)
   integer :: halo_extents(3)
+  integer :: mem_order(3, 3)
   logical :: out_of_place, use_managed_memory
   integer :: pr, pc
 
@@ -172,8 +173,8 @@ program main
   ARRTYPE, pointer, device:: input(:), output(:)
   integer :: dtype = DTYPE
 
-  integer :: i, j, k, idt, iarg
-  logical :: skip_next
+  integer :: i, j, k, l, idt, iarg
+  integer :: skip_count
   character(len=16) :: arg
 
   call MPI_Init(ierr)
@@ -194,13 +195,14 @@ program main
   axis_contiguous(:) = .false.
   gdims_dist(:) = 0
   halo_extents(:) = 0
+  mem_order(:,:) = -1
   out_of_place = .false.
   use_managed_memory = .false.
 
-  skip_next = .false.
+  skip_count = 0
   do i = 1, command_argument_count()
-    if (skip_next) then
-      skip_next = .false.
+    if (skip_count > 0) then
+      skip_count = skip_count - 1
       cycle
     end if
     call get_command_argument(i, arg)
@@ -208,72 +210,82 @@ program main
       case('--gx')
         call get_command_argument(i+1, arg)
         read(arg, *) gx
-        skip_next = .true.
+        skip_count = 1
       case('--gy')
         call get_command_argument(i+1, arg)
         read(arg, *) gy
-        skip_next = .true.
+        skip_count = 1
       case('--gz')
         call get_command_argument(i+1, arg)
         read(arg, *) gz
-        skip_next = .true.
+        skip_count = 1
       case('--backend')
         call get_command_argument(i+1, arg)
         read(arg, *) comm_backend
-        skip_next = .true.
+        skip_count = 1
       case('--pr')
         call get_command_argument(i+1, arg)
         read(arg, *) pr
-        skip_next = .true.
+        skip_count = 1
       case('--pc')
         call get_command_argument(i+1, arg)
         read(arg, *) pc
-        skip_next = .true.
+        skip_count = 1
       case('--acx')
         call get_command_argument(i+1, arg)
         read(arg, *) iarg
         axis_contiguous(1) = iarg
-        skip_next = .true.
+        skip_count = 1
       case('--acy')
         call get_command_argument(i+1, arg)
         read(arg, *) iarg
         axis_contiguous(2) = iarg
-        skip_next = .true.
+        skip_count = 1
       case('--acz')
         call get_command_argument(i+1, arg)
         read(arg, *) iarg
         axis_contiguous(3) = iarg
-        skip_next = .true.
+        skip_count = 1
       case('--gdx')
         call get_command_argument(i+1, arg)
         read(arg, *) gdims_dist(1)
-        skip_next = .true.
+        skip_count = 1
       case('--gdy')
         call get_command_argument(i+1, arg)
         read(arg, *) gdims_dist(2)
-        skip_next = .true.
+        skip_count = 1
       case('--gdz')
         call get_command_argument(i+1, arg)
         read(arg, *) gdims_dist(3)
-        skip_next = .true.
+        skip_count = 1
       case('--hex')
         call get_command_argument(i+1, arg)
         read(arg, *) halo_extents(1)
-        skip_next = .true.
+        skip_count = 1
       case('--hey')
         call get_command_argument(i+1, arg)
         read(arg, *) halo_extents(2)
-        skip_next = .true.
+        skip_count = 1
       case('--hez')
         call get_command_argument(i+1, arg)
         read(arg, *) halo_extents(3)
-        skip_next = .true.
+        skip_count = 1
+      case('--mem_order')
+        l = 1
+        do j = 1, 3
+          do k = 1, 3
+            call get_command_argument(i+l, arg)
+            read(arg, *) mem_order(k, j)
+            l = l + 1
+          enddo
+        enddo
+        skip_count = 9
       case('-o')
         out_of_place = .true.
       case('-m')
         use_managed_memory = .true.
       case(' ')
-        skip_next = .true.
+        skip_count = 1
       case default
         print*, "Unknown argument."
         call exit(1)
@@ -302,6 +314,7 @@ program main
   config%gdims = gdims
   config%gdims_dist = gdims_dist
   config%transpose_axis_contiguous = axis_contiguous
+  config%transpose_mem_order = mem_order
 
   CHECK_CUDECOMP_EXIT(cudecompGridDescAutotuneOptionsSetDefaults(options))
   options%dtype = dtype
