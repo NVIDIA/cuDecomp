@@ -160,10 +160,13 @@ static void checkConfig(cudecompHandle_t handle, const cudecompGridDescConfig_t*
     THROW_INVALID_USAGE("product of pdims values must equal number of ranks");
   }
 
-  bool mem_order_set = true;
+  bool mem_order_set = (config->transpose_mem_order[0][0] >= 0);
   for (int i = 0; i < 3; ++i) {
     for (int j = 0; j < 3; ++j) {
-      if (config->transpose_mem_order[i][j] < 0) mem_order_set = false;
+      if ((mem_order_set && config->transpose_mem_order[i][j] < 0) ||
+          (!mem_order_set && config->transpose_mem_order[i][j] >= 0)) {
+        THROW_INVALID_USAGE("transpose_mem_order only partially set");
+      }
     }
   }
 
@@ -350,15 +353,9 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
     auto comm_backend = grid_desc->config.transpose_comm_backend;
     auto halo_comm_backend = grid_desc->config.halo_comm_backend;
 
-    // Check for transpose_mem_order settings (overrides transpose_axis_contiguous setting)
-    bool mem_order_set = true;
-    for (int i = 0; i < 3; ++i) {
-      for (int j = 0; j < 3; ++j) {
-        if (grid_desc->config.transpose_mem_order[i][j] < 0) mem_order_set = false;
-      }
-    }
-
     // If transpose_mem_order not used, set based on transpose_axis_contiguous settings)
+    bool mem_order_set = (config->transpose_mem_order[0][0] >= 0);
+
     if (!mem_order_set) {
       for (int axis = 0; axis < 3; ++axis) {
         for (int i = 0; i < 3; ++i) {
