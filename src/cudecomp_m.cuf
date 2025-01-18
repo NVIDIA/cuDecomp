@@ -270,14 +270,14 @@ module cudecomp
   end interface
 
   interface
-    function cudecompGetGridDescConfig(handle, grid_desc, config) &
+    function cudecompGetGridDescConfigC(handle, grid_desc, config) &
       bind(C, name="cudecompGetGridDescConfig") result(res)
       import
       type(cudecompHandle), value :: handle
       type(cudecompGridDesc), value :: grid_desc
       type(cudecompGridDescConfig) :: config
       integer(c_int) :: res
-    end function cudecompGetGridDescConfig
+    end function cudecompGetGridDescConfigC
   end interface
 
   interface
@@ -611,6 +611,19 @@ contains
     pencil_info%lo = pencil_info%lo + 1
     pencil_info%hi = pencil_info%hi + 1
   end function cudecompGetPencilInfo
+
+  function cudecompGetGridDescConfig(handle, grid_desc, config) result(res)
+    type(cudecompHandle), value :: handle
+    type(cudecompGridDesc), value :: grid_desc
+    type(cudecompGridDescConfig) :: config
+    integer(c_int) :: res
+
+    res = cudecompGetGridDescConfigC(handle, grid_desc, config)
+
+    ! Adjust transpose mem order entries for one-based indexing
+    config%transpose_mem_order = config%transpose_mem_order + 1
+
+  end function cudecompGetGridDescConfig
 
   function cudecompGetHaloWorkspaceSize(handle, grid_desc, axis, halo_extents, workspace_size) result(res)
     implicit none
