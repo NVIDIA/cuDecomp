@@ -371,11 +371,11 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
       }
     }
 
-    for (int i = 0; i < 3; ++i) {
-      for (int j = 0; j < 3; ++j) {
-        printf("transpose_mem_order[%d][%d] = %d\n", i, j, grid_desc->config.transpose_mem_order[i][j]);
-      }
-    }
+    //for (int i = 0; i < 3; ++i) {
+    //  for (int j = 0; j < 3; ++j) {
+    //    printf("transpose_mem_order[%d][%d] = %d\n", i, j, grid_desc->config.transpose_mem_order[i][j]);
+    //  }
+    //}
 
     grid_desc->config.transpose_axis_contiguous[0] = false; // For x-axis, always set to false.
 

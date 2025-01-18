@@ -214,8 +214,6 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
     offsets_b[i + 1] = offsets_b[i] + splits_b[i];
   }
 
-  bool power_of_2 = !(splits_a.size() & splits_a.size() - 1);
-
   // Get pencil info
   cudecompPencilInfo_t pinfo_a, pinfo_a_h;
   CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_a, ax_a, nullptr));
@@ -223,6 +221,12 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
   cudecompPencilInfo_t pinfo_b, pinfo_b_h;
   CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_b, ax_b, nullptr));
   CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_b_h, ax_b, output_halo_extents.data()));
+
+  // Check if input and output orders are the same
+  bool orders_equal = true;
+  for (int i = 0; i < 3; ++i) {
+    if (pinfo_a.order[i] != pinfo_b.order[i]) orders_equal = false;
+  }
 
   // Get global ordered shapes
   auto shape_g_a = getShapeG(pinfo_a);
@@ -242,74 +246,67 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
   }
 
   // Disable special cases for now
-  #if 0
   // Adjust pointers to handle special cases
   if (!input_has_halos && !output_has_halos) {
     if (splits_a.size() == 1) {
-      if (grid_desc->config.transpose_axis_contiguous[ax_a]) {
-        if (grid_desc->config.transpose_axis_contiguous[ax_b]) {
-          if (fwd && !inplace) {
-            // Single rank, out of place: Transpose directly to output and return
-            o1 = output;
-          } else if (!fwd && !inplace) {
-            // Single rank, out of place: Skip pack, transpose directly to output
-            o1 = input;
-            o2 = input;
-          }
+      // Special cases for single rank communicators
+      if (orders_equal) {
+        if (inplace) {
+          // Single rank, in place, Pack -> Unpack: No transpose necessary.
+          return;
         } else {
-          if (!inplace) {
-            // Single rank, out of place: Skip pack, transpose directly to output
-            o1 = input;
-            o2 = input;
-          }
+          // Single rank, out of place, Pack -> Unpack: Pack directly to output and return
+          o1 = output;
         }
       } else {
-        if (grid_desc->config.transpose_axis_contiguous[ax_b]) {
-          if (!inplace && fwd) {
-            // Single rank, out of place: Transpose directly to output and return
+        if (!inplace) {
+          if (fwd && pinfo_b.order[2] == ax_a) {
+            // Single rank, out of place, Tranpose -> Unpack: Transpose directly to
+            // output and return
             o1 = output;
-          } else if (!inplace && !fwd) {
-            // Single rank, out of place: Skip pack, transpose directly to output
+          } else if (!fwd) {
+            // Single rank, out of place, Pack -> Transpose: Skip pack, transpose directly
+            // to output
             o1 = input;
             o2 = input;
-          }
-        } else {
-          if (inplace) {
-            // Single rank, in place: No transpose necessary.
-            return;
-          } else {
-            // Single rank, out of place: Pack directly to output and return
-            o1 = output;
           }
         }
       }
     } else {
-      if (!grid_desc->config.transpose_axis_contiguous[ax_a]) {
-        // Special cases that skip local phases (i.e. all-to-all directly from/to input or output)
+      // Special cases that skip local phases (i.e. all-to-all directly from/to input or output)
 
-        bool enable = true;
+      bool enable = true;
 
-        if (pipelined && inplace) {
-          // Note: Disabling special cases for in-place pipelined communication to avoid
-          // handing more complex input/output data dependencies. Can revisit.
-          enable = false;
-        } else if (transposeBackendRequiresNvshmem(grid_desc->config.transpose_comm_backend)) {
-          // Note: For NVSHMEM, disabling special cases to ensure communication is always staged
-          // in to workspace (which should be nvshmem allocated). Can revisit support for input/output
-          // arrays allocated with nvshmem.
-          enable = false;
-        } else if (transposeBackendRequiresMpi(grid_desc->config.transpose_comm_backend) &&
-                   (isManagedPointer(input) || isManagedPointer(output))) {
-          // Note: For MPI, disable special cases if input or output pointers are to managed memory
-          // since MPI performance directly from managed memory is not great
-          enable = false;
-        }
+      if (pipelined && inplace) {
+        // Note: Disabling special cases for in-place pipelined communication to avoid
+        // handing more complex input/output data dependencies. Can revisit.
+        enable = false;
+      } else if (transposeBackendRequiresNvshmem(grid_desc->config.transpose_comm_backend)) {
+        // Note: For NVSHMEM, disabling special cases to ensure communication is always staged
+        // in to workspace (which should be nvshmem allocated). Can revisit support for input/output
+        // arrays allocated with nvshmem.
+        enable = false;
+      } else if (transposeBackendRequiresMpi(grid_desc->config.transpose_comm_backend) &&
+                 (isManagedPointer(input) || isManagedPointer(output))) {
+        // Note: For MPI, disable special cases if input or output pointers are to managed memory
+        // since MPI performance directly from managed memory is not great
+        enable = false;
+      }
 
-        if (enable) {
-          if (fwd && ax_a == 1 && !grid_desc->config.transpose_axis_contiguous[ax_b]) { // Y2Z
-            // Output of all to all is in correct orientation, skip unpack
-            o2 = output;
-          } else if (!fwd && ax_a == 2) { // Z2Y
+      if (enable) {
+        if (fwd) {
+          if (pinfo_b.order[2] == ax_a) {
+            // Tranpose: No special cases
+          } else {
+            // Pack
+            if (pinfo_a.order[2] == ax_b && orders_equal) {
+              // Output of all to all is in correct orientation, skip unpack
+              o2 = output;
+            }
+          }
+        } else {
+          // Pack
+          if (pinfo_a.order[2] == ax_a) {
             // Input is already packed for all to all, skip pack
             o1 = input;
             o2 = work;
@@ -318,7 +315,6 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
       }
     }
   }
-#endif
 
   // Setup communication info
   std::vector<comm_count_t> send_offsets(splits_a.size());
@@ -338,7 +334,7 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
   }
 
   if (o1 != i1) {
-    if (fwd && pinfo_b.order[2] == ax_a) {
+    if (fwd && pinfo_b.order[2] == ax_a && !orders_equal) {
       // Transpose/Pack
       std::array<int64_t, 3> extents;
       std::array<int64_t, 3> extents_h;
@@ -534,11 +530,8 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
         localPermute(handle, extents, order, strides_in, strides_out, src, dst, stream);
       }
     }
-  } else if ((pinfo_a.order[0] == pinfo_b.order[0] &&
-              pinfo_a.order[1] == pinfo_b.order[1] &&
-              pinfo_a.order[2] == pinfo_b.order[2]) ||
-             (fwd && pinfo_b.order[2] == ax_a)) {
-
+  } else if (orders_equal || (fwd && pinfo_b.order[2] == ax_a)) {
+    // Unpack
     bool nvshmem_synced = false;
     int memcpy_count = 0;
     cudecompBatchedD2DMemcpy3DParams<T> memcpy_params;
