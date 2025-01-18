@@ -338,59 +338,59 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
   }
 
   if (o1 != i1) {
-    //if (fwd && grid_desc->config.transpose_axis_contiguous[ax_b]) {
-    //  // Transpose
-    //  std::array<int64_t, 3> extents;
-    //  std::array<int64_t, 3> extents_h;
-    //  std::array<int64_t, 3> strides_in{1, 0, 0}, strides_out{1, 0, 0};
-    //  std::array<int, 3> order;
+    if (fwd && pinfo_b.order[2] == ax_a) {
+      // Transpose/Pack
+      std::array<int64_t, 3> extents;
+      std::array<int64_t, 3> extents_h;
+      std::array<int64_t, 3> strides_in{1, 0, 0}, strides_out{1, 0, 0};
+      std::array<int, 3> order;
 
-    //  for (int i = 0; i < 3; ++i) {
-    //    for (int j = 0; j < 3; ++j) {
-    //      if (pinfo_a.order[j] == pinfo_b.order[i]) {
-    //        order[i] = j;
-    //        break;
-    //      }
-    //    }
-    //  }
+      for (int i = 0; i < 3; ++i) {
+        for (int j = 0; j < 3; ++j) {
+          if (pinfo_a.order[j] == pinfo_b.order[i]) {
+            order[i] = j;
+            break;
+          }
+        }
+      }
 
-    //  for (int i = 0; i < 3; ++i) {
-    //    extents[i] = shape_g_a[pinfo_a.order[i]];
-    //    extents_h[i] = shape_g_a_h[pinfo_a.order[i]];
-    //  }
+      for (int i = 0; i < 3; ++i) {
+        extents[i] = shape_g_a[pinfo_a.order[i]];
+        extents_h[i] = shape_g_a_h[pinfo_a.order[i]];
+      }
 
-    //  for (int i = 1; i < 3; ++i) {
-    //    strides_in[i] = strides_in[i - 1] * extents_h[i - 1];
-    //    strides_out[i] = strides_out[i - 1] * extents[order[i - 1]];
-    //  }
+      for (int i = 1; i < 3; ++i) {
+        strides_in[i] = strides_in[i - 1] * extents_h[i - 1];
+        strides_out[i] = strides_out[i - 1] * extents[order[i - 1]];
+      }
 
-    //  if (pipelined) {
-    //    for (int j = 1; j < splits_a.size() + 1; ++j) {
-    //      int src_rank, dst_rank;
-    //      getAlltoallPeerRanks(grid_desc, comm_axis, j, src_rank, dst_rank);
-    //      if (j == splits_a.size()) dst_rank = comm_rank;
+      if (pipelined) {
+        for (int j = 1; j < splits_a.size() + 1; ++j) {
+          int src_rank, dst_rank;
+          getAlltoallPeerRanks(grid_desc, comm_axis, j, src_rank, dst_rank);
+          if (j == splits_a.size()) dst_rank = comm_rank;
 
-    //      size_t shift = offsets_a[dst_rank];
-    //      for (int i = 0; i < 3; ++i) {
-    //        if (pinfo_a_h.order[i] == ax_a) break;
-    //        shift *= shape_g_a_h[i];
-    //      }
+          size_t shift = offsets_a[dst_rank];
+          for (int i = 0; i < 3; ++i) {
+            if (pinfo_a_h.order[i] == ax_a) break;
+            shift *= shape_g_a_h[pinfo_a_h.order[i]];
+          }
 
-    //      T* src = i1 + shift + getPencilPtrOffset(pinfo_a_h, input_halo_extents);
-    //      T* dst = o1 + send_offsets[dst_rank];
-    //      for (int i = 0; i < 3; ++i) {
-    //        if (ax_a == pinfo_a.order[i]) extents[i] = splits_a[dst_rank];
-    //      }
-    //      localPermute(handle, extents, order, strides_in, strides_out, src, dst, stream);
-    //      CHECK_CUDA(cudaEventRecord(grid_desc->events[dst_rank], stream));
-    //    }
-    //  } else {
-    //    T* src = i1 + getPencilPtrOffset(pinfo_a_h, input_halo_extents);
-    //    T* dst = o1;
-    //    localPermute(handle, extents, order, strides_in, strides_out, src, dst, stream);
-    //  }
+          T* src = i1 + shift + getPencilPtrOffset(pinfo_a_h, input_halo_extents);
+          T* dst = o1 + send_offsets[dst_rank];
+          for (int i = 0; i < 3; ++i) {
+            if (ax_a == pinfo_a.order[i]) extents[i] = splits_a[dst_rank];
+          }
+          localPermute(handle, extents, order, strides_in, strides_out, src, dst, stream);
+          CHECK_CUDA(cudaEventRecord(grid_desc->events[dst_rank], stream));
+        }
+      } else {
+        T* src = i1 + getPencilPtrOffset(pinfo_a_h, input_halo_extents);
+        T* dst = o1;
+        localPermute(handle, extents, order, strides_in, strides_out, src, dst, stream);
+      }
 
-    //} else {
+    } else {
       // Pack
       int memcpy_count = 0;
       cudecompBatchedD2DMemcpy3DParams<T> memcpy_params;
@@ -428,7 +428,7 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
         }
         if (pipelined) CHECK_CUDA(cudaEventRecord(grid_desc->events[dst_rank], stream));
       }
-    //}
+    }
 
     if (o1 == output) {
       // o1 is output. Return.
@@ -451,93 +451,159 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
   }
 
   // Unpack into output buffer
-  //if (!fwd && grid_desc->config.transpose_axis_contiguous[ax_a]) {
-  //  // Transpose out
-  //  std::array<int64_t, 3> extents;
-  //  std::array<int64_t, 3> extents_h;
-  //  std::array<int64_t, 3> strides_in{1, 0, 0}, strides_out{1, 0, 0};
-  //  std::array<int, 3> order;
+  if (!fwd && pinfo_a.order[2] == ax_b) {
+    // Transpose/Unpack
+    std::array<int64_t, 3> extents;
+    std::array<int64_t, 3> extents_h;
+    std::array<int64_t, 3> strides_in{1, 0, 0}, strides_out{1, 0, 0};
+    std::array<int, 3> order;
 
-  //  for (int i = 0; i < 3; ++i) {
-  //    for (int j = 0; j < 3; ++j) {
-  //      if (pinfo_a.order[j] == pinfo_b.order[i]) {
-  //        order[i] = j;
-  //        break;
-  //      }
-  //    }
+    for (int i = 0; i < 3; ++i) {
+      for (int j = 0; j < 3; ++j) {
+        if (pinfo_a.order[j] == pinfo_b.order[i]) {
+          order[i] = j;
+          break;
+        }
+      }
 
-  //    extents[i] = shape_g_b[pinfo_a.order[i]];
-  //    extents_h[i] = shape_g_b_h[pinfo_b_h.order[i]];
-  //    if (i > 0) {
-  //      strides_in[i] = strides_in[i - 1] * extents[i - 1];
-  //      strides_out[i] = strides_out[i - 1] * extents_h[i - 1];
-  //    }
-  //  }
+      extents[i] = shape_g_b[pinfo_a.order[i]];
+      extents_h[i] = shape_g_b_h[pinfo_b_h.order[i]];
+      if (i > 0) {
+        strides_in[i] = strides_in[i - 1] * extents[i - 1];
+        strides_out[i] = strides_out[i - 1] * extents_h[i - 1];
+      }
+    }
 
-  //  if (pipelined) {
-  //    bool nvshmem_synced = false;
-  //    for (int j = 0; j < splits_b.size(); ++j) {
-  //      int src_rank, dst_rank;
-  //      getAlltoallPeerRanks(grid_desc, comm_axis, j, src_rank, dst_rank);
-  //      if (j == 0) {
-  //        dst_rank = comm_rank;
-  //        src_rank = comm_rank;
-  //      }
+    if (pipelined) {
+      bool nvshmem_synced = false;
+      for (int j = 0; j < splits_b.size(); ++j) {
+        int src_rank, dst_rank;
+        getAlltoallPeerRanks(grid_desc, comm_axis, j, src_rank, dst_rank);
+        if (j == 0) {
+          dst_rank = comm_rank;
+          src_rank = comm_rank;
+        }
 
-  //      std::vector<int> dst_ranks{dst_rank};
-  //      std::vector<int> src_ranks{src_rank};
+        std::vector<int> dst_ranks{dst_rank};
+        std::vector<int> src_ranks{src_rank};
 
-  //      if (j != 0 && comm_info.homogeneous && comm_info.nnodes != 1) {
-  //        // Perform pipelining in pairs to intra-node comms behind inter-node transfers
-  //        if (j % 2 == 1) {
-  //          if (j + 1 < splits_b.size()) {
-  //            int src_rank_next, dst_rank_next;
-  //            getAlltoallPeerRanks(grid_desc, comm_axis, j + 1, src_rank_next, dst_rank_next);
-  //            dst_ranks.push_back(dst_rank_next);
-  //            src_ranks.push_back(src_rank_next);
-  //          }
-  //        } else {
-  //          // Skip alltoall, this transfer was paired with previous one.
-  //          dst_ranks.resize(0);
-  //          src_ranks.resize(0);
-  //        }
-  //      }
+        if (j != 0 && comm_info.homogeneous && comm_info.nnodes != 1) {
+          // Perform pipelining in pairs to intra-node comms behind inter-node transfers
+          if (j % 2 == 1) {
+            if (j + 1 < splits_b.size()) {
+              int src_rank_next, dst_rank_next;
+              getAlltoallPeerRanks(grid_desc, comm_axis, j + 1, src_rank_next, dst_rank_next);
+              dst_ranks.push_back(dst_rank_next);
+              src_ranks.push_back(src_rank_next);
+            }
+          } else {
+            // Skip alltoall, this transfer was paired with previous one.
+            dst_ranks.resize(0);
+            src_ranks.resize(0);
+          }
+        }
 
-  //      if (o2 != o1) {
-  //        cudecompAlltoallPipelined(handle, grid_desc, o1, send_counts, send_offsets, o2, recv_counts, recv_offsets,
-  //                                  recv_offsets_nvshmem, comm_axis, src_ranks, dst_ranks, stream, nvshmem_synced);
-  //      }
+        if (o2 != o1) {
+          cudecompAlltoallPipelined(handle, grid_desc, o1, send_counts, send_offsets, o2, recv_counts, recv_offsets,
+                                    recv_offsets_nvshmem, comm_axis, src_ranks, dst_ranks, stream, nvshmem_synced);
+        }
 
-  //      if (o2 != o3) {
-  //        size_t shift = offsets_b[src_rank];
-  //        for (int i = 0; i < 3; ++i) {
-  //          if (pinfo_b_h.order[i] == ax_b) break;
-  //          shift *= shape_g_b_h[i];
-  //        }
+        if (o2 != o3) {
+          size_t shift = offsets_b[src_rank];
+          for (int i = 0; i < 3; ++i) {
+            if (pinfo_b_h.order[i] == ax_b) break;
+            shift *= shape_g_b_h[pinfo_b_h.order[i]];
+          }
 
-  //        T* src = o2 + recv_offsets[src_rank];
-  //        T* dst = o3 + shift + getPencilPtrOffset(pinfo_b_h, output_halo_extents);
-  //        for (int i = 0; i < 3; ++i) {
-  //          if (ax_b == pinfo_a.order[i]) {
-  //            extents[i] = splits_b[src_rank];
-  //            break;
-  //          }
-  //        }
+          T* src = o2 + recv_offsets[src_rank];
+          T* dst = o3 + shift + getPencilPtrOffset(pinfo_b_h, output_halo_extents);
+          for (int i = 0; i < 3; ++i) {
+            if (ax_b == pinfo_a.order[i]) {
+              extents[i] = splits_b[src_rank];
+              break;
+            }
+          }
 
-  //        localPermute(handle, extents, order, strides_in, strides_out, src, dst, stream);
-  //      }
-  //    }
-  //  } else {
-  //    if (o2 != o3) {
-  //      T* src = o2;
-  //      T* dst = o3 + getPencilPtrOffset(pinfo_b_h, output_halo_extents);
-  //      localPermute(handle, extents, order, strides_in, strides_out, src, dst, stream);
-  //    }
-  //  }
-  //} else if ((!fwd && grid_desc->config.transpose_axis_contiguous[ax_b]) ||
-  //           (fwd && grid_desc->config.transpose_axis_contiguous[ax_a] &&
-  //            !grid_desc->config.transpose_axis_contiguous[ax_b])) {
-    // Split transpose
+          localPermute(handle, extents, order, strides_in, strides_out, src, dst, stream);
+        }
+      }
+    } else {
+      if (o2 != o3) {
+        T* src = o2;
+        T* dst = o3 + getPencilPtrOffset(pinfo_b_h, output_halo_extents);
+        localPermute(handle, extents, order, strides_in, strides_out, src, dst, stream);
+      }
+    }
+  } else if ((pinfo_a.order[0] == pinfo_b.order[0] &&
+              pinfo_a.order[1] == pinfo_b.order[1] &&
+              pinfo_a.order[2] == pinfo_b.order[2]) ||
+             (fwd && pinfo_b.order[2] == ax_a)) {
+
+    bool nvshmem_synced = false;
+    int memcpy_count = 0;
+    cudecompBatchedD2DMemcpy3DParams<T> memcpy_params;
+    for (int j = 0; j < splits_a.size(); ++j) {
+      int src_rank, dst_rank;
+      getAlltoallPeerRanks(grid_desc, comm_axis, j, src_rank, dst_rank);
+      if (j == 0) {
+        dst_rank = comm_rank;
+        src_rank = comm_rank;
+      }
+
+      std::vector<int> dst_ranks{dst_rank};
+      std::vector<int> src_ranks{src_rank};
+
+      if (j != 0 && comm_info.homogeneous && comm_info.nnodes != 1) {
+        // Perform pipelining in pairs to intra-node comms behind inter-node transfers
+        if (j % 2 == 1) {
+          if (j + 1 < splits_b.size()) {
+            int src_rank_next, dst_rank_next;
+            getAlltoallPeerRanks(grid_desc, comm_axis, j + 1, src_rank_next, dst_rank_next);
+            dst_ranks.push_back(dst_rank_next);
+            src_ranks.push_back(src_rank_next);
+          }
+        } else {
+          // Skip alltoall, this transfer was paired with previous one.
+          dst_ranks.resize(0);
+          src_ranks.resize(0);
+        }
+      }
+
+      if (o2 != o1) {
+        cudecompAlltoallPipelined(handle, grid_desc, o1, send_counts, send_offsets, o2, recv_counts, recv_offsets,
+                                  recv_offsets_nvshmem, comm_axis, src_ranks, dst_ranks, stream, nvshmem_synced);
+      }
+
+      if (o2 != o3) {
+        size_t shift = offsets_b[src_rank];
+        for (int i = 0; i < 3; ++i) {
+          if (pinfo_b_h.order[i] == ax_b) break;
+          shift *= shape_g_b_h[pinfo_b_h.order[i]];
+        }
+
+        T* src = o2 + recv_offsets[src_rank];
+        T* dest = o3 + shift + getPencilPtrOffset(pinfo_b_h, output_halo_extents);
+        memcpy_params.src[memcpy_count] = src;
+        memcpy_params.dest[memcpy_count] = dest;
+        memcpy_params.src_strides[1][memcpy_count] = (ax_b == pinfo_b.order[0]) ? splits_b[src_rank] : pinfo_b.shape[0];
+        memcpy_params.src_strides[0][memcpy_count] =
+            memcpy_params.src_strides[1][memcpy_count] *
+            ((ax_b == pinfo_b.order[1]) ? splits_b[src_rank] : pinfo_b.shape[1]);
+        memcpy_params.dest_strides[0][memcpy_count] = pinfo_b_h.shape[0] * pinfo_b_h.shape[1];
+        memcpy_params.dest_strides[1][memcpy_count] = pinfo_b_h.shape[0];
+        memcpy_params.extents[2][memcpy_count] = (ax_b == pinfo_b.order[0]) ? splits_b[src_rank] : pinfo_b.shape[0];
+        memcpy_params.extents[1][memcpy_count] = (ax_b == pinfo_b.order[1]) ? splits_b[src_rank] : pinfo_b.shape[1];
+        memcpy_params.extents[0][memcpy_count] = (ax_b == pinfo_b.order[2]) ? splits_b[src_rank] : pinfo_b.shape[2];
+        memcpy_count++;
+        if (memcpy_count == memcpy_limit || j == splits_a.size() - 1) {
+          memcpy_params.ncopies = memcpy_count;
+          cudecomp_batched_d2d_memcpy_3d(memcpy_params, stream);
+          memcpy_count = 0;
+        }
+      }
+    }
+  } else {
+    // Split Transpose/Unpack
     std::array<int64_t, 3> extents;
     std::array<int64_t, 3> extents_h;
     std::array<int64_t, 3> strides_in{1, 0, 0}, strides_out{1, 0, 0};
@@ -606,72 +672,7 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
         localPermute(handle, extents, order, strides_in, strides_out, src, dst, stream);
       }
     }
-  //} else {
-  //  // Unpack
-  //  bool nvshmem_synced = false;
-  //  int memcpy_count = 0;
-  //  cudecompBatchedD2DMemcpy3DParams<T> memcpy_params;
-  //  for (int j = 0; j < splits_a.size(); ++j) {
-  //    int src_rank, dst_rank;
-  //    getAlltoallPeerRanks(grid_desc, comm_axis, j, src_rank, dst_rank);
-  //    if (j == 0) {
-  //      dst_rank = comm_rank;
-  //      src_rank = comm_rank;
-  //    }
-
-  //    std::vector<int> dst_ranks{dst_rank};
-  //    std::vector<int> src_ranks{src_rank};
-
-  //    if (j != 0 && comm_info.homogeneous && comm_info.nnodes != 1) {
-  //      // Perform pipelining in pairs to intra-node comms behind inter-node transfers
-  //      if (j % 2 == 1) {
-  //        if (j + 1 < splits_b.size()) {
-  //          int src_rank_next, dst_rank_next;
-  //          getAlltoallPeerRanks(grid_desc, comm_axis, j + 1, src_rank_next, dst_rank_next);
-  //          dst_ranks.push_back(dst_rank_next);
-  //          src_ranks.push_back(src_rank_next);
-  //        }
-  //      } else {
-  //        // Skip alltoall, this transfer was paired with previous one.
-  //        dst_ranks.resize(0);
-  //        src_ranks.resize(0);
-  //      }
-  //    }
-
-  //    if (o2 != o1) {
-  //      cudecompAlltoallPipelined(handle, grid_desc, o1, send_counts, send_offsets, o2, recv_counts, recv_offsets,
-  //                                recv_offsets_nvshmem, comm_axis, src_ranks, dst_ranks, stream, nvshmem_synced);
-  //    }
-
-  //    if (o2 != o3) {
-  //      size_t shift = offsets_b[src_rank];
-  //      for (int i = 0; i < 3; ++i) {
-  //        if (pinfo_b_h.order[i] == ax_b) break;
-  //        shift *= shape_g_b_h[i];
-  //      }
-
-  //      T* src = o2 + recv_offsets[src_rank];
-  //      T* dest = o3 + shift + getPencilPtrOffset(pinfo_b_h, output_halo_extents);
-  //      memcpy_params.src[memcpy_count] = src;
-  //      memcpy_params.dest[memcpy_count] = dest;
-  //      memcpy_params.src_strides[1][memcpy_count] = (ax_b == pinfo_b.order[0]) ? splits_b[src_rank] : pinfo_b.shape[0];
-  //      memcpy_params.src_strides[0][memcpy_count] =
-  //          memcpy_params.src_strides[1][memcpy_count] *
-  //          ((ax_b == pinfo_b.order[1]) ? splits_b[src_rank] : pinfo_b.shape[1]);
-  //      memcpy_params.dest_strides[0][memcpy_count] = pinfo_b_h.shape[0] * pinfo_b_h.shape[1];
-  //      memcpy_params.dest_strides[1][memcpy_count] = pinfo_b_h.shape[0];
-  //      memcpy_params.extents[2][memcpy_count] = (ax_b == pinfo_b.order[0]) ? splits_b[src_rank] : pinfo_b.shape[0];
-  //      memcpy_params.extents[1][memcpy_count] = (ax_b == pinfo_b.order[1]) ? splits_b[src_rank] : pinfo_b.shape[1];
-  //      memcpy_params.extents[0][memcpy_count] = (ax_b == pinfo_b.order[2]) ? splits_b[src_rank] : pinfo_b.shape[2];
-  //      memcpy_count++;
-  //      if (memcpy_count == memcpy_limit || j == splits_a.size() - 1) {
-  //        memcpy_params.ncopies = memcpy_count;
-  //        cudecomp_batched_d2d_memcpy_3d(memcpy_params, stream);
-  //        memcpy_count = 0;
-  //      }
-  //    }
-  //  }
-  //}
+  }
 }
 
 template <typename T>
