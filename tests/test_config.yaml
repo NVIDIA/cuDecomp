@@ -29,9 +29,9 @@ transpose_test_base: &transpose_test_base
   gdy: [0]
   gdz: [0]
 
-  hex: [0]
-  hey: [0]
-  hez: [0]
+  hex: ["0 0 0"]
+  hey: ["0 0 0"]
+  hez: ["0 0 0"]
 
   out_of_place: [True, False]
   managed_memory : [True, False]
@@ -59,23 +59,20 @@ transpose_test_acmix: &transpose_test_acmix
   acy: [0, 1]
   acz: [0, 1]
 
-transpose_test_acfalse_halo: &transpose_test_acfalse_halo
+transpose_test_halo: &transpose_test_halo
   <<: *transpose_test_base
+  args : ['backend',
+          'gx', 'gy', 'gz',
+          'gdx', 'gdy', 'gdz',
+          'hex' ,'hey', 'hez']
+
   backend: [1, 2] # Limit this testing to one normal and one pipelined backend
   dtypes: ['C64'] # Limit to one data type
-  acx: [0]
-  acy: [0]
-  acz: [0]
+  test_mem_order: true
 
-  hex: [0, 1]
-  hey: [0, 1]
-  hez: [0, 1]
-
-transpose_test_actrue_halo: &transpose_test_actrue_halo
-  <<: *transpose_test_acfalse_halo
-  acx: [1]
-  acy: [1]
-  acz: [1]
+  hex: ["0 0 0", "1 1 1"]
+  hey: ["1 1 1"]
+  hez: ["0 0 0", "1 1 1"]
 
 transpose_test_acfalse_gdimdist: &transpose_test_acfalse_gdimdist
   <<: *transpose_test_base
@@ -117,12 +114,8 @@ transpose_test_acmix_cc:
   <<: *transpose_test_acmix
   executable_prefix: 'cc/transpose_test'
 
-transpose_test_acfalse_halo_cc:
-  <<: *transpose_test_acfalse_halo
-  executable_prefix: 'cc/transpose_test'
-
-transpose_test_actrue_halo_cc:
-  <<: *transpose_test_actrue_halo
+transpose_test_halo_cc:
+  <<: *transpose_test_halo
   executable_prefix: 'cc/transpose_test'
 
 transpose_test_acfalse_gdimdist_cc:
@@ -152,13 +145,8 @@ transpose_test_acmix_fortran:
   executable_prefix: 'fortran/transpose_test'
   fortran_indexing: true
 
-transpose_test_acfalse_halo_fortran:
-  <<: *transpose_test_acfalse_halo
-  executable_prefix: 'fortran/transpose_test'
-  fortran_indexing: true
-
-transpose_test_actrue_halo_fortran:
-  <<: *transpose_test_actrue_halo
+transpose_test_halo_fortran:
+  <<: *transpose_test_halo
   executable_prefix: 'fortran/transpose_test'
   fortran_indexing: true
 

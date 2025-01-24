@@ -238,6 +238,13 @@ static inline void getAlltoallPeerRanks(cudecompGridDesc_t grid_desc, cudecompCo
 
   const auto& info = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info : grid_desc->col_comm_info;
 
+  // Quick return for single rank case
+  if (info.nranks == 1) {
+    src_rank = info.rank;
+    dst_rank = info.rank;
+    return;
+  }
+
   bool power_of_2 = !(info.nranks & info.nranks - 1);
 
   if (info.homogeneous) {
@@ -276,6 +283,16 @@ static inline void getAlltoallPeerRanks(cudecompGridDesc_t grid_desc, cudecompCo
     dst_rank = (info.rank + iter) % info.nranks;
     src_rank = (info.rank + info.nranks - iter) % info.nranks;
   }
+}
+
+static inline std::vector<int64_t> getSplits(int64_t N, int nchunks, int pad) {
+  std::vector<int64_t> splits(nchunks, N / nchunks);
+  for (int i = 0; i < N % nchunks; ++i) { splits[i] += 1; }
+
+  // Add padding to last populated pencil
+  splits[std::min(N, (int64_t)nchunks) - 1] += pad;
+
+  return splits;
 }
 
 } // namespace cudecomp
