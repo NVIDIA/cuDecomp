@@ -125,7 +125,7 @@ program main
 
   options%halo_axis = 1
 
-  options%halo_extents = [1, 1, 1]
+  options%halo_extents = [1, 1, 1, 1, 1, 1]
 
   options%halo_periods = [.true., .true., .true.]
 
@@ -251,7 +251,8 @@ program main
   ! Transposing data
 
   ! Transpose from X-pencils to Y-pencils.
-  istat = cudecompTransposeXToY(handle, grid_desc, data_d, data_d, transpose_work_d, CUDECOMP_DOUBLE, pinfo_x%halo_extents, [0,0,0])
+  istat = cudecompTransposeXToY(handle, grid_desc, data_d, data_d, transpose_work_d, CUDECOMP_DOUBLE, pinfo_x%halo_extents, &
+                                [0, 0, 0, 0, 0, 0])
   call CHECK_CUDECOMP_EXIT(istat)
 
   ! Transpose from Y-pencils to Z-pencils.
@@ -263,7 +264,8 @@ program main
   call CHECK_CUDECOMP_EXIT(istat)
 
   ! Transpose from Y-pencils to X-pencils.
-  istat = cudecompTransposeYToX(handle, grid_desc, data_d, data_d, transpose_work_d, CUDECOMP_DOUBLE, [0,0,0], pinfo_x%halo_extents)
+  istat = cudecompTransposeYToX(handle, grid_desc, data_d, data_d, transpose_work_d, CUDECOMP_DOUBLE, [0, 0, 0, 0, 0, 0], &
+                                pinfo_x%halo_extents)
   call CHECK_CUDECOMP_EXIT(istat)
 
 

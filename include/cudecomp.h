@@ -177,7 +177,7 @@ typedef struct {
 
   // Halo-specific options
   bool autotune_halo_backend; ///< flag to enable halo backend autotuning (default: false)
-  int32_t halo_extents[3];    ///< extents for halo autotuning (default: [0, 0, 0])
+  int32_t halo_extents[6];    ///< extents for halo autotuning (default: [0, 0, 0, 0, 0, 0])
   bool halo_periods[3];       ///< periodicity for halo autotuning (default: [false, false, false])
   int32_t halo_axis;          ///< which axis pencils to use for halo autotuning (default: 0, X-pencils)
 } cudecompGridDescAutotuneOptions_t;
@@ -190,7 +190,9 @@ typedef struct {
   int32_t lo[3];           ///< lower bound coordinates (in local order, excluding halo elements)
   int32_t hi[3];           ///< upper bound coordinates (in local order, excluding halo elements)
   int32_t order[3];        ///< data layout order (e.g. 2,1,0 means memory is ordered Z,Y,X)
-  int32_t halo_extents[3]; ///< halo extents by dimension (in global order)
+  int32_t halo_extents[6]; ///< halo extents; first three values are
+                           ///< the number of "lower" halo elements (by dimension in global order);
+                           ///< next three values are the number of "upper" halo elements (by dimension in global order)
   int64_t size;            ///< number of elements in pencil (including halo elements)
 } cudecompPencilInfo_t;
 

@@ -59,12 +59,12 @@ module transpose_CUDECOMP_DOUBLE_COMPLEX_mod
     use cudecomp
     implicit none
     type(cudecompPencilInfo) :: pinfo
-    ARRTYPE :: ref(pinfo%lo(1) - pinfo%halo_extents(pinfo%order(1)): pinfo%hi(1) + pinfo%halo_extents(pinfo%order(1)), &
-                   pinfo%lo(2) - pinfo%halo_extents(pinfo%order(2)): pinfo%hi(2) + pinfo%halo_extents(pinfo%order(2)), &
-                   pinfo%lo(3) - pinfo%halo_extents(pinfo%order(3)): pinfo%hi(3) + pinfo%halo_extents(pinfo%order(3)))
-    ARRTYPE :: res(pinfo%lo(1) - pinfo%halo_extents(pinfo%order(1)): pinfo%hi(1) + pinfo%halo_extents(pinfo%order(1)), &
-                   pinfo%lo(2) - pinfo%halo_extents(pinfo%order(2)): pinfo%hi(2) + pinfo%halo_extents(pinfo%order(2)), &
-                   pinfo%lo(3) - pinfo%halo_extents(pinfo%order(3)): pinfo%hi(3) + pinfo%halo_extents(pinfo%order(3)))
+    ARRTYPE :: ref(pinfo%lo(1) - pinfo%halo_extents(pinfo%order(1)): pinfo%hi(1) + pinfo%halo_extents(pinfo%order(1) + 3), &
+                   pinfo%lo(2) - pinfo%halo_extents(pinfo%order(2)): pinfo%hi(2) + pinfo%halo_extents(pinfo%order(2) + 3), &
+                   pinfo%lo(3) - pinfo%halo_extents(pinfo%order(3)): pinfo%hi(3) + pinfo%halo_extents(pinfo%order(3) + 3))
+    ARRTYPE :: res(pinfo%lo(1) - pinfo%halo_extents(pinfo%order(1)): pinfo%hi(1) + pinfo%halo_extents(pinfo%order(1) + 3), &
+                   pinfo%lo(2) - pinfo%halo_extents(pinfo%order(2)): pinfo%hi(2) + pinfo%halo_extents(pinfo%order(2) + 3), &
+                   pinfo%lo(3) - pinfo%halo_extents(pinfo%order(3)): pinfo%hi(3) + pinfo%halo_extents(pinfo%order(3) + 3))
 
     logical :: mismatch
     mismatch = any(ref(pinfo%lo(1): pinfo%hi(1), pinfo%lo(2): pinfo%hi(2), pinfo%lo(3): pinfo%hi(3)) /= &
@@ -82,9 +82,9 @@ module transpose_CUDECOMP_DOUBLE_COMPLEX_mod
     integer :: gx(3)
 
     ! Allocate reference pencil with halo regions
-    allocate(ref(pinfo%lo(1) - pinfo%halo_extents(pinfo%order(1)): pinfo%hi(1) + pinfo%halo_extents(pinfo%order(1)), &
-                 pinfo%lo(2) - pinfo%halo_extents(pinfo%order(2)): pinfo%hi(2) + pinfo%halo_extents(pinfo%order(2)), &
-                 pinfo%lo(3) - pinfo%halo_extents(pinfo%order(3)): pinfo%hi(3) + pinfo%halo_extents(pinfo%order(3))))
+    allocate(ref(pinfo%lo(1) - pinfo%halo_extents(pinfo%order(1)): pinfo%hi(1) + pinfo%halo_extents(pinfo%order(1) + 3), &
+                 pinfo%lo(2) - pinfo%halo_extents(pinfo%order(2)): pinfo%hi(2) + pinfo%halo_extents(pinfo%order(2) + 3), &
+                 pinfo%lo(3) - pinfo%halo_extents(pinfo%order(3)): pinfo%hi(3) + pinfo%halo_extents(pinfo%order(3) + 3)))
 
     ref = -1
 
@@ -145,7 +145,7 @@ program main
   integer :: comm_backend
   logical :: axis_contiguous(3)
   integer :: gdims_dist(3)
-  integer :: halo_extents(3)
+  integer :: halo_extents_x(6), halo_extents_y(6), halo_extents_z(6)
   integer :: mem_order(3, 3)
   logical :: out_of_place, use_managed_memory
   integer :: pr, pc
@@ -194,7 +194,9 @@ program main
   comm_backend = 0
   axis_contiguous(:) = .false.
   gdims_dist(:) = 0
-  halo_extents(:) = 0
+  halo_extents_x(:) = 0
+  halo_extents_y(:) = 0
+  halo_extents_z(:) = 0
   mem_order(:,:) = -1
   out_of_place = .false.
   use_managed_memory = .false.
@@ -259,17 +261,23 @@ program main
         read(arg, *) gdims_dist(3)
         skip_count = 1
       case('--hex')
-        call get_command_argument(i+1, arg)
-        read(arg, *) halo_extents(1)
-        skip_count = 1
+        do j = 1, 6
+          call get_command_argument(i+j, arg)
+          read(arg, *) halo_extents_x(j)
+        enddo
+        skip_count = 6
       case('--hey')
-        call get_command_argument(i+1, arg)
-        read(arg, *) halo_extents(2)
-        skip_count = 1
+        do j = 1, 6
+          call get_command_argument(i+j, arg)
+          read(arg, *) halo_extents_y(j)
+        enddo
+        skip_count = 6
       case('--hez')
-        call get_command_argument(i+1, arg)
-        read(arg, *) halo_extents(3)
-        skip_count = 1
+        do j = 1, 6
+          call get_command_argument(i+j, arg)
+          read(arg, *) halo_extents_z(j)
+        enddo
+        skip_count = 6
       case('--mem_order')
         l = 1
         do j = 1, 3
@@ -335,13 +343,13 @@ program main
   endif
 
   ! Get x-pencil information
-  CHECK_CUDECOMP_EXIT(cudecompGetPencilInfo(handle, grid_desc, pinfo_x, 1, halo_extents))
+  CHECK_CUDECOMP_EXIT(cudecompGetPencilInfo(handle, grid_desc, pinfo_x, 1, halo_extents_x))
 
   ! Get y-pencil information
-  CHECK_CUDECOMP_EXIT(cudecompGetPencilInfo(handle, grid_desc, pinfo_y, 2, halo_extents))
+  CHECK_CUDECOMP_EXIT(cudecompGetPencilInfo(handle, grid_desc, pinfo_y, 2, halo_extents_y))
 
   ! Get z-pencil information
-  CHECK_CUDECOMP_EXIT(cudecompGetPencilInfo(handle, grid_desc, pinfo_z, 3, halo_extents))
+  CHECK_CUDECOMP_EXIT(cudecompGetPencilInfo(handle, grid_desc, pinfo_z, 3, halo_extents_z))
 
   ! Get workspace size
   CHECK_CUDECOMP_EXIT(cudecompGetTransposeWorkspaceSize(handle, grid_desc, workspace_num_elements))
@@ -447,7 +455,7 @@ program main
   CHECK_CUDECOMP_EXIT(cudecompTransposeYToX(handle, grid_desc, input, output, work_d, dtype, pinfo_y%halo_extents, pinfo_x%halo_extents))
   data = output
   if (compare_pencils(xref, data, pinfo_x)) then
-    print*, "FAILED cudecompTranposeXToY"
+    print*, "FAILED cudecompTranposeYToX"
     call exit(1)
   endif
 

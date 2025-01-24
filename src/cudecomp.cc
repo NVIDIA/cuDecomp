@@ -665,6 +665,7 @@ cudecompResult_t cudecompGridDescAutotuneOptionsSetDefaults(cudecompGridDescAuto
     options->halo_axis = 0;
     for (int i = 0; i < 3; ++i) {
       options->halo_extents[i] = 0;
+      options->halo_extents[i+3] = 0;
       options->halo_periods[i] = false;
     }
 
@@ -714,10 +715,12 @@ cudecompResult_t cudecompGetPencilInfo(cudecompHandle_t handle, cudecompGridDesc
       pencil_info->hi[ord] = pencil_info->lo[ord] + pencil_info->shape[ord] - 1;
 
       if (halo_extents) {
-        pencil_info->shape[ord] += 2 * halo_extents[i];
+        pencil_info->shape[ord] += halo_extents[i] + halo_extents[i+3];
         pencil_info->halo_extents[i] = halo_extents[i];
+        pencil_info->halo_extents[i+3] = halo_extents[i+3];
       } else {
         pencil_info->halo_extents[i] = 0;
+        pencil_info->halo_extents[i+3] = 0;
       }
       pencil_info->size *= pencil_info->shape[ord];
     }
@@ -783,9 +786,9 @@ cudecompResult_t cudecompGetHaloWorkspaceSize(cudecompHandle_t handle, cudecompG
     cudecompPencilInfo_t pinfo;
     CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo, axis, halo_extents));
     auto shape_g = getShapeG(pinfo);
-    size_t halo_size_x = 4 * shape_g[1] * shape_g[2] * pinfo.halo_extents[0];
-    size_t halo_size_y = 4 * shape_g[0] * shape_g[2] * pinfo.halo_extents[1];
-    size_t halo_size_z = 4 * shape_g[0] * shape_g[1] * pinfo.halo_extents[2];
+    size_t halo_size_x = 2 * shape_g[1] * shape_g[2] * (pinfo.halo_extents[0] + pinfo.halo_extents[3]);
+    size_t halo_size_y = 2 * shape_g[0] * shape_g[2] * (pinfo.halo_extents[1] + pinfo.halo_extents[4]);
+    size_t halo_size_z = 2 * shape_g[0] * shape_g[1] * (pinfo.halo_extents[2] + pinfo.halo_extents[5]);
 
     *workspace_size = std::max(halo_size_x, std::max(halo_size_y, halo_size_z));
   } catch (const cudecomp::BaseException& e) {

@@ -144,7 +144,7 @@ module cudecomp
 
     ! Halo-specific options
     logical(c_bool) :: autotune_halo_backend ! flag to enable halo backend autotuning
-    integer(c_int32_t) :: halo_extents(3) ! halo configuration for autotuning
+    integer(c_int32_t) :: halo_extents(6) ! halo configuration for autotuning
     logical(c_bool) :: halo_periods(3) ! halo configuration for autotuning
     integer(c_int32_t) :: halo_axis ! halo configuration for autotuning
   end type cudecompGridDescAutotuneOptions
@@ -155,7 +155,7 @@ module cudecomp
     integer(c_int32_t) :: lo(3)           ! lower bound coordinates (in local order, excluding halo elements)
     integer(c_int32_t) :: hi(3)           ! upper bound coordinates (in local order, excluding halo elements)
     integer(c_int32_t) :: order(3)        ! data layout order (e.g. 3,2,1 means memory is ordered z,y,x)
-    integer(c_int32_t) :: halo_extents(3) ! halo extents by dimension (always in x,y,z order)
+    integer(c_int32_t) :: halo_extents(6) ! halo extents by dimension (always in x,y,z order)
     integer(c_int64_t) :: size            ! number of elements in pencil (including halo elements)
   end type cudecompPencilInfo
 
@@ -263,7 +263,7 @@ module cudecomp
       type(cudecompHandle), value :: handle
       type(cudecompGridDesc), value :: grid_desc
       integer(c_int32_t), value :: axis
-      integer(c_int32_t) :: halo_extents(3)
+      integer(c_int32_t) :: halo_extents(6)
       type(cudecompPencilInfo) :: pencil_info
       integer(c_int) :: res
     end function cudecompGetPencilInfoC
@@ -298,7 +298,7 @@ module cudecomp
       type(cudecompHandle), value :: handle
       type(cudecompGridDesc), value :: grid_desc
       integer(c_int32_t), value :: axis
-      integer(c_int32_t) :: halo_extents(3)
+      integer(c_int32_t) :: halo_extents(6)
       integer(c_int64_t) :: workspace_size
       integer(c_int) :: res
     end function cudecompGetHaloWorkspaceSizeC
@@ -387,7 +387,7 @@ module cudecomp
       !dir$ ignore_tkr input, output, work
       real(c_float), device :: input(*), output(*), work(*)
       integer(c_int), value :: dtype
-      integer(c_int32_t) :: input_halo_extents(3), output_halo_extents(3)
+      integer(c_int32_t) :: input_halo_extents(6), output_halo_extents(6)
       integer(cuda_stream_kind), value :: stream
       integer(c_int) :: res
     end function cudecompTransposeXToY_C
@@ -403,7 +403,7 @@ module cudecomp
       !dir$ ignore_tkr input, output, work
       real(c_float), device :: input(*), output(*), work(*)
       integer(c_int), value :: dtype
-      integer(c_int32_t) :: input_halo_extents(3), output_halo_extents(3)
+      integer(c_int32_t) :: input_halo_extents(6), output_halo_extents(6)
       integer(cuda_stream_kind), value :: stream
       integer(c_int) :: res
     end function cudecompTransposeYToZ_C
@@ -419,7 +419,7 @@ module cudecomp
       !dir$ ignore_tkr input, output, work
       real(c_float), device :: input(*), output(*), work(*)
       integer(c_int), value :: dtype
-      integer(c_int32_t) :: input_halo_extents(3), output_halo_extents(3)
+      integer(c_int32_t) :: input_halo_extents(6), output_halo_extents(6)
       integer(cuda_stream_kind), value :: stream
       integer(c_int) :: res
     end function cudecompTransposeZToY_C
@@ -435,7 +435,7 @@ module cudecomp
       !dir$ ignore_tkr input, output, work
       real(c_float), device :: input(*), output(*), work(*)
       integer(c_int), value :: dtype
-      integer(c_int32_t) :: input_halo_extents(3), output_halo_extents(3)
+      integer(c_int32_t) :: input_halo_extents(6), output_halo_extents(6)
       integer(cuda_stream_kind), value :: stream
       integer(c_int) :: res
     end function cudecompTransposeYToX_C
@@ -452,7 +452,7 @@ module cudecomp
       !dir$ ignore_tkr input, work
       real(c_float), device :: input(*), work(*)
       integer(c_int), value :: dtype
-      integer(c_int32_t) :: halo_extents(3)
+      integer(c_int32_t) :: halo_extents(6)
       logical(c_bool) :: halo_periods(3)
       integer(c_int32_t), value :: dim
       integer(cuda_stream_kind), value :: stream
@@ -470,7 +470,7 @@ module cudecomp
       !dir$ ignore_tkr input, work
       real(c_float), device :: input(*), work(*)
       integer(c_int), value :: dtype
-      integer(c_int32_t) :: halo_extents(3)
+      integer(c_int32_t) :: halo_extents(6)
       logical(c_bool) :: halo_periods(3)
       integer(c_int32_t), value :: dim
       integer(cuda_stream_kind), value :: stream
@@ -488,7 +488,7 @@ module cudecomp
       !dir$ ignore_tkr input, work
       real(c_float), device :: input(*), work(*)
       integer(c_int), value :: dtype
-      integer(c_int32_t) :: halo_extents(3)
+      integer(c_int32_t) :: halo_extents(6)
       logical(c_bool) :: halo_periods(3)
       integer(c_int32_t), value :: dim
       integer(cuda_stream_kind), value :: stream
@@ -597,13 +597,13 @@ contains
     type(cudecompHandle) :: handle
     type(cudecompGridDesc) :: grid_desc
     integer :: axis  ! unit offset, so x/y/z = 1/2/3
-    integer, optional:: halo_extents(3)
+    integer, optional:: halo_extents(6)
     type(cudecompPencilInfo) :: pencil_info  ! res%order is unit offset, x/y/z = 1/2/3
     integer(c_int) :: res
 
-    integer :: halo_extents_(3)
+    integer :: halo_extents_(6)
 
-    halo_extents_(:) = [0, 0, 0]
+    halo_extents_(:) = [0, 0, 0, 0, 0 ,0]
     if (present(halo_extents)) halo_extents_ = halo_extents
     res = cudecompGetPencilInfoC(handle, grid_desc, pencil_info, axis - 1, halo_extents_)
     ! Update entries for Fortran indexing
@@ -630,7 +630,7 @@ contains
     type(cudecompHandle) :: handle
     type(cudecompGridDesc) :: grid_desc
     integer :: axis
-    integer :: halo_extents(3)
+    integer :: halo_extents(6)
     integer(int64) :: workspace_size
     integer(c_int) :: res
 
@@ -793,17 +793,17 @@ contains
     real(c_float), device :: input(*), output(*), work(*)
     integer :: dtype
     integer(cuda_stream_kind), optional :: stream
-    integer, optional :: input_halo_extents(3)
-    integer, optional :: output_halo_extents(3)
+    integer, optional :: input_halo_extents(6)
+    integer, optional :: output_halo_extents(6)
     integer(c_int) :: res
 
     integer(cuda_stream_kind) :: stream_
-    integer :: input_halo_extents_(3)
-    integer :: output_halo_extents_(3)
+    integer :: input_halo_extents_(6)
+    integer :: output_halo_extents_(6)
 
     stream_ = 0
-    input_halo_extents_(:) = [0, 0, 0]
-    output_halo_extents_(:) = [0, 0, 0]
+    input_halo_extents_(:) = [0, 0, 0, 0, 0, 0]
+    output_halo_extents_(:) = [0, 0, 0, 0, 0, 0]
     if (present(stream)) stream_ = stream
     if (present(input_halo_extents)) input_halo_extents_ = input_halo_extents
     if (present(output_halo_extents)) output_halo_extents_ = output_halo_extents
@@ -822,17 +822,17 @@ contains
     real(c_float), device :: input(*), output(*), work(*)
     integer :: dtype
     integer(cuda_stream_kind), optional :: stream
-    integer, optional :: input_halo_extents(3)
-    integer, optional :: output_halo_extents(3)
+    integer, optional :: input_halo_extents(6)
+    integer, optional :: output_halo_extents(6)
     integer(c_int) :: res
 
     integer(cuda_stream_kind) :: stream_
-    integer :: input_halo_extents_(3)
-    integer :: output_halo_extents_(3)
+    integer :: input_halo_extents_(6)
+    integer :: output_halo_extents_(6)
 
     stream_ = 0
-    input_halo_extents_(:) = [0, 0, 0]
-    output_halo_extents_(:) = [0, 0, 0]
+    input_halo_extents_(:) = [0, 0, 0, 0, 0, 0]
+    output_halo_extents_(:) = [0, 0, 0, 0, 0, 0]
     if (present(stream)) stream_ = stream
     if (present(input_halo_extents)) input_halo_extents_ = input_halo_extents
     if (present(output_halo_extents)) output_halo_extents_ = output_halo_extents
@@ -851,17 +851,17 @@ contains
     real(c_float), device :: input(*), output(*), work(*)
     integer :: dtype
     integer(cuda_stream_kind), optional :: stream
-    integer, optional :: input_halo_extents(3)
-    integer, optional :: output_halo_extents(3)
+    integer, optional :: input_halo_extents(6)
+    integer, optional :: output_halo_extents(6)
     integer(c_int) :: res
 
     integer(cuda_stream_kind) :: stream_
-    integer :: input_halo_extents_(3)
-    integer :: output_halo_extents_(3)
+    integer :: input_halo_extents_(6)
+    integer :: output_halo_extents_(6)
 
     stream_ = 0
-    input_halo_extents_(:) = [0, 0, 0]
-    output_halo_extents_(:) = [0, 0, 0]
+    input_halo_extents_(:) = [0, 0, 0, 0, 0, 0]
+    output_halo_extents_(:) = [0, 0, 0, 0, 0, 0]
     if (present(stream)) stream_ = stream
     if (present(input_halo_extents)) input_halo_extents_ = input_halo_extents
     if (present(output_halo_extents)) output_halo_extents_ = output_halo_extents
@@ -880,17 +880,17 @@ contains
     real(c_float), device :: input(*), output(*), work(*)
     integer :: dtype
     integer(cuda_stream_kind), optional :: stream
-    integer, optional :: input_halo_extents(3)
-    integer, optional :: output_halo_extents(3)
+    integer, optional :: input_halo_extents(6)
+    integer, optional :: output_halo_extents(6)
     integer(c_int) :: res
 
     integer(cuda_stream_kind) :: stream_
-    integer :: input_halo_extents_(3)
-    integer :: output_halo_extents_(3)
+    integer :: input_halo_extents_(6)
+    integer :: output_halo_extents_(6)
 
     stream_ = 0
-    input_halo_extents_(:) = [0, 0, 0]
-    output_halo_extents_(:) = [0, 0, 0]
+    input_halo_extents_(:) = [0, 0, 0, 0, 0, 0]
+    output_halo_extents_(:) = [0, 0, 0, 0, 0, 0]
     if (present(stream)) stream_ = stream
     if (present(input_halo_extents)) input_halo_extents_ = input_halo_extents
     if (present(output_halo_extents)) output_halo_extents_ = output_halo_extents
@@ -909,7 +909,7 @@ contains
     !dir$ ignore_tkr input, work
     real(c_float), device :: input(*), work(*)
     integer :: dtype
-    integer :: halo_extents(3)
+    integer :: halo_extents(6)
     logical :: halo_periods(3)
     integer :: dim
     integer(cuda_stream_kind), optional :: stream
@@ -936,7 +936,7 @@ contains
     !dir$ ignore_tkr input, work
     real(c_float), device :: input(*), work(*)
     integer :: dtype
-    integer :: halo_extents(3)
+    integer :: halo_extents(6)
     logical :: halo_periods(3)
     integer :: dim
     integer(cuda_stream_kind), optional :: stream
@@ -963,7 +963,7 @@ contains
     !dir$ ignore_tkr input, work
     real(c_float), device :: input(*), work(*)
     integer :: dtype
-    integer :: halo_extents(3)
+    integer :: halo_extents(6)
     logical :: halo_periods(3)
     integer :: dim
     integer(cuda_stream_kind), optional :: stream

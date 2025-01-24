@@ -59,12 +59,12 @@ module halo_CUDECOMP_DOUBLE_COMPLEX_mod
     use cudecomp
     implicit none
     type(cudecompPencilInfo) :: pinfo
-    ARRTYPE :: ref(pinfo%lo(1) - pinfo%halo_extents(pinfo%order(1)): pinfo%hi(1) + pinfo%halo_extents(pinfo%order(1)), &
-                   pinfo%lo(2) - pinfo%halo_extents(pinfo%order(2)): pinfo%hi(2) + pinfo%halo_extents(pinfo%order(2)), &
-                   pinfo%lo(3) - pinfo%halo_extents(pinfo%order(3)): pinfo%hi(3) + pinfo%halo_extents(pinfo%order(3)))
-    ARRTYPE :: res(pinfo%lo(1) - pinfo%halo_extents(pinfo%order(1)): pinfo%hi(1) + pinfo%halo_extents(pinfo%order(1)), &
-                   pinfo%lo(2) - pinfo%halo_extents(pinfo%order(2)): pinfo%hi(2) + pinfo%halo_extents(pinfo%order(2)), &
-                   pinfo%lo(3) - pinfo%halo_extents(pinfo%order(3)): pinfo%hi(3) + pinfo%halo_extents(pinfo%order(3)))
+    ARRTYPE :: ref(pinfo%lo(1) - pinfo%halo_extents(pinfo%order(1)): pinfo%hi(1) + pinfo%halo_extents(pinfo%order(1) + 3), &
+                   pinfo%lo(2) - pinfo%halo_extents(pinfo%order(2)): pinfo%hi(2) + pinfo%halo_extents(pinfo%order(2) + 3), &
+                   pinfo%lo(3) - pinfo%halo_extents(pinfo%order(3)): pinfo%hi(3) + pinfo%halo_extents(pinfo%order(3) + 3))
+    ARRTYPE :: res(pinfo%lo(1) - pinfo%halo_extents(pinfo%order(1)): pinfo%hi(1) + pinfo%halo_extents(pinfo%order(1) + 3), &
+                   pinfo%lo(2) - pinfo%halo_extents(pinfo%order(2)): pinfo%hi(2) + pinfo%halo_extents(pinfo%order(2) + 3), &
+                   pinfo%lo(3) - pinfo%halo_extents(pinfo%order(3)): pinfo%hi(3) + pinfo%halo_extents(pinfo%order(3) + 3))
 
     logical :: mismatch
     mismatch = any(ref /= res)
@@ -81,9 +81,9 @@ module halo_CUDECOMP_DOUBLE_COMPLEX_mod
     integer :: gx(3)
 
     ! Allocate reference pencil with halo regions
-    allocate(ref(pinfo%lo(1) - pinfo%halo_extents(pinfo%order(1)): pinfo%hi(1) + pinfo%halo_extents(pinfo%order(1)), &
-                 pinfo%lo(2) - pinfo%halo_extents(pinfo%order(2)): pinfo%hi(2) + pinfo%halo_extents(pinfo%order(2)), &
-                 pinfo%lo(3) - pinfo%halo_extents(pinfo%order(3)): pinfo%hi(3) + pinfo%halo_extents(pinfo%order(3))))
+    allocate(ref(pinfo%lo(1) - pinfo%halo_extents(pinfo%order(1)): pinfo%hi(1) + pinfo%halo_extents(pinfo%order(1) + 3), &
+                 pinfo%lo(2) - pinfo%halo_extents(pinfo%order(2)): pinfo%hi(2) + pinfo%halo_extents(pinfo%order(2) + 3), &
+                 pinfo%lo(3) - pinfo%halo_extents(pinfo%order(3)): pinfo%hi(3) + pinfo%halo_extents(pinfo%order(3) + 3)))
 
     ref = -1
 
@@ -117,16 +117,16 @@ module halo_CUDECOMP_DOUBLE_COMPLEX_mod
     logical :: unset
 
     ! Allocate reference pencil with halo regions
-    allocate(ref(pinfo%lo(1) - pinfo%halo_extents(pinfo%order(1)): pinfo%hi(1) + pinfo%halo_extents(pinfo%order(1)), &
-                 pinfo%lo(2) - pinfo%halo_extents(pinfo%order(2)): pinfo%hi(2) + pinfo%halo_extents(pinfo%order(2)), &
-                 pinfo%lo(3) - pinfo%halo_extents(pinfo%order(3)): pinfo%hi(3) + pinfo%halo_extents(pinfo%order(3))))
+    allocate(ref(pinfo%lo(1) - pinfo%halo_extents(pinfo%order(1)): pinfo%hi(1) + pinfo%halo_extents(pinfo%order(1) + 3), &
+                 pinfo%lo(2) - pinfo%halo_extents(pinfo%order(2)): pinfo%hi(2) + pinfo%halo_extents(pinfo%order(2) + 3), &
+                 pinfo%lo(3) - pinfo%halo_extents(pinfo%order(3)): pinfo%hi(3) + pinfo%halo_extents(pinfo%order(3) + 3)))
 
     ref = -1
 
     ! Iterate over entire pencil, set values including halo regions
-    do k = pinfo%lo(3) - pinfo%halo_extents(pinfo%order(3)), pinfo%hi(3) + pinfo%halo_extents(pinfo%order(3))
-      do j = pinfo%lo(2) - pinfo%halo_extents(pinfo%order(2)), pinfo%hi(2) + pinfo%halo_extents(pinfo%order(2))
-        do i = pinfo%lo(1) - pinfo%halo_extents(pinfo%order(1)), pinfo%hi(1) + pinfo%halo_extents(pinfo%order(1))
+    do k = pinfo%lo(3) - pinfo%halo_extents(pinfo%order(3)), pinfo%hi(3) + pinfo%halo_extents(pinfo%order(3) + 3)
+      do j = pinfo%lo(2) - pinfo%halo_extents(pinfo%order(2)), pinfo%hi(2) + pinfo%halo_extents(pinfo%order(2) + 3)
+        do i = pinfo%lo(1) - pinfo%halo_extents(pinfo%order(1)), pinfo%hi(1) + pinfo%halo_extents(pinfo%order(1) + 3)
           ! Compute ordered global coordinate
           gx(pinfo%order(1)) = i
           gx(pinfo%order(2)) = j
@@ -196,7 +196,7 @@ program main
   integer :: comm_backend
   logical :: axis_contiguous(3)
   integer :: gdims_dist(3)
-  integer :: halo_extents(3)
+  integer :: halo_extents(6)
   logical :: halo_periods(3)
   integer :: mem_order(3, 3)
   logical :: use_managed_memory
@@ -311,18 +311,6 @@ program main
         call get_command_argument(i+1, arg)
         read(arg, *) gdims_dist(3)
         skip_count = 1
-      case('--hex')
-        call get_command_argument(i+1, arg)
-        read(arg, *) halo_extents(1)
-        skip_count = 1
-      case('--hey')
-        call get_command_argument(i+1, arg)
-        read(arg, *) halo_extents(2)
-        skip_count = 1
-      case('--hez')
-        call get_command_argument(i+1, arg)
-        read(arg, *) halo_extents(3)
-        skip_count = 1
       case('--hpx')
         call get_command_argument(i+1, arg)
         read(arg, *) iarg
@@ -342,6 +330,12 @@ program main
         call get_command_argument(i+1, arg)
         read(arg, *) axis
         skip_count = 1
+      case('--he')
+        do j = 1, 6
+          call get_command_argument(i+j, arg)
+          read(arg, *) halo_extents(j)
+        enddo
+        skip_count = 6
       case('--mem_order')
         l = 1
         do j = 1, 3

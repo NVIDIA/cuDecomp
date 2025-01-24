@@ -48,8 +48,8 @@ template <typename T>
 void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompGridDesc_t grid_desc, T* input, T* work,
                           const int32_t halo_extents_ptr[], const bool halo_periods_ptr[], int32_t dim,
                           cudaStream_t stream) {
-  std::array<int32_t, 3> halo_extents{};
-  if (halo_extents_ptr) std::copy(halo_extents_ptr, halo_extents_ptr + 3, halo_extents.begin());
+  std::array<int32_t, 6> halo_extents{};
+  if (halo_extents_ptr) std::copy(halo_extents_ptr, halo_extents_ptr + 6, halo_extents.begin());
   std::array<bool, 3> halo_periods{};
   if (halo_periods_ptr) std::copy(halo_periods_ptr, halo_periods_ptr + 3, halo_periods.begin());
 
@@ -65,7 +65,7 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
   CHECK_CUDECOMP(cudecompGetShiftedRank(handle, grid_desc, ax, dim, -1, halo_periods[dim], &neighbors[0]));
   CHECK_CUDECOMP(cudecompGetShiftedRank(handle, grid_desc, ax, dim, 1, halo_periods[dim], &neighbors[1]));
 
-  if (halo_extents[dim] == 0) { return; }
+  if (halo_extents[dim] == 0 && halo_extents[dim + 3] == 0) { return; }
 
   // Select correct case based on pencil memory order and transfer dim
   int c;
