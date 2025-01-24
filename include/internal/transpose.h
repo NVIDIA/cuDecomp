@@ -245,7 +245,6 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
     o2 = work + max_pencil_size_a;
   }
 
-  // Disable special cases for now
   // Adjust pointers to handle special cases
   if (!input_has_halos && !output_has_halos) {
     if (splits_a.size() == 1) {
