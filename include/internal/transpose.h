@@ -260,11 +260,11 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
         }
       } else {
         if (!inplace) {
-          if (fwd && pinfo_b.order[2] == ax_a) {
-            // Single rank, out of place, Tranpose -> Unpack: Transpose directly to
+          if (pinfo_b.order[2] == ax_a) {
+            // Single rank, out of place, Transpose -> Unpack: Transpose directly to
             // output and return
             o1 = output;
-          } else if (!fwd) {
+          } else {
             // Single rank, out of place, Pack -> Transpose: Skip pack, transpose directly
             // to output
             o1 = input;
@@ -294,23 +294,13 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
       }
 
       if (enable) {
-        if (fwd) {
-          if (pinfo_b.order[2] == ax_a) {
-            // Tranpose: No special cases
-          } else {
-            // Pack
-            if (pinfo_a.order[2] == ax_b && orders_equal) {
-              // Output of all to all is in correct orientation, skip unpack
-              o2 = output;
-            }
-          }
-        } else {
-          // Pack
-          if (pinfo_a.order[2] == ax_a) {
-            // Input is already packed for all to all, skip pack
-            o1 = input;
-            o2 = work;
-          }
+        if (pinfo_a.order[2] == ax_a) {
+          // Input is already packed for all to all, skip pack
+          o1 = input;
+          o2 = work;
+        } else if (pinfo_a.order[2] == ax_b && orders_equal) {
+          // Output of all to all is in correct orientation, skip unpack
+          o2 = output;
         }
       }
     }
@@ -333,8 +323,9 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
     recv_offsets_nvshmem[i] = rank_offset * shape_g_a[ax_c] * splits_a[i];
   }
 
+  bool data_transposed = false;
   if (o1 != i1) {
-    if (fwd && pinfo_b.order[2] == ax_a && !orders_equal) {
+    if (pinfo_b.order[2] == ax_a && !orders_equal) {
       // Transpose/Pack
       std::array<int64_t, 3> extents;
       std::array<int64_t, 3> extents_h;
@@ -385,6 +376,8 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
         T* dst = o1;
         localPermute(handle, extents, order, strides_in, strides_out, src, dst, stream);
       }
+
+      data_transposed = true;
 
     } else {
       // Pack
@@ -447,30 +440,110 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
   }
 
   // Unpack into output buffer
-  if (!fwd && pinfo_a.order[2] == ax_b) {
-    // Transpose/Unpack
-    std::array<int64_t, 3> extents;
-    std::array<int64_t, 3> extents_h;
-    std::array<int64_t, 3> strides_in{1, 0, 0}, strides_out{1, 0, 0};
-    std::array<int, 3> order;
+  if (!data_transposed && !orders_equal) {
+    if (pinfo_a.order[2] == ax_b) {
+      // Transpose/Unpack
+      std::array<int64_t, 3> extents;
+      std::array<int64_t, 3> extents_h;
+      std::array<int64_t, 3> strides_in{1, 0, 0}, strides_out{1, 0, 0};
+      std::array<int, 3> order;
 
-    for (int i = 0; i < 3; ++i) {
-      for (int j = 0; j < 3; ++j) {
-        if (pinfo_a.order[j] == pinfo_b.order[i]) {
-          order[i] = j;
-          break;
+      for (int i = 0; i < 3; ++i) {
+        for (int j = 0; j < 3; ++j) {
+          if (pinfo_a.order[j] == pinfo_b.order[i]) {
+            order[i] = j;
+            break;
+          }
+        }
+
+        extents[i] = shape_g_b[pinfo_a.order[i]];
+        extents_h[i] = shape_g_b_h[pinfo_b_h.order[i]];
+        if (i > 0) {
+          strides_in[i] = strides_in[i - 1] * extents[i - 1];
+          strides_out[i] = strides_out[i - 1] * extents_h[i - 1];
         }
       }
 
-      extents[i] = shape_g_b[pinfo_a.order[i]];
-      extents_h[i] = shape_g_b_h[pinfo_b_h.order[i]];
-      if (i > 0) {
-        strides_in[i] = strides_in[i - 1] * extents[i - 1];
-        strides_out[i] = strides_out[i - 1] * extents_h[i - 1];
-      }
-    }
+      if (pipelined) {
+        bool nvshmem_synced = false;
+        for (int j = 0; j < splits_b.size(); ++j) {
+          int src_rank, dst_rank;
+          getAlltoallPeerRanks(grid_desc, comm_axis, j, src_rank, dst_rank);
+          if (j == 0) {
+            dst_rank = comm_rank;
+            src_rank = comm_rank;
+          }
 
-    if (pipelined) {
+          std::vector<int> dst_ranks{dst_rank};
+          std::vector<int> src_ranks{src_rank};
+
+          if (j != 0 && comm_info.homogeneous && comm_info.nnodes != 1) {
+            // Perform pipelining in pairs to intra-node comms behind inter-node transfers
+            if (j % 2 == 1) {
+              if (j + 1 < splits_b.size()) {
+                int src_rank_next, dst_rank_next;
+                getAlltoallPeerRanks(grid_desc, comm_axis, j + 1, src_rank_next, dst_rank_next);
+                dst_ranks.push_back(dst_rank_next);
+                src_ranks.push_back(src_rank_next);
+              }
+            } else {
+              // Skip alltoall, this transfer was paired with previous one.
+              dst_ranks.resize(0);
+              src_ranks.resize(0);
+            }
+          }
+
+          if (o2 != o1) {
+            cudecompAlltoallPipelined(handle, grid_desc, o1, send_counts, send_offsets, o2, recv_counts, recv_offsets,
+                                      recv_offsets_nvshmem, comm_axis, src_ranks, dst_ranks, stream, nvshmem_synced);
+          }
+
+          if (o2 != o3) {
+            size_t shift = offsets_b[src_rank];
+            for (int i = 0; i < 3; ++i) {
+              if (pinfo_b_h.order[i] == ax_b) break;
+              shift *= shape_g_b_h[pinfo_b_h.order[i]];
+            }
+
+            T* src = o2 + recv_offsets[src_rank];
+            T* dst = o3 + shift + getPencilPtrOffset(pinfo_b_h, output_halo_extents);
+            for (int i = 0; i < 3; ++i) {
+              if (ax_b == pinfo_a.order[i]) {
+                extents[i] = splits_b[src_rank];
+                break;
+              }
+            }
+
+            localPermute(handle, extents, order, strides_in, strides_out, src, dst, stream);
+          }
+        }
+      } else {
+        if (o2 != o3) {
+          T* src = o2;
+          T* dst = o3 + getPencilPtrOffset(pinfo_b_h, output_halo_extents);
+          localPermute(handle, extents, order, strides_in, strides_out, src, dst, stream);
+        }
+      }
+    } else {
+      // Split Transpose/Unpack
+      std::array<int64_t, 3> extents;
+      std::array<int64_t, 3> extents_h;
+      std::array<int64_t, 3> strides_in{1, 0, 0}, strides_out{1, 0, 0};
+      std::array<int, 3> order;
+
+      for (int i = 0; i < 3; ++i) {
+        for (int j = 0; j < 3; ++j) {
+          if (pinfo_a.order[j] == pinfo_b.order[i]) {
+            order[i] = j;
+            break;
+          }
+        }
+
+        extents[i] = shape_g_b[pinfo_a.order[i]];
+        extents_h[i] = shape_g_b_h[pinfo_b_h.order[i]];
+        if (i > 0) { strides_out[i] = strides_out[i - 1] * extents_h[i - 1]; }
+      }
+
       bool nvshmem_synced = false;
       for (int j = 0; j < splits_b.size(); ++j) {
         int src_rank, dst_rank;
@@ -505,6 +578,11 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
         }
 
         if (o2 != o3) {
+          for (int i = 0; i < 3; ++i) {
+            if (ax_b == pinfo_a.order[i]) extents[i] = splits_b[src_rank];
+            if (i > 0) { strides_in[i] = strides_in[i - 1] * extents[i - 1]; }
+          }
+
           size_t shift = offsets_b[src_rank];
           for (int i = 0; i < 3; ++i) {
             if (pinfo_b_h.order[i] == ax_b) break;
@@ -513,24 +591,11 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
 
           T* src = o2 + recv_offsets[src_rank];
           T* dst = o3 + shift + getPencilPtrOffset(pinfo_b_h, output_halo_extents);
-          for (int i = 0; i < 3; ++i) {
-            if (ax_b == pinfo_a.order[i]) {
-              extents[i] = splits_b[src_rank];
-              break;
-            }
-          }
-
           localPermute(handle, extents, order, strides_in, strides_out, src, dst, stream);
         }
       }
-    } else {
-      if (o2 != o3) {
-        T* src = o2;
-        T* dst = o3 + getPencilPtrOffset(pinfo_b_h, output_halo_extents);
-        localPermute(handle, extents, order, strides_in, strides_out, src, dst, stream);
-      }
     }
-  } else if (orders_equal || (fwd && pinfo_b.order[2] == ax_a)) {
+  } else {
     // Unpack
     bool nvshmem_synced = false;
     int memcpy_count = 0;
@@ -593,76 +658,6 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
           cudecomp_batched_d2d_memcpy_3d(memcpy_params, stream);
           memcpy_count = 0;
         }
-      }
-    }
-  } else {
-    // Split Transpose/Unpack
-    std::array<int64_t, 3> extents;
-    std::array<int64_t, 3> extents_h;
-    std::array<int64_t, 3> strides_in{1, 0, 0}, strides_out{1, 0, 0};
-    std::array<int, 3> order;
-
-    for (int i = 0; i < 3; ++i) {
-      for (int j = 0; j < 3; ++j) {
-        if (pinfo_a.order[j] == pinfo_b.order[i]) {
-          order[i] = j;
-          break;
-        }
-      }
-
-      extents[i] = shape_g_b[pinfo_a.order[i]];
-      extents_h[i] = shape_g_b_h[pinfo_b_h.order[i]];
-      if (i > 0) { strides_out[i] = strides_out[i - 1] * extents_h[i - 1]; }
-    }
-
-    bool nvshmem_synced = false;
-    for (int j = 0; j < splits_b.size(); ++j) {
-      int src_rank, dst_rank;
-      getAlltoallPeerRanks(grid_desc, comm_axis, j, src_rank, dst_rank);
-      if (j == 0) {
-        dst_rank = comm_rank;
-        src_rank = comm_rank;
-      }
-
-      std::vector<int> dst_ranks{dst_rank};
-      std::vector<int> src_ranks{src_rank};
-
-      if (j != 0 && comm_info.homogeneous && comm_info.nnodes != 1) {
-        // Perform pipelining in pairs to intra-node comms behind inter-node transfers
-        if (j % 2 == 1) {
-          if (j + 1 < splits_b.size()) {
-            int src_rank_next, dst_rank_next;
-            getAlltoallPeerRanks(grid_desc, comm_axis, j + 1, src_rank_next, dst_rank_next);
-            dst_ranks.push_back(dst_rank_next);
-            src_ranks.push_back(src_rank_next);
-          }
-        } else {
-          // Skip alltoall, this transfer was paired with previous one.
-          dst_ranks.resize(0);
-          src_ranks.resize(0);
-        }
-      }
-
-      if (o2 != o1) {
-        cudecompAlltoallPipelined(handle, grid_desc, o1, send_counts, send_offsets, o2, recv_counts, recv_offsets,
-                                  recv_offsets_nvshmem, comm_axis, src_ranks, dst_ranks, stream, nvshmem_synced);
-      }
-
-      if (o2 != o3) {
-        for (int i = 0; i < 3; ++i) {
-          if (ax_b == pinfo_a.order[i]) extents[i] = splits_b[src_rank];
-          if (i > 0) { strides_in[i] = strides_in[i - 1] * extents[i - 1]; }
-        }
-
-        size_t shift = offsets_b[src_rank];
-        for (int i = 0; i < 3; ++i) {
-          if (pinfo_b_h.order[i] == ax_b) break;
-          shift *= shape_g_b_h[pinfo_b_h.order[i]];
-        }
-
-        T* src = o2 + recv_offsets[src_rank];
-        T* dst = o3 + shift + getPencilPtrOffset(pinfo_b_h, output_halo_extents);
-        localPermute(handle, extents, order, strides_in, strides_out, src, dst, stream);
       }
     }
   }
