@@ -118,7 +118,7 @@ module cudecomp
     ! Transpose Options
     integer(c_int32_t) :: transpose_comm_backend
     logical(c_bool) :: transpose_axis_contiguous(3) ! flag (by axis) indicating whether pencil memory should be contiguous along pencil axis
-    integer(c_int32_t) :: transpose_mem_order(3,3) ! user specificed memory order by axis
+    integer(c_int32_t) :: transpose_mem_order(3,3) ! user-specified memory ordering by axis, overrides transpose_axis_contiguous setting
 
     ! Halo Options
     integer(c_int32_t) :: halo_comm_backend ! communication backend to use for halo communication

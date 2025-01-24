@@ -133,7 +133,9 @@ typedef struct {
                                                          ///< (default: CUDECOMP_TRANSPOSE_COMM_MPI_P2P)
   bool transpose_axis_contiguous[3]; ///< flag (by axis) indicating if memory should be contiguous along pencil axis
                                      ///< (default: [false, false, false])
-  int32_t transpose_mem_order[3][3]; ///< user specified memory ordering by axis
+  int32_t transpose_mem_order[3][3]; ///< user-specified memory ordering by axis, overrides transpose_axis_contiguous setting;
+                                     ///< first index specifies axis, second index specifies memory order
+                                     ///< setting (default: unset)
 
 
   // Halo settings

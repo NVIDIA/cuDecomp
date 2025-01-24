@@ -49,6 +49,8 @@ ________________________
   :f integer pdims(2): dimensions of process grid
   :f cudecompTransposeCommType transpose_comm_backend: communication backend to use for transpose communication (default: CUDECOMP_TRANSPOSE_COMM_MPI_P2P)
   :f logical transpose_axis_contiguous(3): flag (by axis) indicating if memory should be contiguous along pencil axis (default: [false, false, false])
+  :f integer transpose_mem_order(3, 3): user-specified memory ordering by axis, overrides transpose_axis_contiguous setting; second index specifies axis,
+                                        first index specifies memory order (default: unset)
   :f cudecompHaloCommType halo_comm_backend: communication backend to use for halo communication (default: CUDECOMP_HALO_COMM_MPI)
 
 ------
