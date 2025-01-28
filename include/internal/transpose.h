@@ -46,16 +46,6 @@
 
 namespace cudecomp {
 
-static inline std::vector<int64_t> getSplits(int64_t N, int nchunks, int pad) {
-  std::vector<int64_t> splits(nchunks, N / nchunks);
-  for (int i = 0; i < N % nchunks; ++i) { splits[i] += 1; }
-
-  // Add padding to last populated pencil
-  splits[std::min(N, (int64_t)nchunks) - 1] += pad;
-
-  return splits;
-}
-
 static inline bool isTransposeCommPipelined(cudecompTransposeCommBackend_t commType) {
   return (commType == CUDECOMP_TRANSPOSE_COMM_NCCL_PL ||
 #ifdef ENABLE_NVSHMEM

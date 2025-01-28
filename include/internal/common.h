@@ -278,6 +278,16 @@ static inline void getAlltoallPeerRanks(cudecompGridDesc_t grid_desc, cudecompCo
   }
 }
 
+static inline std::vector<int64_t> getSplits(int64_t N, int nchunks, int pad) {
+  std::vector<int64_t> splits(nchunks, N / nchunks);
+  for (int i = 0; i < N % nchunks; ++i) { splits[i] += 1; }
+
+  // Add padding to last populated pencil
+  splits[std::min(N, (int64_t)nchunks) - 1] += pad;
+
+  return splits;
+}
+
 } // namespace cudecomp
 
 #endif // CUDECOMP_COMMON_H
