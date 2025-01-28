@@ -488,6 +488,14 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
   CHECK_MPI(MPI_Barrier(handle->mpi_comm));
   double t_end = MPI_Wtime();
   if (handle->rank == 0) printf("CUDECOMP: transpose autotuning time [s]: %f\n", t_end - t_start);
+
+  // Perform an Alltoall on small buffer to force some MPI backends (e.g. UCX) to release stale registration handles
+  // on larger test buffer.
+  char* tmp;
+  CHECK_CUDA(cudaMalloc(&tmp, handle->nranks * sizeof(*tmp)));
+  CHECK_MPI(MPI_Alltoall(MPI_IN_PLACE, 1, MPI_CHAR, tmp, 1, MPI_CHAR, handle->mpi_comm));
+  CHECK_MPI(MPI_Barrier(handle->mpi_comm));
+  CHECK_CUDA(cudaFree(tmp));
 }
 
 void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
