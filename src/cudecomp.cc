@@ -1210,10 +1210,6 @@ cudecompResult_t cudecompUpdateHalosX(cudecompHandle_t handle, cudecompGridDesc_
     checkGridDesc(grid_desc);
     checkDataType(dtype);
     if (!halo_extents) { THROW_INVALID_USAGE("halo_extents argument cannot be null"); }
-    if (halo_extents[0] == 0 && halo_extents[1] == 0 && halo_extents[2] == 0) {
-      // No halos, quick return.
-      return CUDECOMP_RESULT_SUCCESS;
-    }
     if (!halo_periods) { THROW_INVALID_USAGE("halo_periods argument cannot be null"); }
     if (!input) { THROW_INVALID_USAGE("input argument cannot be null"); }
     if (!work) { THROW_INVALID_USAGE("work argument cannot be null"); }
@@ -1255,10 +1251,6 @@ cudecompResult_t cudecompUpdateHalosY(cudecompHandle_t handle, cudecompGridDesc_
     checkGridDesc(grid_desc);
     checkDataType(dtype);
     if (!halo_extents) { THROW_INVALID_USAGE("halo_extents argument cannot be null"); }
-    if (halo_extents[0] == 0 && halo_extents[1] == 0 && halo_extents[2] == 0) {
-      // No halos, quick return.
-      return CUDECOMP_RESULT_SUCCESS;
-    }
     if (!halo_periods) { THROW_INVALID_USAGE("halo_periods argument cannot be null"); }
     if (!input) { THROW_INVALID_USAGE("input argument cannot be null"); }
     if (!work) { THROW_INVALID_USAGE("work argument cannot be null"); }
@@ -1300,10 +1292,6 @@ cudecompResult_t cudecompUpdateHalosZ(cudecompHandle_t handle, cudecompGridDesc_
     checkGridDesc(grid_desc);
     checkDataType(dtype);
     if (!halo_extents) { THROW_INVALID_USAGE("halo_extents argument cannot be null"); }
-    if (halo_extents[0] == 0 && halo_extents[1] == 0 && halo_extents[2] == 0) {
-      // No halos, quick return.
-      return CUDECOMP_RESULT_SUCCESS;
-    }
     if (!halo_periods) { THROW_INVALID_USAGE("halo_periods argument cannot be null"); }
     if (!input) { THROW_INVALID_USAGE("input argument cannot be null"); }
     if (!work) { THROW_INVALID_USAGE("work argument cannot be null"); }

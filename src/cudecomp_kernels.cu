@@ -40,6 +40,7 @@ void cudecomp_batched_d2d_memcpy_3d(cudecompBatchedD2DMemcpy3DParams<float>& par
   for (int i = 1; i < params.ncopies; ++i) {
     N = std::max(N, params.extents[0][i] * params.extents[1][i] * params.extents[2][i]);
   }
+  if (N == 0) return;
   int blocks_per_copy = (N + CUDECOMP_CUDA_NTHREADS - 1) / CUDECOMP_CUDA_NTHREADS;
   cudecomp_batched_d2d_memcpy_3d_k<<<params.ncopies * blocks_per_copy, CUDECOMP_CUDA_NTHREADS, 0, stream>>>(
       params, blocks_per_copy);
@@ -50,6 +51,7 @@ void cudecomp_batched_d2d_memcpy_3d(cudecompBatchedD2DMemcpy3DParams<double>& pa
   for (int i = 1; i < params.ncopies; ++i) {
     N = std::max(N, params.extents[0][i] * params.extents[1][i] * params.extents[2][i]);
   }
+  if (N == 0) return;
   int blocks_per_copy = (N + CUDECOMP_CUDA_NTHREADS - 1) / CUDECOMP_CUDA_NTHREADS;
   cudecomp_batched_d2d_memcpy_3d_k<<<params.ncopies * blocks_per_copy, CUDECOMP_CUDA_NTHREADS, 0, stream>>>(
       params, blocks_per_copy);
@@ -61,6 +63,7 @@ void cudecomp_batched_d2d_memcpy_3d(cudecompBatchedD2DMemcpy3DParams<cuda::std::
   for (int i = 1; i < params.ncopies; ++i) {
     N = std::max(N, params.extents[0][i] * params.extents[1][i] * params.extents[2][i]);
   }
+  if (N == 0) return;
   int blocks_per_copy = (N + CUDECOMP_CUDA_NTHREADS - 1) / CUDECOMP_CUDA_NTHREADS;
   cudecomp_batched_d2d_memcpy_3d_k<<<params.ncopies * blocks_per_copy, CUDECOMP_CUDA_NTHREADS, 0, stream>>>(
       params, blocks_per_copy);
@@ -72,8 +75,8 @@ void cudecomp_batched_d2d_memcpy_3d(cudecompBatchedD2DMemcpy3DParams<cuda::std::
   for (int i = 1; i < params.ncopies; ++i) {
     N = std::max(N, params.extents[0][i] * params.extents[1][i] * params.extents[2][i]);
   }
+  if (N == 0) return;
   int blocks_per_copy = (N + CUDECOMP_CUDA_NTHREADS - 1) / CUDECOMP_CUDA_NTHREADS;
-
   cudecomp_batched_d2d_memcpy_3d_k<<<params.ncopies * blocks_per_copy, CUDECOMP_CUDA_NTHREADS, 0, stream>>>(
       params, blocks_per_copy);
   CHECK_CUDA_LAUNCH();
