@@ -79,7 +79,8 @@ template <typename T> static std::vector<T> processTimings(cudecompHandle_t hand
   t_var /= handle->nranks;
   double t_std = std::sqrt(t_var);
 
-  return {t_min * scale, t_max * scale, t_avg * scale, t_std * scale};
+  return {static_cast<T>(t_min) * scale, static_cast<T>(t_max) * scale, static_cast<T>(t_avg) * scale,
+          static_cast<T>(t_std) * scale};
 }
 
 } // namespace

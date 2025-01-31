@@ -153,7 +153,7 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
     memcpy_params.ncopies = 2;
     cudecomp_batched_d2d_memcpy_3d(memcpy_params, stream);
 
-    std::array<comm_count_t, 2> counts{halo_size, halo_size};
+    std::array<comm_count_t, 2> counts{static_cast<comm_count_t>(halo_size), static_cast<comm_count_t>(halo_size)};
     std::array<size_t, 2> offsets{};
     offsets[1] = halo_size;
 
@@ -200,7 +200,7 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
     std::array<int32_t, 3> lx{};
 
     size_t halo_size = shape_g_h[(dim + 1) % 3] * shape_g_h[(dim + 2) % 3] * halo_extents[dim];
-    std::array<comm_count_t, 2> counts{halo_size, halo_size};
+    std::array<comm_count_t, 2> counts{static_cast<comm_count_t>(halo_size), static_cast<comm_count_t>(halo_size)};
     std::array<size_t, 2> send_offsets;
     std::array<size_t, 2> recv_offsets;
 
