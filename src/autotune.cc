@@ -489,13 +489,15 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
   double t_end = MPI_Wtime();
   if (handle->rank == 0) printf("CUDECOMP: transpose autotuning time [s]: %f\n", t_end - t_start);
 
-  // Perform an Alltoall on small buffer to force some MPI backends (e.g. UCX) to release stale registration handles
-  // on larger test buffer.
-  char* tmp;
-  CHECK_CUDA(cudaMalloc(&tmp, handle->nranks * sizeof(*tmp)));
-  CHECK_MPI(MPI_Alltoall(MPI_IN_PLACE, 1, MPI_CHAR, tmp, 1, MPI_CHAR, handle->mpi_comm));
+  // Perform an MPI_Alltoall on small buffers to force some MPI backends (e.g. UCX) to release stale registration handles
+  // on larger test data buffers. These stale registration handles can cause to delays in freeing the test buffer GPU memory.
+  char *tmp1, *tmp2;
+  CHECK_CUDA(cudaMalloc(&tmp1, handle->nranks * sizeof(*tmp1)));
+  CHECK_CUDA(cudaMalloc(&tmp2, handle->nranks * sizeof(*tmp2)));
+  CHECK_MPI(MPI_Alltoall(tmp1, 1, MPI_CHAR, tmp2, 1, MPI_CHAR, handle->mpi_comm));
   CHECK_MPI(MPI_Barrier(handle->mpi_comm));
-  CHECK_CUDA(cudaFree(tmp));
+  CHECK_CUDA(cudaFree(tmp1));
+  CHECK_CUDA(cudaFree(tmp2));
 }
 
 void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
