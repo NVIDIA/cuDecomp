@@ -368,12 +368,6 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
       }
     }
 
-    //for (int i = 0; i < 3; ++i) {
-    //  for (int j = 0; j < 3; ++j) {
-    //    printf("transpose_mem_order[%d][%d] = %d\n", i, j, grid_desc->config.transpose_mem_order[i][j]);
-    //  }
-    //}
-
     grid_desc->config.transpose_axis_contiguous[0] = false; // For x-axis, always set to false.
 
     if (grid_desc->config.gdims_dist[0] > grid_desc->config.gdims[0] ||
@@ -652,11 +646,6 @@ cudecompResult_t cudecompGetPencilInfo(cudecompHandle_t handle, cudecompGridDesc
 
     // Setup order (and inverse)
     for (int i = 0; i < 3; ++i) {
-      //if (grid_desc->config.transpose_axis_contiguous[axis]) {
-      //  pencil_info->order[i] = (axis + i) % 3;
-      //} else {
-      //  pencil_info->order[i] = i;
-      //}
       pencil_info->order[i] = grid_desc->config.transpose_mem_order[axis][i];
       invorder[pencil_info->order[i]] = i;
     }
