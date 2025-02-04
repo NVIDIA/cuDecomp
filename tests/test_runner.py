@@ -49,7 +49,7 @@ def generate_mem_order_args(zero_indexed):
      orders_ax = [" ".join(x) for x in itertools.permutations(["0", "1", "2"])]
    else:
      orders_ax = [" ".join(x) for x in itertools.permutations(["1", "2", "3"])]
-   args = [" ".join(x) for x in itertools.product(orders_ax, orders_ax, orders_ax)]
+   args = [" ".join([x, y, x]) for x, y in itertools.product(orders_ax, orders_ax)]
 
    return args
 
