@@ -35,6 +35,7 @@
 #include <iostream>
 #include <string>
 
+#include <cuda.h>
 #include <cuda_runtime.h>
 #include <cufft.h>
 #include <cutensor.h>
@@ -59,6 +60,15 @@
   do {                                                                                                                 \
     cudaError_t err = call;                                                                                            \
     if (cudaSuccess != err) { throw cudecomp::CudaError(__FILE__, __LINE__, cudaGetErrorString(err)); }                \
+  } while (false)
+
+#define CHECK_CUDA_DRV(call)                                                                                           \
+  do {                                                                                                                 \
+    CUresult err = call;                                                                                               \
+    if (CUDA_SUCCESS != err) {                                                                                         \
+      const char* error_str;                                                                                           \
+      cuGetErrorString(err, &error_str);                                                                               \
+      throw cudecomp::CudaError(__FILE__, __LINE__, error_str); }                                                      \
   } while (false)
 
 #define CHECK_CUDA_LAUNCH()                                                                                            \

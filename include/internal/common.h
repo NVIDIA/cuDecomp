@@ -84,6 +84,8 @@ struct cudecompHandle {
   bool nvshmem_vmm;                                      // Flag to track if NVSHMEM is using VMM allocations
   std::unordered_map<void*, size_t> nvshmem_allocations; // Table to record NVSHMEM allocations
   size_t nvshmem_allocation_size = 0;                    // Total of NVSHMEM allocations
+
+  bool cuda_cumem_enable = false; // Flag to control whether cuMem* APIs are used for cudecompMalloc/Free
 };
 
 // Structure with information about row/column communicator

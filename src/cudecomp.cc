@@ -35,6 +35,7 @@
 #include <string>
 #include <vector>
 
+#include <cuda.h>
 #include <cuda_runtime.h>
 #include <mpi.h>
 #include <nccl.h>
@@ -198,8 +199,34 @@ static void gatherGlobalMPIInfo(cudecompHandle_t& handle) {
 
 static void getCudecompEnvVars(cudecompHandle_t& handle) {
   // Check CUDECOMP_ENABLE_NCCL_UBR (NCCL user buffer registration)
-  char* nccl_enable_ubr_str = std::getenv("CUDECOMP_ENABLE_NCCL_UBR");
+  const char* nccl_enable_ubr_str = std::getenv("CUDECOMP_ENABLE_NCCL_UBR");
   if (nccl_enable_ubr_str) { handle->nccl_enable_ubr = std::strtol(nccl_enable_ubr_str, nullptr, 10) == 1; }
+
+  // Check CUDECOMP_ENABLE_CUMEM (CUDA VMM allocations for work buffers)
+  const char* cumem_enable_str = std::getenv("CUDECOMP_ENABLE_CUMEM");
+  if (cumem_enable_str) { handle->cuda_cumem_enable = std::strtol(cumem_enable_str, nullptr, 10) == 1; }
+#if CUDART_VERSION < 12030
+  if (handle->rank == 0 && handle->cuda_cumem_enable) {
+    printf("CUDECOMP:WARN: CUDECOMP_ENABLE_CUMEM is set but CUDA version used for compilation does not "
+           "support fabric allocations. Disabling this feature.\n");
+  }
+  handle->cuda_cumem_enable = false;
+#else
+  // Check if fabric allocation type is supported
+  int dev;
+  CUdevice cu_dev;
+  CHECK_CUDA(cudaGetDevice(&dev));
+  CHECK_CUDA_DRV(cuDeviceGet(&cu_dev, dev));
+  int flag = 0;
+  auto ret = cuDeviceGetAttribute(&flag, CU_DEVICE_ATTRIBUTE_HANDLE_TYPE_FABRIC_SUPPORTED, cu_dev);
+  if (!flag || ret != CUDA_SUCCESS) {
+    if (handle->rank == 0 && handle->cuda_cumem_enable) {
+      printf("CUDECOMP:WARN: CUDECOMP_ENABLE_CUMEM is set but installed driver and/or device does not "
+             "support fabric allocations. Disabling this feature.\n");
+    }
+    handle->cuda_cumem_enable = false;
+  }
+#endif
 }
 
 #ifdef ENABLE_NVSHMEM
@@ -785,7 +812,46 @@ cudecompResult_t cudecompMalloc(cudecompHandle_t handle, cudecompGridDesc_t grid
       THROW_NOT_SUPPORTED("build does not support NVSHMEM communication backends.");
 #endif
     } else {
-      CHECK_CUDA(cudaMalloc(buffer, buffer_size_bytes));
+      if (handle->cuda_cumem_enable) {
+#if CUDART_VERSION >= 12030
+        int dev;
+        CUdevice cu_dev;
+        CHECK_CUDA(cudaGetDevice(&dev));
+        CHECK_CUDA_DRV(cuDeviceGet(&cu_dev, dev));
+
+        CUmemAllocationProp prop = {};
+        prop.type = CU_MEM_ALLOCATION_TYPE_PINNED;
+        prop.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
+        prop.requestedHandleTypes = CU_MEM_HANDLE_TYPE_FABRIC;
+        prop.location.id = cu_dev;
+
+        // Check for RDMA support
+        int flag;
+        CHECK_CUDA_DRV(cuDeviceGetAttribute(&flag, CU_DEVICE_ATTRIBUTE_GPU_DIRECT_RDMA_WITH_CUDA_VMM_SUPPORTED, cu_dev));
+        printf("flag %d\n", flag);
+        if (flag) prop.allocFlags.gpuDirectRDMACapable = 1;
+
+        // Align allocation size to required granularity
+        size_t granularity;
+        CHECK_CUDA_DRV(cuMemGetAllocationGranularity(&granularity, &prop, CU_MEM_ALLOC_GRANULARITY_MINIMUM));
+        buffer_size_bytes = (buffer_size_bytes + granularity - 1) / granularity * granularity;
+
+        // Allocate memory
+        CUmemGenericAllocationHandle cumem_handle;
+        CUresult res = cuMemCreate(&cumem_handle, buffer_size_bytes, &prop, 0);
+        CHECK_CUDA_DRV(cuMemAddressReserve((CUdeviceptr *)buffer, buffer_size_bytes, granularity, 0, 0));
+        CHECK_CUDA_DRV(cuMemMap((CUdeviceptr)*buffer, buffer_size_bytes, 0, cumem_handle, 0));
+
+        // Set read/write access
+        CUmemAccessDesc accessDesc = {};
+        accessDesc.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
+        accessDesc.location.id = cu_dev;
+        accessDesc.flags = CU_MEM_ACCESS_FLAGS_PROT_READWRITE;
+        CHECK_CUDA_DRV(cuMemSetAccess((CUdeviceptr)*buffer, buffer_size_bytes, &accessDesc, 1));
+#endif
+      } else {
+        CHECK_CUDA(cudaMalloc(buffer, buffer_size_bytes));
+      }
 #if NCCL_VERSION_CODE >= NCCL_VERSION(2, 19, 0)
       if (transposeBackendRequiresNccl(grid_desc->config.transpose_comm_backend) ||
           haloBackendRequiresNccl(grid_desc->config.halo_comm_backend)) {
@@ -843,7 +909,22 @@ cudecompResult_t cudecompFree(cudecompHandle_t handle, cudecompGridDesc_t grid_d
 #endif
 
     } else {
-      if (buffer) { CHECK_CUDA(cudaFree(buffer)); }
+      if (handle->cuda_cumem_enable) {
+#if CUDART_VERSION >= 12030
+        if (buffer) {
+          CUmemGenericAllocationHandle cumem_handle;
+          CHECK_CUDA_DRV(cuMemRetainAllocationHandle(&cumem_handle, buffer));
+          CHECK_CUDA_DRV(cuMemRelease(cumem_handle));
+          size_t size = 0;
+          CHECK_CUDA_DRV(cuMemGetAddressRange(NULL, &size, (CUdeviceptr)buffer));
+          CHECK_CUDA_DRV(cuMemUnmap((CUdeviceptr)buffer, size));
+          CHECK_CUDA_DRV(cuMemRelease(cumem_handle));
+          CHECK_CUDA_DRV(cuMemAddressFree((CUdeviceptr)buffer, size));
+        }
+#endif
+      } else {
+        if (buffer) { CHECK_CUDA(cudaFree(buffer)); }
+      }
     }
   } catch (const cudecomp::BaseException& e) {
     std::cerr << e.what();
