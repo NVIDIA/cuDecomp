@@ -180,6 +180,8 @@ static void usage(const char* pname) {
           "\t\tZ-dimension halo_periods setting. (default: 0) \n"
           "\t--ax\n"
           "\t\t Pencil configuration (by axis) to test. (default: 0) \n"
+          "\t--mem_order\n"
+          "\t\ttranspose_mem_order setting. (default: unset) \n"
           "\t-m|--use-managed-memory\n"
           "\t\tFlag to test operation with managed memory. (default: 0) \n",
           bname);
@@ -211,6 +213,7 @@ int main(int argc, char** argv) {
   std::array<bool, 3> halo_periods{true, true, true};
   int axis = 0;
   bool use_managed_memory = false;
+  std::array<int, 9> mem_order{-1, -1, -1, -1, -1, -1, -1, -1, -1};
 
   while (1) {
     static struct option long_options[] = {
@@ -224,10 +227,11 @@ int main(int argc, char** argv) {
         {"hez", required_argument, 0, '9'}, {"hpx", required_argument, 0, 'e'},
         {"hpy", required_argument, 0, 'f'}, {"hpz", required_argument, 0, 'g'},
         {"ax", required_argument, 0, 'a'},  {"use-managed-memory", no_argument, 0, 'm'},
+        {"mem_order", required_argument, 0, 'q'},
         {"help", no_argument, 0, 'h'},      {0, 0, 0, 0}};
 
     int option_index = 0;
-    int ch = getopt_long(argc, argv, "x:y:z:b:r:c:1:2:3:4:5:6:7:8:9:e:f:g:a:mh", long_options, &option_index);
+    int ch = getopt_long(argc, argv, "x:y:z:b:r:c:1:2:3:4:5:6:7:8:9:e:f:g:a:q:mh", long_options, &option_index);
     if (ch == -1) break;
 
     switch (ch) {
@@ -252,6 +256,13 @@ int main(int argc, char** argv) {
     case 'g': halo_periods[2] = atoi(optarg); break;
     case 'a': axis = atoi(optarg); break;
     case 'm': use_managed_memory = true; break;
+    case 'q':
+      optind--;
+      for (int i = 0; i < 9; ++i) {
+        mem_order[i] = atoi(argv[optind]);
+        optind++;
+      }
+      break;
     case 'h': usage(argv[0]); break;
     case '?': exit(EXIT_FAILURE);
     default: fprintf(stderr, "unknown option: %c\n", ch); exit(EXIT_FAILURE);
@@ -290,6 +301,11 @@ int main(int argc, char** argv) {
   config.transpose_axis_contiguous[0] = axis_contiguous[0];
   config.transpose_axis_contiguous[1] = axis_contiguous[1];
   config.transpose_axis_contiguous[2] = axis_contiguous[2];
+  for (int i = 0; i < 3; ++i) {
+    for (int j = 0; j < 3; ++j) {
+      config.transpose_mem_order[i][j] = mem_order[i * 3 + j];
+    }
+  }
 
   cudecompGridDescAutotuneOptions_t options;
   CHECK_CUDECOMP_EXIT(cudecompGridDescAutotuneOptionsSetDefaults(&options));

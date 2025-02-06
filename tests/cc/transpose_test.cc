@@ -148,6 +148,8 @@ static void usage(const char* pname) {
           "\t\tY-dimension halo_extents setting. (default: 0) \n"
           "\t--hez\n"
           "\t\tZ-dimension halo_extents setting. (default: 0) \n"
+          "\t--mem_order\n"
+          "\t\ttranspose_mem_order setting. (default: unset) \n"
           "\t-m|--use-managed-memory\n"
           "\t\tFlag to test operation with managed memory.\n"
           "\t-o|--out-of-place\n"
@@ -180,6 +182,7 @@ int main(int argc, char** argv) {
   std::array<int, 3> halo_extents{};
   bool out_of_place = false;
   bool use_managed_memory = false;
+  std::array<int, 9> mem_order{-1, -1, -1, -1, -1, -1, -1, -1, -1};
 
   while (1) {
     static struct option long_options[] = {{"gx", required_argument, 0, 'x'},
@@ -197,13 +200,14 @@ int main(int argc, char** argv) {
                                            {"hex", required_argument, 0, '7'},
                                            {"hey", required_argument, 0, '8'},
                                            {"hez", required_argument, 0, '9'},
+                                           {"mem_order", required_argument, 0, 'q'},
                                            {"out-of-place", no_argument, 0, 'o'},
                                            {"use-managed-memory", no_argument, 0, 'm'},
                                            {"help", no_argument, 0, 'h'},
                                            {0, 0, 0, 0}};
 
     int option_index = 0;
-    int ch = getopt_long(argc, argv, "x:y:z:b:r:c:1:2:3:4:5:6:7:8:9:omh", long_options, &option_index);
+    int ch = getopt_long(argc, argv, "x:y:z:b:r:c:1:2:3:4:5:6:7:8:9:q:omh", long_options, &option_index);
     if (ch == -1) break;
 
     switch (ch) {
@@ -225,6 +229,13 @@ int main(int argc, char** argv) {
     case '9': halo_extents[2] = atoi(optarg); break;
     case 'o': out_of_place = true; break;
     case 'm': use_managed_memory = true; break;
+    case 'q':
+      optind--;
+      for (int i = 0; i < 9; ++i) {
+        mem_order[i] = atoi(argv[optind]);
+        optind++;
+      }
+      break;
     case 'h': usage(argv[0]); break;
     case '?': exit(EXIT_FAILURE);
     default: fprintf(stderr, "unknown option: %c\n", ch); exit(EXIT_FAILURE);
@@ -262,6 +273,11 @@ int main(int argc, char** argv) {
   config.transpose_axis_contiguous[0] = axis_contiguous[0];
   config.transpose_axis_contiguous[1] = axis_contiguous[1];
   config.transpose_axis_contiguous[2] = axis_contiguous[2];
+  for (int i = 0; i < 3; ++i) {
+    for (int j = 0; j < 3; ++j) {
+      config.transpose_mem_order[i][j] = mem_order[i * 3 + j];
+    }
+  }
 
   cudecompGridDescAutotuneOptions_t options;
   CHECK_CUDECOMP_EXIT(cudecompGridDescAutotuneOptionsSetDefaults(&options));

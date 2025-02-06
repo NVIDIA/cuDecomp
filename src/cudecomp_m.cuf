@@ -118,6 +118,7 @@ module cudecomp
     ! Transpose Options
     integer(c_int32_t) :: transpose_comm_backend
     logical(c_bool) :: transpose_axis_contiguous(3) ! flag (by axis) indicating whether pencil memory should be contiguous along pencil axis
+    integer(c_int32_t) :: transpose_mem_order(3,3) ! user-specified memory ordering by axis, overrides transpose_axis_contiguous setting
 
     ! Halo Options
     integer(c_int32_t) :: halo_comm_backend ! communication backend to use for halo communication
@@ -269,14 +270,14 @@ module cudecomp
   end interface
 
   interface
-    function cudecompGetGridDescConfig(handle, grid_desc, config) &
+    function cudecompGetGridDescConfigC(handle, grid_desc, config) &
       bind(C, name="cudecompGetGridDescConfig") result(res)
       import
       type(cudecompHandle), value :: handle
       type(cudecompGridDesc), value :: grid_desc
       type(cudecompGridDescConfig) :: config
       integer(c_int) :: res
-    end function cudecompGetGridDescConfig
+    end function cudecompGetGridDescConfigC
   end interface
 
   interface
@@ -573,6 +574,9 @@ contains
     type(cudecompGridDescAutotuneOptions), optional :: options
     integer(c_int) :: res
 
+    ! Adjust transpose mem order entries for zero-based indexing
+    config%transpose_mem_order = config%transpose_mem_order - 1
+
     if (present(options)) then
       ! Adjust halo axis entry for zero-based axis indexing
       options%halo_axis = options%halo_axis - 1
@@ -582,6 +586,9 @@ contains
     else
       res = cudecompGridDescCreateC_nullopt(handle, grid_desc, config, C_NULL_PTR)
     endif
+
+    ! Adjust transpose mem order entries for one-based indexing
+    config%transpose_mem_order = config%transpose_mem_order + 1
   end function cudecompGridDescCreate
 
   ! General functions
@@ -604,6 +611,19 @@ contains
     pencil_info%lo = pencil_info%lo + 1
     pencil_info%hi = pencil_info%hi + 1
   end function cudecompGetPencilInfo
+
+  function cudecompGetGridDescConfig(handle, grid_desc, config) result(res)
+    type(cudecompHandle), value :: handle
+    type(cudecompGridDesc), value :: grid_desc
+    type(cudecompGridDescConfig) :: config
+    integer(c_int) :: res
+
+    res = cudecompGetGridDescConfigC(handle, grid_desc, config)
+
+    ! Adjust transpose mem order entries for one-based indexing
+    config%transpose_mem_order = config%transpose_mem_order + 1
+
+  end function cudecompGetGridDescConfig
 
   function cudecompGetHaloWorkspaceSize(handle, grid_desc, axis, halo_extents, workspace_size) result(res)
     implicit none

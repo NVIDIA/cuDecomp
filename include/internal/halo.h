@@ -67,17 +67,12 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
 
   if (halo_extents[dim] == 0) { return; }
 
-  // Select correct case based on pencil axis and transfer dim
+  // Select correct case based on pencil memory order and transfer dim
   int c;
-  if (grid_desc->config.transpose_axis_contiguous[ax]) {
-    for (int i = 0; i < 3; ++i) {
-      if (pinfo_h.order[i] == dim) {
-        c = i;
-        break;
-      }
-    }
+  if (dim != pinfo_h.order[0] && dim != pinfo_h.order[1]) {
+    c = 2;
   } else {
-    c = (dim == 2 && ax != 2) ? 2 : 1;
+    c = 1;
   }
 
   if (neighbors[0] == handle->rank && neighbors[1] == handle->rank) {

@@ -44,7 +44,20 @@ def should_skip_case(arg_dict):
 
   return skip
 
+def generate_mem_order_args(zero_indexed):
+   if zero_indexed:
+     orders_ax = [" ".join(x) for x in itertools.permutations(["0", "1", "2"])]
+   else:
+     orders_ax = [" ".join(x) for x in itertools.permutations(["1", "2", "3"])]
+   args = [" ".join([x, y, x]) for x, y in itertools.product(orders_ax, orders_ax)]
+
+   return args
+
 def generate_command_lines(config, args):
+  if (config["test_mem_order"]):
+    config['args'].append("mem_order")
+    config['mem_order'] = generate_mem_order_args(not config["fortran_indexing"])
+
   generic_cmd = f"{args.launcher_cmd}"
   generic_cmd += " {0}"
 
@@ -80,6 +93,7 @@ def generate_command_lines(config, args):
         extra_flags.append(['-o' if x else '' for x in config['out_of_place']])
         for extras in itertools.product(*extra_flags):
           cmds.append(f"{cmd} {' '.join(filter(lambda x: x != '', extras))}")
+
 
   return cmds
 

@@ -36,6 +36,8 @@ transpose_test_base: &transpose_test_base
   out_of_place: [True, False]
   managed_memory : [True, False]
   run_autotuning : False
+  test_mem_order: False
+  fortran_indexing: False
 
 transpose_test_acfalse: &transpose_test_acfalse
   <<: *transpose_test_base
@@ -93,6 +95,16 @@ transpose_test_actrue_gdimdist: &transpose_test_actrue_gdimdist
   acy: [1]
   acz: [1]
 
+transpose_test_mem_order: &transpose_test_mem_order
+  <<: *transpose_test_base
+  backend: [1, 2] # Limit this testing to one normal and one pipelined backend
+  dtypes: ['C64'] # Limit to one data type
+  test_mem_order: true
+  args : ['backend',
+          'gx', 'gy', 'gz',
+          'gdx', 'gdy', 'gdz',
+          'hex' ,'hey', 'hez']
+
 transpose_test_acfalse_cc:
   <<: *transpose_test_acfalse
   executable_prefix: 'cc/transpose_test'
@@ -121,33 +133,49 @@ transpose_test_actrue_gdimdist_cc:
   <<: *transpose_test_actrue_gdimdist
   executable_prefix: 'cc/transpose_test'
 
+transpose_test_mem_order_cc:
+  <<: *transpose_test_mem_order
+  executable_prefix: 'cc/transpose_test'
+
 transpose_test_acfalse_fortran:
   <<: *transpose_test_acfalse
   executable_prefix: 'fortran/transpose_test'
+  fortran_indexing: true
 
 transpose_test_actrue_fortran:
   <<: *transpose_test_actrue
   executable_prefix: 'fortran/transpose_test'
+  fortran_indexing: true
 
 transpose_test_acmix_fortran:
   <<: *transpose_test_acmix
   executable_prefix: 'fortran/transpose_test'
+  fortran_indexing: true
 
 transpose_test_acfalse_halo_fortran:
   <<: *transpose_test_acfalse_halo
   executable_prefix: 'fortran/transpose_test'
+  fortran_indexing: true
 
 transpose_test_actrue_halo_fortran:
   <<: *transpose_test_actrue_halo
   executable_prefix: 'fortran/transpose_test'
+  fortran_indexing: true
 
 transpose_test_acfalse_gdimdist_fortran:
   <<: *transpose_test_acfalse_gdimdist
   executable_prefix: 'fortran/transpose_test'
+  fortran_indexing: true
 
 transpose_test_actrue_gdimdist_fortran:
   <<: *transpose_test_actrue_gdimdist
   executable_prefix: 'fortran/transpose_test'
+  fortran_indexing: true
+
+transpose_test_mem_order_fortran:
+  <<: *transpose_test_mem_order
+  executable_prefix: 'fortran/transpose_test'
+  fortran_indexing: true
 
 halo_test_base: &halo_test_base
   <<: *base
@@ -187,6 +215,8 @@ halo_test_base: &halo_test_base
   managed_memory : [True, False]
   out_of_place : [False]
   run_autotuning : False
+  test_mem_order: False
+  fortran_indexing: False
 
 halo_test_acfalse: &halo_test_acfalse
   <<: *halo_test_base
@@ -242,6 +272,18 @@ halo_test_actrue_gdimdist: &halo_test_actrue_gdimdist
   acy: [1]
   acz: [1]
 
+halo_test_mem_order: &halo_test_mem_order
+  <<: *halo_test_base
+  backend: [1] # Limit this testing to one backend
+  dtypes: ['C64'] # Limit to one data type
+  test_mem_order: true
+  args : ['backend',
+          'gx', 'gy', 'gz',
+          'gdx', 'gdy', 'gdz',
+          'hex' ,'hey', 'hez',
+          'hpx', 'hpy', 'hpz',
+          'ax']
+
 halo_test_acfalse_cc:
   <<: *halo_test_acfalse
   executable_prefix: 'cc/halo_test'
@@ -266,32 +308,47 @@ halo_test_actrue_gdimdist_cc:
   <<: *halo_test_actrue_gdimdist
   executable_prefix: 'cc/halo_test'
 
+halo_test_mem_order_cc:
+  <<: *halo_test_mem_order
+  executable_prefix: 'cc/halo_test'
+
 halo_test_acfalse_fortran:
   <<: *halo_test_acfalse
   ax: [1, 2, 3]
   executable_prefix: 'fortran/halo_test'
+  fortran_indexing: true
 
 halo_test_actrue_fortran:
   <<: *halo_test_actrue
   ax: [1, 2, 3]
   executable_prefix: 'fortran/halo_test'
+  fortran_indexing: true
 
 halo_test_acfalse_halomix_fortran:
   <<: *halo_test_acfalse_halomix
   ax: [1, 2, 3]
   executable_prefix: 'fortran/halo_test'
+  fortran_indexing: true
 
 halo_test_actrue_halomix_fortran:
   <<: *halo_test_actrue_halomix
   ax: [1, 2, 3]
   executable_prefix: 'fortran/halo_test'
+  fortran_indexing: true
 
 halo_test_acfalse_gdimdist_fortran:
   <<: *halo_test_acfalse_gdimdist
   ax: [1, 2, 3]
   executable_prefix: 'fortran/halo_test'
+  fortran_indexing: true
 
 halo_test_actrue_gdimdist_fortran:
   <<: *halo_test_actrue_gdimdist
   ax: [1, 2, 3]
   executable_prefix: 'fortran/halo_test'
+  fortran_indexing: true
+
+halo_test_mem_order_fortran:
+  <<: *halo_test_mem_order
+  executable_prefix: 'fortran/halo_test'
+  fortran_indexing: true

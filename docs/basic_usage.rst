@@ -162,6 +162,36 @@ between signal elements in an FFT). In this example, we set this flag to true fo
 
     config%transpose_axis_contiguous = [.true., .true., .true.]
 
+Advanced users who require more flexibility in the memory layout of the pencil buffers can override the layouts available via
+:code:`transpose_axis_contiguous` by setting the :code:`transpose_mem_order` array in the configuration structure. This array enables
+users to set arbitrary memory layout orders for the pencil buffers by axis. For example, a user can set this structure as follows to
+have pencil memory in :math:`[X, Y, Z]` order for the :math:`X`-pencil and :math:`[Z, Y, X]` order for the :math:`Y`- and :math:`Z`-pencils:
+
+.. tabs::
+
+  .. code-tab:: c++
+
+    config.transpose_mem_order[0][0] = 0;
+    config.transpose_mem_order[0][1] = 1;
+    config.transpose_mem_order[0][2] = 2;
+    config.transpose_mem_order[1][0] = 2;
+    config.transpose_mem_order[1][1] = 1;
+    config.transpose_mem_order[1][2] = 0;
+    config.transpose_mem_order[2][0] = 2;
+    config.transpose_mem_order[2][1] = 1;
+    config.transpose_mem_order[2][2] = 0;
+
+  .. code-tab:: fortran
+
+    config%transpose_mem_order(1, 1) = 1
+    config%transpose_mem_order(2, 1) = 2
+    config%transpose_mem_order(3, 1) = 3
+    config%transpose_mem_order(1, 2) = 3
+    config%transpose_mem_order(2, 2) = 2
+    config%transpose_mem_order(3, 2) = 1
+    config%transpose_mem_order(1, 3) = 3
+    config%transpose_mem_order(2, 3) = 2
+    config%transpose_mem_order(3, 3) = 1
 
 With the grid descriptor configuration structure created and populated, we can now create the grid descriptor. The last
 argument in :ref:`cudecompGridDescCreate-ref` is for an optional structure to set autotuning options. See :ref:`autotuning-section-ref`
