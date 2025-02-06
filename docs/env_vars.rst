@@ -15,3 +15,11 @@ section of the NCCL documentation for more details.
 
 Default setting is off (:code:`0`). Setting this variable to :code:`1` will enable this feature.
 
+CUDECOMP_ENABLE_CUMEM
+------------------------
+(since v0.5.0, requires CUDA 12.3 driver/toolkit or newer)
+
+:code:`CUDECOMP_ENABLE_CUMEM` controls whether cuDecomp uses :code:`cuMem*` APIs to allocate fabric-registered workspace buffers via :code:`cudecompMalloc`. This option can improve the performance of
+some MPI distributions on multi-node NVLink (MNNVL) capable systems.
+
+Default setting is off (:code:`0`). Setting this variable to :code:`1` will enable this feature.
