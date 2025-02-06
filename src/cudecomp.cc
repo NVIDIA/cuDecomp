@@ -828,7 +828,6 @@ cudecompResult_t cudecompMalloc(cudecompHandle_t handle, cudecompGridDesc_t grid
         // Check for RDMA support
         int flag;
         CHECK_CUDA_DRV(cuDeviceGetAttribute(&flag, CU_DEVICE_ATTRIBUTE_GPU_DIRECT_RDMA_WITH_CUDA_VMM_SUPPORTED, cu_dev));
-        printf("flag %d\n", flag);
         if (flag) prop.allocFlags.gpuDirectRDMACapable = 1;
 
         // Align allocation size to required granularity

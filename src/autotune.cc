@@ -205,7 +205,7 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
           CHECK_CUDECOMP(cudecompFree(handle, grid_desc, work));
           grid_desc->config.transpose_comm_backend = tmp;
         }
-        // Temporarily set backend to force nvshmem_malloc patch in cudecompMalloc/Free
+        // Temporarily set backend to force nvshmem_malloc path in cudecompMalloc/Free
         auto tmp = grid_desc->config.transpose_comm_backend;
         grid_desc->config.transpose_comm_backend = CUDECOMP_TRANSPOSE_COMM_NVSHMEM;
         if (work_nvshmem) CHECK_CUDECOMP(cudecompFree(handle, grid_desc, work_nvshmem));
@@ -430,7 +430,7 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
       grid_desc->config.transpose_comm_backend = tmp;
     }
 #ifdef ENABLE_NVSHMEM
-    // Temporarily set backend to force nvshmem_malloc patch in cudecompMalloc/Free
+    // Temporarily set backend to force nvshmem_malloc path in cudecompMalloc/Free
     auto tmp = grid_desc->config.transpose_comm_backend;
     grid_desc->config.transpose_comm_backend = CUDECOMP_TRANSPOSE_COMM_NVSHMEM;
     CHECK_CUDECOMP(cudecompFree(handle, grid_desc, work_nvshmem));
@@ -584,7 +584,7 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
           CHECK_CUDECOMP(cudecompFree(handle, grid_desc, work));
           grid_desc->config.halo_comm_backend = tmp;
         }
-        // Temporarily set backend to force nvshmem_malloc patch in cudecompMalloc/Free
+        // Temporarily set backend to force nvshmem_malloc path in cudecompMalloc/Free
         auto tmp = grid_desc->config.halo_comm_backend;
         grid_desc->config.halo_comm_backend = CUDECOMP_HALO_COMM_NVSHMEM;
         if (work_nvshmem) CHECK_CUDECOMP(cudecompFree(handle, grid_desc, work_nvshmem));
@@ -756,7 +756,7 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
       grid_desc->config.halo_comm_backend = tmp;
     }
 #ifdef ENABLE_NVSHMEM
-    // Temporarily set backend to force nvshmem_malloc patch in cudecompMalloc/Free
+    // Temporarily set backend to force nvshmem_malloc path in cudecompMalloc/Free
     auto tmp = grid_desc->config.halo_comm_backend;
     grid_desc->config.halo_comm_backend = CUDECOMP_HALO_COMM_NVSHMEM;
     CHECK_CUDECOMP(cudecompFree(handle, grid_desc, work_nvshmem));
