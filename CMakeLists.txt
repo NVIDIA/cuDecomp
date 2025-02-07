@@ -206,6 +206,7 @@ if (CUDECOMP_ENABLE_NVSHMEM)
   if (NVSHMEM_VERSION VERSION_LESS "2.7")
     # NVSHMEM versions before 2.7 will export NCCL symbols erroneously, need to define this flag
     target_compile_definitions(cudecomp PRIVATE NVSHMEM_USE_NCCL)
+    target_link_libraries(cudecomp PUBLIC -L${NVHPC_CUDA_LIBRARY_DIR}/stubs -lcuda)
   endif()
 
   if (NVSHMEM_VERSION VERSION_LESS "2.11")
