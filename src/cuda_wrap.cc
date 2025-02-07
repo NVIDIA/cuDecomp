@@ -44,7 +44,7 @@
     }                                                                                                                    \
   } while(false)
 #else
-#define LOAD_SYM(symbol, table)                                                                                          \
+#define LOAD_SYM(symbol)                                                                                                 \
   do {                                                                                                                   \
     CHECK_CUDA(cudaGetDriverEntryPoint(#symbol, (void **) (&cuFnTable.pfn_##symbol), cudaEnableDefault));                \
   } while(false)
