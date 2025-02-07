@@ -143,6 +143,7 @@ target_compile_options(cudecomp PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:--ptxas-optio
 target_sources(cudecomp
   PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/src/autotune.cc
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/cuda_wrap.cc
   ${CMAKE_CURRENT_SOURCE_DIR}/src/cudecomp_kernels.cu
   ${CMAKE_CURRENT_SOURCE_DIR}/src/cudecomp_kernels_rdc.cu
   ${CMAKE_CURRENT_SOURCE_DIR}/src/cudecomp.cc
@@ -195,21 +196,22 @@ if (CUDECOMP_ENABLE_NVSHMEM)
   list(APPEND NVSHMEM_VERSION ${CMAKE_MATCH_1})
   list(JOIN NVSHMEM_VERSION "." NVSHMEM_VERSION)
 
-  if (NVSHMEM_VERSION VERSION_LESS "2.7")
-    # NVSHMEM versions before 2.7 will  export NCCL symbols erroneously, need to define this flag
-    target_compile_definitions(cudecomp PRIVATE NVSHMEM_USE_NCCL)
-  endif()
-
   if (NVSHMEM_VERSION VERSION_LESS "2.5")
     target_link_libraries(cudecomp PRIVATE ${NVSHMEM_LIBRARY_DIR}/libnvshmem.a)
   else()
     target_link_libraries(cudecomp PRIVATE ${NVSHMEM_LIBRARY_DIR}/libnvshmem_host.so)
     target_link_libraries(cudecomp PRIVATE ${NVSHMEM_LIBRARY_DIR}/libnvshmem_device.a)
+  endif()
+
+  if (NVSHMEM_VERSION VERSION_LESS "2.7")
+    # NVSHMEM versions before 2.7 will export NCCL symbols erroneously, need to define this flag
+    target_compile_definitions(cudecomp PRIVATE NVSHMEM_USE_NCCL)
+  endif()
+
+  if (NVSHMEM_VERSION VERSION_LESS "2.11")
     target_link_libraries(cudecomp PUBLIC -L${NVHPC_CUDA_LIBRARY_DIR}/stubs -lnvidia-ml)
   endif()
 endif()
-
-target_link_libraries(cudecomp PUBLIC -L${NVHPC_CUDA_LIBRARY_DIR}/stubs -lcuda)
 
 set_target_properties(cudecomp PROPERTIES PUBLIC_HEADER ${CMAKE_CURRENT_SOURCE_DIR}/include/cudecomp.h)
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/include/cudecomp.h ${CMAKE_BINARY_DIR}/include/cudecomp.h)

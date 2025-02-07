@@ -64,10 +64,10 @@
 
 #define CHECK_CUDA_DRV(call)                                                                                           \
   do {                                                                                                                 \
-    CUresult err = call;                                                                                               \
+    CUresult err = cuFnTable.pfn_##call;                                                                               \
     if (CUDA_SUCCESS != err) {                                                                                         \
       const char* error_str;                                                                                           \
-      cuGetErrorString(err, &error_str);                                                                               \
+      cuFnTable.pfn_cuGetErrorString(err, &error_str);                                                                 \
       throw cudecomp::CudaError(__FILE__, __LINE__, error_str); }                                                      \
   } while (false)
 
