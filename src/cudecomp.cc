@@ -48,6 +48,7 @@
 #include "internal/autotune.h"
 #include "internal/checks.h"
 #include "internal/common.h"
+#include "internal/cuda_wrap.h"
 #include "internal/exceptions.h"
 #include "internal/halo.h"
 #include "internal/transpose.h"
@@ -205,28 +206,40 @@ static void getCudecompEnvVars(cudecompHandle_t& handle) {
   // Check CUDECOMP_ENABLE_CUMEM (CUDA VMM allocations for work buffers)
   const char* cumem_enable_str = std::getenv("CUDECOMP_ENABLE_CUMEM");
   if (cumem_enable_str) { handle->cuda_cumem_enable = std::strtol(cumem_enable_str, nullptr, 10) == 1; }
+  if (handle->cuda_cumem_enable) {
 #if CUDART_VERSION < 12030
-  if (handle->rank == 0 && handle->cuda_cumem_enable) {
-    printf("CUDECOMP:WARN: CUDECOMP_ENABLE_CUMEM is set but CUDA version used for compilation does not "
-           "support fabric allocations. Disabling this feature.\n");
-  }
-  handle->cuda_cumem_enable = false;
-#else
-  // Check if fabric allocation type is supported
-  int dev;
-  CUdevice cu_dev;
-  CHECK_CUDA(cudaGetDevice(&dev));
-  CHECK_CUDA_DRV(cuDeviceGet(&cu_dev, dev));
-  int flag = 0;
-  auto ret = cuDeviceGetAttribute(&flag, CU_DEVICE_ATTRIBUTE_HANDLE_TYPE_FABRIC_SUPPORTED, cu_dev);
-  if (!flag || ret != CUDA_SUCCESS) {
-    if (handle->rank == 0 && handle->cuda_cumem_enable) {
-      printf("CUDECOMP:WARN: CUDECOMP_ENABLE_CUMEM is set but installed driver and/or device does not "
+    if (handle->rank == 0) {
+      printf("CUDECOMP:WARN: CUDECOMP_ENABLE_CUMEM is set but CUDA version used for compilation does not "
              "support fabric allocations. Disabling this feature.\n");
     }
     handle->cuda_cumem_enable = false;
-  }
+#else
+    int driverVersion;
+    CHECK_CUDA(cudaDriverGetVersion(&driverVersion));
+    if (driverVersion < 12030) {
+      if (handle->rank == 0) {
+        printf("CUDECOMP:WARN: CUDECOMP_ENABLE_CUMEM is set but installed driver does not "
+               "support fabric allocations. Disabling this feature.\n");
+      }
+      handle->cuda_cumem_enable = false;
+    } else {
+      // Check if fabric allocation type is supported
+      int dev;
+      CUdevice cu_dev;
+      CHECK_CUDA(cudaGetDevice(&dev));
+      CHECK_CUDA_DRV(cuDeviceGet(&cu_dev, dev));
+      int flag = 0;
+      CHECK_CUDA_DRV(cuDeviceGetAttribute(&flag, CU_DEVICE_ATTRIBUTE_HANDLE_TYPE_FABRIC_SUPPORTED, cu_dev));
+      if (!flag) {
+        if (handle->rank == 0) {
+          printf("CUDECOMP:WARN: CUDECOMP_ENABLE_CUMEM is set but device does not "
+                 "support fabric allocations. Disabling this feature.\n");
+        }
+        handle->cuda_cumem_enable = false;
+      }
+    }
 #endif
+  }
 }
 
 #ifdef ENABLE_NVSHMEM
@@ -283,6 +296,8 @@ cudecompResult_t cudecompInit(cudecompHandle_t* handle_in, MPI_Comm mpi_comm) {
     CHECK_MPI(MPI_Comm_split_type(handle->mpi_comm, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL, &handle->mpi_local_comm));
     CHECK_MPI(MPI_Comm_rank(handle->mpi_local_comm, &handle->local_rank));
     CHECK_MPI(MPI_Comm_size(handle->mpi_local_comm, &handle->local_nranks));
+
+    initCuFunctionTable();
 
     // Initialize cuTENSOR library
 #if CUTENSOR_MAJOR >= 2
@@ -837,7 +852,7 @@ cudecompResult_t cudecompMalloc(cudecompHandle_t handle, cudecompGridDesc_t grid
 
         // Allocate memory
         CUmemGenericAllocationHandle cumem_handle;
-        CUresult res = cuMemCreate(&cumem_handle, buffer_size_bytes, &prop, 0);
+        CHECK_CUDA_DRV(cuMemCreate(&cumem_handle, buffer_size_bytes, &prop, 0));
         CHECK_CUDA_DRV(cuMemAddressReserve((CUdeviceptr *)buffer, buffer_size_bytes, granularity, 0, 0));
         CHECK_CUDA_DRV(cuMemMap((CUdeviceptr)*buffer, buffer_size_bytes, 0, cumem_handle, 0));
 
