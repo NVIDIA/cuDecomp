@@ -106,7 +106,8 @@ typedef enum {
   CUDECOMP_RESULT_CUTENSOR_ERROR = 5, ///< An error occured in the cuTENSOR library
   CUDECOMP_RESULT_MPI_ERROR = 6,      ///< An error occurred in the MPI library
   CUDECOMP_RESULT_NCCL_ERROR = 7,     ///< An error occured in the NCCL library
-  CUDECOMP_RESULT_NVSHMEM_ERROR = 8   ///< An error occured in the NVSHMEM library
+  CUDECOMP_RESULT_NVSHMEM_ERROR = 8,  ///< An error occured in the NVSHMEM library
+  CUDECOMP_RESULT_NVML_ERROR = 9      ///< An error occured in the NVML library
 } cudecompResult_t;
 
 /**

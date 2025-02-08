@@ -51,6 +51,7 @@
 #include "internal/cuda_wrap.h"
 #include "internal/exceptions.h"
 #include "internal/halo.h"
+#include "internal/nvml_wrap.h"
 #include "internal/transpose.h"
 
 namespace cudecomp {
@@ -297,7 +298,27 @@ cudecompResult_t cudecompInit(cudecompHandle_t* handle_in, MPI_Comm mpi_comm) {
     CHECK_MPI(MPI_Comm_rank(handle->mpi_local_comm, &handle->local_rank));
     CHECK_MPI(MPI_Comm_size(handle->mpi_local_comm, &handle->local_nranks));
 
+    // Load CUDA driver symbols into table
     initCuFunctionTable();
+
+    // Load NVML symbols into table
+    initNvmlFunctionTable();
+
+    CHECK_NVML(nvmlInit());
+    int dev;
+    CHECK_CUDA(cudaGetDevice(&dev));
+    char pciBusId[] = "00000000:00:00.0";
+    CHECK_CUDA(cudaDeviceGetPCIBusId(pciBusId, sizeof(pciBusId), dev));
+    nvmlDevice_t nvml_dev;
+    CHECK_NVML(nvmlDeviceGetHandleByPciBusId(pciBusId, &nvml_dev));
+#if NVML_API_VERSION >= 12 && CUDART_VERSION >= 12030
+    nvmlGpuFabricInfoV_t fabricInfo ={ .version = nvmlGpuFabricInfo_v2 };
+    if (nvmlHasFabricSupport()) {
+      CHECK_NVML(nvmlDeviceGetGpuFabricInfoV(nvml_dev, &fabricInfo));
+    } else {
+      printf("Runtime NVML library does not have fabric support.\n");
+    }
+#endif
 
     // Initialize cuTENSOR library
 #if CUTENSOR_MAJOR >= 2
@@ -349,6 +370,8 @@ cudecompResult_t cudecompFinalize(cudecompHandle_t handle) {
     CHECK_CUTENSOR(cutensorDestroy(handle->cutensor_handle));
     CHECK_CUTENSOR(cutensorDestroyPlanPreference(handle->cutensor_plan_pref));
 #endif
+
+    CHECK_NVML(nvmlShutdown());
 
     handle = nullptr;
     delete handle;
