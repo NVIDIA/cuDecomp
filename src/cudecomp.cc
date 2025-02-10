@@ -29,6 +29,7 @@
  */
 
 #include <algorithm>
+#include <cstring>
 #include <iostream>
 #include <numeric>
 #include <set>
@@ -187,16 +188,39 @@ static void checkConfig(cudecompHandle_t handle, const cudecompGridDescConfig_t*
 }
 
 static void gatherGlobalMPIInfo(cudecompHandle_t& handle) {
+  // Gather hostnames by rank
   handle->hostnames.resize(handle->nranks);
   int resultlen;
   CHECK_MPI(MPI_Get_processor_name(handle->hostnames[handle->rank].data(), &resultlen));
   CHECK_MPI(MPI_Allgather(MPI_IN_PLACE, 0, MPI_DATATYPE_NULL, handle->hostnames.data(), MPI_MAX_PROCESSOR_NAME,
                           MPI_CHAR, handle->mpi_comm));
 
+  // Gather rank to local rank mappings
   handle->rank_to_local_rank.resize(handle->nranks);
   handle->rank_to_local_rank[handle->rank] = handle->local_rank;
   CHECK_MPI(MPI_Allgather(MPI_IN_PLACE, 0, MPI_DATATYPE_NULL, handle->rank_to_local_rank.data(), 1, MPI_INT,
                           handle->mpi_comm));
+
+  // Gather rank to MNNVL clique mappings (if supported)
+  int dev;
+  CHECK_CUDA(cudaGetDevice(&dev));
+  char pciBusId[] = "00000000:00:00.0";
+  CHECK_CUDA(cudaDeviceGetPCIBusId(pciBusId, sizeof(pciBusId), dev));
+  nvmlDevice_t nvml_dev;
+  CHECK_NVML(nvmlDeviceGetHandleByPciBusId(pciBusId, &nvml_dev));
+#if NVML_API_VERSION >= 12 && CUDART_VERSION >= 12030
+  nvmlGpuFabricInfoV_t fabricInfo ={ .version = nvmlGpuFabricInfo_v2 };
+  if (nvmlHasFabricSupport()) {
+    CHECK_NVML(nvmlDeviceGetGpuFabricInfoV(nvml_dev, &fabricInfo));
+    unsigned char zeros[NVML_GPU_FABRIC_UUID_LEN]{};
+    if (memcmp(fabricInfo.clusterUuid, zeros, NVML_GPU_FABRIC_UUID_LEN) != 0) {
+      handle->rank_to_cliqueId.resize(handle->nranks);
+      handle->rank_to_cliqueId[handle->rank] = fabricInfo.cliqueId;
+      CHECK_MPI(MPI_Allgather(MPI_IN_PLACE, 0, MPI_DATATYPE_NULL, handle->rank_to_cliqueId.data(), 1, MPI_INT,
+                              handle->mpi_comm));
+    }
+  }
+#endif
 }
 
 static void getCudecompEnvVars(cudecompHandle_t& handle) {
@@ -301,24 +325,10 @@ cudecompResult_t cudecompInit(cudecompHandle_t* handle_in, MPI_Comm mpi_comm) {
     // Load CUDA driver symbols into table
     initCuFunctionTable();
 
-    // Load NVML symbols into table
+    // Load NVML symbols into table and initialize NVML
     initNvmlFunctionTable();
 
     CHECK_NVML(nvmlInit());
-    int dev;
-    CHECK_CUDA(cudaGetDevice(&dev));
-    char pciBusId[] = "00000000:00:00.0";
-    CHECK_CUDA(cudaDeviceGetPCIBusId(pciBusId, sizeof(pciBusId), dev));
-    nvmlDevice_t nvml_dev;
-    CHECK_NVML(nvmlDeviceGetHandleByPciBusId(pciBusId, &nvml_dev));
-#if NVML_API_VERSION >= 12 && CUDART_VERSION >= 12030
-    nvmlGpuFabricInfoV_t fabricInfo ={ .version = nvmlGpuFabricInfo_v2 };
-    if (nvmlHasFabricSupport()) {
-      CHECK_NVML(nvmlDeviceGetGpuFabricInfoV(nvml_dev, &fabricInfo));
-    } else {
-      printf("Runtime NVML library does not have fabric support.\n");
-    }
-#endif
 
     // Initialize cuTENSOR library
 #if CUTENSOR_MAJOR >= 2

@@ -85,7 +85,9 @@ struct cudecompHandle {
   std::unordered_map<void*, size_t> nvshmem_allocations; // Table to record NVSHMEM allocations
   size_t nvshmem_allocation_size = 0;                    // Total of NVSHMEM allocations
 
+  // Multi-node NVLINK (MNNVL)
   bool cuda_cumem_enable = false; // Flag to control whether cuMem* APIs are used for cudecompMalloc/Free
+  std::vector<unsigned int> rank_to_cliqueId; // list of rank to MNNVL clique mappings
 };
 
 // Structure with information about row/column communicator
@@ -203,29 +205,58 @@ static void setCommInfo(cudecompHandle_t& handle, cudecompGridDesc_t& grid_desc,
   CHECK_MPI(MPI_Comm_rank(info.mpi_comm, &info.rank));
   CHECK_MPI(MPI_Comm_size(info.mpi_comm, &info.nranks));
 
-  // Count occurences of hostname in row/col communicator
-  std::map<std::string, int> host_counts;
-  for (int i = 0; i < info.nranks; ++i) {
-    int peer_rank_global = getGlobalRank(grid_desc, comm_axis, i);
-    std::string hostname = std::string(handle->hostnames[peer_rank_global].data());
-    host_counts[hostname]++;
-  }
-
-  // Number of unique hostnames is node count
-  info.nnodes = host_counts.size();
-
-  // Check for node homogeneity (i.e. all nodes have equal number of ranks).
-  // This usually means node topologies are the same.
   int count = 0;
   info.homogeneous = true;
-  for (const auto& e : host_counts) {
-    if (count == 0) {
-      count = e.second;
-    } else {
-      if (count != e.second) {
-        // Communicator has mixed sized nodes.
-        info.homogeneous = false;
-        break;
+
+  if (handle->rank_to_cliqueId.size() == 0) {
+    // Count occurences of hostname in row/col communicator
+    std::map<std::string, int> host_counts;
+    for (int i = 0; i < info.nranks; ++i) {
+      int peer_rank_global = getGlobalRank(grid_desc, comm_axis, i);
+      std::string hostname = std::string(handle->hostnames[peer_rank_global].data());
+      host_counts[hostname]++;
+    }
+
+    // Number of unique hostnames is node count
+    info.nnodes = host_counts.size();
+
+    // Check for node homogeneity (i.e. all nodes have equal number of ranks).
+    // This usually means node topologies are the same.
+    if (handle->rank_to_cliqueId.size() == 0) {
+      for (const auto& e : host_counts) {
+        if (count == 0) {
+          count = e.second;
+        } else {
+          if (count != e.second) {
+            // Communicator has mixed sized nodes.
+            info.homogeneous = false;
+            break;
+          }
+        }
+      }
+    }
+  } else {
+    // For MNNVL configurations, count occurences of cliqueId in row/col communicator
+    std::map<unsigned int, int> cliqueId_counts;
+    for (int i = 0; i < info.nranks; ++i) {
+      int peer_rank_global = getGlobalRank(grid_desc, comm_axis, i);
+      unsigned int cliqueId = handle->rank_to_cliqueId[peer_rank_global];
+      cliqueId_counts[cliqueId]++;
+    }
+
+    // Number of unique cliqueIds is effective node count
+    info.nnodes = cliqueId_counts.size();
+
+    // For MNNVL configurations, check for homogeneity across cliques (i.e. MNNVL domains)
+    for (const auto& e : cliqueId_counts) {
+      if (count == 0) {
+        count = e.second;
+      } else {
+        if (count != e.second) {
+          // Communicator has mixed sized nodes.
+          info.homogeneous = false;
+          break;
+        }
       }
     }
   }
