@@ -201,7 +201,7 @@ static void gatherGlobalMPIInfo(cudecompHandle_t& handle) {
   CHECK_MPI(MPI_Allgather(MPI_IN_PLACE, 0, MPI_DATATYPE_NULL, handle->rank_to_local_rank.data(), 1, MPI_INT,
                           handle->mpi_comm));
 
-  // Gather rank to MNNVL clique mappings (if supported)
+  // Gather MNNVL clique related structures (if supported)
   int dev;
   CHECK_CUDA(cudaGetDevice(&dev));
   char pciBusId[] = "00000000:00:00.0";
@@ -214,13 +214,32 @@ static void gatherGlobalMPIInfo(cudecompHandle_t& handle) {
     CHECK_NVML(nvmlDeviceGetGpuFabricInfoV(nvml_dev, &fabricInfo));
     unsigned char zeros[NVML_GPU_FABRIC_UUID_LEN]{};
     if (memcmp(fabricInfo.clusterUuid, zeros, NVML_GPU_FABRIC_UUID_LEN) != 0) {
+      // Gather rank to clique ID mappings
       handle->rank_to_cliqueId.resize(handle->nranks);
       handle->rank_to_cliqueId[handle->rank] = fabricInfo.cliqueId;
       CHECK_MPI(MPI_Allgather(MPI_IN_PLACE, 0, MPI_DATATYPE_NULL, handle->rank_to_cliqueId.data(), 1, MPI_INT,
                               handle->mpi_comm));
+
+      // Create clique local MPI communicator
+      CHECK_MPI(MPI_Comm_split(handle->mpi_comm, static_cast<int>(fabricInfo.cliqueId), handle->rank, &handle->mpi_clique_comm));
+      CHECK_MPI(MPI_Comm_rank(handle->mpi_clique_comm, &handle->clique_rank));
+      CHECK_MPI(MPI_Comm_size(handle->mpi_clique_comm, &handle->clique_nranks));
+
+      // Gather rank to clique rank mappings
+      handle->rank_to_clique_rank.resize(handle->nranks);
+      handle->rank_to_clique_rank[handle->rank] = handle->clique_rank;
+      CHECK_MPI(MPI_Allgather(MPI_IN_PLACE, 0, MPI_DATATYPE_NULL, handle->rank_to_clique_rank.data(), 1, MPI_INT,
+                              handle->mpi_comm));
     }
   }
 #endif
+
+  // Copy local rank mapping to clique rank mapping in general case
+  if (handle->rank_to_clique_rank.size() == 0) {
+    handle->rank_to_clique_rank = handle->rank_to_local_rank;
+
+  }
+
 }
 
 static void getCudecompEnvVars(cudecompHandle_t& handle) {
@@ -466,7 +485,9 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
     if (transposeBackendRequiresNccl(comm_backend) || haloBackendRequiresNccl(halo_comm_backend) ||
         ((autotune_transpose_backend || autotune_halo_backend) && !autotune_disable_nccl_backends)) {
       if (!handle->nccl_comm) { handle->nccl_comm = ncclCommFromMPIComm(handle->mpi_comm); }
-      if (!handle->nccl_local_comm) { handle->nccl_local_comm = ncclCommFromMPIComm(handle->mpi_local_comm); }
+      if (!handle->nccl_local_comm) {
+        handle->nccl_local_comm = ncclCommFromMPIComm(handle->mpi_clique_comm != MPI_COMM_NULL ? handle->mpi_clique_comm : handle->mpi_local_comm);
+      }
       if (!handle->pl_stream) {
         int greatest_priority;
         CHECK_CUDA(cudaDeviceGetStreamPriorityRange(nullptr, &greatest_priority));

@@ -48,18 +48,22 @@
 // cuDecomp handle containing general information
 struct cudecompHandle {
 
-  MPI_Comm mpi_comm; // MPI communicator
+  MPI_Comm mpi_comm = MPI_COMM_NULL; // MPI communicator
   int32_t rank;      // MPI rank
   int32_t nranks;    // MPI size
 
-  MPI_Comm mpi_local_comm; // MPI local communicator
+  MPI_Comm mpi_local_comm = MPI_COMM_NULL; // MPI local communicator
   int32_t local_rank;      // MPI rank
   int32_t local_nranks;    // MPI size
+
+  MPI_Comm mpi_clique_comm = MPI_COMM_NULL; // MPI MNNVL clique local communicator
+  int32_t clique_rank;      // MPI rank
+  int32_t clique_nranks;    // MPI size
 
   // Entries for NCCL management
   int n_grid_descs_using_nccl = 0;      // Count of grid descriptors using NCCL
   ncclComm_t nccl_comm = nullptr;       // NCCL communicator (global)
-  ncclComm_t nccl_local_comm = nullptr; // NCCL communicator (intranode)
+  ncclComm_t nccl_local_comm = nullptr; // NCCL communicator (intranode, or intra-clique on MNNVL systems)
   bool nccl_enable_ubr = false;         // Flag to control NCCL user buffer registration usage
   std::unordered_map<void*, std::vector<std::pair<ncclComm_t, void*>>>
       nccl_ubr_handles; // map of allocated buffer address to NCCL registration handle(s)
@@ -88,6 +92,7 @@ struct cudecompHandle {
   // Multi-node NVLINK (MNNVL)
   bool cuda_cumem_enable = false; // Flag to control whether cuMem* APIs are used for cudecompMalloc/Free
   std::vector<unsigned int> rank_to_cliqueId; // list of rank to MNNVL clique mappings
+  std::vector<int> rank_to_clique_rank; // list of rank to MNNVL clique rank mappings
 };
 
 // Structure with information about row/column communicator

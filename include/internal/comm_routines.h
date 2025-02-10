@@ -168,7 +168,7 @@ cudecompAlltoall(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
     CHECK_NCCL(ncclGroupStart());
     for (int i = 0; i < send_counts.size(); ++i) {
       int peer_rank_global = getGlobalRank(grid_desc, comm_axis, i);
-      if (comm_info.nnodes == 1) { peer_rank_global = handle->rank_to_local_rank[peer_rank_global]; }
+      if (comm_info.nnodes == 1) { peer_rank_global = handle->rank_to_clique_rank[peer_rank_global]; }
       if (send_counts[i] != 0) {
         CHECK_NCCL(ncclSend(send_buff + send_offsets[i], send_counts[i] * sizeof(T), ncclChar, peer_rank_global, comm,
                             stream));
@@ -366,8 +366,8 @@ static void cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cude
         int src_rank_global = getGlobalRank(grid_desc, comm_axis, src_rank);
         int dst_rank_global = getGlobalRank(grid_desc, comm_axis, dst_rank);
         if (comm_info.nnodes == 1) {
-          src_rank_global = handle->rank_to_local_rank[src_rank_global];
-          dst_rank_global = handle->rank_to_local_rank[dst_rank_global];
+          src_rank_global = handle->rank_to_clique_rank[src_rank_global];
+          dst_rank_global = handle->rank_to_clique_rank[dst_rank_global];
         }
         if (send_counts[dst_rank] != 0) {
           CHECK_NCCL(ncclSend(send_buff + send_offsets[dst_rank], send_counts[dst_rank] * sizeof(T), ncclChar,
