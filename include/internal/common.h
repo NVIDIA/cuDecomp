@@ -67,7 +67,7 @@ struct cudecompHandle {
   // Entries for NCCL management
   int n_grid_descs_using_nccl = 0;      // Count of grid descriptors using NCCL
   ncclComm_t nccl_comm = nullptr;       // NCCL communicator (global)
-  ncclComm_t nccl_local_comm = nullptr; // NCCL communicator (intranode, or intra-clique on MNNVL systems)
+  ncclComm_t nccl_local_comm = nullptr; // NCCL communicator (intra-node, or intra-clique on MNNVL systems)
   bool nccl_enable_ubr = false;         // Flag to control NCCL user buffer registration usage
   std::unordered_map<void*, std::vector<std::pair<ncclComm_t, void*>>>
       nccl_ubr_handles; // map of allocated buffer address to NCCL registration handle(s)
@@ -106,9 +106,8 @@ struct cudecompCommInfo {
   int32_t rank;
   int32_t nranks;
 
-  bool homogeneous = false; // true if all nodes in communicator have same number of assigned ranks
-  int32_t nnodes = 0;       // number of nodes in communicator
-  int32_t npernode = 0;     // Ranks per node, only relevant for homogeneous case.
+  int32_t ngroups = 0;      // number of p2p groups (i.e. grouping of ranks with fast interconnect) in communicator
+  int32_t npergroup = 0;    // number of ranks per p2p group
 
 #ifdef ENABLE_NVSHMEM
   nvshmem_team_t nvshmem_team = NVSHMEM_TEAM_INVALID;
@@ -175,6 +174,16 @@ static inline std::array<int32_t, 3> getShapeG(const cudecompPencilInfo_t& pinfo
   return shape_g;
 }
 
+// Function to compute the GCD using the Euclidean algorithm
+static inline int gcd(int a, int b) {
+  while (b != 0) {
+    int temp = b;
+    b = a % b;
+    a = temp;
+  }
+  return a;
+}
+
 static inline bool transposeBackendRequiresMpi(cudecompTransposeCommBackend_t comm_backend) {
   return (comm_backend == CUDECOMP_TRANSPOSE_COMM_MPI_P2P || comm_backend == CUDECOMP_TRANSPOSE_COMM_MPI_A2A ||
           comm_backend == CUDECOMP_TRANSPOSE_COMM_MPI_P2P_PL);
@@ -216,7 +225,6 @@ static void setCommInfo(cudecompHandle_t& handle, cudecompGridDesc_t& grid_desc,
   CHECK_MPI(MPI_Comm_size(info.mpi_comm, &info.nranks));
 
   int count = 0;
-  info.homogeneous = true;
 
   if (handle->rank_to_clique.size() == 0) {
     // Count occurences of hostname in row/col communicator
@@ -227,19 +235,14 @@ static void setCommInfo(cudecompHandle_t& handle, cudecompGridDesc_t& grid_desc,
       host_counts[hostname]++;
     }
 
-    // Number of unique hostnames is node count
-    info.nnodes = host_counts.size();
-
-    // Check for node homogeneity (i.e. all nodes have equal number of ranks).
-    // This usually means node topologies are the same.
+    // Find largest homogeneous peer-to-peer group size. This can be smaller than
+    // a full node when running across nodes with different GPU counts.
     for (const auto& e : host_counts) {
       if (count == 0) {
         count = e.second;
       } else {
         if (count != e.second) {
-          // Communicator has mixed sized nodes.
-          info.homogeneous = false;
-          break;
+	  count = gcd(count, e.second);
         }
       }
     }
@@ -252,24 +255,21 @@ static void setCommInfo(cudecompHandle_t& handle, cudecompGridDesc_t& grid_desc,
       clique_counts[clique]++;
     }
 
-    // Number of unique cliques is effective node count
-    info.nnodes = clique_counts.size();
-
-    // For MNNVL configurations, check for homogeneity across cliques (i.e. MNNVL domains)
+    // Find largest homogeneous peer-to-peer group size. This can be smaller than
+    // a full clique when running across multiple cliques of differing sizes.
     for (const auto& e : clique_counts) {
       if (count == 0) {
         count = e.second;
       } else {
         if (count != e.second) {
-          // Communicator has mixed sized nodes.
-          info.homogeneous = false;
-          break;
+	  count = gcd(count, e.second);
         }
       }
     }
   }
 
-  if (info.homogeneous) { info.npernode = count; }
+  info.npergroup = count;
+  info.ngroups = info.nranks / info.npergroup;
 }
 
 static inline void getAlltoallPeerRanks(cudecompGridDesc_t grid_desc, cudecompCommAxis comm_axis, int iter,
@@ -286,41 +286,35 @@ static inline void getAlltoallPeerRanks(cudecompGridDesc_t grid_desc, cudecompCo
 
   bool power_of_2 = !(info.nranks & info.nranks - 1);
 
-  if (info.homogeneous) {
-    // Mixing up transfer ordering to distribute intranode transfers between internode ones.
-    if (iter % 2 == 1) {
-      iter = iter / 2 + 1;
+  // Mixing up transfer ordering to distribute intra-group transfers between inter-group ones.
+  if (iter % 2 == 1) {
+    iter = iter / 2 + 1;
+  } else {
+    iter = info.nranks / 2 + iter / 2;
+  }
+  if (power_of_2) {
+    // Case 1: power of two size, use XOR communication pattern
+    dst_rank = info.rank ^ iter;
+    src_rank = info.rank ^ iter;
+  } else {
+    // Case 2: not a power of two size, use multi-level ring
+    // communication pattern (intra-group rings followed by inter-group rings)
+    int groupid = info.rank / info.npergroup;
+    if (iter < info.npergroup) {
+      dst_rank = (info.rank + iter) % info.npergroup + groupid * info.npergroup;
+      src_rank = (info.rank + info.npergroup - iter) % info.npergroup + groupid * info.npergroup;
     } else {
-      iter = info.nranks / 2 + iter / 2;
-    }
-    if (power_of_2) {
-      // Case 1: homogeneous nodes and power of two size, use XOR communication pattern
-      dst_rank = info.rank ^ iter;
-      src_rank = info.rank ^ iter;
-    } else {
-      // Case 2: homogeneous nodes and not a power of two size, use multi-level ring
-      // communication pattern (intranode rings followed by internode rings)
-      int nodeid = info.rank / info.npernode;
-      if (iter < info.npernode) {
-        dst_rank = (info.rank + iter) % info.npernode + nodeid * info.npernode;
-        src_rank = (info.rank + info.npernode - iter) % info.npernode + nodeid * info.npernode;
-      } else {
-        dst_rank = (info.rank + iter) % info.nranks;
-        if (dst_rank >= nodeid * info.npernode and dst_rank < (nodeid + 1) * info.npernode) {
-          dst_rank += info.npernode;
-          dst_rank %= info.nranks;
-        }
-        src_rank = (info.rank + info.nranks - iter) % info.nranks;
-        if (src_rank >= nodeid * info.npernode and src_rank < (nodeid + 1) * info.npernode) {
-          src_rank += (info.nranks - info.npernode);
-          src_rank %= info.nranks;
-        }
+      dst_rank = (info.rank + iter) % info.nranks;
+      if (dst_rank >= groupid * info.npergroup and dst_rank < (groupid + 1) * info.npergroup) {
+        dst_rank += info.npergroup;
+        dst_rank %= info.nranks;
+      }
+      src_rank = (info.rank + info.nranks - iter) % info.nranks;
+      if (src_rank >= groupid * info.npergroup and src_rank < (groupid + 1) * info.npergroup) {
+        src_rank += (info.nranks - info.npergroup);
+        src_rank %= info.nranks;
       }
     }
-  } else {
-    // Case 3: heterogeneous nodes in communicator, fallback to naive ring pattern
-    dst_rank = (info.rank + iter) % info.nranks;
-    src_rank = (info.rank + info.nranks - iter) % info.nranks;
   }
 }
 
@@ -336,11 +330,11 @@ static inline std::vector<int64_t> getSplits(int64_t N, int nchunks, int pad) {
 
 // Assigns an integer ID to every unique value in a vector
 template <typename T>
-std::unordered_map<T, int> getUniqueIds(const std::vector<T>& v) {
-  std::unordered_map<T, int> ids;
+std::unordered_map<T, unsigned int> getUniqueIds(const std::vector<T>& v) {
+  std::unordered_map<T, unsigned int> ids;
   for (const auto &e : v) {
     if (ids.count(e) == 0){
-      ids[e] = static_cast<int>(ids.size());
+      ids[e] = static_cast<unsigned int>(ids.size());
     }
   }
   return ids;

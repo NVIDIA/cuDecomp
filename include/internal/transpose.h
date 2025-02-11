@@ -524,8 +524,8 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
           std::vector<int> dst_ranks{dst_rank};
           std::vector<int> src_ranks{src_rank};
 
-          if (j != 0 && comm_info.homogeneous && comm_info.nnodes != 1) {
-            // Perform pipelining in pairs to intra-node comms behind inter-node transfers
+          if (j != 0 && comm_info.ngroups != 1) {
+            // Perform pipelining in pairs to hide intra-group comms behind inter-group transfers
             if (j % 2 == 1) {
               if (j + 1 < splits_b.size()) {
                 int src_rank_next, dst_rank_next;
@@ -618,8 +618,8 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
         std::vector<int> dst_ranks{dst_rank};
         std::vector<int> src_ranks{src_rank};
 
-        if (j != 0 && comm_info.homogeneous && comm_info.nnodes != 1) {
-          // Perform pipelining in pairs to intra-node comms behind inter-node transfers
+        if (j != 0 && comm_info.ngroups != 1) {
+          // Perform pipelining in pairs to hide intra-group comms behind inter-group transfers
           if (j % 2 == 1) {
             if (j + 1 < splits_b.size()) {
               int src_rank_next, dst_rank_next;
@@ -673,8 +673,8 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
       std::vector<int> dst_ranks{dst_rank};
       std::vector<int> src_ranks{src_rank};
 
-      if (j != 0 && comm_info.homogeneous && comm_info.nnodes != 1) {
-        // Perform pipelining in pairs to intra-node comms behind inter-node transfers
+      if (j != 0 && comm_info.ngroups != 1) {
+        // Perform pipelining in pairs to hide intra-group comms behind inter-group transfers
         if (j % 2 == 1) {
           if (j + 1 < splits_b.size()) {
             int src_rank_next, dst_rank_next;

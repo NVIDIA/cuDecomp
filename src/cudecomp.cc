@@ -247,7 +247,7 @@ static void gatherGlobalMPIInfo(cudecompHandle_t& handle) {
   if (handle->rank_to_mnnvl_info.size() != 0) {
     // cliqueIds returned in fabricInfo are not unique across MNNVL domains (defined by clusterUuid).
     // Define a modified clique id that assigns a unique index to each (clusterUuid, cliqueId) pair.
-    std::unordered_map<mnnvl_info, int> clique_ids;
+    std::unordered_map<mnnvl_info, unsigned int> clique_ids;
     clique_ids = getUniqueIds(handle->rank_to_mnnvl_info);
 
     // Populate rank to MNNVL clique mappings
@@ -257,7 +257,7 @@ static void gatherGlobalMPIInfo(cudecompHandle_t& handle) {
     }
 
     // Create clique local MPI communicator
-    CHECK_MPI(MPI_Comm_split(handle->mpi_comm, handle->rank_to_clique[handle->rank], handle->rank, &handle->mpi_clique_comm));
+    CHECK_MPI(MPI_Comm_split(handle->mpi_comm, static_cast<int>(handle->rank_to_clique[handle->rank]), handle->rank, &handle->mpi_clique_comm));
     CHECK_MPI(MPI_Comm_rank(handle->mpi_clique_comm, &handle->clique_rank));
     CHECK_MPI(MPI_Comm_size(handle->mpi_clique_comm, &handle->clique_nranks));
 
