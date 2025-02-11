@@ -34,6 +34,7 @@
 #include <numeric>
 #include <set>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include <cuda.h>
@@ -52,6 +53,7 @@
 #include "internal/cuda_wrap.h"
 #include "internal/exceptions.h"
 #include "internal/halo.h"
+#include "internal/hashes.h"
 #include "internal/nvml_wrap.h"
 #include "internal/transpose.h"
 
@@ -211,26 +213,59 @@ static void gatherGlobalMPIInfo(cudecompHandle_t& handle) {
 #if NVML_API_VERSION >= 12 && CUDART_VERSION >= 12030
   nvmlGpuFabricInfoV_t fabricInfo ={ .version = nvmlGpuFabricInfo_v2 };
   if (nvmlHasFabricSupport()) {
+    handle->rank_to_mnnvl_info.resize(handle->nranks);
+
+    // Gather MNNVL information (clusterUuid, cliqueId) by rank
     CHECK_NVML(nvmlDeviceGetGpuFabricInfoV(nvml_dev, &fabricInfo));
     unsigned char zeros[NVML_GPU_FABRIC_UUID_LEN]{};
-    if (memcmp(fabricInfo.clusterUuid, zeros, NVML_GPU_FABRIC_UUID_LEN) != 0) {
-      // Gather rank to clique ID mappings
-      handle->rank_to_cliqueId.resize(handle->nranks);
-      handle->rank_to_cliqueId[handle->rank] = fabricInfo.cliqueId;
-      CHECK_MPI(MPI_Allgather(MPI_IN_PLACE, 0, MPI_DATATYPE_NULL, handle->rank_to_cliqueId.data(), 1, MPI_INT,
-                              handle->mpi_comm));
+    std::vector<std::array<unsigned char, NVML_GPU_FABRIC_UUID_LEN>> clusterUuids(handle->nranks);
+    std::vector<unsigned int> cliqueIds(handle->nranks);
 
-      // Create clique local MPI communicator
-      CHECK_MPI(MPI_Comm_split(handle->mpi_comm, static_cast<int>(fabricInfo.cliqueId), handle->rank, &handle->mpi_clique_comm));
-      CHECK_MPI(MPI_Comm_rank(handle->mpi_clique_comm, &handle->clique_rank));
-      CHECK_MPI(MPI_Comm_size(handle->mpi_clique_comm, &handle->clique_nranks));
-
-      // Gather rank to clique rank mappings
-      handle->rank_to_clique_rank.resize(handle->nranks);
-      handle->rank_to_clique_rank[handle->rank] = handle->clique_rank;
-      CHECK_MPI(MPI_Allgather(MPI_IN_PLACE, 0, MPI_DATATYPE_NULL, handle->rank_to_clique_rank.data(), 1, MPI_INT,
-                              handle->mpi_comm));
+    if (std::memcmp(fabricInfo.clusterUuid, zeros, NVML_GPU_FABRIC_UUID_LEN) != 0) {
+      std::memcpy(clusterUuids[handle->rank].data(), fabricInfo.clusterUuid, NVML_GPU_FABRIC_UUID_LEN);
+      cliqueIds[handle->rank] = fabricInfo.cliqueId;
+    } else {
+      std::memcpy(clusterUuids[handle->rank].data(), zeros, NVML_GPU_FABRIC_UUID_LEN);
+      cliqueIds[handle->rank] = 0;
     }
+
+    CHECK_MPI(MPI_Allgather(MPI_IN_PLACE, 0, MPI_DATATYPE_NULL, clusterUuids.data(), NVML_GPU_FABRIC_UUID_LEN, MPI_CHAR,
+                            handle->mpi_comm));
+    CHECK_MPI(MPI_Allgather(MPI_IN_PLACE, 0, MPI_DATATYPE_NULL, cliqueIds.data(), 1, MPI_INT, handle->mpi_comm));
+
+    for (int i = 0; i < handle->nranks; ++i) {
+      if (std::memcmp(clusterUuids[i].data(), zeros, NVML_GPU_FABRIC_UUID_LEN) == 0) {
+        // If any rank has a zero cluster UUID, disable MNNVL.
+        handle->rank_to_mnnvl_info.resize(0);
+	break;
+      }
+      handle->rank_to_mnnvl_info[i].first = clusterUuids[i];
+      handle->rank_to_mnnvl_info[i].second = cliqueIds[i];
+    }
+  }
+
+  if (handle->rank_to_mnnvl_info.size() != 0) {
+    // cliqueIds returned in fabricInfo are not unique across MNNVL domains (defined by clusterUuid).
+    // Define a modified clique id that assigns a unique index to each (clusterUuid, cliqueId) pair.
+    std::unordered_map<mnnvl_info, int> clique_ids;
+    clique_ids = getUniqueIds(handle->rank_to_mnnvl_info);
+
+    // Populate rank to MNNVL clique mappings
+    handle->rank_to_clique.resize(handle->nranks);
+    for (int i = 0; i < handle->nranks; ++i) {
+      handle->rank_to_clique[i] = clique_ids[handle->rank_to_mnnvl_info[i]];
+    }
+
+    // Create clique local MPI communicator
+    CHECK_MPI(MPI_Comm_split(handle->mpi_comm, handle->rank_to_clique[handle->rank], handle->rank, &handle->mpi_clique_comm));
+    CHECK_MPI(MPI_Comm_rank(handle->mpi_clique_comm, &handle->clique_rank));
+    CHECK_MPI(MPI_Comm_size(handle->mpi_clique_comm, &handle->clique_nranks));
+
+    // Gather rank to clique rank mappings
+    handle->rank_to_clique_rank.resize(handle->nranks);
+    handle->rank_to_clique_rank[handle->rank] = handle->clique_rank;
+    CHECK_MPI(MPI_Allgather(MPI_IN_PLACE, 0, MPI_DATATYPE_NULL, handle->rank_to_clique_rank.data(), 1, MPI_INT,
+                            handle->mpi_comm));
   }
 #endif
 

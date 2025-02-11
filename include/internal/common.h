@@ -45,6 +45,10 @@
 #include "cudecomp.h"
 #include "internal/checks.h"
 
+namespace cudecomp {
+  typedef std::pair<std::array<unsigned char, NVML_GPU_FABRIC_UUID_LEN>, unsigned int> mnnvl_info;
+}
+
 // cuDecomp handle containing general information
 struct cudecompHandle {
 
@@ -90,9 +94,10 @@ struct cudecompHandle {
   size_t nvshmem_allocation_size = 0;                    // Total of NVSHMEM allocations
 
   // Multi-node NVLINK (MNNVL)
-  bool cuda_cumem_enable = false; // Flag to control whether cuMem* APIs are used for cudecompMalloc/Free
-  std::vector<unsigned int> rank_to_cliqueId; // list of rank to MNNVL clique mappings
-  std::vector<int> rank_to_clique_rank; // list of rank to MNNVL clique rank mappings
+  bool cuda_cumem_enable = false;                       // Flag to control whether cuMem* APIs are used for cudecompMalloc/Free
+  std::vector<cudecomp::mnnvl_info> rank_to_mnnvl_info; // list of mnnvl information (clusterUuid, cliqueId) by rank
+  std::vector<unsigned int> rank_to_clique;             // list of rank to MNNVL clique mappings
+  std::vector<int> rank_to_clique_rank;                 // list of rank to MNNVL clique rank mappings
 };
 
 // Structure with information about row/column communicator
@@ -213,7 +218,7 @@ static void setCommInfo(cudecompHandle_t& handle, cudecompGridDesc_t& grid_desc,
   int count = 0;
   info.homogeneous = true;
 
-  if (handle->rank_to_cliqueId.size() == 0) {
+  if (handle->rank_to_clique.size() == 0) {
     // Count occurences of hostname in row/col communicator
     std::map<std::string, int> host_counts;
     for (int i = 0; i < info.nranks; ++i) {
@@ -227,33 +232,31 @@ static void setCommInfo(cudecompHandle_t& handle, cudecompGridDesc_t& grid_desc,
 
     // Check for node homogeneity (i.e. all nodes have equal number of ranks).
     // This usually means node topologies are the same.
-    if (handle->rank_to_cliqueId.size() == 0) {
-      for (const auto& e : host_counts) {
-        if (count == 0) {
-          count = e.second;
-        } else {
-          if (count != e.second) {
-            // Communicator has mixed sized nodes.
-            info.homogeneous = false;
-            break;
-          }
+    for (const auto& e : host_counts) {
+      if (count == 0) {
+        count = e.second;
+      } else {
+        if (count != e.second) {
+          // Communicator has mixed sized nodes.
+          info.homogeneous = false;
+          break;
         }
       }
     }
   } else {
-    // For MNNVL configurations, count occurences of cliqueId in row/col communicator
-    std::map<unsigned int, int> cliqueId_counts;
+    // For MNNVL configurations, count occurences of clique in row/col communicator
+    std::map<unsigned int, int> clique_counts;
     for (int i = 0; i < info.nranks; ++i) {
       int peer_rank_global = getGlobalRank(grid_desc, comm_axis, i);
-      unsigned int cliqueId = handle->rank_to_cliqueId[peer_rank_global];
-      cliqueId_counts[cliqueId]++;
+      unsigned int clique = handle->rank_to_clique[peer_rank_global];
+      clique_counts[clique]++;
     }
 
-    // Number of unique cliqueIds is effective node count
-    info.nnodes = cliqueId_counts.size();
+    // Number of unique cliques is effective node count
+    info.nnodes = clique_counts.size();
 
     // For MNNVL configurations, check for homogeneity across cliques (i.e. MNNVL domains)
-    for (const auto& e : cliqueId_counts) {
+    for (const auto& e : clique_counts) {
       if (count == 0) {
         count = e.second;
       } else {
@@ -329,6 +332,18 @@ static inline std::vector<int64_t> getSplits(int64_t N, int nchunks, int pad) {
   splits[std::min(N, (int64_t)nchunks) - 1] += pad;
 
   return splits;
+}
+
+// Assigns an integer ID to every unique value in a vector
+template <typename T>
+std::unordered_map<T, int> getUniqueIds(const std::vector<T>& v) {
+  std::unordered_map<T, int> ids;
+  for (const auto &e : v) {
+    if (ids.count(e) == 0){
+      ids[e] = static_cast<int>(ids.size());
+    }
+  }
+  return ids;
 }
 
 } // namespace cudecomp
