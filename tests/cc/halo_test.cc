@@ -334,7 +334,7 @@ int main(int argc, char** argv) {
 
   // Get pencil information
   cudecompPencilInfo_t pinfo;
-  CHECK_CUDECOMP_EXIT(cudecompGetPencilInfo(handle, grid_desc, &pinfo, axis, halo_extents.data()));
+  CHECK_CUDECOMP_EXIT(cudecompGetPencilInfo(handle, grid_desc, &pinfo, axis, halo_extents.data(), nullptr));
 
   // Get workspace size
   int64_t workspace_num_elements;
