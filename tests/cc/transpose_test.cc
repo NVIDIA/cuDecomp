@@ -123,9 +123,9 @@ static bool compare_pencils(const std::vector<real_t>& ref, const std::vector<re
       lx[2] = i / (pinfo.shape[0] * pinfo.shape[1]);
 
       // Only compare values inside internal region
-      if (lx[0] >= pinfo.halo_extents[pinfo.order[0]] && lx[0] < (pinfo.shape[0] - pinfo.halo_extents[pinfo.order[0]]) &&
-          lx[1] >= pinfo.halo_extents[pinfo.order[1]] && lx[1] < (pinfo.shape[1] - pinfo.halo_extents[pinfo.order[1]]) &&
-          lx[2] >= pinfo.halo_extents[pinfo.order[2]] && lx[2] < (pinfo.shape[2] - pinfo.halo_extents[pinfo.order[2]])) {
+      if (lx[0] >= pinfo.halo_extents[pinfo.order[0]] && lx[0] < (pinfo.shape[0] - pinfo.halo_extents[pinfo.order[0]] - pinfo.padding[pinfo.order[0]]) &&
+          lx[1] >= pinfo.halo_extents[pinfo.order[1]] && lx[1] < (pinfo.shape[1] - pinfo.halo_extents[pinfo.order[1]] - pinfo.padding[pinfo.order[1]]) &&
+          lx[2] >= pinfo.halo_extents[pinfo.order[2]] && lx[2] < (pinfo.shape[2] - pinfo.halo_extents[pinfo.order[2]] - pinfo.padding[pinfo.order[2]])) {
         return false;
       }
     }
@@ -150,9 +150,9 @@ static void initialize_pencil(std::vector<real_t>& ref, const cudecompPencilInfo
     int64_t gi = gx[0] + gdims[0] * (gx[1] + gx[2] * gdims[1]);
 
     // Only set values inside internal region
-    if (lx[0] >= pinfo.halo_extents[pinfo.order[0]] && lx[0] < (pinfo.shape[0] - pinfo.halo_extents[pinfo.order[0]]) &&
-        lx[1] >= pinfo.halo_extents[pinfo.order[1]] && lx[1] < (pinfo.shape[1] - pinfo.halo_extents[pinfo.order[1]]) &&
-        lx[2] >= pinfo.halo_extents[pinfo.order[2]] && lx[2] < (pinfo.shape[2] - pinfo.halo_extents[pinfo.order[2]])) {
+    if (lx[0] >= pinfo.halo_extents[pinfo.order[0]] && lx[0] < (pinfo.shape[0] - pinfo.halo_extents[pinfo.order[0]] - pinfo.padding[pinfo.order[0]]) &&
+        lx[1] >= pinfo.halo_extents[pinfo.order[1]] && lx[1] < (pinfo.shape[1] - pinfo.halo_extents[pinfo.order[1]] - pinfo.padding[pinfo.order[1]]) &&
+        lx[2] >= pinfo.halo_extents[pinfo.order[2]] && lx[2] < (pinfo.shape[2] - pinfo.halo_extents[pinfo.order[2]] - pinfo.padding[pinfo.order[2]])) {
       ref[i] = gi;
     } else {
       ref[i] = -1;
@@ -198,6 +198,12 @@ static void usage(const char* pname) {
           "\t\tY-pencil halo_extents setting. (default: 0 0 0) \n"
           "\t--hez\n"
           "\t\tZ-pencil halo_extents setting. (default: 0 0 0) \n"
+          "\t--pdx\n"
+          "\t\tX-pencil padding setting. (default: 0 0 0) \n"
+          "\t--pdy\n"
+          "\t\tY-pencil padding setting. (default: 0 0 0) \n"
+          "\t--pdz\n"
+          "\t\tZ-pencil padding setting. (default: 0 0 0) \n"
           "\t--mem_order\n"
           "\t\ttranspose_mem_order setting. (default: unset) \n"
           "\t-m|--use-managed-memory\n"
@@ -220,6 +226,9 @@ struct transposeTestArgs {
   std::array<int, 3> halo_extents_x{};
   std::array<int, 3> halo_extents_y{};
   std::array<int, 3> halo_extents_z{};
+  std::array<int, 3> padding_x{};
+  std::array<int, 3> padding_y{};
+  std::array<int, 3> padding_z{};
   bool out_of_place = false;
   bool use_managed_memory = false;
   std::array<int, 9> mem_order{-1, -1, -1, -1, -1, -1, -1, -1, -1};
@@ -248,6 +257,9 @@ static transposeTestArgs parse_arguments(const std::string& arguments) {
                                            {"hex", required_argument, 0, '7'},
                                            {"hey", required_argument, 0, '8'},
                                            {"hez", required_argument, 0, '9'},
+                                           {"pdx", required_argument, 0, '&'},
+                                           {"pdy", required_argument, 0, '*'},
+                                           {"pdz", required_argument, 0, '('},
                                            {"mem_order", required_argument, 0, 'q'},
                                            {"out-of-place", no_argument, 0, 'o'},
                                            {"use-managed-memory", no_argument, 0, 'm'},
@@ -255,7 +267,7 @@ static transposeTestArgs parse_arguments(const std::string& arguments) {
                                            {0, 0, 0, 0}};
 
     int option_index = 0;
-    int ch = getopt_long(argc, argv, "x:y:z:b:r:c:1:2:3:4:7:8:9:q:omh", long_options, &option_index);
+    int ch = getopt_long(argc, argv, "x:y:z:b:r:c:1:2:3:4:7:8:9:&:*:(:q:omh", long_options, &option_index);
     if (ch == -1) break;
 
     switch (ch) {
@@ -294,6 +306,27 @@ static transposeTestArgs parse_arguments(const std::string& arguments) {
       optind--;
       for (int i = 0; i < 3; ++i) {
         args.halo_extents_z[i] = atoi(argv[optind]);
+        optind++;
+      }
+      break;
+    case '&':
+      optind--;
+      for (int i = 0; i < 3; ++i) {
+        args.padding_x[i] = atoi(argv[optind]);
+        optind++;
+      }
+      break;
+    case '*':
+      optind--;
+      for (int i = 0; i < 3; ++i) {
+        args.padding_y[i] = atoi(argv[optind]);
+        optind++;
+      }
+      break;
+    case '(':
+      optind--;
+      for (int i = 0; i < 3; ++i) {
+        args.padding_z[i] = atoi(argv[optind]);
         optind++;
       }
       break;
@@ -389,15 +422,15 @@ static int run_test(const std::string& arguments, bool silent) {
 
     // Get x-pencil information
     cudecompPencilInfo_t pinfo_x;
-    CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_x, 0, args.halo_extents_x.data()));
+    CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_x, 0, args.halo_extents_x.data(), args.padding_x.data()));
 
     // Get y-pencil information
     cudecompPencilInfo_t pinfo_y;
-    CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_y, 1, args.halo_extents_y.data()));
+    CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_y, 1, args.halo_extents_y.data(), args.padding_x.data()));
 
     // Get z-pencil information
     cudecompPencilInfo_t pinfo_z;
-    CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_z, 2, args.halo_extents_z.data()));
+    CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_z, 2, args.halo_extents_z.data(), args.padding_x.data()));
 
     // Get workspace size
     int64_t workspace_num_elements;
@@ -449,7 +482,7 @@ static int run_test(const std::string& arguments, bool silent) {
 
     CHECK_CUDA(cudaMemset(work_d, 0, workspace_num_elements * dtype_size));
     CHECK_CUDECOMP(cudecompTransposeXToY(handle, grid_desc, input, output, work_d, get_cudecomp_datatype(real_t(0)),
-                                              pinfo_x.halo_extents, pinfo_y.halo_extents, 0));
+                                              pinfo_x.halo_extents, pinfo_y.halo_extents, pinfo_x.padding, pinfo_y.padding, 0));
     CHECK_CUDA(cudaMemcpy(data.data(), output, data.size() * sizeof(*output), cudaMemcpyDeviceToHost));
     if (!compare_pencils(yref, data, pinfo_y)) {
       fprintf(stderr, "FAILED cudecompTransposeXToY\n");
@@ -460,7 +493,7 @@ static int run_test(const std::string& arguments, bool silent) {
 
     CHECK_CUDA(cudaMemset(work_d, 0, workspace_num_elements * dtype_size));
     CHECK_CUDECOMP(cudecompTransposeYToZ(handle, grid_desc, input, output, work_d, get_cudecomp_datatype(real_t(0)),
-                                              pinfo_y.halo_extents, pinfo_z.halo_extents, 0));
+                                              pinfo_y.halo_extents, pinfo_z.halo_extents, pinfo_y.padding, pinfo_z.padding, 0));
     CHECK_CUDA(cudaMemcpy(data.data(), output, data.size() * sizeof(*data_d), cudaMemcpyDeviceToHost));
     if (!compare_pencils(zref, data, pinfo_z)) {
       fprintf(stderr, "FAILED cudecompTransposeYToZ\n");
@@ -471,7 +504,7 @@ static int run_test(const std::string& arguments, bool silent) {
 
     CHECK_CUDA(cudaMemset(work_d, 0, workspace_num_elements * dtype_size));
     CHECK_CUDECOMP(cudecompTransposeZToY(handle, grid_desc, input, output, work_d, get_cudecomp_datatype(real_t(0)),
-                                              pinfo_z.halo_extents, pinfo_y.halo_extents, 0));
+                                              pinfo_z.halo_extents, pinfo_y.halo_extents, pinfo_z.padding, pinfo_y.padding, 0));
     CHECK_CUDA(cudaMemcpy(data.data(), output, data.size() * sizeof(*data_d), cudaMemcpyDeviceToHost));
     if (!compare_pencils(yref, data, pinfo_y)) {
       fprintf(stderr, "FAILED cudecompTransposeZToY\n");
@@ -482,7 +515,7 @@ static int run_test(const std::string& arguments, bool silent) {
 
     CHECK_CUDA(cudaMemset(work_d, 0, workspace_num_elements * dtype_size));
     CHECK_CUDECOMP(cudecompTransposeYToX(handle, grid_desc, input, output, work_d, get_cudecomp_datatype(real_t(0)),
-                                              pinfo_y.halo_extents, pinfo_x.halo_extents, 0));
+                                              pinfo_y.halo_extents, pinfo_x.halo_extents, pinfo_y.padding, pinfo_x.padding, 0));
     CHECK_CUDA(cudaMemcpy(data.data(), output, data.size() * sizeof(*data_d), cudaMemcpyDeviceToHost));
     if (!compare_pencils(xref, data, pinfo_x)) {
       fprintf(stderr, "FAILED cudecompTransposeYToX\n");

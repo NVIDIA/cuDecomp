@@ -190,15 +190,15 @@ int main(int argc, char** argv) {
   // Get X-pencil information (with halo elements).
   cudecompPencilInfo_t pinfo_x;
   int32_t halo_extents_x[3]{1, 1, 1};
-  CHECK_CUDECOMP_EXIT(cudecompGetPencilInfo(handle, grid_desc, &pinfo_x, 0, halo_extents_x));
+  CHECK_CUDECOMP_EXIT(cudecompGetPencilInfo(handle, grid_desc, &pinfo_x, 0, halo_extents_x, nullptr));
 
   // Get Y-pencil information
   cudecompPencilInfo_t pinfo_y;
-  CHECK_CUDECOMP_EXIT(cudecompGetPencilInfo(handle, grid_desc, &pinfo_y, 1, nullptr));
+  CHECK_CUDECOMP_EXIT(cudecompGetPencilInfo(handle, grid_desc, &pinfo_y, 1, nullptr, nullptr));
 
   // Get Z-pencil information
   cudecompPencilInfo_t pinfo_z;
-  CHECK_CUDECOMP_EXIT(cudecompGetPencilInfo(handle, grid_desc, &pinfo_z, 2, nullptr));
+  CHECK_CUDECOMP_EXIT(cudecompGetPencilInfo(handle, grid_desc, &pinfo_z, 2, nullptr, nullptr));
 
   // Allocate pencil memory
   int64_t data_num_elements = std::max(std::max(pinfo_x.size, pinfo_y.size), pinfo_z.size);
@@ -241,19 +241,19 @@ int main(int argc, char** argv) {
 
   // Transpose from X-pencils to Y-pencils.
   CHECK_CUDECOMP_EXIT(cudecompTransposeXToY(handle, grid_desc, data_d, data_d, transpose_work_d, CUDECOMP_DOUBLE,
-                                            pinfo_x.halo_extents, nullptr, 0));
+                                            pinfo_x.halo_extents, nullptr, nullptr, nullptr, 0));
 
   // Transpose from Y-pencils to Z-pencils.
   CHECK_CUDECOMP_EXIT(
-      cudecompTransposeYToZ(handle, grid_desc, data_d, data_d, transpose_work_d, CUDECOMP_DOUBLE, nullptr, nullptr, 0));
+      cudecompTransposeYToZ(handle, grid_desc, data_d, data_d, transpose_work_d, CUDECOMP_DOUBLE, nullptr, nullptr, nullptr, nullptr, 0));
 
   // Transpose from Z-pencils to Y-pencils.
   CHECK_CUDECOMP_EXIT(
-      cudecompTransposeZToY(handle, grid_desc, data_d, data_d, transpose_work_d, CUDECOMP_DOUBLE, nullptr, nullptr, 0));
+      cudecompTransposeZToY(handle, grid_desc, data_d, data_d, transpose_work_d, CUDECOMP_DOUBLE, nullptr, nullptr, nullptr, nullptr, 0));
 
   // Transpose from Y-pencils to X-pencils.
   CHECK_CUDECOMP_EXIT(cudecompTransposeYToX(handle, grid_desc, data_d, data_d, transpose_work_d, CUDECOMP_DOUBLE,
-                                            nullptr, pinfo_x.halo_extents, 0));
+                                            nullptr, pinfo_x.halo_extents, nullptr, nullptr, 0));
 
   // Updating halos
 
