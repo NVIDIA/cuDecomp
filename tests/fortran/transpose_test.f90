@@ -69,12 +69,12 @@ module transpose_CUDECOMP_DOUBLE_COMPLEX_mod
   function compare_pencils(ref, res, pinfo) result(mismatch)
     implicit none
     type(cudecompPencilInfo) :: pinfo
-    ARRTYPE :: ref(pinfo%lo(1) - pinfo%halo_extents(pinfo%order(1)): pinfo%hi(1) + pinfo%halo_extents(pinfo%order(1)), &
-                   pinfo%lo(2) - pinfo%halo_extents(pinfo%order(2)): pinfo%hi(2) + pinfo%halo_extents(pinfo%order(2)), &
-                   pinfo%lo(3) - pinfo%halo_extents(pinfo%order(3)): pinfo%hi(3) + pinfo%halo_extents(pinfo%order(3)))
-    ARRTYPE :: res(pinfo%lo(1) - pinfo%halo_extents(pinfo%order(1)): pinfo%hi(1) + pinfo%halo_extents(pinfo%order(1)), &
-                   pinfo%lo(2) - pinfo%halo_extents(pinfo%order(2)): pinfo%hi(2) + pinfo%halo_extents(pinfo%order(2)), &
-                   pinfo%lo(3) - pinfo%halo_extents(pinfo%order(3)): pinfo%hi(3) + pinfo%halo_extents(pinfo%order(3)))
+    ARRTYPE :: ref(pinfo%lo(1) - pinfo%halo_extents(pinfo%order(1)): pinfo%hi(1) + pinfo%halo_extents(pinfo%order(1)) + pinfo%padding(pinfo%order(1)), &
+                   pinfo%lo(2) - pinfo%halo_extents(pinfo%order(2)): pinfo%hi(2) + pinfo%halo_extents(pinfo%order(2)) + pinfo%padding(pinfo%order(2)), &
+                   pinfo%lo(3) - pinfo%halo_extents(pinfo%order(3)): pinfo%hi(3) + pinfo%halo_extents(pinfo%order(3)) + pinfo%padding(pinfo%order(3)))
+    ARRTYPE :: res(pinfo%lo(1) - pinfo%halo_extents(pinfo%order(1)): pinfo%hi(1) + pinfo%halo_extents(pinfo%order(1)) + pinfo%padding(pinfo%order(1)), &
+                   pinfo%lo(2) - pinfo%halo_extents(pinfo%order(2)): pinfo%hi(2) + pinfo%halo_extents(pinfo%order(2)) + pinfo%padding(pinfo%order(2)), &
+                   pinfo%lo(3) - pinfo%halo_extents(pinfo%order(3)): pinfo%hi(3) + pinfo%halo_extents(pinfo%order(3)) + pinfo%padding(pinfo%order(3)))
 
     logical :: mismatch
     mismatch = any(ref(pinfo%lo(1): pinfo%hi(1), pinfo%lo(2): pinfo%hi(2), pinfo%lo(3): pinfo%hi(3)) /= &
@@ -90,10 +90,10 @@ module transpose_CUDECOMP_DOUBLE_COMPLEX_mod
     integer :: gdims(3)
     integer :: gx(3)
 
-    ! Allocate reference pencil with halo regions
-    allocate(ref(pinfo%lo(1) - pinfo%halo_extents(pinfo%order(1)): pinfo%hi(1) + pinfo%halo_extents(pinfo%order(1)), &
-                 pinfo%lo(2) - pinfo%halo_extents(pinfo%order(2)): pinfo%hi(2) + pinfo%halo_extents(pinfo%order(2)), &
-                 pinfo%lo(3) - pinfo%halo_extents(pinfo%order(3)): pinfo%hi(3) + pinfo%halo_extents(pinfo%order(3))))
+    ! Allocate reference pencil with halo and padding regions
+    allocate(ref(pinfo%lo(1) - pinfo%halo_extents(pinfo%order(1)): pinfo%hi(1) + pinfo%halo_extents(pinfo%order(1)) + pinfo%padding(pinfo%order(1)), &
+                 pinfo%lo(2) - pinfo%halo_extents(pinfo%order(2)): pinfo%hi(2) + pinfo%halo_extents(pinfo%order(2)) + pinfo%padding(pinfo%order(2)), &
+                 pinfo%lo(3) - pinfo%halo_extents(pinfo%order(3)): pinfo%hi(3) + pinfo%halo_extents(pinfo%order(3)) + pinfo%padding(pinfo%order(3))))
 
     ref = -1
 
@@ -175,6 +175,7 @@ module transpose_CUDECOMP_DOUBLE_COMPLEX_mod
     logical :: axis_contiguous(3)
     integer :: gdims_dist(3)
     integer :: halo_extents_x(3), halo_extents_y(3), halo_extents_z(3)
+    integer :: padding_x(3), padding_y(3), padding_z(3)
     integer :: mem_order(3, 3)
     logical :: out_of_place, use_managed_memory
     integer :: pr, pc
@@ -305,6 +306,24 @@ module transpose_CUDECOMP_DOUBLE_COMPLEX_mod
           do j = 1, 3
             read(args(i+j), *) arg
             read(arg, *) halo_extents_z(j)
+          enddo
+          skip_count = 3
+        case('--pdx')
+          do j = 1, 3
+            call get_command_argument(i+j, arg)
+            read(arg, *) padding_x(j)
+          enddo
+          skip_count = 3
+        case('--pdy')
+          do j = 1, 3
+            call get_command_argument(i+j, arg)
+            read(arg, *) padding_y(j)
+          enddo
+          skip_count = 3
+        case('--pdz')
+          do j = 1, 3
+            call get_command_argument(i+j, arg)
+            read(arg, *) padding_z(j)
           enddo
           skip_count = 3
         case('--mem_order')
@@ -569,7 +588,6 @@ program main
   else
     call read_testfile(testfile, testcases)
   endif
-
 
   nfailed = 0
   allocate(failed_cases(size(testcases)))

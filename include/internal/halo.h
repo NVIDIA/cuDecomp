@@ -55,7 +55,7 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
 
   // Get pencil info
   cudecompPencilInfo_t pinfo_h;
-  CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_h, ax, halo_extents.data()));
+  CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_h, ax, halo_extents.data(), nullptr));
 
   // Get global ordered shapes
   auto shape_g_h = getShapeG(pinfo_h);
