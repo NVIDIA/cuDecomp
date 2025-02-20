@@ -315,6 +315,7 @@ program main
     integer :: il, jl, ig, jg
     integer :: offsets(3), xoff, yoff
     integer :: np(3)
+    integer(8) :: norm
     np(piZ%order(1)) = piZ%shape(1)
     np(piZ%order(2)) = piZ%shape(2)
     np(piZ%order(3)) = piZ%shape(3)
@@ -322,6 +323,8 @@ program main
 
 
     ! divide by -K**2, and normalize
+
+    norm = int(nx,8) * int(ny,8) * int(nz,8)
 
     offsets(piZ%order(1)) = piZ%lo(1) - 1
     offsets(piZ%order(2)) = piZ%lo(2) - 1
@@ -338,7 +341,7 @@ program main
           ig = xoff + il
           do k = 1, nz
              k2 = kx_d(ig)**2 + ky_d(jg)**2 + kz_d(k)**2
-             phi3d(k,il,jl) = -phi3d(k,il,jl)/k2/(nx*ny*nz)
+             phi3d(k,il,jl) = -phi3d(k,il,jl)/k2/norm
           enddo
        enddo
     enddo
