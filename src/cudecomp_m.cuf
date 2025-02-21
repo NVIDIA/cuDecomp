@@ -79,6 +79,7 @@ module cudecomp
     enumerator :: CUDECOMP_RESULT_MPI_ERROR = 6
     enumerator :: CUDECOMP_RESULT_NCCL_ERROR = 7
     enumerator :: CUDECOMP_RESULT_NVSHMEM_ERROR = 8
+    enumerator :: CUDECOMP_RESULT_NVML_ERROR = 9
   end enum
 
   ! types

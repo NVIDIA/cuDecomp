@@ -147,6 +147,7 @@ target_sources(cudecomp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/cudecomp_kernels.cu
   ${CMAKE_CURRENT_SOURCE_DIR}/src/cudecomp_kernels_rdc.cu
   ${CMAKE_CURRENT_SOURCE_DIR}/src/cudecomp.cc
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/nvml_wrap.cc
 )
 
 set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/src/cudecomp_kernels_rdc.cu PROPERTIES COMPILE_FLAGS -rdc=true)

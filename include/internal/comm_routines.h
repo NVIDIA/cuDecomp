@@ -162,13 +162,13 @@ cudecompAlltoall(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
   }
   case CUDECOMP_TRANSPOSE_COMM_NCCL: {
     auto comm_info = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info : grid_desc->col_comm_info;
-    // For fully intranode alltoall, use distinct NCCL local comm instead of global comm as it is faster.
-    auto comm = (comm_info.nnodes == 1) ? handle->nccl_local_comm : handle->nccl_comm;
+    // For fully intra-group alltoall, use distinct NCCL local comm instead of global comm as it is faster.
+    auto comm = (comm_info.ngroups == 1) ? handle->nccl_local_comm : handle->nccl_comm;
 
     CHECK_NCCL(ncclGroupStart());
     for (int i = 0; i < send_counts.size(); ++i) {
       int peer_rank_global = getGlobalRank(grid_desc, comm_axis, i);
-      if (comm_info.nnodes == 1) { peer_rank_global = handle->rank_to_local_rank[peer_rank_global]; }
+      if (comm_info.ngroups == 1) { peer_rank_global = handle->rank_to_clique_rank[peer_rank_global]; }
       if (send_counts[i] != 0) {
         CHECK_NCCL(ncclSend(send_buff + send_offsets[i], send_counts[i] * sizeof(T), ncclChar, peer_rank_global, comm,
                             stream));
@@ -342,8 +342,8 @@ static void cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cude
   }
   case CUDECOMP_TRANSPOSE_COMM_NCCL_PL: {
     auto comm_info = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info : grid_desc->col_comm_info;
-    // For fully intranode alltoall, use distinct NCCL local comm instead of global comm as it is faster.
-    auto comm = (comm_info.nnodes == 1) ? handle->nccl_local_comm : handle->nccl_comm;
+    // For fully intra-group alltoall, use distinct NCCL local comm instead of global comm as it is faster.
+    auto comm = (comm_info.ngroups == 1) ? handle->nccl_local_comm : handle->nccl_comm;
     auto pl_stream = handle->pl_stream;
     int self_rank = comm_info.rank;
 
@@ -365,9 +365,9 @@ static void cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cude
         }
         int src_rank_global = getGlobalRank(grid_desc, comm_axis, src_rank);
         int dst_rank_global = getGlobalRank(grid_desc, comm_axis, dst_rank);
-        if (comm_info.nnodes == 1) {
-          src_rank_global = handle->rank_to_local_rank[src_rank_global];
-          dst_rank_global = handle->rank_to_local_rank[dst_rank_global];
+        if (comm_info.ngroups == 1) {
+          src_rank_global = handle->rank_to_clique_rank[src_rank_global];
+          dst_rank_global = handle->rank_to_clique_rank[dst_rank_global];
         }
         if (send_counts[dst_rank] != 0) {
           CHECK_NCCL(ncclSend(send_buff + send_offsets[dst_rank], send_counts[dst_rank] * sizeof(T), ncclChar,

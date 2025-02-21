@@ -29,10 +29,12 @@
  */
 
 #include <algorithm>
+#include <cstring>
 #include <iostream>
 #include <numeric>
 #include <set>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include <cuda.h>
@@ -51,6 +53,8 @@
 #include "internal/cuda_wrap.h"
 #include "internal/exceptions.h"
 #include "internal/halo.h"
+#include "internal/hashes.h"
+#include "internal/nvml_wrap.h"
 #include "internal/transpose.h"
 
 namespace cudecomp {
@@ -186,16 +190,91 @@ static void checkConfig(cudecompHandle_t handle, const cudecompGridDescConfig_t*
 }
 
 static void gatherGlobalMPIInfo(cudecompHandle_t& handle) {
+  // Gather hostnames by rank
   handle->hostnames.resize(handle->nranks);
   int resultlen;
   CHECK_MPI(MPI_Get_processor_name(handle->hostnames[handle->rank].data(), &resultlen));
   CHECK_MPI(MPI_Allgather(MPI_IN_PLACE, 0, MPI_DATATYPE_NULL, handle->hostnames.data(), MPI_MAX_PROCESSOR_NAME,
                           MPI_CHAR, handle->mpi_comm));
 
+  // Gather rank to local rank mappings
   handle->rank_to_local_rank.resize(handle->nranks);
   handle->rank_to_local_rank[handle->rank] = handle->local_rank;
   CHECK_MPI(MPI_Allgather(MPI_IN_PLACE, 0, MPI_DATATYPE_NULL, handle->rank_to_local_rank.data(), 1, MPI_INT,
                           handle->mpi_comm));
+
+  // Gather MNNVL clique related structures (if supported)
+  int dev;
+  CHECK_CUDA(cudaGetDevice(&dev));
+  char pciBusId[] = "00000000:00:00.0";
+  CHECK_CUDA(cudaDeviceGetPCIBusId(pciBusId, sizeof(pciBusId), dev));
+  nvmlDevice_t nvml_dev;
+  CHECK_NVML(nvmlDeviceGetHandleByPciBusId(pciBusId, &nvml_dev));
+#if NVML_API_VERSION >= 12 && CUDART_VERSION >= 12030
+  nvmlGpuFabricInfoV_t fabricInfo ={ .version = nvmlGpuFabricInfo_v2 };
+  if (nvmlHasFabricSupport()) {
+    handle->rank_to_mnnvl_info.resize(handle->nranks);
+
+    // Gather MNNVL information (clusterUuid, cliqueId) by rank
+    CHECK_NVML(nvmlDeviceGetGpuFabricInfoV(nvml_dev, &fabricInfo));
+    unsigned char zeros[NVML_GPU_FABRIC_UUID_LEN]{};
+    std::vector<std::array<unsigned char, NVML_GPU_FABRIC_UUID_LEN>> clusterUuids(handle->nranks);
+    std::vector<unsigned int> cliqueIds(handle->nranks);
+
+    if (std::memcmp(fabricInfo.clusterUuid, zeros, NVML_GPU_FABRIC_UUID_LEN) != 0) {
+      std::memcpy(clusterUuids[handle->rank].data(), fabricInfo.clusterUuid, NVML_GPU_FABRIC_UUID_LEN);
+      cliqueIds[handle->rank] = fabricInfo.cliqueId;
+    } else {
+      std::memcpy(clusterUuids[handle->rank].data(), zeros, NVML_GPU_FABRIC_UUID_LEN);
+      cliqueIds[handle->rank] = 0;
+    }
+
+    CHECK_MPI(MPI_Allgather(MPI_IN_PLACE, 0, MPI_DATATYPE_NULL, clusterUuids.data(), NVML_GPU_FABRIC_UUID_LEN, MPI_CHAR,
+                            handle->mpi_comm));
+    CHECK_MPI(MPI_Allgather(MPI_IN_PLACE, 0, MPI_DATATYPE_NULL, cliqueIds.data(), 1, MPI_INT, handle->mpi_comm));
+
+    for (int i = 0; i < handle->nranks; ++i) {
+      if (std::memcmp(clusterUuids[i].data(), zeros, NVML_GPU_FABRIC_UUID_LEN) == 0) {
+        // If any rank has a zero cluster UUID, disable MNNVL.
+        handle->rank_to_mnnvl_info.resize(0);
+	break;
+      }
+      handle->rank_to_mnnvl_info[i].first = clusterUuids[i];
+      handle->rank_to_mnnvl_info[i].second = cliqueIds[i];
+    }
+  }
+
+  if (handle->rank_to_mnnvl_info.size() != 0) {
+    // cliqueIds returned in fabricInfo are not unique across MNNVL domains (defined by clusterUuid).
+    // Define a modified clique id that assigns a unique index to each (clusterUuid, cliqueId) pair.
+    std::unordered_map<mnnvl_info, unsigned int> clique_ids;
+    clique_ids = getUniqueIds(handle->rank_to_mnnvl_info);
+
+    // Populate rank to MNNVL clique mappings
+    handle->rank_to_clique.resize(handle->nranks);
+    for (int i = 0; i < handle->nranks; ++i) {
+      handle->rank_to_clique[i] = clique_ids[handle->rank_to_mnnvl_info[i]];
+    }
+
+    // Create clique local MPI communicator
+    CHECK_MPI(MPI_Comm_split(handle->mpi_comm, static_cast<int>(handle->rank_to_clique[handle->rank]), handle->rank, &handle->mpi_clique_comm));
+    CHECK_MPI(MPI_Comm_rank(handle->mpi_clique_comm, &handle->clique_rank));
+    CHECK_MPI(MPI_Comm_size(handle->mpi_clique_comm, &handle->clique_nranks));
+
+    // Gather rank to clique rank mappings
+    handle->rank_to_clique_rank.resize(handle->nranks);
+    handle->rank_to_clique_rank[handle->rank] = handle->clique_rank;
+    CHECK_MPI(MPI_Allgather(MPI_IN_PLACE, 0, MPI_DATATYPE_NULL, handle->rank_to_clique_rank.data(), 1, MPI_INT,
+                            handle->mpi_comm));
+  }
+#endif
+
+  // Copy local rank mapping to clique rank mapping in general case
+  if (handle->rank_to_clique_rank.size() == 0) {
+    handle->rank_to_clique_rank = handle->rank_to_local_rank;
+
+  }
+
 }
 
 static void getCudecompEnvVars(cudecompHandle_t& handle) {
@@ -297,7 +376,13 @@ cudecompResult_t cudecompInit(cudecompHandle_t* handle_in, MPI_Comm mpi_comm) {
     CHECK_MPI(MPI_Comm_rank(handle->mpi_local_comm, &handle->local_rank));
     CHECK_MPI(MPI_Comm_size(handle->mpi_local_comm, &handle->local_nranks));
 
+    // Load CUDA driver symbols into table
     initCuFunctionTable();
+
+    // Load NVML symbols into table and initialize NVML
+    initNvmlFunctionTable();
+
+    CHECK_NVML(nvmlInit());
 
     // Initialize cuTENSOR library
 #if CUTENSOR_MAJOR >= 2
@@ -349,6 +434,8 @@ cudecompResult_t cudecompFinalize(cudecompHandle_t handle) {
     CHECK_CUTENSOR(cutensorDestroy(handle->cutensor_handle));
     CHECK_CUTENSOR(cutensorDestroyPlanPreference(handle->cutensor_plan_pref));
 #endif
+
+    CHECK_NVML(nvmlShutdown());
 
     handle = nullptr;
     delete handle;
@@ -433,7 +520,9 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
     if (transposeBackendRequiresNccl(comm_backend) || haloBackendRequiresNccl(halo_comm_backend) ||
         ((autotune_transpose_backend || autotune_halo_backend) && !autotune_disable_nccl_backends)) {
       if (!handle->nccl_comm) { handle->nccl_comm = ncclCommFromMPIComm(handle->mpi_comm); }
-      if (!handle->nccl_local_comm) { handle->nccl_local_comm = ncclCommFromMPIComm(handle->mpi_local_comm); }
+      if (!handle->nccl_local_comm) {
+        handle->nccl_local_comm = ncclCommFromMPIComm(handle->mpi_clique_comm != MPI_COMM_NULL ? handle->mpi_clique_comm : handle->mpi_local_comm);
+      }
       if (!handle->pl_stream) {
         int greatest_priority;
         CHECK_CUDA(cudaDeviceGetStreamPriorityRange(nullptr, &greatest_priority));
