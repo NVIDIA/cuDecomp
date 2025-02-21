@@ -63,9 +63,7 @@ static cudecompDataType_t get_cudecomp_datatype(float) { return CUDECOMP_FLOAT; 
 static bool compare_pencils(const std::vector<real_t>& ref, const std::vector<real_t>& res,
                             const cudecompPencilInfo_t& pinfo) {
   for (int64_t i = 0; i < ref.size(); ++i) {
-    if (ref[i] != real_t(-1)) {
-      if (std::abs(ref[i] - res[i]) > 1e-6) return false;
-    }
+    if (std::abs(ref[i] - res[i]) > 1e-6) return false;
   }
   return true;
 }
@@ -86,9 +84,9 @@ static void initialize_pencil(std::vector<real_t>& ref, const cudecompPencilInfo
     int64_t gi = gx[0] + gdims[0] * (gx[1] + gx[2] * gdims[1]);
 
     // Only set values inside internal region
-    if (lx[0] >= pinfo.halo_extents[pinfo.order[0]] && lx[0] < (pinfo.shape[0] - pinfo.halo_extents[pinfo.order[0]]) &&
-        lx[1] >= pinfo.halo_extents[pinfo.order[1]] && lx[1] < (pinfo.shape[1] - pinfo.halo_extents[pinfo.order[1]]) &&
-        lx[2] >= pinfo.halo_extents[pinfo.order[2]] && lx[2] < (pinfo.shape[2] - pinfo.halo_extents[pinfo.order[2]])) {
+    if (lx[0] >= pinfo.halo_extents[pinfo.order[0]] && lx[0] < (pinfo.shape[0] - pinfo.halo_extents[pinfo.order[0]] - pinfo.padding[pinfo.order[0]]) &&
+        lx[1] >= pinfo.halo_extents[pinfo.order[1]] && lx[1] < (pinfo.shape[1] - pinfo.halo_extents[pinfo.order[1]] - pinfo.padding[pinfo.order[1]]) &&
+        lx[2] >= pinfo.halo_extents[pinfo.order[2]] && lx[2] < (pinfo.shape[2] - pinfo.halo_extents[pinfo.order[2]] - pinfo.padding[pinfo.order[2]])) {
       ref[i] = gi;
     } else {
       ref[i] = -1;
@@ -123,6 +121,12 @@ static void initialize_reference(std::vector<real_t>& ref, const cudecompPencilI
           unset = true;
         }
       }
+    }
+    // Also mark any padded elements for unset value (-1)
+    if (lx[0] >= pinfo.shape[0] - pinfo.padding[pinfo.order[0]] ||
+        lx[1] >= pinfo.shape[1] - pinfo.padding[pinfo.order[1]] ||
+        lx[2] >= pinfo.shape[2] - pinfo.padding[pinfo.order[2]]) {
+      unset = true;
     }
 
     int64_t gi = (unset) ? -1 : gx[0] + gdims[0] * (gx[1] + gx[2] * gdims[1]);
@@ -211,6 +215,7 @@ int main(int argc, char** argv) {
   std::array<int, 3> gdims_dist{};
   std::array<int, 3> halo_extents{1, 1, 1};
   std::array<bool, 3> halo_periods{true, true, true};
+  std::array<int, 3> padding{};
   int axis = 0;
   bool use_managed_memory = false;
   std::array<int, 9> mem_order{-1, -1, -1, -1, -1, -1, -1, -1, -1};
@@ -226,12 +231,13 @@ int main(int argc, char** argv) {
         {"hex", required_argument, 0, '7'}, {"hey", required_argument, 0, '8'},
         {"hez", required_argument, 0, '9'}, {"hpx", required_argument, 0, 'e'},
         {"hpy", required_argument, 0, 'f'}, {"hpz", required_argument, 0, 'g'},
-        {"ax", required_argument, 0, 'a'},  {"use-managed-memory", no_argument, 0, 'm'},
-        {"mem_order", required_argument, 0, 'q'},
+        {"pdx", required_argument, 0, '&'}, {"pdy", required_argument, 0, '*'},
+        {"pdz", required_argument, 0, '*'}, {"ax", required_argument, 0, 'a'},
+        {"use-managed-memory", no_argument, 0, 'm'}, {"mem_order", required_argument, 0, 'q'},
         {"help", no_argument, 0, 'h'},      {0, 0, 0, 0}};
 
     int option_index = 0;
-    int ch = getopt_long(argc, argv, "x:y:z:b:r:c:1:2:3:4:5:6:7:8:9:e:f:g:a:q:mh", long_options, &option_index);
+    int ch = getopt_long(argc, argv, "x:y:z:b:r:c:1:2:3:4:5:6:7:8:9:e:f:g:a:q:&:*:(:mh", long_options, &option_index);
     if (ch == -1) break;
 
     switch (ch) {
@@ -254,6 +260,9 @@ int main(int argc, char** argv) {
     case 'e': halo_periods[0] = atoi(optarg); break;
     case 'f': halo_periods[1] = atoi(optarg); break;
     case 'g': halo_periods[2] = atoi(optarg); break;
+    case '&': padding[0] = atoi(optarg); break;
+    case '*': padding[1] = atoi(optarg); break;
+    case '(': padding[2] = atoi(optarg); break;
     case 'a': axis = atoi(optarg); break;
     case 'm': use_managed_memory = true; break;
     case 'q':
@@ -334,7 +343,7 @@ int main(int argc, char** argv) {
 
   // Get pencil information
   cudecompPencilInfo_t pinfo;
-  CHECK_CUDECOMP_EXIT(cudecompGetPencilInfo(handle, grid_desc, &pinfo, axis, halo_extents.data(), nullptr));
+  CHECK_CUDECOMP_EXIT(cudecompGetPencilInfo(handle, grid_desc, &pinfo, axis, halo_extents.data(), padding.data()));
 
   // Get workspace size
   int64_t workspace_num_elements;
@@ -374,15 +383,15 @@ int main(int argc, char** argv) {
     switch (axis) {
     case 0:
       CHECK_CUDECOMP_EXIT(cudecompUpdateHalosX(handle, grid_desc, input, work_d, get_cudecomp_datatype(real_t(0)),
-                                               pinfo.halo_extents, halo_periods.data(), i, 0));
+                                               pinfo.halo_extents, halo_periods.data(), i, pinfo.padding, 0));
       break;
     case 1:
       CHECK_CUDECOMP_EXIT(cudecompUpdateHalosY(handle, grid_desc, input, work_d, get_cudecomp_datatype(real_t(0)),
-                                               pinfo.halo_extents, halo_periods.data(), i, 0));
+                                               pinfo.halo_extents, halo_periods.data(), i, pinfo.padding, 0));
       break;
     case 2:
       CHECK_CUDECOMP_EXIT(cudecompUpdateHalosZ(handle, grid_desc, input, work_d, get_cudecomp_datatype(real_t(0)),
-                                               pinfo.halo_extents, halo_periods.data(), i, 0));
+                                               pinfo.halo_extents, halo_periods.data(), i, pinfo.padding, 0));
       break;
     }
   }

@@ -46,19 +46,25 @@ namespace cudecomp {
 
 template <typename T>
 void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompGridDesc_t grid_desc, T* input, T* work,
-                          const int32_t halo_extents_ptr[], const bool halo_periods_ptr[], int32_t dim,
+                          const int32_t halo_extents_ptr[], const bool halo_periods_ptr[],
+                          int32_t dim, const int32_t padding_ptr[],
                           cudaStream_t stream) {
   std::array<int32_t, 3> halo_extents{};
   if (halo_extents_ptr) std::copy(halo_extents_ptr, halo_extents_ptr + 3, halo_extents.begin());
   std::array<bool, 3> halo_periods{};
   if (halo_periods_ptr) std::copy(halo_periods_ptr, halo_periods_ptr + 3, halo_periods.begin());
+  std::array<int32_t, 3> padding{};
+  if (padding_ptr) std::copy(padding_ptr, padding_ptr + 3, padding.begin());
 
   // Get pencil info
   cudecompPencilInfo_t pinfo_h;
   CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_h, ax, halo_extents.data(), nullptr));
+  cudecompPencilInfo_t pinfo_h_p; // with padding
+  CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_h_p, ax, halo_extents.data(), padding.data()));
 
   // Get global ordered shapes
   auto shape_g_h = getShapeG(pinfo_h);
+  auto shape_g_h_p = getShapeG(pinfo_h_p);
 
   // Get neighbors
   std::array<int32_t, 2> neighbors;
@@ -120,9 +126,13 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
   }
 
   bool managed = isManagedPointer(input);
+  bool input_has_padding = anyNonzeros(padding);
+
   if (c == 2 &&
-      (haloBackendRequiresNvshmem(grid_desc->config.halo_comm_backend) ||
-      (managed && haloBackendRequiresMpi(grid_desc->config.halo_comm_backend)))) {
+      (input_has_padding ||
+       haloBackendRequiresNvshmem(grid_desc->config.halo_comm_backend) ||
+       (managed && haloBackendRequiresMpi(grid_desc->config.halo_comm_backend)))) {
+    // For padded input, always stage to work space.
     // For managed memory, always stage to work space if using MPI.
     // For any memory, always stage to workspace if using NVSHMEM.
     // Can revisit for NVSHMEM if input is NVSHMEM allocated.
@@ -136,21 +146,21 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
     std::array<int32_t, 3> lx{};
 
     // Left
-    lx[dim] = shape_g_h[dim] - 2 * halo_extents[dim];
-    memcpy_params.src[0] = input + getPencilPtrOffset(pinfo_h, lx);
-    memcpy_params.dest[0] = input + getPencilPtrOffset(pinfo_h, {0, 0, 0});
+    lx[dim] = shape_g_h_p[dim] - 2 * halo_extents[dim] - padding[dim];
+    memcpy_params.src[0] = input + getPencilPtrOffset(pinfo_h_p, lx);
+    memcpy_params.dest[0] = input + getPencilPtrOffset(pinfo_h_p, {0, 0, 0});
 
     // Right
     lx[dim] = halo_extents[dim];
-    memcpy_params.src[1] = input + getPencilPtrOffset(pinfo_h, lx);
-    lx[dim] = shape_g_h[dim] - halo_extents[dim];
-    memcpy_params.dest[1] = input + getPencilPtrOffset(pinfo_h, lx);
+    memcpy_params.src[1] = input + getPencilPtrOffset(pinfo_h_p, lx);
+    lx[dim] = shape_g_h_p[dim] - halo_extents[dim] - padding[dim];
+    memcpy_params.dest[1] = input + getPencilPtrOffset(pinfo_h_p, lx);
 
     for (int i = 0; i < 2; ++i) {
-      memcpy_params.src_strides[0][i] = pinfo_h.shape[0] * pinfo_h.shape[1];
-      memcpy_params.src_strides[1][i] = pinfo_h.shape[0];
-      memcpy_params.dest_strides[0][i] = pinfo_h.shape[0] * pinfo_h.shape[1];
-      memcpy_params.dest_strides[1][i] = pinfo_h.shape[0];
+      memcpy_params.src_strides[0][i] = pinfo_h_p.shape[0] * pinfo_h_p.shape[1];
+      memcpy_params.src_strides[1][i] = pinfo_h_p.shape[0];
+      memcpy_params.dest_strides[0][i] = pinfo_h_p.shape[0] * pinfo_h_p.shape[1];
+      memcpy_params.dest_strides[1][i] = pinfo_h_p.shape[0];
       memcpy_params.extents[0][i] = (dim == pinfo_h.order[2]) ? halo_extents[dim] : pinfo_h.shape[2];
       memcpy_params.extents[1][i] = (dim == pinfo_h.order[1]) ? halo_extents[dim] : pinfo_h.shape[1];
       memcpy_params.extents[2][i] = (dim == pinfo_h.order[0]) ? halo_extents[dim] : pinfo_h.shape[0];
@@ -172,17 +182,17 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
     // Pack
     // Left
     lx[dim] = halo_extents[dim];
-    memcpy_params.src[0] = input + getPencilPtrOffset(pinfo_h, lx);
+    memcpy_params.src[0] = input + getPencilPtrOffset(pinfo_h_p, lx);
     memcpy_params.dest[0] = send_buff;
 
     // Right
-    lx[dim] = shape_g_h[dim] - 2 * halo_extents[dim];
-    memcpy_params.src[1] = input + getPencilPtrOffset(pinfo_h, lx);
+    lx[dim] = shape_g_h_p[dim] - 2 * halo_extents[dim] - padding[dim];
+    memcpy_params.src[1] = input + getPencilPtrOffset(pinfo_h_p, lx);
     memcpy_params.dest[1] = send_buff + halo_size;
 
     for (int i = 0; i < 2; ++i) {
-      memcpy_params.src_strides[0][i] = pinfo_h.shape[0] * pinfo_h.shape[1];
-      memcpy_params.src_strides[1][i] = pinfo_h.shape[0];
+      memcpy_params.src_strides[0][i] = pinfo_h_p.shape[0] * pinfo_h_p.shape[1];
+      memcpy_params.src_strides[1][i] = pinfo_h_p.shape[0];
       memcpy_params.dest_strides[1][i] = (dim == pinfo_h.order[0]) ? halo_extents[dim] : pinfo_h.shape[0];
       memcpy_params.dest_strides[0][i] =
           memcpy_params.dest_strides[1][i] * ((dim == pinfo_h.order[1]) ? halo_extents[dim] : pinfo_h.shape[1]);
@@ -203,16 +213,16 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
     // Unpack
     // Left
     memcpy_params.src[0] = recv_buff;
-    memcpy_params.dest[0] = input + getPencilPtrOffset(pinfo_h, {0, 0, 0});
+    memcpy_params.dest[0] = input + getPencilPtrOffset(pinfo_h_p, {0, 0, 0});
 
     // Right
     memcpy_params.src[1] = recv_buff + halo_size;
-    lx[dim] = shape_g_h[dim] - halo_extents[dim];
-    memcpy_params.dest[1] = input + getPencilPtrOffset(pinfo_h, lx);
+    lx[dim] = shape_g_h_p[dim] - halo_extents[dim] - padding[dim];
+    memcpy_params.dest[1] = input + getPencilPtrOffset(pinfo_h_p, lx);
 
     for (int i = 0; i < 2; ++i) {
-      memcpy_params.dest_strides[0][i] = pinfo_h.shape[0] * pinfo_h.shape[1];
-      memcpy_params.dest_strides[1][i] = pinfo_h.shape[0];
+      memcpy_params.dest_strides[0][i] = pinfo_h_p.shape[0] * pinfo_h_p.shape[1];
+      memcpy_params.dest_strides[1][i] = pinfo_h_p.shape[0];
       memcpy_params.src_strides[1][i] = (dim == pinfo_h.order[0]) ? halo_extents[dim] : pinfo_h.shape[0];
       memcpy_params.src_strides[0][i] =
           memcpy_params.src_strides[1][i] * ((dim == pinfo_h.order[1]) ? halo_extents[dim] : pinfo_h.shape[1]);
@@ -250,9 +260,9 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
     send_offsets[0] = getPencilPtrOffset(pinfo_h, lx);
     recv_offsets[0] = getPencilPtrOffset(pinfo_h, {0, 0, 0});
     // Right
-    lx[dim] = shape_g_h[dim] - 2 * halo_extents[dim];
+    lx[dim] = shape_g_h_p[dim] - 2 * halo_extents[dim];
     send_offsets[1] = getPencilPtrOffset(pinfo_h, lx);
-    lx[dim] = shape_g_h[dim] - halo_extents[dim];
+    lx[dim] = shape_g_h_p[dim] - halo_extents[dim];
     recv_offsets[1] = getPencilPtrOffset(pinfo_h, lx);
 
     cudecompSendRecvPair(handle, grid_desc, neighbors, input, counts, send_offsets, input, counts, recv_offsets,
@@ -263,34 +273,34 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
 
 template <typename T>
 void cudecompUpdateHalosX(const cudecompHandle_t handle, const cudecompGridDesc_t grid_desc, T* input, T* work,
-                          const int32_t halo_extents_ptr[], const bool halo_periods_ptr[], int32_t dim,
-                          cudaStream_t stream) {
+                          const int32_t halo_extents_ptr[], const bool halo_periods_ptr[],
+                          int32_t dim, const int32_t padding_ptr[], cudaStream_t stream) {
   std::stringstream os;
   os << "cudecompUpdateHalosX_" << dim;
   nvtx::rangePush(os.str());
-  cudecompUpdateHalos_(0, handle, grid_desc, input, work, halo_extents_ptr, halo_periods_ptr, dim, stream);
+  cudecompUpdateHalos_(0, handle, grid_desc, input, work, halo_extents_ptr, halo_periods_ptr, dim, padding_ptr, stream);
   nvtx::rangePop();
 }
 
 template <typename T>
 void cudecompUpdateHalosY(const cudecompHandle_t handle, const cudecompGridDesc_t grid_desc, T* input, T* work,
-                          const int32_t halo_extents_ptr[], const bool halo_periods_ptr[], int32_t dim,
-                          cudaStream_t stream) {
+                          const int32_t halo_extents_ptr[], const bool halo_periods_ptr[],
+                          int32_t dim, const int32_t padding_ptr[], cudaStream_t stream) {
   std::stringstream os;
   os << "cudecompUpdateHalosY_" << dim;
   nvtx::rangePush(os.str());
-  cudecompUpdateHalos_(1, handle, grid_desc, input, work, halo_extents_ptr, halo_periods_ptr, dim, stream);
+  cudecompUpdateHalos_(1, handle, grid_desc, input, work, halo_extents_ptr, halo_periods_ptr, dim, padding_ptr, stream);
   nvtx::rangePop();
 }
 
 template <typename T>
 void cudecompUpdateHalosZ(const cudecompHandle_t handle, const cudecompGridDesc_t grid_desc, T* input, T* work,
-                          const int32_t halo_extents_ptr[], const bool halo_periods_ptr[], int32_t dim,
-                          cudaStream_t stream) {
+                          const int32_t halo_extents_ptr[], const bool halo_periods_ptr[],
+                          int32_t dim, const int32_t padding_ptr[], cudaStream_t stream) {
   std::stringstream os;
   os << "cudecompUpdateHalosZ_" << dim;
   nvtx::rangePush(os.str());
-  cudecompUpdateHalos_(2, handle, grid_desc, input, work, halo_extents_ptr, halo_periods_ptr, dim, stream);
+  cudecompUpdateHalos_(2, handle, grid_desc, input, work, halo_extents_ptr, halo_periods_ptr, dim, padding_ptr, stream);
   nvtx::rangePop();
 }
 

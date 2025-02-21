@@ -59,12 +59,8 @@ module halo_CUDECOMP_DOUBLE_COMPLEX_mod
     use cudecomp
     implicit none
     type(cudecompPencilInfo) :: pinfo
-    ARRTYPE :: ref(pinfo%lo(1) - pinfo%halo_extents(pinfo%order(1)): pinfo%hi(1) + pinfo%halo_extents(pinfo%order(1)), &
-                   pinfo%lo(2) - pinfo%halo_extents(pinfo%order(2)): pinfo%hi(2) + pinfo%halo_extents(pinfo%order(2)), &
-                   pinfo%lo(3) - pinfo%halo_extents(pinfo%order(3)): pinfo%hi(3) + pinfo%halo_extents(pinfo%order(3)))
-    ARRTYPE :: res(pinfo%lo(1) - pinfo%halo_extents(pinfo%order(1)): pinfo%hi(1) + pinfo%halo_extents(pinfo%order(1)), &
-                   pinfo%lo(2) - pinfo%halo_extents(pinfo%order(2)): pinfo%hi(2) + pinfo%halo_extents(pinfo%order(2)), &
-                   pinfo%lo(3) - pinfo%halo_extents(pinfo%order(3)): pinfo%hi(3) + pinfo%halo_extents(pinfo%order(3)))
+    ARRTYPE :: ref(pinfo%shape(1), pinfo%shape(2), pinfo%shape(3))
+    ARRTYPE :: res(pinfo%shape(1), pinfo%shape(2), pinfo%shape(3))
 
     logical :: mismatch
     mismatch = any(ref /= res)
@@ -80,10 +76,10 @@ module halo_CUDECOMP_DOUBLE_COMPLEX_mod
     integer :: gdims(3)
     integer :: gx(3)
 
-    ! Allocate reference pencil with halo regions
-    allocate(ref(pinfo%lo(1) - pinfo%halo_extents(pinfo%order(1)): pinfo%hi(1) + pinfo%halo_extents(pinfo%order(1)), &
-                 pinfo%lo(2) - pinfo%halo_extents(pinfo%order(2)): pinfo%hi(2) + pinfo%halo_extents(pinfo%order(2)), &
-                 pinfo%lo(3) - pinfo%halo_extents(pinfo%order(3)): pinfo%hi(3) + pinfo%halo_extents(pinfo%order(3))))
+    ! Allocate reference pencil with halo and padding regions
+    allocate(ref(pinfo%lo(1) - pinfo%halo_extents(pinfo%order(1)): pinfo%hi(1) + pinfo%halo_extents(pinfo%order(1)) + pinfo%padding(pinfo%order(1)), &
+                 pinfo%lo(2) - pinfo%halo_extents(pinfo%order(2)): pinfo%hi(2) + pinfo%halo_extents(pinfo%order(2)) + pinfo%padding(pinfo%order(2)), &
+                 pinfo%lo(3) - pinfo%halo_extents(pinfo%order(3)): pinfo%hi(3) + pinfo%halo_extents(pinfo%order(3)) + pinfo%padding(pinfo%order(3))))
 
     ref = -1
 
@@ -116,10 +112,10 @@ module halo_CUDECOMP_DOUBLE_COMPLEX_mod
     logical :: halo_periods(3)
     logical :: unset
 
-    ! Allocate reference pencil with halo regions
-    allocate(ref(pinfo%lo(1) - pinfo%halo_extents(pinfo%order(1)): pinfo%hi(1) + pinfo%halo_extents(pinfo%order(1)), &
-                 pinfo%lo(2) - pinfo%halo_extents(pinfo%order(2)): pinfo%hi(2) + pinfo%halo_extents(pinfo%order(2)), &
-                 pinfo%lo(3) - pinfo%halo_extents(pinfo%order(3)): pinfo%hi(3) + pinfo%halo_extents(pinfo%order(3))))
+    ! Allocate reference pencil with halo and padding regions
+    allocate(ref(pinfo%lo(1) - pinfo%halo_extents(pinfo%order(1)): pinfo%hi(1) + pinfo%halo_extents(pinfo%order(1)) + pinfo%padding(pinfo%order(1)), &
+                 pinfo%lo(2) - pinfo%halo_extents(pinfo%order(2)): pinfo%hi(2) + pinfo%halo_extents(pinfo%order(2)) + pinfo%padding(pinfo%order(2)), &
+                 pinfo%lo(3) - pinfo%halo_extents(pinfo%order(3)): pinfo%hi(3) + pinfo%halo_extents(pinfo%order(3)) + pinfo%padding(pinfo%order(3))))
 
     ref = -1
 
@@ -198,6 +194,7 @@ program main
   integer :: gdims_dist(3)
   integer :: halo_extents(3)
   logical :: halo_periods(3)
+  integer :: padding(3)
   integer :: mem_order(3, 3)
   logical :: use_managed_memory
   integer :: pr, pc
@@ -249,6 +246,7 @@ program main
   gdims_dist(:) = 0
   halo_extents(:) = 1
   halo_periods(:) = .true.
+  padding(:) = 0
   axis = 1
   use_managed_memory = .false.
 
@@ -338,6 +336,18 @@ program main
         read(arg, *) iarg
         halo_periods(3) = iarg
         skip_count = 1
+      case('--pdx')
+        call get_command_argument(i+1, arg)
+        read(arg, *) padding(1)
+        skip_count = 1
+      case('--pdy')
+        call get_command_argument(i+1, arg)
+        read(arg, *) padding(2)
+        skip_count = 1
+      case('--pdz')
+        call get_command_argument(i+1, arg)
+        read(arg, *) padding(3)
+        skip_count = 1
       case('--ax')
         call get_command_argument(i+1, arg)
         read(arg, *) axis
@@ -408,7 +418,7 @@ program main
   endif
 
   ! Get pencil information
-  CHECK_CUDECOMP_EXIT(cudecompGetPencilInfo(handle, grid_desc, pinfo, axis, halo_extents))
+  CHECK_CUDECOMP_EXIT(cudecompGetPencilInfo(handle, grid_desc, pinfo, axis, halo_extents, padding))
 
   ! Get workspace size
   CHECK_CUDECOMP_EXIT(cudecompGetHaloWorkspaceSize(handle, grid_desc, axis, halo_extents, workspace_num_elements))
@@ -448,11 +458,11 @@ program main
   do i = 1, 3
     select case(axis)
       case(1)
-        CHECK_CUDECOMP_EXIT(cudecompUpdateHalosX(handle, grid_desc, input, work_d, dtype, pinfo%halo_extents, halo_periods, i))
+        CHECK_CUDECOMP_EXIT(cudecompUpdateHalosX(handle, grid_desc, input, work_d, dtype, pinfo%halo_extents, halo_periods, i, padding))
       case(2)
-        CHECK_CUDECOMP_EXIT(cudecompUpdateHalosY(handle, grid_desc, input, work_d, dtype, pinfo%halo_extents, halo_periods, i))
+        CHECK_CUDECOMP_EXIT(cudecompUpdateHalosY(handle, grid_desc, input, work_d, dtype, pinfo%halo_extents, halo_periods, i, padding))
       case(3)
-        CHECK_CUDECOMP_EXIT(cudecompUpdateHalosZ(handle, grid_desc, input, work_d, dtype, pinfo%halo_extents, halo_periods, i))
+        CHECK_CUDECOMP_EXIT(cudecompUpdateHalosZ(handle, grid_desc, input, work_d, dtype, pinfo%halo_extents, halo_periods, i, padding))
     end select
   end do
 
