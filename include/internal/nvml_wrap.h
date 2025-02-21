@@ -41,7 +41,7 @@ struct nvmlFunctionTable {
   nvmlReturn_t (*pfn_nvmlShutdown)(void) = nullptr;
   const char* (*pfn_nvmlErrorString)(nvmlReturn_t result) = nullptr;
   nvmlReturn_t (*pfn_nvmlDeviceGetHandleByPciBusId)(const char* pciBusId, nvmlDevice_t* device) = nullptr;
-#if NVML_API_VERSION >= 12 && CUDART_VERSION >= 12030
+#if NVML_API_VERSION >= 12 && CUDART_VERSION >= 12040
   nvmlReturn_t (*pfn_nvmlDeviceGetGpuFabricInfoV)(nvmlDevice_t device, nvmlGpuFabricInfoV_t* gpuFabricInfo) = nullptr;
 #endif
 };

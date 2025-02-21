@@ -58,13 +58,13 @@ void initNvmlFunctionTable() {
   LOAD_SYM(nvmlShutdown);
   LOAD_SYM(nvmlErrorString);
   LOAD_SYM(nvmlDeviceGetHandleByPciBusId);
-#if NVML_API_VERSION >= 12 && CUDART_VERSION >= 12030
+#if NVML_API_VERSION >= 12 && CUDART_VERSION >= 12040
   LOAD_SYM(nvmlDeviceGetGpuFabricInfoV);
 #endif
 }
 
 bool nvmlHasFabricSupport() {
-#if NVML_API_VERSION >= 12 && CUDART_VERSION >= 12030
+#if NVML_API_VERSION >= 12 && CUDART_VERSION >= 12040
   return (nvmlFnTable.pfn_nvmlDeviceGetGpuFabricInfoV != nullptr);
 #else
   return false;
