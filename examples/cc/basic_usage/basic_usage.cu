@@ -284,15 +284,15 @@ int main(int argc, char** argv) {
 
   // Update X-pencil halos in X direction
   CHECK_CUDECOMP_EXIT(cudecompUpdateHalosX(handle, grid_desc, data_d, halo_work_d, CUDECOMP_DOUBLE,
-                                           pinfo_x.halo_extents, halo_periods, 0, 0));
+                                           pinfo_x.halo_extents, halo_periods, 0, nullptr, 0));
 
   // Update X-pencil halos in Y direction
   CHECK_CUDECOMP_EXIT(cudecompUpdateHalosX(handle, grid_desc, data_d, halo_work_d, CUDECOMP_DOUBLE,
-                                           pinfo_x.halo_extents, halo_periods, 1, 0));
+                                           pinfo_x.halo_extents, halo_periods, 1, nullptr, 0));
 
   // Update X-pencil halos in Z direction
   CHECK_CUDECOMP_EXIT(cudecompUpdateHalosX(handle, grid_desc, data_d, halo_work_d, CUDECOMP_DOUBLE,
-                                           pinfo_x.halo_extents, halo_periods, 2, 0));
+                                           pinfo_x.halo_extents, halo_periods, 2, nullptr, 0));
 
   // Cleanup resources
   free(data);

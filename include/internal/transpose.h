@@ -54,10 +54,6 @@ static inline bool isTransposeCommPipelined(cudecompTransposeCommBackend_t commT
           commType == CUDECOMP_TRANSPOSE_COMM_MPI_P2P_PL);
 }
 
-template <typename T> static inline bool anyNonzeros(const std::array<T, 3>& arr) {
-  return (arr[0] != T(0) || arr[1] != T(0) || arr[2] != T(0));
-}
-
 #if CUTENSOR_MAJOR >= 2
 static inline cutensorDataType_t getCutensorDataType(float) { return CUTENSOR_R_32F; }
 static inline cutensorDataType_t getCutensorDataType(double) { return CUTENSOR_R_64F; }

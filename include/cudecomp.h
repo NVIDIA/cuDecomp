@@ -546,13 +546,16 @@ cudecompResult_t cudecompTransposeYToX(cudecompHandle_t handle, cudecompGridDesc
  * If the i-th entry in this array is true, the domain is treated periodically along the i-th global domain axis. A NULL
  * pointer can be provided if none of the domain axes are periodic.
  * @param[in] dim Which pencil dimension (global indexed) to perform the halo update
+ * @param[in] padding An array of three integers to define padding of the input data, in global order. The i-th entry
+ * in this array should contain the number of elements to treat as padding in the i-th global domain axis. If the input has
+ * no padding, a NULL pointer can be provided.
  * @param[in] stream CUDA stream to enqueue GPU operations into
  *
  * @return CUDECOMP_RESULT_SUCCESS on success or error code on failure.
  */
 cudecompResult_t cudecompUpdateHalosX(cudecompHandle_t handle, cudecompGridDesc_t grid_desc, void* input, void* work,
                                       cudecompDataType_t dtype, const int32_t halo_extents[], const bool halo_periods[],
-                                      int32_t dim, cudaStream_t stream);
+                                      int32_t dim, const int32_t padding[], cudaStream_t stream);
 
 /**
  * @brief Function to perform halo communication of Y-axis aligned pencil data
@@ -569,13 +572,16 @@ cudecompResult_t cudecompUpdateHalosX(cudecompHandle_t handle, cudecompGridDesc_
  * @param[in] halo_periods An array of three booleans to define halo periodicity of the input data, in global order.
  * If the i-th entry in this array is true, the domain is treated periodically along the i-th global domain axis.
  * @param[in] dim Which pencil dimension (global indexed) to perform the halo update
+ * @param[in] padding An array of three integers to define padding of the input data, in global order. The i-th entry
+ * in this array should contain the number of elements to treat as padding in the i-th global domain axis. If the input has
+ * no padding, a NULL pointer can be provided.
  * @param[in] stream CUDA stream to enqueue GPU operations into
  *
  * @return CUDECOMP_RESULT_SUCCESS on success or error code on failure.
  */
 cudecompResult_t cudecompUpdateHalosY(cudecompHandle_t handle, cudecompGridDesc_t grid_desc, void* input, void* work,
                                       cudecompDataType_t dtype, const int32_t halo_extents[], const bool halo_periods[],
-                                      int32_t dim, cudaStream_t stream);
+                                      int32_t dim, const int32_t padding[], cudaStream_t stream);
 
 /**
  * @brief Function to perform halo communication of Z-axis aligned pencil data
@@ -592,13 +598,16 @@ cudecompResult_t cudecompUpdateHalosY(cudecompHandle_t handle, cudecompGridDesc_
  * @param[in] halo_periods An array of three booleans to define halo periodicity of the input data, in global order.
  * If the i-th entry in this array is true, the domain is treated periodically along the i-th global domain axis.
  * @param[in] dim Which pencil dimension (global indexed) to perform the halo update
+ * @param[in] padding An array of three integers to define padding of the input data, in global order. The i-th entry
+ * in this array should contain the number of elements to treat as padding in the i-th global domain axis. If the input has
+ * no padding, a NULL pointer can be provided.
  * @param[in] stream CUDA stream to enqueue GPU operations into
  *
  * @return CUDECOMP_RESULT_SUCCESS on success or error code on failure.
  */
 cudecompResult_t cudecompUpdateHalosZ(cudecompHandle_t handle, cudecompGridDesc_t grid_desc, void* input, void* work,
                                       cudecompDataType_t dtype, const int32_t halo_extents[], const bool halo_periods[],
-                                      int32_t dim, cudaStream_t stream);
+                                      int32_t dim, const int32_t padding[], cudaStream_t stream);
 
 #ifdef __cplusplus
 }

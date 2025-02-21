@@ -455,7 +455,7 @@ module cudecomp
   ! Halo functions
   interface
     function cudecompUpdateHalosX_C(handle, grid_desc, input, work, dtype, &
-                                    halo_extents, halo_periods, dim, stream) &
+                                    halo_extents, halo_periods, dim, padding, stream) &
       bind(C, name="cudecompUpdateHalosX") result(res)
       import
       type(cudecompHandle), value :: handle
@@ -466,6 +466,7 @@ module cudecomp
       integer(c_int32_t) :: halo_extents(3)
       logical(c_bool) :: halo_periods(3)
       integer(c_int32_t), value :: dim
+      integer(c_int32_t) :: padding(3)
       integer(cuda_stream_kind), value :: stream
       integer(c_int) :: res
     end function cudecompUpdateHalosX_C
@@ -473,7 +474,7 @@ module cudecomp
 
   interface
     function cudecompUpdateHalosY_C(handle, grid_desc, input, work, dtype, &
-                                    halo_extents, halo_periods, dim, stream) &
+                                    halo_extents, halo_periods, dim, padding, stream) &
       bind(C, name="cudecompUpdateHalosY") result(res)
       import
       type(cudecompHandle), value :: handle
@@ -484,6 +485,7 @@ module cudecomp
       integer(c_int32_t) :: halo_extents(3)
       logical(c_bool) :: halo_periods(3)
       integer(c_int32_t), value :: dim
+      integer(c_int32_t) :: padding(3)
       integer(cuda_stream_kind), value :: stream
       integer(c_int) :: res
     end function cudecompUpdateHalosY_C
@@ -491,7 +493,7 @@ module cudecomp
 
   interface
     function cudecompUpdateHalosZ_C(handle, grid_desc, input, work, dtype, &
-                                    halo_extents, halo_periods, dim, stream) &
+                                    halo_extents, halo_periods, dim, padding, stream) &
       bind(C, name="cudecompUpdateHalosZ") result(res)
       import
       type(cudecompHandle), value :: handle
@@ -502,6 +504,7 @@ module cudecomp
       integer(c_int32_t) :: halo_extents(3)
       logical(c_bool) :: halo_periods(3)
       integer(c_int32_t), value :: dim
+      integer(c_int32_t) :: padding(3)
       integer(cuda_stream_kind), value :: stream
       integer(c_int) :: res
     end function cudecompUpdateHalosZ_C
@@ -949,7 +952,7 @@ contains
   ! Halo functions
   function cudecompUpdateHalosX(handle, grid_desc, &
        input, work, dtype, halo_extents, halo_periods, &
-       dim, stream) result(res)
+       dim, padding, stream) result(res)
     implicit none
     type(cudecompHandle) :: handle
     type(cudecompGridDesc) :: grid_desc
@@ -959,24 +962,28 @@ contains
     integer :: halo_extents(3)
     logical :: halo_periods(3)
     integer :: dim
+    integer, optional :: padding(3)
     integer(cuda_stream_kind), optional :: stream
     integer(c_int) :: res
 
     integer(cuda_stream_kind) :: stream_
     logical(c_bool) :: halo_periods_c(3)
+    integer :: padding_(3)
 
     halo_periods_c(:) = halo_periods
 
     stream_ = 0
+    padding_ = [0, 0, 0]
     if (present(stream)) stream_ = stream
+    if (present(padding)) padding_ = padding
     res = cudecompUpdateHalosX_C(handle, grid_desc, &
           input, work, dtype, halo_extents, halo_periods_c, &
-          dim - 1, stream_)
+          dim - 1, padding_, stream_)
   end function cudecompUpdateHalosX
 
   function cudecompUpdateHalosY(handle, grid_desc, &
        input, work, dtype, halo_extents, halo_periods, &
-       dim, stream) result(res)
+       dim, padding, stream) result(res)
     implicit none
     type(cudecompHandle) :: handle
     type(cudecompGridDesc) :: grid_desc
@@ -986,24 +993,28 @@ contains
     integer :: halo_extents(3)
     logical :: halo_periods(3)
     integer :: dim
+    integer, optional :: padding(3)
     integer(cuda_stream_kind), optional :: stream
     integer(c_int) :: res
 
     integer(cuda_stream_kind) :: stream_
     logical(c_bool) :: halo_periods_c(3)
+    integer :: padding_(3)
 
     halo_periods_c(:) = halo_periods
 
     stream_ = 0
+    padding_ = [0, 0, 0]
     if (present(stream)) stream_ = stream
+    if (present(padding)) padding_ = padding
     res = cudecompUpdateHalosY_C(handle, grid_desc, &
           input, work, dtype, halo_extents, halo_periods_c, &
-          dim - 1, stream_)
+          dim - 1, padding_, stream_)
   end function cudecompUpdateHalosY
 
   function cudecompUpdateHalosZ(handle, grid_desc, &
        input, work, dtype, halo_extents, halo_periods, &
-       dim, stream) result(res)
+       dim, padding, stream) result(res)
     implicit none
     type(cudecompHandle) :: handle
     type(cudecompGridDesc) :: grid_desc
@@ -1013,19 +1024,23 @@ contains
     integer :: halo_extents(3)
     logical :: halo_periods(3)
     integer :: dim
+    integer, optional :: padding(3)
     integer(cuda_stream_kind), optional :: stream
     integer(c_int) :: res
 
     integer(cuda_stream_kind) :: stream_
     logical(c_bool) :: halo_periods_c(3)
+    integer :: padding_(3)
 
     halo_periods_c(:) = halo_periods
 
     stream_ = 0
+    padding_ = [0, 0, 0]
     if (present(stream)) stream_ = stream
+    if (present(padding)) padding_ = padding
     res = cudecompUpdateHalosZ_C(handle, grid_desc, &
           input, work, dtype, halo_extents, halo_periods_c, &
-          dim - 1, stream_)
+          dim - 1, padding, stream_)
   end function cudecompUpdateHalosZ
 
   ! Helper function to copy string
