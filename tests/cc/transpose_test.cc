@@ -143,11 +143,11 @@ static void usage(const char* pname) {
           "\t--gdz\n"
           "\t\tZ-dimension gdim_dist setting, set to gz - gdz. (default: 0) \n"
           "\t--hex\n"
-          "\t\tX-dimension halo_extents setting. (default: 0) \n"
+          "\t\tX-pencil halo_extents setting. (default: 0 0 0) \n"
           "\t--hey\n"
-          "\t\tY-dimension halo_extents setting. (default: 0) \n"
+          "\t\tY-pencil halo_extents setting. (default: 0 0 0) \n"
           "\t--hez\n"
-          "\t\tZ-dimension halo_extents setting. (default: 0) \n"
+          "\t\tZ-pencil halo_extents setting. (default: 0 0 0) \n"
           "\t--mem_order\n"
           "\t\ttranspose_mem_order setting. (default: unset) \n"
           "\t-m|--use-managed-memory\n"
@@ -179,7 +179,9 @@ int main(int argc, char** argv) {
   cudecompTransposeCommBackend_t comm_backend = static_cast<cudecompTransposeCommBackend_t>(0);
   std::array<bool, 3> axis_contiguous{};
   std::array<int, 3> gdims_dist{};
-  std::array<int, 3> halo_extents{};
+  std::array<int, 3> halo_extents_x{};
+  std::array<int, 3> halo_extents_y{};
+  std::array<int, 3> halo_extents_z{};
   bool out_of_place = false;
   bool use_managed_memory = false;
   std::array<int, 9> mem_order{-1, -1, -1, -1, -1, -1, -1, -1, -1};
@@ -224,9 +226,27 @@ int main(int argc, char** argv) {
     case '4': gdims_dist[0] = atoi(optarg); break;
     case '5': gdims_dist[1] = atoi(optarg); break;
     case '6': gdims_dist[2] = atoi(optarg); break;
-    case '7': halo_extents[0] = atoi(optarg); break;
-    case '8': halo_extents[1] = atoi(optarg); break;
-    case '9': halo_extents[2] = atoi(optarg); break;
+    case '7':
+      optind--;
+      for (int i = 0; i < 3; ++i) {
+        halo_extents_x[i] = atoi(argv[optind]);
+        optind++;
+      }
+      break;
+    case '8':
+      optind--;
+      for (int i = 0; i < 3; ++i) {
+        halo_extents_y[i] = atoi(argv[optind]);
+        optind++;
+      }
+      break;
+    case '9':
+      optind--;
+      for (int i = 0; i < 3; ++i) {
+        halo_extents_z[i] = atoi(argv[optind]);
+        optind++;
+      }
+      break;
     case 'o': out_of_place = true; break;
     case 'm': use_managed_memory = true; break;
     case 'q':
@@ -300,15 +320,15 @@ int main(int argc, char** argv) {
 
   // Get x-pencil information
   cudecompPencilInfo_t pinfo_x;
-  CHECK_CUDECOMP_EXIT(cudecompGetPencilInfo(handle, grid_desc, &pinfo_x, 0, halo_extents.data()));
+  CHECK_CUDECOMP_EXIT(cudecompGetPencilInfo(handle, grid_desc, &pinfo_x, 0, halo_extents_x.data()));
 
   // Get y-pencil information
   cudecompPencilInfo_t pinfo_y;
-  CHECK_CUDECOMP_EXIT(cudecompGetPencilInfo(handle, grid_desc, &pinfo_y, 1, halo_extents.data()));
+  CHECK_CUDECOMP_EXIT(cudecompGetPencilInfo(handle, grid_desc, &pinfo_y, 1, halo_extents_y.data()));
 
   // Get z-pencil information
   cudecompPencilInfo_t pinfo_z;
-  CHECK_CUDECOMP_EXIT(cudecompGetPencilInfo(handle, grid_desc, &pinfo_z, 2, halo_extents.data()));
+  CHECK_CUDECOMP_EXIT(cudecompGetPencilInfo(handle, grid_desc, &pinfo_z, 2, halo_extents_z.data()));
 
   // Get workspace size
   int64_t workspace_num_elements;

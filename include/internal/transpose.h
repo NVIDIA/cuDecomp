@@ -46,16 +46,6 @@
 
 namespace cudecomp {
 
-static inline std::vector<int64_t> getSplits(int64_t N, int nchunks, int pad) {
-  std::vector<int64_t> splits(nchunks, N / nchunks);
-  for (int i = 0; i < N % nchunks; ++i) { splits[i] += 1; }
-
-  // Add padding to last populated pencil
-  splits[std::min(N, (int64_t)nchunks) - 1] += pad;
-
-  return splits;
-}
-
 static inline bool isTransposeCommPipelined(cudecompTransposeCommBackend_t commType) {
   return (commType == CUDECOMP_TRANSPOSE_COMM_NCCL_PL ||
 #ifdef ENABLE_NVSHMEM
@@ -228,6 +218,12 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
     if (pinfo_a.order[i] != pinfo_b.order[i]) orders_equal = false;
   }
 
+  // Check if input and output halo extents are the same
+  bool halos_equal = true;
+  for (int i = 0; i < 3; ++i) {
+    if (input_halo_extents[i] != output_halo_extents[i]) halos_equal = false;
+  }
+
   // Get global ordered shapes
   auto shape_g_a = getShapeG(pinfo_a);
   auto shape_g_a_h = getShapeG(pinfo_a_h);
@@ -246,61 +242,66 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
   }
 
   // Adjust pointers to handle special cases
-  if (!input_has_halos && !output_has_halos) {
-    if (splits_a.size() == 1) {
-      // Special cases for single rank communicators
-      if (orders_equal) {
-        if (inplace) {
+  bool direct_pack = false;
+  bool direct_transpose = false;
+  if (splits_a.size() == 1) {
+    // Special cases for single rank communicators
+    if (orders_equal) {
+      if (inplace) {
+        if (halos_equal) {
           // Single rank, in place, Pack -> Unpack: No transpose necessary.
           return;
-        } else {
-          // Single rank, out of place, Pack -> Unpack: Pack directly to output and return
-          o1 = output;
         }
       } else {
-        if (!inplace) {
-          if (pinfo_b.order[2] == ax_a) {
-            // Single rank, out of place, Transpose -> Unpack: Transpose directly to
-            // output and return
-            o1 = output;
-          } else {
-            // Single rank, out of place, Pack -> Transpose: Skip pack, transpose directly
-            // to output
-            o1 = input;
-            o2 = input;
-          }
-        }
+        // Single rank, out of place, Pack -> Unpack: Pack directly to output and return
+        o1 = output;
+        direct_pack = true;
       }
     } else {
-      // Special cases that skip local phases (i.e. all-to-all directly from/to input or output)
-
-      bool enable = true;
-
-      if (pipelined && inplace) {
-        // Note: Disabling special cases for in-place pipelined communication to avoid
-        // handing more complex input/output data dependencies. Can revisit.
-        enable = false;
-      } else if (transposeBackendRequiresNvshmem(grid_desc->config.transpose_comm_backend)) {
-        // Note: For NVSHMEM, disabling special cases to ensure communication is always staged
-        // in to workspace (which should be nvshmem allocated). Can revisit support for input/output
-        // arrays allocated with nvshmem.
-        enable = false;
-      } else if (transposeBackendRequiresMpi(grid_desc->config.transpose_comm_backend) &&
-                 (isManagedPointer(input) || isManagedPointer(output))) {
-        // Note: For MPI, disable special cases if input or output pointers are to managed memory
-        // since MPI performance directly from managed memory is not great
-        enable = false;
-      }
-
-      if (enable) {
-        if (pinfo_a.order[2] == ax_a) {
-          // Input is already packed for all to all, skip pack
+      if (!inplace) {
+        if (pinfo_b.order[2] == ax_a) {
+          // Single rank, out of place, Transpose -> Unpack: Transpose directly to
+          // output and return
+          o1 = output;
+          direct_transpose = true;
+        } else {
+          // Single rank, out of place, Pack -> Transpose: Skip pack, transpose directly
+          // to output
           o1 = input;
-          o2 = work;
-        } else if (pinfo_a.order[2] == ax_b && orders_equal) {
-          // Output of all to all is in correct orientation, skip unpack
-          o2 = output;
+          o2 = input;
+          direct_transpose = true;
         }
+      }
+    }
+  } else {
+    // Special cases that skip local phases (i.e. all-to-all directly from/to input or output)
+
+    bool enable = true;
+
+    if (pipelined && inplace) {
+      // Note: Disabling special cases for in-place pipelined communication to avoid
+      // handing more complex input/output data dependencies. Can revisit.
+      enable = false;
+    } else if (transposeBackendRequiresNvshmem(grid_desc->config.transpose_comm_backend)) {
+      // Note: For NVSHMEM, disabling special cases to ensure communication is always staged
+      // in to workspace (which should be nvshmem allocated). Can revisit support for input/output
+      // arrays allocated with nvshmem.
+      enable = false;
+    } else if (transposeBackendRequiresMpi(grid_desc->config.transpose_comm_backend) &&
+               (isManagedPointer(input) || isManagedPointer(output))) {
+      // Note: For MPI, disable special cases if input or output pointers are to managed memory
+      // since MPI performance directly from managed memory is not great
+      enable = false;
+    }
+
+    if (enable) {
+      if (pinfo_a.order[2] == ax_a && !input_has_halos) {
+        // Input is already packed for all to all, skip pack
+        o1 = input;
+        o2 = work;
+      } else if (pinfo_a.order[2] == ax_b && orders_equal && !output_has_halos) {
+        // Output of all to all is in correct orientation, skip unpack
+        o2 = output;
       }
     }
   }
@@ -328,6 +329,7 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
       // Transpose/Pack
       std::array<int64_t, 3> extents;
       std::array<int64_t, 3> extents_h;
+      std::array<int64_t, 3> extents_h_b;
       std::array<int64_t, 3> strides_in{1, 0, 0}, strides_out{1, 0, 0};
       std::array<int, 3> order;
 
@@ -343,11 +345,16 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
       for (int i = 0; i < 3; ++i) {
         extents[i] = shape_g_a[pinfo_a.order[i]];
         extents_h[i] = shape_g_a_h[pinfo_a.order[i]];
+        extents_h_b[i] = shape_g_b_h[pinfo_a.order[i]];
       }
 
       for (int i = 1; i < 3; ++i) {
         strides_in[i] = strides_in[i - 1] * extents_h[i - 1];
-        strides_out[i] = strides_out[i - 1] * extents[order[i - 1]];
+        if (!direct_transpose) {
+          strides_out[i] = strides_out[i - 1] * extents[order[i - 1]];
+        } else {
+          strides_out[i] = strides_out[i - 1] * extents_h_b[order[i - 1]];
+        }
       }
 
       if (pipelined) {
@@ -363,16 +370,34 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
           }
 
           T* src = i1 + shift + getPencilPtrOffset(pinfo_a_h, input_halo_extents);
-          T* dst = o1 + send_offsets[dst_rank];
+          T* dst;
+          if (!direct_transpose) {
+            dst = o1 + send_offsets[dst_rank];
+          } else {
+            size_t shift_b = offsets_b[src_rank];
+            for (int i = 0; i < 3; ++i) {
+              if (pinfo_b_h.order[i] == ax_b) break;
+              shift *= shape_g_b_h[pinfo_b_h.order[i]];
+            }
+
+            dst = o1 + shift + getPencilPtrOffset(pinfo_b_h, output_halo_extents);
+          }
+
           for (int i = 0; i < 3; ++i) {
             if (ax_a == pinfo_a.order[i]) extents[i] = splits_a[dst_rank];
           }
+
           localPermute(handle, extents, order, strides_in, strides_out, src, dst, stream);
           CHECK_CUDA(cudaEventRecord(grid_desc->events[dst_rank], stream));
         }
       } else {
         T* src = i1 + getPencilPtrOffset(pinfo_a_h, input_halo_extents);
-        T* dst = o1;
+        T* dst;
+        if (!direct_transpose) {
+          dst = o1;
+        } else {
+          dst = o1 + getPencilPtrOffset(pinfo_b_h, output_halo_extents);
+        }
         localPermute(handle, extents, order, strides_in, strides_out, src, dst, stream);
       }
 
@@ -394,17 +419,32 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
         }
 
         T* src = i1 + shift + getPencilPtrOffset(pinfo_a_h, input_halo_extents);
-        T* dst = o1 + send_offsets[dst_rank];
+        T* dst;
+        if (!direct_pack) {
+          dst = o1 + send_offsets[dst_rank];
+        } else {
+          size_t shift_b = offsets_b[src_rank];
+          for (int i = 0; i < 3; ++i) {
+            if (pinfo_b_h.order[i] == ax_b) break;
+            shift_b *= shape_g_b_h[pinfo_b_h.order[i]];
+          }
+          dst = o1 + shift_b + getPencilPtrOffset(pinfo_b_h, output_halo_extents);
+        }
 
         memcpy_params.src[memcpy_count] = src;
         memcpy_params.dest[memcpy_count] = dst;
         memcpy_params.src_strides[0][memcpy_count] = pinfo_a_h.shape[0] * pinfo_a_h.shape[1];
         memcpy_params.src_strides[1][memcpy_count] = pinfo_a_h.shape[0];
-        memcpy_params.dest_strides[1][memcpy_count] =
-            (ax_a == pinfo_a.order[0]) ? splits_a[dst_rank] : pinfo_a.shape[0];
-        memcpy_params.dest_strides[0][memcpy_count] =
-            memcpy_params.dest_strides[1][memcpy_count] *
-            ((ax_a == pinfo_a.order[1]) ? splits_a[dst_rank] : pinfo_a.shape[1]);
+        if (!direct_pack) {
+          memcpy_params.dest_strides[1][memcpy_count] =
+              (ax_a == pinfo_a.order[0]) ? splits_a[dst_rank] : pinfo_a.shape[0];
+          memcpy_params.dest_strides[0][memcpy_count] =
+              memcpy_params.dest_strides[1][memcpy_count] *
+              ((ax_a == pinfo_a.order[1]) ? splits_a[dst_rank] : pinfo_a.shape[1]);
+        } else {
+          memcpy_params.dest_strides[0][memcpy_count] = pinfo_b_h.shape[0] * pinfo_b_h.shape[1];
+          memcpy_params.dest_strides[1][memcpy_count] = pinfo_b_h.shape[0];
+        }
         memcpy_params.extents[2][memcpy_count] = (ax_a == pinfo_a.order[0]) ? splits_a[dst_rank] : pinfo_a.shape[0];
         memcpy_params.extents[1][memcpy_count] = (ax_a == pinfo_a.order[1]) ? splits_a[dst_rank] : pinfo_a.shape[1];
         memcpy_params.extents[0][memcpy_count] = (ax_a == pinfo_a.order[2]) ? splits_a[dst_rank] : pinfo_a.shape[2];
@@ -440,10 +480,13 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
 
   // Unpack into output buffer
   if (!data_transposed && !orders_equal) {
-    if (pinfo_a.order[2] == ax_b) {
+    if (pinfo_a.order[2] == ax_b || splits_a.size() == 1) {
       // Transpose/Unpack
+      // Note: routing all single cases to this branch since single rank split transpose
+      // is equivalent
       std::array<int64_t, 3> extents;
       std::array<int64_t, 3> extents_h;
+      std::array<int64_t, 3> extents_h_a;
       std::array<int64_t, 3> strides_in{1, 0, 0}, strides_out{1, 0, 0};
       std::array<int, 3> order;
 
@@ -457,8 +500,13 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
 
         extents[i] = shape_g_b[pinfo_a.order[i]];
         extents_h[i] = shape_g_b_h[pinfo_b_h.order[i]];
+        extents_h_a[i] = shape_g_a_h[pinfo_a_h.order[i]];
         if (i > 0) {
-          strides_in[i] = strides_in[i - 1] * extents[i - 1];
+          if (!direct_transpose) {
+            strides_in[i] = strides_in[i - 1] * extents[i - 1];
+          } else {
+            strides_in[i] = strides_in[i - 1] * extents_h_a[i - 1];
+          }
           strides_out[i] = strides_out[i - 1] * extents_h[i - 1];
         }
       }
@@ -504,7 +552,17 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
               shift *= shape_g_b_h[pinfo_b_h.order[i]];
             }
 
-            T* src = o2 + recv_offsets[src_rank];
+            T* src;
+            if (!direct_transpose) {
+              src = o2 + recv_offsets[src_rank];
+            } else {
+              size_t shift_a = offsets_a[dst_rank];
+              for (int i = 0; i < 3; ++i) {
+                if (pinfo_a_h.order[i] == ax_a) break;
+                shift_a *= shape_g_a_h[pinfo_a_h.order[i]];
+              }
+               src = o2 + shift_a + getPencilPtrOffset(pinfo_a_h, input_halo_extents);
+            }
             T* dst = o3 + shift + getPencilPtrOffset(pinfo_b_h, output_halo_extents);
             for (int i = 0; i < 3; ++i) {
               if (ax_b == pinfo_a.order[i]) {
@@ -518,7 +576,12 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
         }
       } else {
         if (o2 != o3) {
-          T* src = o2;
+          T* src;
+          if (!direct_transpose) {
+            src = o2;
+          } else {
+            src = o2 + getPencilPtrOffset(pinfo_a_h, input_halo_extents);
+          }
           T* dst = o3 + getPencilPtrOffset(pinfo_b_h, output_halo_extents);
           localPermute(handle, extents, order, strides_in, strides_out, src, dst, stream);
         }

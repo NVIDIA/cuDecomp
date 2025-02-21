@@ -65,7 +65,43 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
   CHECK_CUDECOMP(cudecompGetShiftedRank(handle, grid_desc, ax, dim, -1, halo_periods[dim], &neighbors[0]));
   CHECK_CUDECOMP(cudecompGetShiftedRank(handle, grid_desc, ax, dim, 1, halo_periods[dim], &neighbors[1]));
 
+  // Quick return if no halos
   if (halo_extents[dim] == 0) { return; }
+
+  // Check if halos include more than one process (unsupported currently).
+  int count = 0;
+  for (int i = 0; i < 3; ++i) {
+    if (i == ax) continue;
+    if (i == dim) break;
+    count++;
+  }
+
+  auto comm_axis = (count == 0) ? CUDECOMP_COMM_COL : CUDECOMP_COMM_ROW;
+  int comm_rank = (comm_axis == CUDECOMP_COMM_COL) ? grid_desc->col_comm_info.rank : grid_desc->row_comm_info.rank;
+
+  auto splits = getSplits(grid_desc->config.gdims_dist[dim], grid_desc->config.pdims[comm_axis == CUDECOMP_COMM_COL ? 0 : 1],
+                          grid_desc->config.gdims[dim] - grid_desc->config.gdims_dist[dim]);
+
+  int comm_rank_l = comm_rank - 1;
+  int comm_rank_r = comm_rank + 1;
+  if (halo_periods[dim]) {
+    comm_rank_l = (comm_rank_l + grid_desc->config.pdims[comm_axis]) % grid_desc->config.pdims[comm_axis];
+    comm_rank_r = (comm_rank_r + grid_desc->config.pdims[comm_axis]) % grid_desc->config.pdims[comm_axis];
+  }
+
+  if (comm_rank_l >= 0) {
+    if (halo_extents[dim] > splits[comm_rank_l] ||
+        halo_extents[dim] > splits[comm_rank]) {
+      THROW_INVALID_USAGE("halo spans multiple processes, this is not currently supported.");
+    }
+  }
+
+  if (comm_rank_r < splits.size()) {
+    if (halo_extents[dim] > splits[comm_rank_r] ||
+        halo_extents[dim] > splits[comm_rank]) {
+      THROW_INVALID_USAGE("halo spans multiple processes, this is not currently supported.");
+    }
+  }
 
   // Select correct case based on pencil memory order and transfer dim
   int c;
@@ -81,6 +117,15 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
   } else if (neighbors[0] == -1 && neighbors[1] == -1) {
     // Single rank in this dimension and not periodic. Return.
     return;
+  }
+
+  bool managed = isManagedPointer(input);
+  if (c == 2 && managed &&
+      (haloBackendRequiresNvshmem(grid_desc->config.halo_comm_backend) ||
+       haloBackendRequiresMpi(grid_desc->config.halo_comm_backend))) {
+    // For managed memory, always stage to work space if using MPI/NVSHMEM
+    // Can revisit for NVSHMEM if input is nvshmem allocated
+    c = 1;
   }
 
   switch (c) {
@@ -209,70 +254,8 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
     lx[dim] = shape_g_h[dim] - halo_extents[dim];
     recv_offsets[1] = getPencilPtrOffset(pinfo_h, lx);
 
-    bool managed = isManagedPointer(input);
-    if (haloBackendRequiresNccl(grid_desc->config.halo_comm_backend) ||
-        (haloBackendRequiresMpi(grid_desc->config.halo_comm_backend) && !managed)) {
-      cudecompSendRecvPair(handle, grid_desc, neighbors, input, counts, send_offsets, input, counts, recv_offsets,
-                           stream);
-    } else {
-      // Note: For managed memory, stage to work space if using MPI/NVSHMEM
-      // Can revisit for NVSHMEM if input is nvshmem allocated
-      T* send_buff = work;
-      T* recv_buff = work + 2 * halo_size;
-
-      cudecompBatchedD2DMemcpy3DParams<T> memcpy_params;
-      for (int i = 0; i < 2; ++i) {
-        memcpy_params.src_strides[0][i] = pinfo_h.shape[0] * pinfo_h.shape[1];
-        memcpy_params.src_strides[1][i] = pinfo_h.shape[0];
-        memcpy_params.dest_strides[0][i] = pinfo_h.shape[0] * pinfo_h.shape[1];
-        memcpy_params.dest_strides[1][i] = pinfo_h.shape[0];
-        memcpy_params.extents[0][i] = (dim == pinfo_h.order[2]) ? halo_extents[dim] : pinfo_h.shape[2];
-        memcpy_params.extents[1][i] = (dim == pinfo_h.order[1]) ? halo_extents[dim] : pinfo_h.shape[1];
-        memcpy_params.extents[2][i] = (dim == pinfo_h.order[0]) ? halo_extents[dim] : pinfo_h.shape[0];
-      }
-
-      // Pack
-      // Left
-      memcpy_params.src[0] = input + send_offsets[0];
-      memcpy_params.dest[0] = send_buff;
-
-      // Right
-      memcpy_params.src[1] = input + send_offsets[1];
-      memcpy_params.dest[1] = send_buff + halo_size;
-
-      memcpy_params.ncopies = 2;
-      cudecomp_batched_d2d_memcpy_3d(memcpy_params, stream);
-
-      std::array<size_t, 2> offsets{};
-      offsets[1] = halo_size;
-
-      cudecompSendRecvPair(handle, grid_desc, neighbors, send_buff, counts, offsets, recv_buff, counts, offsets,
-                           stream);
-
-      // Unpack
-      // Left
-      memcpy_params.src[0] = recv_buff;
-      memcpy_params.dest[0] = input + recv_offsets[0];
-
-      // Right
-      memcpy_params.src[1] = recv_buff + halo_size;
-      memcpy_params.dest[1] = input + recv_offsets[1];
-
-      if (neighbors[0] == -1) {
-        // Left is non-periodic, unpack right only
-        memcpy_params.src[0] = memcpy_params.src[1];
-        memcpy_params.dest[0] = memcpy_params.dest[1];
-        memcpy_params.ncopies = 1;
-      } else if (neighbors[1] == -1) {
-        // Right is non-periodic, unpack left only
-        memcpy_params.ncopies = 1;
-      } else {
-        memcpy_params.ncopies = 2;
-      }
-
-      cudecomp_batched_d2d_memcpy_3d(memcpy_params, stream);
-    }
-
+    cudecompSendRecvPair(handle, grid_desc, neighbors, input, counts, send_offsets, input, counts, recv_offsets,
+                         stream);
   } break;
   }
 }
