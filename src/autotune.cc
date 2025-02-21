@@ -648,15 +648,15 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
           switch (options->halo_axis) {
           case 0:
             CHECK_CUDECOMP(cudecompUpdateHalosX(handle, grid_desc, d, w, options->dtype, pinfo.halo_extents,
-                                                options->halo_periods, dim, 0));
+                                                options->halo_periods, dim, nullptr, 0));
             break;
           case 1:
             CHECK_CUDECOMP(cudecompUpdateHalosY(handle, grid_desc, d, w, options->dtype, pinfo.halo_extents,
-                                                options->halo_periods, dim, 0));
+                                                options->halo_periods, dim, nullptr, 0));
             break;
           case 2:
             CHECK_CUDECOMP(cudecompUpdateHalosZ(handle, grid_desc, d, w, options->dtype, pinfo.halo_extents,
-                                                options->halo_periods, dim, 0));
+                                                options->halo_periods, dim, nullptr, 0));
             break;
           }
         }
@@ -672,15 +672,15 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
           switch (options->halo_axis) {
           case 0:
             CHECK_CUDECOMP(cudecompUpdateHalosX(handle, grid_desc, d, w, options->dtype, pinfo.halo_extents,
-                                                options->halo_periods, dim, 0));
+                                                options->halo_periods, dim, nullptr, 0));
             break;
           case 1:
             CHECK_CUDECOMP(cudecompUpdateHalosY(handle, grid_desc, d, w, options->dtype, pinfo.halo_extents,
-                                                options->halo_periods, dim, 0));
+                                                options->halo_periods, dim, nullptr, 0));
             break;
           case 2:
             CHECK_CUDECOMP(cudecompUpdateHalosZ(handle, grid_desc, d, w, options->dtype, pinfo.halo_extents,
-                                                options->halo_periods, dim, 0));
+                                                options->halo_periods, dim, nullptr, 0));
             break;
           }
         }
