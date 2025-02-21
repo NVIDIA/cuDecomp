@@ -210,7 +210,7 @@ static void gatherGlobalMPIInfo(cudecompHandle_t& handle) {
   CHECK_CUDA(cudaDeviceGetPCIBusId(pciBusId, sizeof(pciBusId), dev));
   nvmlDevice_t nvml_dev;
   CHECK_NVML(nvmlDeviceGetHandleByPciBusId(pciBusId, &nvml_dev));
-#if NVML_API_VERSION >= 12 && CUDART_VERSION >= 12030
+#if NVML_API_VERSION >= 12 && CUDART_VERSION >= 12040
   nvmlGpuFabricInfoV_t fabricInfo ={ .version = nvmlGpuFabricInfo_v2 };
   if (nvmlHasFabricSupport()) {
     handle->rank_to_mnnvl_info.resize(handle->nranks);
@@ -237,7 +237,7 @@ static void gatherGlobalMPIInfo(cudecompHandle_t& handle) {
       if (std::memcmp(clusterUuids[i].data(), zeros, NVML_GPU_FABRIC_UUID_LEN) == 0) {
         // If any rank has a zero cluster UUID, disable MNNVL.
         handle->rank_to_mnnvl_info.resize(0);
-	break;
+        break;
       }
       handle->rank_to_mnnvl_info[i].first = clusterUuids[i];
       handle->rank_to_mnnvl_info[i].second = cliqueIds[i];
