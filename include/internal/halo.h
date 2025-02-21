@@ -120,11 +120,12 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
   }
 
   bool managed = isManagedPointer(input);
-  if (c == 2 && managed &&
+  if (c == 2 &&
       (haloBackendRequiresNvshmem(grid_desc->config.halo_comm_backend) ||
-       haloBackendRequiresMpi(grid_desc->config.halo_comm_backend))) {
-    // For managed memory, always stage to work space if using MPI/NVSHMEM
-    // Can revisit for NVSHMEM if input is nvshmem allocated
+      (managed && haloBackendRequiresMpi(grid_desc->config.halo_comm_backend)))) {
+    // For managed memory, always stage to work space if using MPI.
+    // For any memory, always stage to workspace if using NVSHMEM.
+    // Can revisit for NVSHMEM if input is NVSHMEM allocated.
     c = 1;
   }
 
