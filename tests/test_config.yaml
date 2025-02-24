@@ -1,6 +1,7 @@
 base: &base
   env_vars :
     NVSHMEM_DISABLE_CUDA_VMM: 1
+    NVSHMEM_DISABLE_NCCL: 1
 
   dtypes: ['R32', 'R64', 'C32', 'C64']
 
@@ -13,7 +14,8 @@ transpose_test_base: &transpose_test_base
           'gx', 'gy', 'gz',
           'acx', 'acy', 'acz',
           'gdx', 'gdy', 'gdz',
-          'hex' ,'hey', 'hez']
+          'hex' ,'hey', 'hez',
+          'pdx' ,'pdy', 'pdz']
 
   backend: [1, 2, 3, 4, 5, 6, 7]
 
@@ -32,6 +34,10 @@ transpose_test_base: &transpose_test_base
   hex: ["0 0 0"]
   hey: ["0 0 0"]
   hez: ["0 0 0"]
+
+  pdx: ["0 0 0"]
+  pdy: ["0 0 0"]
+  pdz: ["0 0 0"]
 
   out_of_place: [True, False]
   managed_memory : [True, False]
@@ -66,13 +72,54 @@ transpose_test_halo: &transpose_test_halo
           'gdx', 'gdy', 'gdz',
           'hex' ,'hey', 'hez']
 
-  backend: [1, 2] # Limit this testing to one normal and one pipelined backend
+  backend: [1] # Limit this testing to one backend
   dtypes: ['C64'] # Limit to one data type
   test_mem_order: true
 
   hex: ["0 0 0", "1 1 1"]
   hey: ["1 1 1"]
   hez: ["0 0 0", "1 1 1"]
+
+  managed_memory: [False]
+
+transpose_test_padding: &transpose_test_padding
+  <<: *transpose_test_base
+  args : ['backend',
+          'gx', 'gy', 'gz',
+          'gdx', 'gdy', 'gdz',
+          'pdx' ,'pdy', 'pdz']
+
+  backend: [1] # Limit this testing to one backend
+  dtypes: ['C64'] # Limit to one data type
+  test_mem_order: true
+
+  pdx: ["0 0 0", "1 1 1"]
+  pdy: ["1 1 1"]
+  pdz: ["0 0 0", "1 1 1"]
+
+  managed_memory: [False]
+
+transpose_test_halo_padding: &transpose_test_halo_padding
+  <<: *transpose_test_base
+  args : ['backend',
+          'gx', 'gy', 'gz',
+          'gdx', 'gdy', 'gdz',
+          'hex' ,'hey', 'hez',
+          'pdx' ,'pdy', 'pdz']
+
+  backend: [1] # Limit this testing to one backend
+  dtypes: ['C64'] # Limit to one data type
+  test_mem_order: true
+
+  hex: ["1 1 1"]
+  hey: ["1 1 1"]
+  hez: ["1 1 1"]
+
+  pdx: ["0 0 0", "1 1 1"]
+  pdy: ["1 1 1"]
+  pdz: ["0 0 0", "1 1 1"]
+
+  managed_memory: [False]
 
 transpose_test_acfalse_gdimdist: &transpose_test_acfalse_gdimdist
   <<: *transpose_test_base
@@ -118,6 +165,14 @@ transpose_test_halo_cc:
   <<: *transpose_test_halo
   executable_prefix: 'cc/transpose_test'
 
+transpose_test_padding_cc:
+  <<: *transpose_test_padding
+  executable_prefix: 'cc/transpose_test'
+
+transpose_test_halo_padding_cc:
+  <<: *transpose_test_halo_padding
+  executable_prefix: 'cc/transpose_test'
+
 transpose_test_acfalse_gdimdist_cc:
   <<: *transpose_test_acfalse_gdimdist
   executable_prefix: 'cc/transpose_test'
@@ -150,6 +205,16 @@ transpose_test_halo_fortran:
   executable_prefix: 'fortran/transpose_test'
   fortran_indexing: true
 
+transpose_test_padding_fortran:
+  <<: *transpose_test_padding
+  executable_prefix: 'fortran/transpose_test'
+  fortran_indexing: true
+
+transpose_test_halo_padding_fortran:
+  <<: *transpose_test_halo_padding
+  executable_prefix: 'fortran/transpose_test'
+  fortran_indexing: true
+
 transpose_test_acfalse_gdimdist_fortran:
   <<: *transpose_test_acfalse_gdimdist
   executable_prefix: 'fortran/transpose_test'
@@ -174,6 +239,7 @@ halo_test_base: &halo_test_base
           'gdx', 'gdy', 'gdz',
           'hex' ,'hey', 'hez',
           'hpx', 'hpy', 'hpz',
+          'pdx', 'pdy', 'pdz',
           'ax']
 
   backend: [1, 2, 3, 4, 5]
@@ -197,6 +263,10 @@ halo_test_base: &halo_test_base
   hpx: [1]
   hpy: [1]
   hpz: [1]
+
+  pdx: [0]
+  pdy: [0]
+  pdz: [0]
 
   ax: [0, 1, 2]
 
@@ -272,6 +342,23 @@ halo_test_mem_order: &halo_test_mem_order
           'hpx', 'hpy', 'hpz',
           'ax']
 
+halo_test_padding: &halo_test_padding
+  <<: *halo_test_base
+  backend: [1] # Limit this testing to one backend
+  dtypes: ['C64'] # Limit to one data type
+  test_mem_order: true
+  args : ['backend',
+          'gx', 'gy', 'gz',
+          'gdx', 'gdy', 'gdz',
+          'hex' ,'hey', 'hez',
+          'hpx', 'hpy', 'hpz',
+          'pdx', 'pdy', 'pdz',
+          'ax']
+
+  pdx : [1]
+  pdy : [1]
+  pdz : [1]
+
 halo_test_acfalse_cc:
   <<: *halo_test_acfalse
   executable_prefix: 'cc/halo_test'
@@ -298,6 +385,10 @@ halo_test_actrue_gdimdist_cc:
 
 halo_test_mem_order_cc:
   <<: *halo_test_mem_order
+  executable_prefix: 'cc/halo_test'
+
+halo_test_padding_cc:
+  <<: *halo_test_padding
   executable_prefix: 'cc/halo_test'
 
 halo_test_acfalse_fortran:
@@ -338,5 +429,12 @@ halo_test_actrue_gdimdist_fortran:
 
 halo_test_mem_order_fortran:
   <<: *halo_test_mem_order
+  ax: [1, 2, 3]
+  executable_prefix: 'fortran/halo_test'
+  fortran_indexing: true
+
+halo_test_padding_fortran:
+  <<: *halo_test_padding
+  ax: [1, 2, 3]
   executable_prefix: 'fortran/halo_test'
   fortran_indexing: true
