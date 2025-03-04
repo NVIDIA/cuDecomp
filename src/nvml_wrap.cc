@@ -40,9 +40,6 @@
     void **fptr = (void**)(&nvmlFnTable.pfn_##symbol);                          \
     void *sym = dlsym(nvml_handle, #symbol);                                    \
     *fptr = sym;                                                                \
-    if (!sym) {                                                                 \
-      printf("%s failed to load\n", #symbol);                                   \
-    }; \
   } while(false)
 
 namespace cudecomp {
