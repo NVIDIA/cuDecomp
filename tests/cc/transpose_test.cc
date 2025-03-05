@@ -30,8 +30,12 @@
 
 #include <array>
 #include <complex>
+#include <cstring>
 #include <cstdio>
+#include <fstream>
 #include <numeric>
+#include <sstream>
+#include <string>
 #include <vector>
 
 #include <getopt.h>
@@ -59,6 +63,53 @@ static cudecompDataType_t get_cudecomp_datatype(std::complex<double>) { return C
 using real_t = float;
 static cudecompDataType_t get_cudecomp_datatype(float) { return CUDECOMP_FLOAT; }
 #endif
+
+// Helper function to convert string into equivalent argc/argv input
+static void string_to_argcv(const std::string& input, int& argc, char**& argv) {
+  std::istringstream stream(input);
+  std::vector<std::string> tokens;
+  std::string token;
+
+  // Set argv[0] to dummy value
+  tokens.push_back("");
+
+  while (stream >> token) {
+    tokens.push_back(token);
+  }
+
+  argc = tokens.size();
+  argv = new char*[argc];
+
+  for (int i = 0; i < argc; ++i) {
+    argv[i] = new char[tokens[i].size() + 1];
+    std::strcpy(argv[i], tokens[i].c_str());
+  }
+}
+
+static void free_argcv(int argc, char** argv) {
+  for (int i = 0; i < argc; ++i) {
+    delete[] argv[i];
+  }
+  delete[] argv;
+}
+
+static std::vector<std::string> read_testfile(const std::string& filename) {
+  std::vector<std::string> cases;
+  std::ifstream file(filename);
+  std::string line;
+
+  if (file.is_open()) {
+    while (std::getline(file, line)) {
+      cases.push_back(line);
+    }
+    file.close();
+  } else {
+    fprintf(stderr, "unable to open test file: %s\n", filename.c_str());
+    exit(EXIT_FAILURE);
+  }
+
+  return cases;
+}
 
 static bool compare_pencils(const std::vector<real_t>& ref, const std::vector<real_t>& res,
                             const cudecompPencilInfo_t& pinfo) {
@@ -158,19 +209,7 @@ static void usage(const char* pname) {
   exit(EXIT_SUCCESS);
 }
 
-int main(int argc, char** argv) {
-  CHECK_MPI_EXIT(MPI_Init(nullptr, nullptr));
-  int rank, nranks;
-  CHECK_MPI_EXIT(MPI_Comm_rank(MPI_COMM_WORLD, &rank));
-  CHECK_MPI_EXIT(MPI_Comm_size(MPI_COMM_WORLD, &nranks));
-
-  MPI_Comm local_comm;
-  MPI_Comm_split_type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL, &local_comm);
-  int local_rank;
-  MPI_Comm_rank(local_comm, &local_rank);
-  CHECK_CUDA_EXIT(cudaSetDevice(local_rank));
-
-  // Parse command-line arguments
+struct transposeTestArgs {
   int gx = 256;
   int gy = 256;
   int gz = 256;
@@ -185,7 +224,17 @@ int main(int argc, char** argv) {
   bool out_of_place = false;
   bool use_managed_memory = false;
   std::array<int, 9> mem_order{-1, -1, -1, -1, -1, -1, -1, -1, -1};
+};
 
+static transposeTestArgs parse_arguments(const std::string& arguments) {
+  transposeTestArgs args;
+
+  int argc;
+  char** argv;
+  string_to_argcv(arguments, argc, argv);
+
+  // Parse command-line arguments
+  optind = 1;
   while (1) {
     static struct option long_options[] = {{"gx", required_argument, 0, 'x'},
                                            {"gy", required_argument, 0, 'y'},
@@ -214,45 +263,45 @@ int main(int argc, char** argv) {
 
     switch (ch) {
     case 0: break;
-    case 'x': gx = atoi(optarg); break;
-    case 'y': gy = atoi(optarg); break;
-    case 'z': gz = atoi(optarg); break;
-    case 'b': comm_backend = static_cast<cudecompTransposeCommBackend_t>(atoi(optarg)); break;
-    case 'r': pr = atoi(optarg); break;
-    case 'c': pc = atoi(optarg); break;
-    case '1': axis_contiguous[0] = atoi(optarg); break;
-    case '2': axis_contiguous[1] = atoi(optarg); break;
-    case '3': axis_contiguous[2] = atoi(optarg); break;
-    case '4': gdims_dist[0] = atoi(optarg); break;
-    case '5': gdims_dist[1] = atoi(optarg); break;
-    case '6': gdims_dist[2] = atoi(optarg); break;
+    case 'x': args.gx = atoi(optarg); break;
+    case 'y': args.gy = atoi(optarg); break;
+    case 'z': args.gz = atoi(optarg); break;
+    case 'b': args.comm_backend = static_cast<cudecompTransposeCommBackend_t>(atoi(optarg)); break;
+    case 'r': args.pr = atoi(optarg); break;
+    case 'c': args.pc = atoi(optarg); break;
+    case '1': args.axis_contiguous[0] = atoi(optarg); break;
+    case '2': args.axis_contiguous[1] = atoi(optarg); break;
+    case '3': args.axis_contiguous[2] = atoi(optarg); break;
+    case '4': args.gdims_dist[0] = atoi(optarg); break;
+    case '5': args.gdims_dist[1] = atoi(optarg); break;
+    case '6': args.gdims_dist[2] = atoi(optarg); break;
     case '7':
       optind--;
       for (int i = 0; i < 3; ++i) {
-        halo_extents_x[i] = atoi(argv[optind]);
+        args.halo_extents_x[i] = atoi(argv[optind]);
         optind++;
       }
       break;
     case '8':
       optind--;
       for (int i = 0; i < 3; ++i) {
-        halo_extents_y[i] = atoi(argv[optind]);
+        args.halo_extents_y[i] = atoi(argv[optind]);
         optind++;
       }
       break;
     case '9':
       optind--;
       for (int i = 0; i < 3; ++i) {
-        halo_extents_z[i] = atoi(argv[optind]);
+        args.halo_extents_z[i] = atoi(argv[optind]);
         optind++;
       }
       break;
-    case 'o': out_of_place = true; break;
-    case 'm': use_managed_memory = true; break;
+    case 'o': args.out_of_place = true; break;
+    case 'm': args.use_managed_memory = true; break;
     case 'q':
       optind--;
       for (int i = 0; i < 9; ++i) {
-        mem_order[i] = atoi(argv[optind]);
+        args.mem_order[i] = atoi(argv[optind]);
         optind++;
       }
       break;
@@ -263,168 +312,261 @@ int main(int argc, char** argv) {
   }
 
   // Finish setting up gdim_dist
-  gdims_dist[0] = gx - gdims_dist[0];
-  gdims_dist[1] = gy - gdims_dist[1];
-  gdims_dist[2] = gz - gdims_dist[2];
+  args.gdims_dist[0] = args.gx - args.gdims_dist[0];
+  args.gdims_dist[1] = args.gy - args.gdims_dist[1];
+  args.gdims_dist[2] = args.gz - args.gdims_dist[2];
 
-  std::array<int, 2> pdims;
-  pdims[0] = pr;
-  pdims[1] = pc;
+  free_argcv(argc, argv);
 
-  if (rank == 0) printf("running on %d x %d x %d spatial grid...\n", gx, gy, gz);
+  return args;
+}
+
+int rank, nranks;
+cudecompHandle_t handle;
+
+static int run_test(const std::string& arguments) {
+
+  try {
+    transposeTestArgs args = parse_arguments(arguments);
+
+    std::array<int, 2> pdims;
+    pdims[0] = args.pr;
+    pdims[1] = args.pc;
+
+    if (rank == 0) printf("running on %d x %d x %d spatial grid...\n", args.gx, args.gy, args.gz);
+
+    // Setup grid descriptor
+    std::array<int32_t, 3> gdims{args.gx, args.gy, args.gz};
+    cudecompGridDesc_t grid_desc;
+    cudecompGridDescConfig_t config;
+    CHECK_CUDECOMP(cudecompGridDescConfigSetDefaults(&config));
+    config.pdims[0] = pdims[0];
+    config.pdims[1] = pdims[1];
+    config.gdims[0] = gdims[0];
+    config.gdims[1] = gdims[1];
+    config.gdims[2] = gdims[2];
+    config.gdims_dist[0] = args.gdims_dist[0];
+    config.gdims_dist[1] = args.gdims_dist[1];
+    config.gdims_dist[2] = args.gdims_dist[2];
+    config.transpose_axis_contiguous[0] = args.axis_contiguous[0];
+    config.transpose_axis_contiguous[1] = args.axis_contiguous[1];
+    config.transpose_axis_contiguous[2] = args.axis_contiguous[2];
+    for (int i = 0; i < 3; ++i) {
+      for (int j = 0; j < 3; ++j) {
+        config.transpose_mem_order[i][j] = args.mem_order[i * 3 + j];
+      }
+    }
+
+    cudecompGridDescAutotuneOptions_t options;
+    CHECK_CUDECOMP(cudecompGridDescAutotuneOptionsSetDefaults(&options));
+    options.dtype = get_cudecomp_datatype(real_t(0));
+    for (int i = 0; i < 4; ++i) { options.transpose_use_inplace_buffers[i] = !args.out_of_place; }
+
+    if (args.comm_backend != 0) {
+      config.transpose_comm_backend = args.comm_backend;
+    } else {
+      options.autotune_transpose_backend = true;
+    }
+
+    CHECK_CUDECOMP(cudecompGridDescCreate(handle, &grid_desc, &config, &options));
+
+    if (rank == 0) {
+      printf("running on %d x %d process grid...\n", config.pdims[0], config.pdims[1]);
+      printf("running using %s transpose backend...\n",
+             cudecompTransposeCommBackendToString(config.transpose_comm_backend));
+    }
+
+    // Get x-pencil information
+    cudecompPencilInfo_t pinfo_x;
+    CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_x, 0, args.halo_extents_x.data()));
+
+    // Get y-pencil information
+    cudecompPencilInfo_t pinfo_y;
+    CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_y, 1, args.halo_extents_y.data()));
+
+    // Get z-pencil information
+    cudecompPencilInfo_t pinfo_z;
+    CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_z, 2, args.halo_extents_z.data()));
+
+    // Get workspace size
+    int64_t workspace_num_elements;
+    CHECK_CUDECOMP(cudecompGetTransposeWorkspaceSize(handle, grid_desc, &workspace_num_elements));
+
+    // Allocate data arrays
+    int64_t data_num_elements = std::max(std::max(pinfo_x.size, pinfo_y.size), pinfo_z.size);
+
+    std::vector<real_t> data(data_num_elements);
+
+    // Create reference data
+    std::vector<real_t> xref(pinfo_x.size);
+    std::vector<real_t> yref(pinfo_y.size);
+    std::vector<real_t> zref(pinfo_z.size);
+
+    initialize_pencil(xref, pinfo_x, gdims);
+    initialize_pencil(yref, pinfo_y, gdims);
+    initialize_pencil(zref, pinfo_z, gdims);
+
+    real_t *data_d, *work_d;
+    if (args.use_managed_memory) {
+      CHECK_CUDA(cudaMallocManaged(&data_d, data.size() * sizeof(*data_d)));
+    } else {
+      CHECK_CUDA(cudaMalloc(&data_d, data.size() * sizeof(*data_d)));
+    }
+    int64_t dtype_size;
+    CHECK_CUDECOMP(cudecompGetDataTypeSize(get_cudecomp_datatype(real_t(0)), &dtype_size));
+    CHECK_CUDECOMP(
+        cudecompMalloc(handle, grid_desc, reinterpret_cast<void**>(&work_d), workspace_num_elements * dtype_size));
+
+    real_t* data_2_d = nullptr;
+    if (args.out_of_place) {
+      if (args.use_managed_memory) {
+        CHECK_CUDA(cudaMallocManaged(&data_2_d, data.size() * sizeof(*data_2_d)));
+      } else {
+        CHECK_CUDA(cudaMalloc(&data_2_d, data.size() * sizeof(*data_2_d)));
+      }
+    }
+
+    // Running correctness tests
+    if (rank == 0) printf("running correctness tests...\n");
+
+    // Initialize data to reference x-pencil data
+    CHECK_CUDA(cudaMemcpy(data_d, xref.data(), xref.size() * sizeof(*data_d), cudaMemcpyHostToDevice));
+
+    real_t* input = data_d;
+    real_t* output = data_d;
+    if (args.out_of_place) output = data_2_d;
+
+    CHECK_CUDA(cudaMemset(work_d, 0, workspace_num_elements * dtype_size));
+    CHECK_CUDECOMP(cudecompTransposeXToY(handle, grid_desc, input, output, work_d, get_cudecomp_datatype(real_t(0)),
+                                              pinfo_x.halo_extents, pinfo_y.halo_extents, 0));
+    CHECK_CUDA(cudaMemcpy(data.data(), output, data.size() * sizeof(*output), cudaMemcpyDeviceToHost));
+    if (!compare_pencils(yref, data, pinfo_y)) {
+      printf("FAILED cudecompTransposeXToY\n");
+      return 1;
+    }
+
+    if (args.out_of_place) std::swap(input, output);
+
+    CHECK_CUDA(cudaMemset(work_d, 0, workspace_num_elements * dtype_size));
+    CHECK_CUDECOMP(cudecompTransposeYToZ(handle, grid_desc, input, output, work_d, get_cudecomp_datatype(real_t(0)),
+                                              pinfo_y.halo_extents, pinfo_z.halo_extents, 0));
+    CHECK_CUDA(cudaMemcpy(data.data(), output, data.size() * sizeof(*data_d), cudaMemcpyDeviceToHost));
+    if (!compare_pencils(zref, data, pinfo_z)) {
+      printf("FAILED cudecompTransposeYToZ\n");
+      return 1;
+    }
+
+    if (args.out_of_place) std::swap(input, output);
+
+    CHECK_CUDA(cudaMemset(work_d, 0, workspace_num_elements * dtype_size));
+    CHECK_CUDECOMP(cudecompTransposeZToY(handle, grid_desc, input, output, work_d, get_cudecomp_datatype(real_t(0)),
+                                              pinfo_z.halo_extents, pinfo_y.halo_extents, 0));
+    CHECK_CUDA(cudaMemcpy(data.data(), output, data.size() * sizeof(*data_d), cudaMemcpyDeviceToHost));
+    if (!compare_pencils(yref, data, pinfo_y)) {
+      printf("FAILED cudecompTransposeZToY\n");
+      return 1;
+    }
+
+    if (args.out_of_place) std::swap(input, output);
+
+    CHECK_CUDA(cudaMemset(work_d, 0, workspace_num_elements * dtype_size));
+    CHECK_CUDECOMP(cudecompTransposeYToX(handle, grid_desc, input, output, work_d, get_cudecomp_datatype(real_t(0)),
+                                              pinfo_y.halo_extents, pinfo_x.halo_extents, 0));
+    CHECK_CUDA(cudaMemcpy(data.data(), output, data.size() * sizeof(*data_d), cudaMemcpyDeviceToHost));
+    if (!compare_pencils(xref, data, pinfo_x)) {
+      printf("FAILED cudecompTransposeYToX\n");
+      return 1;
+    }
+
+    CHECK_CUDA(cudaFree(data_d));
+    if (data_2_d) CHECK_CUDA(cudaFree(data_2_d));
+    CHECK_CUDECOMP(cudecompFree(handle, grid_desc, work_d));
+    CHECK_CUDECOMP(cudecompGridDescDestroy(handle, grid_desc));
+  } catch (const std::exception& e) {
+    printf("%s\n", e.what());
+    return 1;
+  }
+
+  return 0;
+}
+
+int main(int argc, char** argv) {
+  CHECK_MPI_EXIT(MPI_Init(nullptr, nullptr));
+  CHECK_MPI_EXIT(MPI_Comm_rank(MPI_COMM_WORLD, &rank));
+  CHECK_MPI_EXIT(MPI_Comm_size(MPI_COMM_WORLD, &nranks));
+
+  MPI_Comm local_comm;
+  MPI_Comm_split_type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL, &local_comm);
+  int local_rank;
+  MPI_Comm_rank(local_comm, &local_rank);
+  CHECK_CUDA_EXIT(cudaSetDevice(local_rank));
+
+  // Check if test file was provided
+  std::string testfile;
+  bool using_testfile = false;
+  for (int i = 0; i < argc; ++i) {
+    if (strcmp(argv[i], "-f") == 0 || strcmp(argv[i], "--testfile") == 0) {
+      testfile = std::string(argv[i+1]);
+      using_testfile = true;
+      break;
+    }
+  }
 
   // Initialize cuDecomp
-  cudecompHandle_t handle;
   CHECK_CUDECOMP_EXIT(cudecompInit(&handle, MPI_COMM_WORLD));
 
-  // Setup grid descriptor
-  std::array<int32_t, 3> gdims{gx, gy, gz};
-  cudecompGridDesc_t grid_desc;
-  cudecompGridDescConfig_t config;
-  CHECK_CUDECOMP_EXIT(cudecompGridDescConfigSetDefaults(&config));
-  config.pdims[0] = pdims[0];
-  config.pdims[1] = pdims[1];
-  config.gdims[0] = gdims[0];
-  config.gdims[1] = gdims[1];
-  config.gdims[2] = gdims[2];
-  config.gdims_dist[0] = gdims_dist[0];
-  config.gdims_dist[1] = gdims_dist[1];
-  config.gdims_dist[2] = gdims_dist[2];
-  config.transpose_axis_contiguous[0] = axis_contiguous[0];
-  config.transpose_axis_contiguous[1] = axis_contiguous[1];
-  config.transpose_axis_contiguous[2] = axis_contiguous[2];
-  for (int i = 0; i < 3; ++i) {
-    for (int j = 0; j < 3; ++j) {
-      config.transpose_mem_order[i][j] = mem_order[i * 3 + j];
+  std::vector<std::string> testcases;
+  if (!using_testfile) {
+    std::string arguments;
+    for (int i = 1;  i < argc; ++i) {
+      arguments += argv[i];
+      if (i < argc - 1) {
+        arguments += " ";
+      }
+    }
+    testcases.push_back(arguments);
+  } else {
+    testcases = read_testfile(testfile);
+  }
+
+  std::vector<std::string> failed_cases;
+  double t0 = MPI_Wtime();
+  if (using_testfile && rank == 0) printf("Running %d tests...\n", static_cast<int>(testcases.size()));
+  for (int i = 0; i < testcases.size(); ++i) {
+    if (using_testfile && rank == 0) printf("arguments: %s\n", testcases[i].c_str());
+    int res = run_test(testcases[i]);
+    CHECK_MPI_EXIT(MPI_Reduce((rank == 0) ? MPI_IN_PLACE: &res, &res, 1, MPI_INT, MPI_MAX, 0, MPI_COMM_WORLD));
+    if (using_testfile && rank == 0) {
+      if (res != 0) {
+        printf(" FAILED\n\n");
+        failed_cases.push_back(testcases[i]);
+      } else {
+        printf(" PASSED\n\n");
+      }
+    }
+    if (using_testfile && (i + 1) % 10 == 0) {
+      if (rank == 0) printf("Completed %d/%d tests, running time %f s\n", i + 1, static_cast<int>(testcases.size()), MPI_Wtime() - t0);
     }
   }
 
-  cudecompGridDescAutotuneOptions_t options;
-  CHECK_CUDECOMP_EXIT(cudecompGridDescAutotuneOptionsSetDefaults(&options));
-  options.dtype = get_cudecomp_datatype(real_t(0));
-  for (int i = 0; i < 4; ++i) { options.transpose_use_inplace_buffers[i] = !out_of_place; }
+  if (using_testfile) {
+    printf("Completed all tests, running time %f s,\n", MPI_Wtime() - t0);
 
-  if (comm_backend != 0) {
-    config.transpose_comm_backend = comm_backend;
-  } else {
-    options.autotune_transpose_backend = true;
-  }
-
-  CHECK_CUDECOMP_EXIT(cudecompGridDescCreate(handle, &grid_desc, &config, &options));
-
-  if (rank == 0) {
-    printf("running on %d x %d process grid...\n", config.pdims[0], config.pdims[1]);
-    printf("running using %s transpose backend...\n",
-           cudecompTransposeCommBackendToString(config.transpose_comm_backend));
-  }
-
-  // Get x-pencil information
-  cudecompPencilInfo_t pinfo_x;
-  CHECK_CUDECOMP_EXIT(cudecompGetPencilInfo(handle, grid_desc, &pinfo_x, 0, halo_extents_x.data()));
-
-  // Get y-pencil information
-  cudecompPencilInfo_t pinfo_y;
-  CHECK_CUDECOMP_EXIT(cudecompGetPencilInfo(handle, grid_desc, &pinfo_y, 1, halo_extents_y.data()));
-
-  // Get z-pencil information
-  cudecompPencilInfo_t pinfo_z;
-  CHECK_CUDECOMP_EXIT(cudecompGetPencilInfo(handle, grid_desc, &pinfo_z, 2, halo_extents_z.data()));
-
-  // Get workspace size
-  int64_t workspace_num_elements;
-  CHECK_CUDECOMP_EXIT(cudecompGetTransposeWorkspaceSize(handle, grid_desc, &workspace_num_elements));
-
-  // Allocate data arrays
-  int64_t data_num_elements = std::max(std::max(pinfo_x.size, pinfo_y.size), pinfo_z.size);
-
-  std::vector<real_t> data(data_num_elements);
-
-  // Create reference data
-  std::vector<real_t> xref(pinfo_x.size);
-  std::vector<real_t> yref(pinfo_y.size);
-  std::vector<real_t> zref(pinfo_z.size);
-
-  initialize_pencil(xref, pinfo_x, gdims);
-  initialize_pencil(yref, pinfo_y, gdims);
-  initialize_pencil(zref, pinfo_z, gdims);
-
-  real_t *data_d, *work_d;
-  if (use_managed_memory) {
-    CHECK_CUDA_EXIT(cudaMallocManaged(&data_d, data.size() * sizeof(*data_d)));
-  } else {
-    CHECK_CUDA_EXIT(cudaMalloc(&data_d, data.size() * sizeof(*data_d)));
-  }
-  int64_t dtype_size;
-  CHECK_CUDECOMP_EXIT(cudecompGetDataTypeSize(get_cudecomp_datatype(real_t(0)), &dtype_size));
-  CHECK_CUDECOMP_EXIT(
-      cudecompMalloc(handle, grid_desc, reinterpret_cast<void**>(&work_d), workspace_num_elements * dtype_size));
-
-  real_t* data_2_d = nullptr;
-  if (out_of_place) {
-    if (use_managed_memory) {
-      CHECK_CUDA_EXIT(cudaMallocManaged(&data_2_d, data.size() * sizeof(*data_2_d)));
-    } else {
-      CHECK_CUDA_EXIT(cudaMalloc(&data_2_d, data.size() * sizeof(*data_2_d)));
+    if (rank == 0) {
+      if (failed_cases.size() == 0) {
+        printf("Passed all tests.");
+      } else {
+        printf("Failed %d/%d tests. Failing cases:\n", static_cast<int>(failed_cases.size()), static_cast<int>(testcases.size()));
+        for (int i = 0; i < failed_cases.size(); ++i) {
+          printf(" %s\n", failed_cases[i].c_str());
+        }
+      }
     }
   }
 
-  // Running correctness tests
-  if (rank == 0) printf("running correctness tests...\n");
-
-  // Initialize data to reference x-pencil data
-  CHECK_CUDA_EXIT(cudaMemcpy(data_d, xref.data(), xref.size() * sizeof(*data_d), cudaMemcpyHostToDevice));
-
-  real_t* input = data_d;
-  real_t* output = data_d;
-  if (out_of_place) output = data_2_d;
-
-  CHECK_CUDA_EXIT(cudaMemset(work_d, 0, workspace_num_elements * dtype_size));
-  CHECK_CUDECOMP_EXIT(cudecompTransposeXToY(handle, grid_desc, input, output, work_d, get_cudecomp_datatype(real_t(0)),
-                                            pinfo_x.halo_extents, pinfo_y.halo_extents, 0));
-  CHECK_CUDA_EXIT(cudaMemcpy(data.data(), output, data.size() * sizeof(*output), cudaMemcpyDeviceToHost));
-  if (!compare_pencils(yref, data, pinfo_y)) {
-    printf("FAILED cudecompTransposeXToY\n");
-    exit(EXIT_FAILURE);
-  }
-
-  if (out_of_place) std::swap(input, output);
-
-  CHECK_CUDA_EXIT(cudaMemset(work_d, 0, workspace_num_elements * dtype_size));
-  CHECK_CUDECOMP_EXIT(cudecompTransposeYToZ(handle, grid_desc, input, output, work_d, get_cudecomp_datatype(real_t(0)),
-                                            pinfo_y.halo_extents, pinfo_z.halo_extents, 0));
-  CHECK_CUDA_EXIT(cudaMemcpy(data.data(), output, data.size() * sizeof(*data_d), cudaMemcpyDeviceToHost));
-  if (!compare_pencils(zref, data, pinfo_z)) {
-    printf("FAILED cudecompTransposeYToZ\n");
-    exit(EXIT_FAILURE);
-  }
-
-  if (out_of_place) std::swap(input, output);
-
-  CHECK_CUDA_EXIT(cudaMemset(work_d, 0, workspace_num_elements * dtype_size));
-  CHECK_CUDECOMP_EXIT(cudecompTransposeZToY(handle, grid_desc, input, output, work_d, get_cudecomp_datatype(real_t(0)),
-                                            pinfo_z.halo_extents, pinfo_y.halo_extents, 0));
-  CHECK_CUDA_EXIT(cudaMemcpy(data.data(), output, data.size() * sizeof(*data_d), cudaMemcpyDeviceToHost));
-  if (!compare_pencils(yref, data, pinfo_y)) {
-    printf("FAILED cudecompTransposeZToY\n");
-    exit(EXIT_FAILURE);
-  }
-
-  if (out_of_place) std::swap(input, output);
-
-  CHECK_CUDA_EXIT(cudaMemset(work_d, 0, workspace_num_elements * dtype_size));
-  CHECK_CUDECOMP_EXIT(cudecompTransposeYToX(handle, grid_desc, input, output, work_d, get_cudecomp_datatype(real_t(0)),
-                                            pinfo_y.halo_extents, pinfo_x.halo_extents, 0));
-  CHECK_CUDA_EXIT(cudaMemcpy(data.data(), output, data.size() * sizeof(*data_d), cudaMemcpyDeviceToHost));
-  if (!compare_pencils(xref, data, pinfo_x)) {
-    printf("FAILED cudecompTransposeYToX\n");
-    exit(EXIT_FAILURE);
-  }
-
-  CHECK_CUDA_EXIT(cudaFree(data_d));
-  if (data_2_d) CHECK_CUDA_EXIT(cudaFree(data_2_d));
-  CHECK_CUDECOMP_EXIT(cudecompFree(handle, grid_desc, work_d));
-  CHECK_CUDECOMP_EXIT(cudecompGridDescDestroy(handle, grid_desc));
+  // Finalize
   CHECK_CUDECOMP_EXIT(cudecompFinalize(handle));
-
   CHECK_MPI_EXIT(MPI_Finalize());
+
 }
+
