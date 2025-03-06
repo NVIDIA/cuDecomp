@@ -36,6 +36,7 @@
 #include <numeric>
 #include <sstream>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include <getopt.h>
@@ -234,7 +235,7 @@ static transposeTestArgs parse_arguments(const std::string& arguments) {
   string_to_argcv(arguments, argc, argv);
 
   // Parse command-line arguments
-  optind = 1;
+  optind = 0;
   while (1) {
     static struct option long_options[] = {{"gx", required_argument, 0, 'x'},
                                            {"gy", required_argument, 0, 'y'},
@@ -323,6 +324,16 @@ static transposeTestArgs parse_arguments(const std::string& arguments) {
 
 int rank, nranks;
 cudecompHandle_t handle;
+std::unordered_map<cudecompTransposeCommBackend_t, cudecompGridDesc_t> grid_desc_cache;
+
+// Cache a single grid descriptor per backend type. This keeps NCCL/NVSHMEM initialized between tests for
+// better throughput.
+static void cache_grid_desc(const cudecompGridDesc_t& grid_desc, cudecompTransposeCommBackend_t backend) {
+  if (grid_desc_cache.count(backend) != 0) {
+    CHECK_CUDECOMP(cudecompGridDescDestroy(handle, grid_desc_cache[backend]));
+  }
+  grid_desc_cache[backend] = grid_desc;
+}
 
 static int run_test(const std::string& arguments) {
 
@@ -369,6 +380,7 @@ static int run_test(const std::string& arguments) {
     }
 
     CHECK_CUDECOMP(cudecompGridDescCreate(handle, &grid_desc, &config, &options));
+    cache_grid_desc(grid_desc, config.transpose_comm_backend);
 
     if (rank == 0) {
       printf("running on %d x %d process grid...\n", config.pdims[0], config.pdims[1]);
@@ -481,7 +493,6 @@ static int run_test(const std::string& arguments) {
     CHECK_CUDA(cudaFree(data_d));
     if (data_2_d) CHECK_CUDA(cudaFree(data_2_d));
     CHECK_CUDECOMP(cudecompFree(handle, grid_desc, work_d));
-    CHECK_CUDECOMP(cudecompGridDescDestroy(handle, grid_desc));
   } catch (const std::exception& e) {
     printf("%s\n", e.what());
     return 1;
@@ -550,11 +561,10 @@ int main(int argc, char** argv) {
   }
 
   if (using_testfile) {
-    printf("Completed all tests, running time %f s,\n", MPI_Wtime() - t0);
-
     if (rank == 0) {
+      printf("Completed all tests, running time %f s,\n", MPI_Wtime() - t0);
       if (failed_cases.size() == 0) {
-        printf("Passed all tests.");
+        printf("Passed all tests.\n");
       } else {
         printf("Failed %d/%d tests. Failing cases:\n", static_cast<int>(failed_cases.size()), static_cast<int>(testcases.size()));
         for (int i = 0; i < failed_cases.size(); ++i) {
