@@ -127,7 +127,7 @@ def main():
   config = load_yaml_config("test_config.yaml", args.config_name)
 
   cmds = generate_command_lines(config, args)
-  with open("cases.txt", 'w') as f:
+  with open(f"{args.config_name}_cases.txt", 'w') as f:
     for c in cmds:
       f.write(c)
       f.write("\n")
@@ -138,7 +138,7 @@ def main():
   print(f"Running tests for dtypes ({', '.join(config['dtypes'])})...")
   for dtype in config['dtypes']:
     print(f"Running {dtype} tests...")
-    cmd = f"{args.launcher_cmd} {config['executable_prefix']}_{dtype} -f cases.txt"
+    cmd = f"{args.launcher_cmd} {config['executable_prefix']}_{dtype} -f {args.config_name}_cases.txt"
     status = run_test(cmd, args)
 
     if not status:
