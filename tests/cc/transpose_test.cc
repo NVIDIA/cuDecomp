@@ -336,7 +336,6 @@ static void cache_grid_desc(const cudecompGridDesc_t& grid_desc, cudecompTranspo
 }
 
 static int run_test(const std::string& arguments, bool silent) {
-
   try {
     transposeTestArgs args = parse_arguments(arguments);
 
