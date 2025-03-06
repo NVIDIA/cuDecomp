@@ -335,7 +335,7 @@ static void cache_grid_desc(const cudecompGridDesc_t& grid_desc, cudecompTranspo
   grid_desc_cache[backend] = grid_desc;
 }
 
-static int run_test(const std::string& arguments) {
+static int run_test(const std::string& arguments, bool silent) {
 
   try {
     transposeTestArgs args = parse_arguments(arguments);
@@ -344,7 +344,7 @@ static int run_test(const std::string& arguments) {
     pdims[0] = args.pr;
     pdims[1] = args.pc;
 
-    if (rank == 0) printf("running on %d x %d x %d spatial grid...\n", args.gx, args.gy, args.gz);
+    if (!silent && rank == 0) printf("running on %d x %d x %d spatial grid...\n", args.gx, args.gy, args.gz);
 
     // Setup grid descriptor
     std::array<int32_t, 3> gdims{args.gx, args.gy, args.gz};
@@ -382,7 +382,7 @@ static int run_test(const std::string& arguments) {
     CHECK_CUDECOMP(cudecompGridDescCreate(handle, &grid_desc, &config, &options));
     cache_grid_desc(grid_desc, config.transpose_comm_backend);
 
-    if (rank == 0) {
+    if (!silent && rank == 0) {
       printf("running on %d x %d process grid...\n", config.pdims[0], config.pdims[1]);
       printf("running using %s transpose backend...\n",
              cudecompTransposeCommBackendToString(config.transpose_comm_backend));
@@ -439,7 +439,7 @@ static int run_test(const std::string& arguments) {
     }
 
     // Running correctness tests
-    if (rank == 0) printf("running correctness tests...\n");
+    if (!silent && rank == 0) printf("running correctness tests...\n");
 
     // Initialize data to reference x-pencil data
     CHECK_CUDA(cudaMemcpy(data_d, xref.data(), xref.size() * sizeof(*data_d), cudaMemcpyHostToDevice));
@@ -453,7 +453,7 @@ static int run_test(const std::string& arguments) {
                                               pinfo_x.halo_extents, pinfo_y.halo_extents, 0));
     CHECK_CUDA(cudaMemcpy(data.data(), output, data.size() * sizeof(*output), cudaMemcpyDeviceToHost));
     if (!compare_pencils(yref, data, pinfo_y)) {
-      printf("FAILED cudecompTransposeXToY\n");
+      fprintf(stderr, "FAILED cudecompTransposeXToY\n");
       return 1;
     }
 
@@ -464,7 +464,7 @@ static int run_test(const std::string& arguments) {
                                               pinfo_y.halo_extents, pinfo_z.halo_extents, 0));
     CHECK_CUDA(cudaMemcpy(data.data(), output, data.size() * sizeof(*data_d), cudaMemcpyDeviceToHost));
     if (!compare_pencils(zref, data, pinfo_z)) {
-      printf("FAILED cudecompTransposeYToZ\n");
+      fprintf(stderr, "FAILED cudecompTransposeYToZ\n");
       return 1;
     }
 
@@ -475,7 +475,7 @@ static int run_test(const std::string& arguments) {
                                               pinfo_z.halo_extents, pinfo_y.halo_extents, 0));
     CHECK_CUDA(cudaMemcpy(data.data(), output, data.size() * sizeof(*data_d), cudaMemcpyDeviceToHost));
     if (!compare_pencils(yref, data, pinfo_y)) {
-      printf("FAILED cudecompTransposeZToY\n");
+      fprintf(stderr, "FAILED cudecompTransposeZToY\n");
       return 1;
     }
 
@@ -486,7 +486,7 @@ static int run_test(const std::string& arguments) {
                                               pinfo_y.halo_extents, pinfo_x.halo_extents, 0));
     CHECK_CUDA(cudaMemcpy(data.data(), output, data.size() * sizeof(*data_d), cudaMemcpyDeviceToHost));
     if (!compare_pencils(xref, data, pinfo_x)) {
-      printf("FAILED cudecompTransposeYToX\n");
+      fprintf(stderr, "FAILED cudecompTransposeYToX\n");
       return 1;
     }
 
@@ -494,7 +494,6 @@ static int run_test(const std::string& arguments) {
     if (data_2_d) CHECK_CUDA(cudaFree(data_2_d));
     CHECK_CUDECOMP(cudecompFree(handle, grid_desc, work_d));
   } catch (const std::exception& e) {
-    printf("%s\n", e.what());
     return 1;
   }
 
@@ -544,22 +543,24 @@ int main(int argc, char** argv) {
   double t0 = MPI_Wtime();
   if (using_testfile && rank == 0) printf("Running %d tests...\n", static_cast<int>(testcases.size()));
   for (int i = 0; i < testcases.size(); ++i) {
-    if (using_testfile && rank == 0) printf("arguments: %s\n", testcases[i].c_str());
-    int res = run_test(testcases[i]);
+    if (using_testfile && rank == 0) printf("command: %s %s\n", argv[0], testcases[i].c_str());
+    int res = run_test(testcases[i], using_testfile);
     CHECK_MPI_EXIT(MPI_Reduce((rank == 0) ? MPI_IN_PLACE: &res, &res, 1, MPI_INT, MPI_MAX, 0, MPI_COMM_WORLD));
     if (using_testfile && rank == 0) {
       if (res != 0) {
-        printf(" FAILED\n\n");
+        printf(" FAILED\n");
         failed_cases.push_back(testcases[i]);
       } else {
-        printf(" PASSED\n\n");
+        printf(" PASSED\n");
       }
     }
+    CHECK_MPI_EXIT(MPI_Barrier(MPI_COMM_WORLD));
     if (using_testfile && (i + 1) % 10 == 0) {
       if (rank == 0) printf("Completed %d/%d tests, running time %f s\n", i + 1, static_cast<int>(testcases.size()), MPI_Wtime() - t0);
     }
   }
 
+  int retcode = 0;
   if (using_testfile) {
     if (rank == 0) {
       printf("Completed all tests, running time %f s,\n", MPI_Wtime() - t0);
@@ -568,15 +569,18 @@ int main(int argc, char** argv) {
       } else {
         printf("Failed %d/%d tests. Failing cases:\n", static_cast<int>(failed_cases.size()), static_cast<int>(testcases.size()));
         for (int i = 0; i < failed_cases.size(); ++i) {
-          printf(" %s\n", failed_cases[i].c_str());
+          printf(" %s %s\n", argv[0], failed_cases[i].c_str());
         }
       }
     }
+    if (failed_cases.size() != 0) retcode = 1;
   }
 
   // Finalize
   CHECK_CUDECOMP_EXIT(cudecompFinalize(handle));
   CHECK_MPI_EXIT(MPI_Finalize());
+
+  return retcode;
 
 }
 
