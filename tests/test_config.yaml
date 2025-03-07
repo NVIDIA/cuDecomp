@@ -1,6 +1,7 @@
 base: &base
   env_vars :
     NVSHMEM_DISABLE_CUDA_VMM: 1
+    NVSHMEM_DISABLE_NCCL: 1
 
   dtypes: ['R32', 'R64', 'C32', 'C64']
 
@@ -11,8 +12,7 @@ transpose_test_base: &transpose_test_base
   # Creating list of args to control order and enable easier overriding of values
   args : ['backend',
           'gx', 'gy', 'gz',
-          'acx', 'acy', 'acz',
-          'gdx', 'gdy', 'gdz',
+          'gd',
           'hex' ,'hey', 'hez']
 
   backend: [1, 2, 3, 4, 5, 6, 7]
@@ -21,13 +21,7 @@ transpose_test_base: &transpose_test_base
   gy: [124]
   gz: [132]
 
-  acx: [0]
-  acy: [0]
-  acz: [0]
-
-  gdx: [0]
-  gdy: [0]
-  gdz: [0]
+  gd: ["0 0 0"]
 
   hex: ["0 0 0"]
   hey: ["0 0 0"]
@@ -36,132 +30,48 @@ transpose_test_base: &transpose_test_base
   out_of_place: [True, False]
   managed_memory : [True, False]
   run_autotuning : False
-  test_mem_order: False
+  test_mem_order: True
   fortran_indexing: False
 
-transpose_test_acfalse: &transpose_test_acfalse
+transpose_test: &transpose_test
   <<: *transpose_test_base
-  acx: [0]
-  acy: [0]
-  acz: [0]
 
-transpose_test_actrue: &transpose_test_actrue
-  <<: *transpose_test_base
-  acx: [1]
-  acy: [1]
-  acz: [1]
+  hex: ["0 0 0", "1 1 1"]
+  hey: ["0 0 0", "1 1 1"]
+  hez: ["0 0 0", "1 1 1"]
 
-transpose_test_acmix: &transpose_test_acmix
+  gd: ["0 0 0", "16 16 16"]
+
+transpose_test_ac: &transpose_test_ac
   <<: *transpose_test_base
-  backend: [1, 2] # Limit this testing to one normal and one pipelined backend
-  dtypes: ['C64'] # Limit to one data type
+  args : ['backend',
+          'acx', 'acy', 'acz',
+          'gx', 'gy', 'gz',
+          'gd',
+          'hex' ,'hey', 'hez']
+
+  backend: [1] # Limit this testing to one backend
+  dtypes: ['R32'] # Limit to one data type
+
   acx: [0, 1]
   acy: [0, 1]
   acz: [0, 1]
 
-transpose_test_halo: &transpose_test_halo
-  <<: *transpose_test_base
-  args : ['backend',
-          'gx', 'gy', 'gz',
-          'gdx', 'gdy', 'gdz',
-          'hex' ,'hey', 'hez']
-
-  backend: [1, 2] # Limit this testing to one normal and one pipelined backend
-  dtypes: ['C64'] # Limit to one data type
-  test_mem_order: true
-
-  hex: ["0 0 0", "1 1 1"]
-  hey: ["1 1 1"]
-  hez: ["0 0 0", "1 1 1"]
-
-transpose_test_acfalse_gdimdist: &transpose_test_acfalse_gdimdist
-  <<: *transpose_test_base
-  backend: [1, 2] # Limit this testing to one normal and one pipelined backend
-  dtypes: ['C64'] # Limit to one data type
-  acx: [0]
-  acy: [0]
-  acz: [0]
-
-  gdx: [0, 16]
-  gdy: [0, 16]
-  gdz: [0, 16]
-
-transpose_test_actrue_gdimdist: &transpose_test_actrue_gdimdist
-  <<: *transpose_test_acfalse_gdimdist
-  acx: [1]
-  acy: [1]
-  acz: [1]
-
-transpose_test_mem_order: &transpose_test_mem_order
-  <<: *transpose_test_base
-  backend: [1, 2] # Limit this testing to one normal and one pipelined backend
-  dtypes: ['C64'] # Limit to one data type
-  test_mem_order: true
-  args : ['backend',
-          'gx', 'gy', 'gz',
-          'gdx', 'gdy', 'gdz',
-          'hex' ,'hey', 'hez']
-
-transpose_test_acfalse_cc:
-  <<: *transpose_test_acfalse
+transpose_test_cc:
+  <<: *transpose_test
   executable_prefix: 'cc/transpose_test'
 
-transpose_test_actrue_cc:
-  <<: *transpose_test_actrue
+transpose_test_ac_cc:
+  <<: *transpose_test_ac
   executable_prefix: 'cc/transpose_test'
 
-transpose_test_acmix_cc:
-  <<: *transpose_test_acmix
-  executable_prefix: 'cc/transpose_test'
-
-transpose_test_halo_cc:
-  <<: *transpose_test_halo
-  executable_prefix: 'cc/transpose_test'
-
-transpose_test_acfalse_gdimdist_cc:
-  <<: *transpose_test_acfalse_gdimdist
-  executable_prefix: 'cc/transpose_test'
-
-transpose_test_actrue_gdimdist_cc:
-  <<: *transpose_test_actrue_gdimdist
-  executable_prefix: 'cc/transpose_test'
-
-transpose_test_mem_order_cc:
-  <<: *transpose_test_mem_order
-  executable_prefix: 'cc/transpose_test'
-
-transpose_test_acfalse_fortran:
-  <<: *transpose_test_acfalse
+transpose_test_fortran:
+  <<: *transpose_test
   executable_prefix: 'fortran/transpose_test'
   fortran_indexing: true
 
-transpose_test_actrue_fortran:
-  <<: *transpose_test_actrue
-  executable_prefix: 'fortran/transpose_test'
-  fortran_indexing: true
-
-transpose_test_acmix_fortran:
-  <<: *transpose_test_acmix
-  executable_prefix: 'fortran/transpose_test'
-  fortran_indexing: true
-
-transpose_test_halo_fortran:
-  <<: *transpose_test_halo
-  executable_prefix: 'fortran/transpose_test'
-  fortran_indexing: true
-
-transpose_test_acfalse_gdimdist_fortran:
-  <<: *transpose_test_acfalse_gdimdist
-  executable_prefix: 'fortran/transpose_test'
-  fortran_indexing: true
-
-transpose_test_actrue_gdimdist_fortran:
-  <<: *transpose_test_actrue_gdimdist
-  executable_prefix: 'fortran/transpose_test'
-  fortran_indexing: true
-
-transpose_test_mem_order_fortran:
-  <<: *transpose_test_mem_order
+transpose_test_ac_fortran:
+  <<: *transpose_test_ac
   executable_prefix: 'fortran/transpose_test'
   fortran_indexing: true
 
@@ -170,8 +80,7 @@ halo_test_base: &halo_test_base
 
   args : ['backend',
           'gx', 'gy', 'gz',
-          'acx', 'acy', 'acz',
-          'gdx', 'gdy', 'gdz',
+          'gd',
           'hex' ,'hey', 'hez',
           'hpx', 'hpy', 'hpz',
           'ax']
@@ -182,13 +91,7 @@ halo_test_base: &halo_test_base
   gy: [132]
   gz: [124]
 
-  acx: [0]
-  acy: [0]
-  acz: [0]
-
-  gdx: [0]
-  gdy: [0]
-  gdz: [0]
+  gd: ["0 0 0"]
 
   hex: [1]
   hey: [1]
@@ -203,30 +106,12 @@ halo_test_base: &halo_test_base
   managed_memory : [True, False]
   out_of_place : [False]
   run_autotuning : False
-  test_mem_order: False
+  test_mem_order: True
   fortran_indexing: False
 
-halo_test_acfalse: &halo_test_acfalse
+
+halo_test: &halo_test
   <<: *halo_test_base
-  acx: [0]
-  acy: [0]
-  acz: [0]
-
-halo_test_actrue: &halo_test_actrue
-  <<: *halo_test_base
-  acx: [1]
-  acy: [1]
-  acz: [1]
-
-halo_test_acfalse_halomix: &halo_test_acfalse_halomix
-  <<: *halo_test_base
-  backend: [1] # Limit this testing to one backend
-  dtypes: ['C64'] # Limit to one data type
-
-  acx: [0]
-  acy: [0]
-  acz: [0]
-
   hex: [0, 1]
   hey: [0, 1]
   hez: [0, 1]
@@ -235,108 +120,41 @@ halo_test_acfalse_halomix: &halo_test_acfalse_halomix
   hpy: [0, 1]
   hpz: [0, 1]
 
-halo_test_actrue_halomix: &halo_test_actrue_halomix
-  <<: *halo_test_acfalse_halomix
-  acx: [1]
-  acy: [1]
-  acz: [1]
+  gd: ["0 0 0", "16 16 16"]
 
-halo_test_acfalse_gdimdist: &halo_test_acfalse_gdimdist
+halo_test_ac: &halo_test_ac
   <<: *halo_test_base
-  backend: [1] # Limit this testing to one backend
-  dtypes: ['C64'] # Limit to one data type
-
-  acx: [0]
-  acy: [0]
-  acz: [0]
-
-  gdx: [0, 16]
-  gdy: [0, 16]
-  gdz: [0, 16]
-
-halo_test_actrue_gdimdist: &halo_test_actrue_gdimdist
-  <<: *halo_test_acfalse_gdimdist
-  acx: [1]
-  acy: [1]
-  acz: [1]
-
-halo_test_mem_order: &halo_test_mem_order
-  <<: *halo_test_base
-  backend: [1] # Limit this testing to one backend
-  dtypes: ['C64'] # Limit to one data type
-  test_mem_order: true
   args : ['backend',
+          'acx', 'acy', 'acz',
           'gx', 'gy', 'gz',
-          'gdx', 'gdy', 'gdz',
+          'gd',
           'hex' ,'hey', 'hez',
           'hpx', 'hpy', 'hpz',
           'ax']
 
-halo_test_acfalse_cc:
-  <<: *halo_test_acfalse
+  backend: [1] # Limit this testing to one backend
+  dtypes: ['R32'] # Limit to one data type
+
+  acx: [0, 1]
+  acy: [0, 1]
+  acz: [0, 1]
+
+halo_test_cc:
+  <<: *halo_test
   executable_prefix: 'cc/halo_test'
 
-halo_test_actrue_cc:
-  <<: *halo_test_actrue
+halo_test_ac_cc:
+  <<: *halo_test_ac
   executable_prefix: 'cc/halo_test'
 
-halo_test_acfalse_halomix_cc:
-  <<: *halo_test_acfalse_halomix
-  executable_prefix: 'cc/halo_test'
-
-halo_test_actrue_halomix_cc:
-  <<: *halo_test_actrue_halomix
-  executable_prefix: 'cc/halo_test'
-
-halo_test_acfalse_gdimdist_cc:
-  <<: *halo_test_acfalse_gdimdist
-  executable_prefix: 'cc/halo_test'
-
-halo_test_actrue_gdimdist_cc:
-  <<: *halo_test_actrue_gdimdist
-  executable_prefix: 'cc/halo_test'
-
-halo_test_mem_order_cc:
-  <<: *halo_test_mem_order
-  executable_prefix: 'cc/halo_test'
-
-halo_test_acfalse_fortran:
-  <<: *halo_test_acfalse
+halo_test_fortran:
+  <<: *halo_test
   ax: [1, 2, 3]
   executable_prefix: 'fortran/halo_test'
   fortran_indexing: true
 
-halo_test_actrue_fortran:
-  <<: *halo_test_actrue
+halo_test_ac_fortran:
+  <<: *halo_test_ac
   ax: [1, 2, 3]
-  executable_prefix: 'fortran/halo_test'
-  fortran_indexing: true
-
-halo_test_acfalse_halomix_fortran:
-  <<: *halo_test_acfalse_halomix
-  ax: [1, 2, 3]
-  executable_prefix: 'fortran/halo_test'
-  fortran_indexing: true
-
-halo_test_actrue_halomix_fortran:
-  <<: *halo_test_actrue_halomix
-  ax: [1, 2, 3]
-  executable_prefix: 'fortran/halo_test'
-  fortran_indexing: true
-
-halo_test_acfalse_gdimdist_fortran:
-  <<: *halo_test_acfalse_gdimdist
-  ax: [1, 2, 3]
-  executable_prefix: 'fortran/halo_test'
-  fortran_indexing: true
-
-halo_test_actrue_gdimdist_fortran:
-  <<: *halo_test_actrue_gdimdist
-  ax: [1, 2, 3]
-  executable_prefix: 'fortran/halo_test'
-  fortran_indexing: true
-
-halo_test_mem_order_fortran:
-  <<: *halo_test_mem_order
   executable_prefix: 'fortran/halo_test'
   fortran_indexing: true

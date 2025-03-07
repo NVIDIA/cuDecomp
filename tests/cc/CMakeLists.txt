@@ -42,6 +42,7 @@ foreach(tgt ${transpose_test_targets_cc} ${halo_test_targets_cc})
   target_link_libraries(${tgt} PRIVATE MPI::MPI_CXX)
   target_link_libraries(${tgt} PRIVATE NVHPC::CUDART)
   target_link_libraries(${tgt} PUBLIC cudecomp)
+  target_compile_options(${tgt} PRIVATE -O3)
 endforeach()
 
 target_compile_definitions(transpose_test_R32_cc PRIVATE R32)
