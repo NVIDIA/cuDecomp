@@ -12,7 +12,7 @@ transpose_test_base: &transpose_test_base
   # Creating list of args to control order and enable easier overriding of values
   args : ['backend',
           'gx', 'gy', 'gz',
-          'gdx', 'gdy', 'gdz',
+          'gd',
           'hex' ,'hey', 'hez']
 
   backend: [1, 2, 3, 4, 5, 6, 7]
@@ -21,9 +21,7 @@ transpose_test_base: &transpose_test_base
   gy: [124]
   gz: [132]
 
-  gdx: [0]
-  gdy: [0]
-  gdz: [0]
+  gd: ["0 0 0"]
 
   hex: ["0 0 0"]
   hey: ["0 0 0"]
@@ -42,16 +40,14 @@ transpose_test: &transpose_test
   hey: ["0 0 0", "1 1 1"]
   hez: ["0 0 0", "1 1 1"]
 
-  gdx: [0, 16]
-  gdy: [0, 16]
-  gdz: [0, 16]
+  gd: ["0 0 0", "16 16 16"]
 
 transpose_test_ac: &transpose_test_ac
   <<: *transpose_test_base
   args : ['backend',
           'acx', 'acy', 'acz',
           'gx', 'gy', 'gz',
-          'gdx', 'gdy', 'gdz',
+          'gd',
           'hex' ,'hey', 'hez']
 
   backend: [1] # Limit this testing to one backend
@@ -84,7 +80,7 @@ halo_test_base: &halo_test_base
 
   args : ['backend',
           'gx', 'gy', 'gz',
-          'gdx', 'gdy', 'gdz',
+          'gd',
           'hex' ,'hey', 'hez',
           'hpx', 'hpy', 'hpz',
           'ax']
@@ -95,9 +91,7 @@ halo_test_base: &halo_test_base
   gy: [132]
   gz: [124]
 
-  gdx: [0]
-  gdy: [0]
-  gdz: [0]
+  gd: ["0 0 0"]
 
   hex: [1]
   hey: [1]
@@ -126,16 +120,14 @@ halo_test: &halo_test
   hpy: [0, 1]
   hpz: [0, 1]
 
-  gdx: [0, 16]
-  gdy: [0, 16]
-  gdz: [0, 16]
+  gd: ["0 0 0", "16 16 16"]
 
 halo_test_ac: &halo_test_ac
   <<: *halo_test_base
   args : ['backend',
           'acx', 'acy', 'acz',
           'gx', 'gy', 'gz',
-          'gdx', 'gdy', 'gdz',
+          'gd',
           'hex' ,'hey', 'hez',
           'hpx', 'hpy', 'hpz',
           'ax']
