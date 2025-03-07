@@ -116,7 +116,7 @@ static bool compare_pencils(const std::vector<real_t>& ref, const std::vector<re
                             const cudecompPencilInfo_t& pinfo) {
   for (int64_t i = 0; i < ref.size(); ++i) {
     if (ref[i] != real_t(-1)) {
-      if (std::abs(ref[i] - res[i]) > 1e-6) return false;
+      if (ref[i] != res[i]) return false;
     }
   }
   return true;

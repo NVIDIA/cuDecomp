@@ -180,7 +180,7 @@ module transpose_CUDECOMP_DOUBLE_COMPLEX_mod
     integer :: pr, pc
 
     ! MPI
-    integer :: local_rank, nranks, ierr
+    integer :: local_rank, ierr
     integer :: local_comm
 
     ! cudecomp
@@ -205,8 +205,6 @@ module transpose_CUDECOMP_DOUBLE_COMPLEX_mod
     integer :: skip_count, nspaces
     character(len=16) :: arg
     character(len=16), allocatable :: args(:)
-
-    real(8) :: t0
 
     res = 0
 
