@@ -282,6 +282,7 @@ module halo_CUDECOMP_DOUBLE_COMPLEX_mod
     gdims_dist(:) = 0
     halo_extents(:) = 1
     halo_periods(:) = .true.
+    mem_order(:, :) = -1
     axis = 1
     use_managed_memory = .false.
 
