@@ -1,4 +1,5 @@
 import argparse
+import ast
 import itertools
 import math
 import os
@@ -121,10 +122,19 @@ def main():
   parser.add_argument('--launcher_cmd', type=str, required=True, help='parallel launch command')
   parser.add_argument('--ngpu', type=int, required=True, help='number of gpus')
   parser.add_argument('--exit_on_failure', action='store_true', required=False, help='flag to control whether script exits on case failure')
+  parser.add_argument('--config_overrides', type=str, required=False, help='string list of key:value pairs, e.g. backend:[1,2],dtype:["C64"]')
   parser.add_argument('config_name', type=str, help='configuration name from test_configs.yaml')
   args = parser.parse_args()
 
   config = load_yaml_config("test_config.yaml", args.config_name)
+
+  if (args.config_overrides):
+    entries = args.config_overrides.split(',')
+    for e in entries:
+      fields = e.split(':')
+      key = fields[0].strip()
+      value = ast.literal_eval(fields[1].strip())
+      config[key] = value
 
   cmds = generate_command_lines(config, args)
   with open(f"{args.config_name}_cases.txt", 'w') as f:
@@ -147,15 +157,18 @@ def main():
 
       if (args.exit_on_failure):
         print("Stopping tests...")
+        os.remove(f"{args.config_name}_cases.txt")
         return 1
 
   if len(failed_dtypes) == 0:
     print(f"Passed all tests for all dtypes, running time {time.time() - t0} s")
-    return 0
+    retcode = 0
   else:
     print(f"Failed tests for dtypes ({', '.join(failed_dtypes)})., running time {time.time() - t0} s")
-    return 1
+    retcode = 1
 
+  os.remove(f"{args.config_name}_cases.txt")
+  return retcode
 
 if __name__ == "__main__":
   main()
