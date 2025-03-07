@@ -70,7 +70,6 @@ def generate_command_lines(config, args):
   for pr, pc in zip(prs, pcs):
     for vals in itertools.product(*[config[x] for x in config['args']]):
       arg_dict = dict(zip(config['args'], vals))
-      #cmd = generic_cmd.format(f"{config['executable_prefix']}_{dtype}", pr, pc)
       cmd = f"--pr {pr} --pc {pc} "
       cmd += " ".join([f"--{x} {y}" for x, y in arg_dict.items()])
 
@@ -122,14 +121,14 @@ def main():
   parser.add_argument('--launcher_cmd', type=str, required=True, help='parallel launch command')
   parser.add_argument('--ngpu', type=int, required=True, help='number of gpus')
   parser.add_argument('--exit_on_failure', action='store_true', required=False, help='flag to control whether script exits on case failure')
-  parser.add_argument('--config_overrides', type=str, required=False, help='string list of key:value pairs, e.g. backend:[1,2],dtype:["C64"]')
+  parser.add_argument('--config_overrides', type=str, required=False, help="string list of semi-colon separated key:value pairs, e.g. \"backend:[1,2];dtype:['C64']\"")
   parser.add_argument('config_name', type=str, help='configuration name from test_configs.yaml')
   args = parser.parse_args()
 
   config = load_yaml_config("test_config.yaml", args.config_name)
 
   if (args.config_overrides):
-    entries = args.config_overrides.split(',')
+    entries = args.config_overrides.split(';')
     for e in entries:
       fields = e.split(':')
       key = fields[0].strip()

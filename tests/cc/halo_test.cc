@@ -212,12 +212,8 @@ static void usage(const char* pname) {
           "\t\tY-dimension axis-contiguous pencils setting. (default: 0) \n"
           "\t--acz\n"
           "\t\tZ-dimension axis-contiguous pencils setting. (default: 0) \n"
-          "\t--gdx\n"
-          "\t\tX-dimension gdim_dist setting, set to gx - gdx. (default: 0) \n"
-          "\t--gdy\n"
-          "\t\tY-dimension gdim_dist setting, set to gy - gdy. (default: 0) \n"
-          "\t--gdz\n"
-          "\t\tZ-dimension gdim_dist setting, set to gz - gdz. (default: 0) \n"
+          "\t--gd\n"
+          "\t\t gdim_dist setting, set to g[i] - gd[i]. (default: 0 0 0) \n"
           "\t--hex\n"
           "\t\tX-dimension halo_extents setting. (default: 0) \n"
           "\t--hey\n"
@@ -271,8 +267,7 @@ static haloTestArgs parse_arguments(const std::string& arguments) {
         {"gz", required_argument, 0, 'z'},  {"backend", required_argument, 0, 'b'},
         {"pr", required_argument, 0, 'r'},  {"pc", required_argument, 0, 'c'},
         {"acx", required_argument, 0, '1'}, {"acy", required_argument, 0, '2'},
-        {"acz", required_argument, 0, '3'}, {"gdx", required_argument, 0, '4'},
-        {"gdy", required_argument, 0, '5'}, {"gdz", required_argument, 0, '6'},
+        {"acz", required_argument, 0, '3'}, {"gd", required_argument, 0, '4'},
         {"hex", required_argument, 0, '7'}, {"hey", required_argument, 0, '8'},
         {"hez", required_argument, 0, '9'}, {"hpx", required_argument, 0, 'e'},
         {"hpy", required_argument, 0, 'f'}, {"hpz", required_argument, 0, 'g'},
@@ -281,7 +276,7 @@ static haloTestArgs parse_arguments(const std::string& arguments) {
         {"help", no_argument, 0, 'h'},      {0, 0, 0, 0}};
 
     int option_index = 0;
-    int ch = getopt_long(argc, argv, "x:y:z:b:r:c:1:2:3:4:5:6:7:8:9:e:f:g:a:q:mh", long_options, &option_index);
+    int ch = getopt_long(argc, argv, "x:y:z:b:r:c:1:2:3:4:7:8:9:e:f:g:a:q:mh", long_options, &option_index);
     if (ch == -1) break;
 
     switch (ch) {
@@ -295,9 +290,13 @@ static haloTestArgs parse_arguments(const std::string& arguments) {
     case '1': args.axis_contiguous[0] = atoi(optarg); break;
     case '2': args.axis_contiguous[1] = atoi(optarg); break;
     case '3': args.axis_contiguous[2] = atoi(optarg); break;
-    case '4': args.gdims_dist[0] = atoi(optarg); break;
-    case '5': args.gdims_dist[1] = atoi(optarg); break;
-    case '6': args.gdims_dist[2] = atoi(optarg); break;
+    case '4':
+      optind--;
+      for (int i = 0; i < 3; ++i) {
+        args.gdims_dist[i] = atoi(argv[optind]);
+        optind++;
+      }
+      break;
     case '7': args.halo_extents[0] = atoi(optarg); break;
     case '8': args.halo_extents[1] = atoi(optarg); break;
     case '9': args.halo_extents[2] = atoi(optarg); break;

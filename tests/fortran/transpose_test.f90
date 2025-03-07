@@ -213,8 +213,12 @@ module transpose_CUDECOMP_DOUBLE_COMPLEX_mod
     do i = 1, len_trim(arguments)
       if (arguments(i:i) == ' ') nspaces = nspaces + 1
     enddo
-    allocate(args(nspaces + 1))
-    read(arguments, *) args(:)
+    if (nspaces >= 1) then
+      allocate(args(nspaces + 1))
+      read(arguments, *) args(:)
+    else
+      allocate(args(0))
+    endif
 
     ! Parse command-line arguments
     gx = 256
@@ -279,18 +283,12 @@ module transpose_CUDECOMP_DOUBLE_COMPLEX_mod
           read(arg, *) iarg
           axis_contiguous(3) = iarg
           skip_count = 1
-        case('--gdx')
-          read(args(i+1), *) arg
-          read(arg, *) gdims_dist(1)
-          skip_count = 1
-        case('--gdy')
-          read(args(i+1), *) arg
-          read(arg, *) gdims_dist(2)
-          skip_count = 1
-        case('--gdz')
-          read(args(i+1), *) arg
-          read(arg, *) gdims_dist(3)
-          skip_count = 1
+        case('--gd')
+          do j = 1, 3
+            read(args(i+j), *) arg
+            read(arg, *) gdims_dist(j)
+          enddo
+          skip_count = 3
         case('--hex')
           do j = 1, 3
             read(args(i+j), *) arg

@@ -333,18 +333,15 @@ module halo_CUDECOMP_DOUBLE_COMPLEX_mod
           read(arg, *) iarg
           axis_contiguous(3) = iarg
           skip_count = 1
-        case('--gdx')
+        case('--gd')
           read(args(i+1), *) arg
           read(arg, *) gdims_dist(1)
           skip_count = 1
-        case('--gdy')
-          read(args(i+1), *) arg
-          read(arg, *) gdims_dist(2)
-          skip_count = 1
-        case('--gdz')
-          read(args(i+1), *) arg
-          read(arg, *) gdims_dist(3)
-          skip_count = 1
+          do j = 1, 3
+            read(args(i+j), *) arg
+            read(arg, *) gdims_dist(j)
+          enddo
+          skip_count = 3
         case('--hex')
           read(args(i+1), *) arg
           read(arg, *) halo_extents(1)
