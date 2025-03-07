@@ -116,16 +116,18 @@ static bool compare_pencils(const std::vector<real_t>& ref, const std::vector<re
                             const cudecompPencilInfo_t& pinfo) {
   int64_t lx[3];
   for (int64_t i = 0; i < pinfo.size; ++i) {
-    // Compute pencil local coordinate
-    lx[0] = i % pinfo.shape[0];
-    lx[1] = i / pinfo.shape[0] % pinfo.shape[1];
-    lx[2] = i / (pinfo.shape[0] * pinfo.shape[1]);
+    if (ref[i] != res[i]) {
+      // Compute pencil local coordinate
+      lx[0] = i % pinfo.shape[0];
+      lx[1] = i / pinfo.shape[0] % pinfo.shape[1];
+      lx[2] = i / (pinfo.shape[0] * pinfo.shape[1]);
 
-    // Only compare values inside internal region
-    if (lx[0] >= pinfo.halo_extents[pinfo.order[0]] && lx[0] < (pinfo.shape[0] - pinfo.halo_extents[pinfo.order[0]]) &&
-        lx[1] >= pinfo.halo_extents[pinfo.order[1]] && lx[1] < (pinfo.shape[1] - pinfo.halo_extents[pinfo.order[1]]) &&
-        lx[2] >= pinfo.halo_extents[pinfo.order[2]] && lx[2] < (pinfo.shape[2] - pinfo.halo_extents[pinfo.order[2]])) {
-      if (std::abs(ref[i] - res[i]) != 0) return false;
+      // Only compare values inside internal region
+      if (lx[0] >= pinfo.halo_extents[pinfo.order[0]] && lx[0] < (pinfo.shape[0] - pinfo.halo_extents[pinfo.order[0]]) &&
+          lx[1] >= pinfo.halo_extents[pinfo.order[1]] && lx[1] < (pinfo.shape[1] - pinfo.halo_extents[pinfo.order[1]]) &&
+          lx[2] >= pinfo.halo_extents[pinfo.order[2]] && lx[2] < (pinfo.shape[2] - pinfo.halo_extents[pinfo.order[2]])) {
+        return false;
+      }
     }
   }
   return true;

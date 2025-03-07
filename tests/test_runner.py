@@ -138,7 +138,7 @@ def main():
   print(f"Running tests for dtypes ({', '.join(config['dtypes'])})...")
   for dtype in config['dtypes']:
     print(f"Running {dtype} tests...")
-    cmd = f"{args.launcher_cmd} {config['executable_prefix']}_{dtype} -f {args.config_name}_cases.txt"
+    cmd = f"{args.launcher_cmd} {config['executable_prefix']}_{dtype} --testfile {args.config_name}_cases.txt"
     status = run_test(cmd, args)
 
     if not status:
