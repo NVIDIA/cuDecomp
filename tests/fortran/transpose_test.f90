@@ -233,6 +233,9 @@ module transpose_CUDECOMP_DOUBLE_COMPLEX_mod
     halo_extents_x(:) = 0
     halo_extents_y(:) = 0
     halo_extents_z(:) = 0
+    padding_x(:) = 0
+    padding_y(:) = 0
+    padding_z(:) = 0
     mem_order(:,:) = -1
     out_of_place = .false.
     use_managed_memory = .false.
@@ -310,19 +313,19 @@ module transpose_CUDECOMP_DOUBLE_COMPLEX_mod
           skip_count = 3
         case('--pdx')
           do j = 1, 3
-            call get_command_argument(i+j, arg)
+            read(args(i+j), *) arg
             read(arg, *) padding_x(j)
           enddo
           skip_count = 3
         case('--pdy')
           do j = 1, 3
-            call get_command_argument(i+j, arg)
+            read(args(i+j), *) arg
             read(arg, *) padding_y(j)
           enddo
           skip_count = 3
         case('--pdz')
           do j = 1, 3
-            call get_command_argument(i+j, arg)
+            read(args(i+j), *) arg
             read(arg, *) padding_z(j)
           enddo
           skip_count = 3
@@ -389,13 +392,13 @@ module transpose_CUDECOMP_DOUBLE_COMPLEX_mod
     endif
 
     ! Get x-pencil information
-    CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, pinfo_x, 1, halo_extents_x))
+    CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, pinfo_x, 1, halo_extents_x, padding_x))
 
     ! Get y-pencil information
-    CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, pinfo_y, 2, halo_extents_y))
+    CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, pinfo_y, 2, halo_extents_y, padding_y))
 
     ! Get z-pencil information
-    CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, pinfo_z, 3, halo_extents_z))
+    CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, pinfo_z, 3, halo_extents_z, padding_z))
 
     ! Get workspace size
     CHECK_CUDECOMP(cudecompGetTransposeWorkspaceSize(handle, grid_desc, workspace_num_elements))
@@ -444,7 +447,7 @@ module transpose_CUDECOMP_DOUBLE_COMPLEX_mod
     endif
 
     work_d = 0
-    CHECK_CUDECOMP(cudecompTransposeXToY(handle, grid_desc, input, output, work_d, dtype, pinfo_x%halo_extents, pinfo_y%halo_extents))
+    CHECK_CUDECOMP(cudecompTransposeXToY(handle, grid_desc, input, output, work_d, dtype, pinfo_x%halo_extents, pinfo_y%halo_extents, pinfo_x%padding, pinfo_y%padding))
     data = output
     if (compare_pencils(yref, data, pinfo_y)) then
       print*, "FAILED cudecompTranposeXToY"
@@ -463,7 +466,7 @@ module transpose_CUDECOMP_DOUBLE_COMPLEX_mod
     endif
 
     work_d = 0
-    CHECK_CUDECOMP(cudecompTransposeYToZ(handle, grid_desc, input, output, work_d, dtype, pinfo_y%halo_extents, pinfo_z%halo_extents))
+    CHECK_CUDECOMP(cudecompTransposeYToZ(handle, grid_desc, input, output, work_d, dtype, pinfo_y%halo_extents, pinfo_z%halo_extents, pinfo_y%padding, pinfo_z%padding))
     data = output
     if (compare_pencils(zref, data, pinfo_z)) then
       print*, "FAILED cudecompTranposeYToZ"
@@ -482,7 +485,7 @@ module transpose_CUDECOMP_DOUBLE_COMPLEX_mod
     endif
 
     work_d = 0
-    CHECK_CUDECOMP(cudecompTransposeZToY(handle, grid_desc, input, output, work_d, dtype, pinfo_z%halo_extents, pinfo_y%halo_extents))
+    CHECK_CUDECOMP(cudecompTransposeZToY(handle, grid_desc, input, output, work_d, dtype, pinfo_z%halo_extents, pinfo_y%halo_extents, pinfo_z%padding, pinfo_y%padding))
     data = output
     if (compare_pencils(yref, data, pinfo_y)) then
       print*, "FAILED cudecompTranposeZToY"
@@ -501,7 +504,7 @@ module transpose_CUDECOMP_DOUBLE_COMPLEX_mod
     endif
 
     work_d = 0
-    CHECK_CUDECOMP(cudecompTransposeYToX(handle, grid_desc, input, output, work_d, dtype, pinfo_y%halo_extents, pinfo_x%halo_extents))
+    CHECK_CUDECOMP(cudecompTransposeYToX(handle, grid_desc, input, output, work_d, dtype, pinfo_y%halo_extents, pinfo_x%halo_extents, pinfo_y%padding, pinfo_x%padding))
     data = output
     if (compare_pencils(xref, data, pinfo_x)) then
       print*, "FAILED cudecompTranposeYToX"
