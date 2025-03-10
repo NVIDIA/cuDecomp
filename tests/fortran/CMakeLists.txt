@@ -41,6 +41,7 @@ foreach(tgt ${transpose_test_targets_f} ${halo_test_targets_f})
   target_link_libraries(${tgt} PUBLIC cudecomp_fort)
   target_compile_options(${tgt} PRIVATE $<$<COMPILE_LANGUAGE:Fortran>:-cpp -cuda -gpu=${CUF_GPU_ARG}>)
   target_link_options(${tgt} PRIVATE $<$<COMPILE_LANGUAGE:Fortran>:-cpp -cuda -gpu=${CUF_GPU_ARG}>)
+  target_compile_options(${tgt} PRIVATE -O3)
 endforeach()
 
 target_compile_definitions(transpose_test_R32_f PUBLIC R32)

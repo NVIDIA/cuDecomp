@@ -1,4 +1,5 @@
 import argparse
+import ast
 import itertools
 import math
 import os
@@ -58,41 +59,35 @@ def generate_command_lines(config, args):
     config['args'].append("mem_order")
     config['mem_order'] = generate_mem_order_args(not config["fortran_indexing"])
 
-  generic_cmd = f"{args.launcher_cmd}"
-  generic_cmd += " {0}"
-
-  generic_cmd += " --pr {1} --pc {2}"
-
   cmds = []
-  for dtype in config['dtypes']:
-    prs = get_factors(args.ngpu)
-    pcs = [args.ngpu // x for x in prs]
-    if config['run_autotuning']:
-      prs = [0] + prs
-      pcs = [0] + pcs
-      if (not 0 in config['backend']):
-        config['backend'].append(0)
-    for pr, pc in zip(prs, pcs):
-      for vals in itertools.product(*[config[x] for x in config['args']]):
-        arg_dict = dict(zip(config['args'], vals))
-        cmd = generic_cmd.format(f"{config['executable_prefix']}_{dtype}", pr, pc)
-        cmd += " "  + " ".join([f"--{x} {y}" for x, y in arg_dict.items()])
+  prs = get_factors(args.ngpu)
+  pcs = [args.ngpu // x for x in prs]
+  if config['run_autotuning']:
+    prs = [0] + prs
+    pcs = [0] + pcs
+    if (not 0 in config['backend']):
+      config['backend'].append(0)
+  for pr, pc in zip(prs, pcs):
+    for vals in itertools.product(*[config[x] for x in config['args']]):
+      arg_dict = dict(zip(config['args'], vals))
+      cmd = f"--pr {pr} --pc {pc} "
+      cmd += " ".join([f"--{x} {y}" for x, y in arg_dict.items()])
 
-        # Only run full (grid and backend) autotuning cases
-        if (config['run_autotuning']):
-          if ((pr == 0 and pc == 0) and arg_dict["backend"] != 0):
-            continue
-          elif ((pr != 0 and pc != 0) and arg_dict["backend"] == 0):
-            continue
+      # Only run full (grid and backend) autotuning cases
+      if (config['run_autotuning']):
+        if ((pr == 0 and pc == 0) and arg_dict["backend"] != 0):
+          continue
+        elif ((pr != 0 and pc != 0) and arg_dict["backend"] == 0):
+          continue
 
-        # Check additional skip conditions
-        if should_skip_case(arg_dict): continue
+      # Check additional skip conditions
+      if should_skip_case(arg_dict): continue
 
-        extra_flags = []
-        extra_flags.append(['-m' if x else '' for x in config['managed_memory']])
-        extra_flags.append(['-o' if x else '' for x in config['out_of_place']])
-        for extras in itertools.product(*extra_flags):
-          cmds.append(f"{cmd} {' '.join(filter(lambda x: x != '', extras))}")
+      extra_flags = []
+      extra_flags.append(['-m' if x else '' for x in config['managed_memory']])
+      extra_flags.append(['-o' if x else '' for x in config['out_of_place']])
+      for extras in itertools.product(*extra_flags):
+        cmds.append(f"{cmd} {' '.join(filter(lambda x: x != '', extras))}")
 
 
   return cmds
@@ -105,32 +100,19 @@ def setup_env(config, args):
     print(f"Set {var} = {val}")
 
 def run_test(cmd, args):
-  print(f"command: {cmd}", sep="")
   cmd_fields = cmd.split()
-
-  failed = False
   try:
-    status = subprocess.run(cmd_fields, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                            timeout=300, check=True)
-  except subprocess.TimeoutExpired as ex:
-    print(f" FAILED (timeout)")
-    print(f"Failing output:\n{ex.stdout.decode('utf-8')}")
-    failed = True
-  except subprocess.CalledProcessError as ex:
-    print(f" FAILED")
-    print(f"Failing output:\n{ex.stdout.decode('utf-8')}")
-    failed = True
-  else:
-    print(" PASSED")
+    sp = subprocess.Popen(cmd_fields, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
-  if failed:
-    if args.exit_on_failure:
-      print("Stopping tests...")
-      sys.exit(1)
+    while sp.poll() is None:
+      line = sp.stdout.readline()
+      print(line.decode('utf-8'), end='')
+
+    if sp.poll() != 0:
+      return False
+
+  except:
     return False
-
-  if args.verbose:
-    print(f"Passing output:\n{status.stdout.decode('utf-8')}")
 
   return True
 
@@ -138,38 +120,54 @@ def main():
   parser = argparse.ArgumentParser()
   parser.add_argument('--launcher_cmd', type=str, required=True, help='parallel launch command')
   parser.add_argument('--ngpu', type=int, required=True, help='number of gpus')
-  parser.add_argument('--verbose', action='store_true', required=False, help='flag to enable full run output')
   parser.add_argument('--exit_on_failure', action='store_true', required=False, help='flag to control whether script exits on case failure')
+  parser.add_argument('--config_overrides', type=str, required=False, help="string list of semi-colon separated key:value pairs, e.g. \"backend:[1,2];dtype:['C64']\"")
   parser.add_argument('config_name', type=str, help='configuration name from test_configs.yaml')
   args = parser.parse_args()
 
   config = load_yaml_config("test_config.yaml", args.config_name)
 
+  if (args.config_overrides):
+    entries = args.config_overrides.split(';')
+    for e in entries:
+      fields = e.split(':')
+      key = fields[0].strip()
+      value = ast.literal_eval(fields[1].strip())
+      config[key] = value
+
   cmds = generate_command_lines(config, args)
+  with open(f"{args.config_name}_cases.txt", 'w') as f:
+    for c in cmds:
+      f.write(c)
+      f.write("\n")
   setup_env(config, args)
 
-  print(f"Running {len(cmds)} tests...")
   t0 = time.time()
-  failed_cmds = []
-  for i,c in enumerate(cmds):
-    status = run_test(c, args)
+  failed_dtypes = []
+  print(f"Running tests for dtypes ({', '.join(config['dtypes'])})...")
+  for dtype in config['dtypes']:
+    print(f"Running {dtype} tests...")
+    cmd = f"{args.launcher_cmd} {config['executable_prefix']}_{dtype} --testfile {args.config_name}_cases.txt"
+    status = run_test(cmd, args)
 
     if not status:
-      failed_cmds.append(c)
+      failed_dtypes.append(dtype)
+      print(f"Failed {dtype} tests.")
 
-    if (i+1) % 10 == 0:
-      t1 = time.time()
-      print(f"Completed {i+1}/{len(cmds)} tests, running time {t1-t0} s")
-  print(f"Completed all tests, running time {time.time() - t0} s")
+      if (args.exit_on_failure):
+        print("Stopping tests...")
+        os.remove(f"{args.config_name}_cases.txt")
+        return 1
 
-  if len(failed_cmds) == 0:
-    print("Passed all tests.")
-    return 0
+  if len(failed_dtypes) == 0:
+    print(f"Passed all tests for all dtypes, running time {time.time() - t0} s")
+    retcode = 0
   else:
-    print(f"Failed {len(failed_cmds)} / {len(cmds)} tests. Failing commands:")
-    for c in failed_cmds:
-      print(f"\t{c}")
-    return -1
+    print(f"Failed tests for dtypes ({', '.join(failed_dtypes)})., running time {time.time() - t0} s")
+    retcode = 1
+
+  os.remove(f"{args.config_name}_cases.txt")
+  return retcode
 
 if __name__ == "__main__":
   main()
