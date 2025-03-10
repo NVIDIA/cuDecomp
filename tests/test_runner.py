@@ -25,10 +25,36 @@ def load_yaml_config(yaml_file, config_name):
     config = yaml.safe_load(f)[config_name]
   return config
 
-def should_skip_case(arg_dict):
+def should_skip_case(arg_dict, key):
   skip = False
 
-  try:
+  if key == 'transpose':
+    # Skip cases with all halo extents, padding, and gdimdist as zero
+    if ((arg_dict["hex"] == "0 0 0" and arg_dict["hey"] == "0 0 0" and arg_dict["hez"] == "0 0 0") and
+        (arg_dict["pdx"] == "0 0 0" and arg_dict["pdy"] == "0 0 0" and arg_dict["pdz"] == "0 0 0") and
+        (arg_dict["gd"] == "0 0 0")):
+      skip = True
+
+    # Skip cases where halo extents in X and Z are unequal as these cases are redundant
+    if (arg_dict["hex"] != arg_dict["hez"]):
+      skip = True
+
+    # Skip cases where padding in X and Z are unequal as these cases are redundant
+    if (arg_dict["pdx"] != arg_dict["pdz"]):
+      skip = True
+
+  elif key == 'transpose_mix':
+    skip = should_skip_case(arg_dict, 'transpose')
+
+    # Skip cases where all halo extents are zero
+    if (arg_dict["hex"] == "0 0 0" and arg_dict["hey"] == "0 0 0" and arg_dict["hez"] == "0 0 0"):
+      skip = True
+
+    # Skip cases where all padding is zero
+    if (arg_dict["pdx"] == "0 0 0" and arg_dict["pdy"] == "0 0 0" and arg_dict["pdz"] == "0 0 0"):
+      skip = True
+
+  elif key == 'halo':
     # No need to test periodic flags if halo extent is zero
     if arg_dict["hex"] == 0 and arg_dict["hpx"] == 1:
       skip = True
@@ -40,8 +66,14 @@ def should_skip_case(arg_dict):
     # Skip cases with all halo extents as zero
     if arg_dict["hex"] == 0 and arg_dict["hey"] == 0 and arg_dict["hez"] == 0:
       skip = True
-  except:
-    pass
+
+  elif key == 'halo_padding':
+    skip = should_skip_case(arg_dict, 'halo')
+
+    # Skip cases where all padding is zero
+    if (arg_dict["pdx"] == 0 and arg_dict["pdy"] == 0 and arg_dict["pdz"] == 0):
+      skip = True
+
 
   return skip
 
@@ -61,6 +93,11 @@ def generate_command_lines(config, args):
 
   cmds = []
   prs = get_factors(args.ngpu)
+  if len(prs) > 3:
+    prs = [prs[0], prs[len(pr) // 2], prs[-1]]
+  if config['use_single_pdim']:
+    prs = [prs[min(len(prs) + 1, 1)]]
+
   pcs = [args.ngpu // x for x in prs]
   if config['run_autotuning']:
     prs = [0] + prs
@@ -81,7 +118,8 @@ def generate_command_lines(config, args):
           continue
 
       # Check additional skip conditions
-      if should_skip_case(arg_dict): continue
+      if (config['apply_skips']):
+        if should_skip_case(arg_dict, config['apply_skips']): continue
 
       extra_flags = []
       extra_flags.append(['-m' if x else '' for x in config['managed_memory']])
