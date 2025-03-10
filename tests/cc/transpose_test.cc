@@ -426,11 +426,11 @@ static int run_test(const std::string& arguments, bool silent) {
 
     // Get y-pencil information
     cudecompPencilInfo_t pinfo_y;
-    CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_y, 1, args.halo_extents_y.data(), args.padding_x.data()));
+    CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_y, 1, args.halo_extents_y.data(), args.padding_y.data()));
 
     // Get z-pencil information
     cudecompPencilInfo_t pinfo_z;
-    CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_z, 2, args.halo_extents_z.data(), args.padding_x.data()));
+    CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_z, 2, args.halo_extents_z.data(), args.padding_z.data()));
 
     // Get workspace size
     int64_t workspace_num_elements;
