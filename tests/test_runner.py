@@ -94,7 +94,7 @@ def generate_command_lines(config, args):
   cmds = []
   prs = get_factors(args.ngpu)
   if len(prs) > 3:
-    prs = [prs[0], prs[len(pr) // 2], prs[-1]]
+    prs = [prs[0], prs[len(prs) // 2], prs[-1]]
   if config['use_single_pdim']:
     prs = [prs[min(len(prs) + 1, 1)]]
 
