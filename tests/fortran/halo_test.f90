@@ -531,7 +531,7 @@ program main
   integer :: res, retcode
   logical :: using_testfile
   character(len=16) :: arg
-  character(len=32) :: binname
+  character(len=256) :: binname
   character(len=256) :: testfile
   character(len=256), allocatable:: testcases(:)
   integer :: nfailed
