@@ -64,6 +64,8 @@ module halo_CUDECOMP_DOUBLE_COMPLEX_mod
   integer :: rank, nranks
   type(cudecompGridDesc) :: grid_desc_cache(5)
   logical :: grid_desc_cache_set(5) = .false.
+  ARRTYPE, pointer, device, contiguous :: work_d(:)
+  integer :: work_backend = -1
 
   contains
   function compare_pencils(ref, res, pinfo) result(mismatch)
@@ -249,7 +251,6 @@ module halo_CUDECOMP_DOUBLE_COMPLEX_mod
     ARRTYPE, allocatable :: ref(:, :, :), init(:, :, :), data(:)
     ARRTYPE, allocatable, device, target:: data_d(:)
     ARRTYPE, allocatable, managed, target:: data_m(:)
-    ARRTYPE, pointer, device, contiguous :: work_d(:)
     ARRTYPE, pointer, device:: input(:)
     integer :: dtype = DTYPE
 
@@ -465,7 +466,21 @@ module halo_CUDECOMP_DOUBLE_COMPLEX_mod
     else
       allocate(data_d(data_num_elements))
     endif
-    CHECK_CUDECOMP(cudecompMalloc(handle, grid_desc, work_d, workspace_num_elements))
+
+    ! Allocate workspace (reuse exising workspace if able)
+    if (work_backend == config%halo_comm_backend) then
+      if (size(work_d) < workspace_num_elements) then
+        CHECK_CUDECOMP(cudecompFree(handle, grid_desc, work_d))
+        CHECK_CUDECOMP(cudecompMalloc(handle, grid_desc, work_d, workspace_num_elements))
+      endif
+    elseif (work_backend > 0 .and. work_backend /= config%halo_comm_backend) then
+      CHECK_CUDECOMP(cudecompFree(handle, grid_desc_cache(work_backend), work_d))
+      CHECK_CUDECOMP(cudecompMalloc(handle, grid_desc, work_d, workspace_num_elements))
+      work_backend = config%halo_comm_backend;
+    else
+      CHECK_CUDECOMP(cudecompMalloc(handle, grid_desc, work_d, workspace_num_elements))
+      work_backend = config%halo_comm_backend;
+    endif
 
     ! Running correctness tests
     if (.not. silent .and. rank == 0) write(*,"('Running correctness tests using ', a, ' backend ...')") &
@@ -507,8 +522,6 @@ module halo_CUDECOMP_DOUBLE_COMPLEX_mod
     else
       deallocate(data_d)
     endif
-
-    CHECK_CUDECOMP(cudecompFree(handle, grid_desc, work_d))
 
   end function
 end module
