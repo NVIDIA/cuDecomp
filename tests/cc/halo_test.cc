@@ -115,9 +115,7 @@ static std::vector<std::string> read_testfile(const std::string& filename) {
 static bool compare_pencils(const std::vector<real_t>& ref, const std::vector<real_t>& res,
                             const cudecompPencilInfo_t& pinfo) {
   for (int64_t i = 0; i < ref.size(); ++i) {
-    if (ref[i] != real_t(-1)) {
-      if (ref[i] != res[i]) return false;
-    }
+    if (ref[i] != res[i]) return false;
   }
   return true;
 }
@@ -138,9 +136,9 @@ static void initialize_pencil(std::vector<real_t>& ref, const cudecompPencilInfo
     int64_t gi = gx[0] + gdims[0] * (gx[1] + gx[2] * gdims[1]);
 
     // Only set values inside internal region
-    if (lx[0] >= pinfo.halo_extents[pinfo.order[0]] && lx[0] < (pinfo.shape[0] - pinfo.halo_extents[pinfo.order[0]]) &&
-        lx[1] >= pinfo.halo_extents[pinfo.order[1]] && lx[1] < (pinfo.shape[1] - pinfo.halo_extents[pinfo.order[1]]) &&
-        lx[2] >= pinfo.halo_extents[pinfo.order[2]] && lx[2] < (pinfo.shape[2] - pinfo.halo_extents[pinfo.order[2]])) {
+    if (lx[0] >= pinfo.halo_extents[pinfo.order[0]] && lx[0] < (pinfo.shape[0] - pinfo.halo_extents[pinfo.order[0]] - pinfo.padding[pinfo.order[0]]) &&
+        lx[1] >= pinfo.halo_extents[pinfo.order[1]] && lx[1] < (pinfo.shape[1] - pinfo.halo_extents[pinfo.order[1]] - pinfo.padding[pinfo.order[1]]) &&
+        lx[2] >= pinfo.halo_extents[pinfo.order[2]] && lx[2] < (pinfo.shape[2] - pinfo.halo_extents[pinfo.order[2]] - pinfo.padding[pinfo.order[2]])) {
       ref[i] = gi;
     } else {
       ref[i] = -1;
@@ -175,6 +173,12 @@ static void initialize_reference(std::vector<real_t>& ref, const cudecompPencilI
           unset = true;
         }
       }
+    }
+    // Also mark any padded elements for unset value (-1)
+    if (lx[0] >= pinfo.shape[0] - pinfo.padding[pinfo.order[0]] ||
+        lx[1] >= pinfo.shape[1] - pinfo.padding[pinfo.order[1]] ||
+        lx[2] >= pinfo.shape[2] - pinfo.padding[pinfo.order[2]]) {
+      unset = true;
     }
 
     int64_t gi = (unset) ? -1 : gx[0] + gdims[0] * (gx[1] + gx[2] * gdims[1]);
@@ -247,6 +251,7 @@ struct haloTestArgs {
   std::array<int, 3> gdims_dist{};
   std::array<int, 3> halo_extents{1, 1, 1};
   std::array<bool, 3> halo_periods{true, true, true};
+  std::array<int, 3> padding{};
   int axis = 0;
   bool use_managed_memory = false;
   std::array<int, 9> mem_order{-1, -1, -1, -1, -1, -1, -1, -1, -1};
@@ -271,12 +276,13 @@ static haloTestArgs parse_arguments(const std::string& arguments) {
         {"hex", required_argument, 0, '7'}, {"hey", required_argument, 0, '8'},
         {"hez", required_argument, 0, '9'}, {"hpx", required_argument, 0, 'e'},
         {"hpy", required_argument, 0, 'f'}, {"hpz", required_argument, 0, 'g'},
-        {"ax", required_argument, 0, 'a'},  {"use-managed-memory", no_argument, 0, 'm'},
-        {"mem_order", required_argument, 0, 'q'},
+        {"pdx", required_argument, 0, '&'}, {"pdy", required_argument, 0, '*'},
+        {"pdz", required_argument, 0, '*'}, {"ax", required_argument, 0, 'a'},
+        {"use-managed-memory", no_argument, 0, 'm'}, {"mem_order", required_argument, 0, 'q'},
         {"help", no_argument, 0, 'h'},      {0, 0, 0, 0}};
 
     int option_index = 0;
-    int ch = getopt_long(argc, argv, "x:y:z:b:r:c:1:2:3:4:7:8:9:e:f:g:a:q:mh", long_options, &option_index);
+    int ch = getopt_long(argc, argv, "x:y:z:b:r:c:1:2:3:4:7:8:9:e:f:g:a:q:&:*:(:mh", long_options, &option_index);
     if (ch == -1) break;
 
     switch (ch) {
@@ -303,6 +309,9 @@ static haloTestArgs parse_arguments(const std::string& arguments) {
     case 'e': args.halo_periods[0] = atoi(optarg); break;
     case 'f': args.halo_periods[1] = atoi(optarg); break;
     case 'g': args.halo_periods[2] = atoi(optarg); break;
+    case '&': args.padding[0] = atoi(optarg); break;
+    case '*': args.padding[1] = atoi(optarg); break;
+    case '(': args.padding[2] = atoi(optarg); break;
     case 'a': args.axis = atoi(optarg); break;
     case 'm': args.use_managed_memory = true; break;
     case 'q':
@@ -331,6 +340,7 @@ static haloTestArgs parse_arguments(const std::string& arguments) {
 int rank, nranks;
 cudecompHandle_t handle;
 std::unordered_map<cudecompHaloCommBackend_t, cudecompGridDesc_t> grid_desc_cache;
+std::tuple<int, real_t*, size_t> workspace{-1, nullptr, 0};
 
 // Cache a single grid descriptor per backend type. This keeps NCCL/NVSHMEM initialized between tests for
 // better throughput.
@@ -401,7 +411,7 @@ static int run_test(const std::string& arguments, bool silent) {
 
     // Get pencil information
     cudecompPencilInfo_t pinfo;
-    CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo, args.axis, args.halo_extents.data()));
+    CHECK_CUDECOMP_EXIT(cudecompGetPencilInfo(handle, grid_desc, &pinfo, args.axis, args.halo_extents.data(), args.padding.data()));
 
     // Get workspace size
     int64_t workspace_num_elements;
@@ -428,8 +438,32 @@ static int run_test(const std::string& arguments, bool silent) {
     }
     int64_t dtype_size;
     CHECK_CUDECOMP(cudecompGetDataTypeSize(get_cudecomp_datatype(real_t(0)), &dtype_size));
-    CHECK_CUDECOMP(
-        cudecompMalloc(handle, grid_desc, reinterpret_cast<void**>(&work_d), workspace_num_elements * dtype_size));
+
+    // Allocate workspace (reuse exising workspace if able)
+    if (std::get<0>(workspace) == static_cast<int>(config.halo_comm_backend)){
+      work_d = std::get<1>(workspace);
+      if (std::get<2>(workspace) < workspace_num_elements * dtype_size) {
+        CHECK_CUDECOMP(cudecompFree(handle, grid_desc, work_d));
+        CHECK_CUDECOMP(
+            cudecompMalloc(handle, grid_desc, reinterpret_cast<void**>(&work_d), workspace_num_elements * dtype_size));
+        std::get<1>(workspace) = work_d;
+        std::get<2>(workspace) = workspace_num_elements * dtype_size;
+      }
+    } else if (std::get<0>(workspace) > 0 && std::get<0>(workspace) != static_cast<int>(config.halo_comm_backend)) {
+      CHECK_CUDECOMP(cudecompFree(handle, grid_desc_cache[static_cast<cudecompHaloCommBackend_t>(std::get<0>(workspace))],
+                                  std::get<1>(workspace)));
+      CHECK_CUDECOMP(
+          cudecompMalloc(handle, grid_desc, reinterpret_cast<void**>(&work_d), workspace_num_elements * dtype_size));
+      std::get<0>(workspace) = static_cast<int>(config.halo_comm_backend);
+      std::get<1>(workspace) = work_d;
+      std::get<2>(workspace) = workspace_num_elements * dtype_size;
+    } else {
+      CHECK_CUDECOMP(
+          cudecompMalloc(handle, grid_desc, reinterpret_cast<void**>(&work_d), workspace_num_elements * dtype_size));
+      std::get<0>(workspace) = static_cast<int>(config.halo_comm_backend);
+      std::get<1>(workspace) = work_d;
+      std::get<2>(workspace) = workspace_num_elements * dtype_size;
+    }
 
     // Running correctness tests
     if (!silent && rank == 0) printf("running correctness tests...\n");
@@ -441,15 +475,15 @@ static int run_test(const std::string& arguments, bool silent) {
       switch (args.axis) {
       case 0:
         CHECK_CUDECOMP(cudecompUpdateHalosX(handle, grid_desc, input, work_d, get_cudecomp_datatype(real_t(0)),
-                                                 pinfo.halo_extents, args.halo_periods.data(), i, 0));
+                                                 pinfo.halo_extents, args.halo_periods.data(), i, pinfo.padding, 0));
         break;
       case 1:
         CHECK_CUDECOMP(cudecompUpdateHalosY(handle, grid_desc, input, work_d, get_cudecomp_datatype(real_t(0)),
-                                                 pinfo.halo_extents, args.halo_periods.data(), i, 0));
+                                                 pinfo.halo_extents, args.halo_periods.data(), i, pinfo.padding, 0));
         break;
       case 2:
         CHECK_CUDECOMP(cudecompUpdateHalosZ(handle, grid_desc, input, work_d, get_cudecomp_datatype(real_t(0)),
-                                                 pinfo.halo_extents, args.halo_periods.data(), i, 0));
+                                                 pinfo.halo_extents, args.halo_periods.data(), i, pinfo.padding, 0));
         break;
       }
     }
@@ -461,7 +495,6 @@ static int run_test(const std::string& arguments, bool silent) {
     }
 
     CHECK_CUDA(cudaFree(data_d));
-    CHECK_CUDECOMP(cudecompFree(handle, grid_desc, work_d));
   } catch (const std::exception& e) {
     return 1;
   }
