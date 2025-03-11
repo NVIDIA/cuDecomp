@@ -340,6 +340,7 @@ static haloTestArgs parse_arguments(const std::string& arguments) {
 int rank, nranks;
 cudecompHandle_t handle;
 std::unordered_map<cudecompHaloCommBackend_t, cudecompGridDesc_t> grid_desc_cache;
+std::tuple<int, real_t*, size_t> workspace{-1, nullptr, 0};
 
 // Cache a single grid descriptor per backend type. This keeps NCCL/NVSHMEM initialized between tests for
 // better throughput.
@@ -437,8 +438,32 @@ static int run_test(const std::string& arguments, bool silent) {
     }
     int64_t dtype_size;
     CHECK_CUDECOMP(cudecompGetDataTypeSize(get_cudecomp_datatype(real_t(0)), &dtype_size));
-    CHECK_CUDECOMP(
-        cudecompMalloc(handle, grid_desc, reinterpret_cast<void**>(&work_d), workspace_num_elements * dtype_size));
+
+    // Allocate workspace (reuse exising workspace if able)
+    if (std::get<0>(workspace) == static_cast<int>(config.halo_comm_backend)){
+      work_d = std::get<1>(workspace);
+      if (std::get<2>(workspace) < workspace_num_elements * dtype_size) {
+        CHECK_CUDECOMP(cudecompFree(handle, grid_desc, work_d));
+        CHECK_CUDECOMP(
+            cudecompMalloc(handle, grid_desc, reinterpret_cast<void**>(&work_d), workspace_num_elements * dtype_size));
+        std::get<1>(workspace) = work_d;
+        std::get<2>(workspace) = workspace_num_elements * dtype_size;
+      }
+    } else if (std::get<0>(workspace) > 0 && std::get<0>(workspace) != static_cast<int>(config.halo_comm_backend)) {
+      CHECK_CUDECOMP(cudecompFree(handle, grid_desc_cache[static_cast<cudecompHaloCommBackend_t>(std::get<0>(workspace))],
+                                  std::get<1>(workspace)));
+      CHECK_CUDECOMP(
+          cudecompMalloc(handle, grid_desc, reinterpret_cast<void**>(&work_d), workspace_num_elements * dtype_size));
+      std::get<0>(workspace) = static_cast<int>(config.halo_comm_backend);
+      std::get<1>(workspace) = work_d;
+      std::get<2>(workspace) = workspace_num_elements * dtype_size;
+    } else {
+      CHECK_CUDECOMP(
+          cudecompMalloc(handle, grid_desc, reinterpret_cast<void**>(&work_d), workspace_num_elements * dtype_size));
+      std::get<0>(workspace) = static_cast<int>(config.halo_comm_backend);
+      std::get<1>(workspace) = work_d;
+      std::get<2>(workspace) = workspace_num_elements * dtype_size;
+    }
 
     // Running correctness tests
     if (!silent && rank == 0) printf("running correctness tests...\n");
@@ -470,7 +495,6 @@ static int run_test(const std::string& arguments, bool silent) {
     }
 
     CHECK_CUDA(cudaFree(data_d));
-    CHECK_CUDECOMP(cudecompFree(handle, grid_desc, work_d));
   } catch (const std::exception& e) {
     return 1;
   }

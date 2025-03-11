@@ -64,6 +64,8 @@ module transpose_CUDECOMP_DOUBLE_COMPLEX_mod
   integer :: rank, nranks
   type(cudecompGridDesc) :: grid_desc_cache(7)
   logical :: grid_desc_cache_set(7) = .false.
+  ARRTYPE, pointer, device, contiguous :: work_d(:)
+  integer :: work_backend = -1
 
   contains
   function compare_pencils(ref, res, pinfo) result(mismatch)
@@ -198,7 +200,6 @@ module transpose_CUDECOMP_DOUBLE_COMPLEX_mod
     ARRTYPE, allocatable :: xref(:, :, :), yref(:, :, :), zref(:, :, :), data(:)
     ARRTYPE, allocatable, device, target:: data_d(:), data_2_d(:)
     ARRTYPE, allocatable, managed, target:: data_m(:), data_2_m(:)
-    ARRTYPE, pointer, device, contiguous :: work_d(:)
     ARRTYPE, pointer, device:: input(:), output(:)
     integer :: dtype = DTYPE
 
@@ -417,7 +418,22 @@ module transpose_CUDECOMP_DOUBLE_COMPLEX_mod
     else
       allocate(data_d(data_num_elements))
     endif
-    CHECK_CUDECOMP(cudecompMalloc(handle, grid_desc, work_d, workspace_num_elements))
+
+    ! Allocate workspace (reuse exising workspace if able)
+    if (work_backend == config%transpose_comm_backend) then
+      if (size(work_d) < workspace_num_elements) then
+        CHECK_CUDECOMP(cudecompFree(handle, grid_desc, work_d))
+        CHECK_CUDECOMP(cudecompMalloc(handle, grid_desc, work_d, workspace_num_elements))
+      endif
+    elseif (work_backend > 0 .and. work_backend /= config%transpose_comm_backend) then
+      CHECK_CUDECOMP(cudecompFree(handle, grid_desc_cache(work_backend), work_d))
+      CHECK_CUDECOMP(cudecompMalloc(handle, grid_desc, work_d, workspace_num_elements))
+      work_backend = config%transpose_comm_backend;
+    else
+      CHECK_CUDECOMP(cudecompMalloc(handle, grid_desc, work_d, workspace_num_elements))
+      work_backend = config%transpose_comm_backend;
+    endif
+
     if (out_of_place) then
       if (use_managed_memory) then
         allocate(data_2_m(data_num_elements))
@@ -519,7 +535,6 @@ module transpose_CUDECOMP_DOUBLE_COMPLEX_mod
       deallocate(data_d)
       if (out_of_place) deallocate(data_2_d)
     endif
-    CHECK_CUDECOMP(cudecompFree(handle, grid_desc, work_d))
 
   end function run_test
 end module
