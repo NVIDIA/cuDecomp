@@ -29,7 +29,6 @@
 #define CHECK_CUDECOMP_EXIT(f) if (f /= CUDECOMP_RESULT_SUCCESS) call exit(1)
 #define CHECK_CUDECOMP(f) if (f /= CUDECOMP_RESULT_SUCCESS) then; res = 1; return; endif
 #define CHECK_CUDA_EXIT(f) if (f /= cudaSuccess) call exit(1)
-#define CHECK_CUDA(f) if (f /= cudaSuccess) thenl res = 1; return; endif
 
 #ifdef R32
 #define ARRTYPE real(real32)
