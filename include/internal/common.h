@@ -118,6 +118,7 @@ struct cudecompCommInfo {
 struct cudecompGridDesc {
   cudecompGridDescConfig_t config; // configuration struct
   bool gdims_dist_set = false;     // flag to record if gdims_dist was set to non-default values
+  bool transpose_mem_order_set = false;     // flag to record if transpose_mem_order was set to non-default values
 
   int32_t pidx[2]; // processor grid index;
 

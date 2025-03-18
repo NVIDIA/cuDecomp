@@ -483,9 +483,9 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
     auto halo_comm_backend = grid_desc->config.halo_comm_backend;
 
     // If transpose_mem_order not used, set based on transpose_axis_contiguous settings)
-    bool mem_order_set = (config->transpose_mem_order[0][0] >= 0);
+    grid_desc->transpose_mem_order_set = (config->transpose_mem_order[0][0] >= 0);
 
-    if (!mem_order_set) {
+    if (!grid_desc->transpose_mem_order_set) {
       for (int axis = 0; axis < 3; ++axis) {
         for (int i = 0; i < 3; ++i) {
           if (grid_desc->config.transpose_axis_contiguous[axis]) {
@@ -626,6 +626,15 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
       config->gdims_dist[0] = 0;
       config->gdims_dist[1] = 0;
       config->gdims_dist[2] = 0;
+    }
+
+    // If transpose_mem_order was not set, return config with default values
+    if (!grid_desc->transpose_mem_order_set) {
+      for (int i = 0; i < 3; ++i) {
+        for (int j = 0; j < 3; ++j) {
+          config->transpose_mem_order[i][j] = -1;
+        }
+      }
     }
 
   } catch (const cudecomp::BaseException& e) {
@@ -832,6 +841,15 @@ cudecompResult_t cudecompGetGridDescConfig(cudecompHandle_t handle, cudecompGrid
       config->gdims_dist[0] = 0;
       config->gdims_dist[1] = 0;
       config->gdims_dist[2] = 0;
+    }
+
+    // If transpose_mem_order was not set, return config with default values
+    if (!grid_desc->transpose_mem_order_set) {
+      for (int i = 0; i < 3; ++i) {
+        for (int j = 0; j < 3; ++j) {
+          config->transpose_mem_order[i][j] = -1;
+        }
+      }
     }
 
   } catch (const cudecomp::BaseException& e) {
