@@ -94,12 +94,13 @@ ____________________
 
   A data structure containing geometry information about a pencil data buffer.
 
-  :f integer shape(3): pencil shape (in local order, including halo elements)
-  :f integer lo(3): lower bound coordinates (in local order, excluding halo elements)
-  :f integer hi(3): upper bound coordinates (in local order, excluding halo elements)
+  :f integer shape(3): pencil shape (in local order, including halo and padding elements)
+  :f integer lo(3): lower bound coordinates (in local order, excluding halo and padding elements)
+  :f integer hi(3): upper bound coordinates (in local order, excluding halo and padding elements)
   :f integer order(3): data layout order (e.g. 3,2,1 means memory is ordered Z,Y,X)
   :f integer halo_extents(3): halo extents by dimension (in global order)
-  :f int64 size: number of elements in pencil (including halo elements)
+  :f integer padding(3): padding by dimension (in global order)
+  :f int64 size: number of elements in pencil (including halo and padding elements)
 
 Communication Backends
 ---------------------------------
@@ -345,7 +346,7 @@ Helper Functions
 cudecompGetPencilInfo
 _____________________
 
-.. f:function:: cudecompGetPencilInfo(handle, grid_desc, pencil_info, axis[, halo_extents])
+.. f:function:: cudecompGetPencilInfo(handle, grid_desc, pencil_info, axis[, halo_extents, padding])
 
   Collects geometry information about assigned pencils, by domain axis.
 
@@ -355,7 +356,8 @@ _____________________
   :p cudecompGridDesc grid_desc [in]: A cuDecomp grid descriptor.
   :p cudecompPencilInfo pencil_info [out]: A cuDecomp pencil information structure.
   :p integer axis [in]: The domain axis the desired pencil is aligned with.
-  :p integer halo_extents(3) [in, optional]: An array of three integers to define halo region extents of the pencil, in global order. The i-th entry in this array should contain the number of halo elements (per direction) expected in the along the i-th global domain axis. Symmetric halos are assumed (e.g. a value of one in halo_extents means there are 2 halo elements, one element on each side).
+  :p integer halo_extents(3) [in,optional]: An array of three integers to define halo region extents of the pencil, in global order. The i-th entry in this array should contain the number of halo elements (per direction) expected in the along the i-th global domain axis. Symmetric halos are assumed (e.g. a value of one in halo_extents means there are 2 halo elements, one element on each side).
+  :p integer padding(3) [in,optional]: An array of three integers to define padding of the pencil, in global order. The i-th entry in this array should contain the number of elements to treat as padding in the i-th global domain axis.
   :r cudecompResult res: :code:`CUDECOMP_RESULT_SUCCESS` on success or error code on failure.
 
 ------
@@ -434,7 +436,7 @@ Transposition Functions
 cudecompTransposeXToY
 _____________________
 
-.. f:function:: cudecompTransposeXToY(handle, grid_desc, input, output, work, dtype[, input_halo_extents, output_halo_extents, stream])
+.. f:function:: cudecompTransposeXToY(handle, grid_desc, input, output, work, dtype[, input_halo_extents, output_halo_extents, input_padding, output_padding, stream])
 
   Function to transpose data from X-axis aligned pencils to a Y-axis aligned pencils.
 
@@ -447,8 +449,10 @@ _____________________
   :p T work(*) [in]: Device array to use for transpose workspace.
   :p cudecompDataType dtype [in]: The :code:`cudecompDataType` to use for the operation.
   :p integer input_halo_extents(3) [in,optional]: An array of three integers to define halo region extents of the input data, in global order. The i-th entry in this array should contain the number of halo elements (per direction) expected in the along the i-th global domain axis. Symmetric halos are assumed (e.g. a value of one in halo_extents means there are 2 halo elements, one element on each side). If not provided, input data is assumed to have no halos.
-  :p integer output_halo_extents(3) [in,optional]: Similar to :code:`intput_halo_extents` but for the output data. If not provided, output data is assumed to have no halos.
-  :p integer(cuda_stream_kind) stream [in, optional]: CUDA stream to enqueue GPU operations into. If not provided, operations are enqueued in the default stream.
+  :p integer output_halo_extents(3) [in,optional]: Similar to :code:`input_halo_extents` but for the output data. If not provided, output data is assumed to have no halos.
+  :p integer input_padding(3) [in,optional]: An array of three integers to define padding of the input data, in global order. The i-th entry in this array should contain the number of elements to treat as padding in the i-th global domain axis.
+  :p integer output_padding(3) [in,optional]: Similar to :code:`input_padding`, but for the output data.
+  :p integer(cuda_stream_kind) stream [in,optional]: CUDA stream to enqueue GPU operations into. If not provided, operations are enqueued in the default stream.
   :r cudecompResult res: :code:`CUDECOMP_RESULT_SUCCESS` on success or error code on failure.
 
 ------
@@ -458,7 +462,7 @@ _____________________
 cudecompTransposeYtoZ
 _____________________
 
-.. f:function:: cudecompTransposeYToZ(handle, grid_desc, input, output, work, dtype[, input_halo_extents, output_halo_extents, stream])
+.. f:function:: cudecompTransposeYToZ(handle, grid_desc, input, output, work, dtype[, input_halo_extents, output_halo_extents, input_padding, output_padding, stream])
 
   Function to transpose data from Y-axis aligned pencils to a Z-axis aligned pencils.
 
@@ -472,7 +476,9 @@ _____________________
   :p cudecompDataType dtype [in]: The :code:`cudecompDataType` to use for the operation.
   :p integer input_halo_extents(3) [in,optional]: An array of three integers to define halo region extents of the input data, in global order. The i-th entry in this array should contain the number of halo elements (per direction) expected in the along the i-th global domain axis. Symmetric halos are assumed (e.g. a value of one in halo_extents means there are 2 halo elements, one element on each side). If not provided, input data is assumed to have no halos.
   :p integer output_halo_extents(3) [in,optional]: Similar to :code:`intput_halo_extents` but for the output data. If not provided, output data is assumed to have no halos.
-  :p integer(cuda_stream_kind) stream [in, optional]: CUDA stream to enqueue GPU operations into. If not provided, operations are enqueued in the default stream.
+  :p integer input_padding(3) [in,optional]: An array of three integers to define padding of the input data, in global order. The i-th entry in this array should contain the number of elements to treat as padding in the i-th global domain axis.
+  :p integer output_padding(3) [in,optional]: Similar to :code:`input_padding`, but for the output data.
+  :p integer(cuda_stream_kind) stream [in,optional]: CUDA stream to enqueue GPU operations into. If not provided, operations are enqueued in the default stream.
   :r cudecompResult res: :code:`CUDECOMP_RESULT_SUCCESS` on success or error code on failure.
 
 ------
@@ -482,7 +488,7 @@ _____________________
 cudecompTransposeZToY
 _____________________
 
-.. f:function:: cudecompTransposeZToY(handle, grid_desc, input, output, work, dtype[, input_halo_extents, output_halo_extents, stream])
+.. f:function:: cudecompTransposeZToY(handle, grid_desc, input, output, work, dtype[, input_halo_extents, output_halo_extents, input_padding, output_padding, stream])
 
   Function to transpose data from Z-axis aligned pencils to a Y-axis aligned pencils.
 
@@ -496,7 +502,9 @@ _____________________
   :p cudecompDataType dtype [in]: The :code:`cudecompDataType` to use for the operation.
   :p integer input_halo_extents(3) [in,optional]: An array of three integers to define halo region extents of the input data, in global order. The i-th entry in this array should contain the number of halo elements (per direction) expected in the along the i-th global domain axis. Symmetric halos are assumed (e.g. a value of one in halo_extents means there are 2 halo elements, one element on each side). If not provided, input data is assumed to have no halos.
   :p integer output_halo_extents(3) [in,optional]: Similar to :code:`intput_halo_extents` but for the output data. If not provided, output data is assumed to have no halos.
-  :p integer(cuda_stream_kind) stream [in, optional]: CUDA stream to enqueue GPU operations into. If not provided, operations are enqueued in the default stream.
+  :p integer input_padding(3) [in,optional]: An array of three integers to define padding of the input data, in global order. The i-th entry in this array should contain the number of elements to treat as padding in the i-th global domain axis.
+  :p integer output_padding(3) [in,optional]: Similar to :code:`input_padding`, but for the output data.
+  :p integer(cuda_stream_kind) stream [in,optional]: CUDA stream to enqueue GPU operations into. If not provided, operations are enqueued in the default stream.
   :r cudecompResult res: :code:`CUDECOMP_RESULT_SUCCESS` on success or error code on failure.
 
 
@@ -507,7 +515,7 @@ _____________________
 cudecompTransposeYToX
 _____________________
 
-.. f:function:: cudecompTransposeYToX(handle, grid_desc, input, output, work, dtype[, input_halo_extents, output_halo_extents, stream])
+.. f:function:: cudecompTransposeYToX(handle, grid_desc, input, output, work, dtype[, input_halo_extents, output_halo_extents, input_padding, output_padding, stream])
 
   Function to transpose data from Y-axis aligned pencils to a X-axis aligned pencils.
 
@@ -521,7 +529,9 @@ _____________________
   :p cudecompDataType dtype [in]: The :code:`cudecompDataType` to use for the operation.
   :p integer input_halo_extents(3) [in,optional]: An array of three integers to define halo region extents of the input data, in global order. The i-th entry in this array should contain the number of halo elements (per direction) expected in the along the i-th global domain axis. Symmetric halos are assumed (e.g. a value of one in halo_extents means there are 2 halo elements, one element on each side). If not provided, input data is assumed to have no halos.
   :p integer output_halo_extents(3) [in,optional]: Similar to :code:`intput_halo_extents` but for the output data. If not provided, output data is assumed to have no halos.
-  :p integer(cuda_stream_kind) stream [in, optional]: CUDA stream to enqueue GPU operations into. If not provided, operations are enqueued in the default stream.
+  :p integer input_padding(3) [in,optional]: An array of three integers to define padding of the input data, in global order. The i-th entry in this array should contain the number of elements to treat as padding in the i-th global domain axis.
+  :p integer output_padding(3) [in,optional]: Similar to :code:`input_padding`, but for the output data.
+  :p integer(cuda_stream_kind) stream [in,optional]: CUDA stream to enqueue GPU operations into. If not provided, operations are enqueued in the default stream.
   :r cudecompResult res: :code:`CUDECOMP_RESULT_SUCCESS` on success or error code on failure.
 
 ------
@@ -534,7 +544,7 @@ Halo Exchange Functions
 cudecompUpdateHalosX
 ____________________
 
-.. f:function:: cudecompUpdateHalosX(handle, grid_desc, input, work, dtype, halo_extents, halo_periods[, stream])
+.. f:function:: cudecompUpdateHalosX(handle, grid_desc, input, work, dtype, halo_extents, halo_periods, dim[, padding, stream])
 
   Function to perform halo communication of X-axis aligned pencil data.
 
@@ -547,7 +557,9 @@ ____________________
   :p cudecompDataType dtype [in]: The :code:`cudecompDataType` to use for the operation.
   :p integer halo_extents(3) [in]: An array of three integers to define halo region extents of the input data, in global order. The i-th entry in this array should contain the number of halo elements (per direction) expected in the along the i-th global domain axis. Symmetric halos are assumed (e.g. a value of one in halo_extents means there are 2 halo elements, one element on each side).
   :p logical halo_periods(3) [in]: An array of three boolean values to define halo periodicity of the input data, in global order. If the i-th entry in this array is true, the domain is treated periodically along the i-th global domain axis.
-  :p integer(cuda_stream_kind) stream [in, optional]: CUDA stream to enqueue GPU operations into. If not provided, operations are enqueued in the default stream.
+  :p integer dim [in]: Which pencil dimension (global indexed) to perform the halo update.
+  :p integer padding(3) [in,optional]: An array of three integers to define padding of the input data, in global order. The i-th entry in this array should contain the number of elements to treat as padding in the i-th global domain axis.
+  :p integer(cuda_stream_kind) stream [in,optional]: CUDA stream to enqueue GPU operations into. If not provided, operations are enqueued in the default stream.
   :r cudecompResult res: :code:`CUDECOMP_RESULT_SUCCESS` on success or error code on failure.
 
 ------
@@ -557,7 +569,7 @@ ____________________
 cudecompUpdateHalosY
 ____________________
 
-.. f:function:: cudecompUpdateHalosY(handle, grid_desc, input, work, dtype, halo_extents, halo_periods[, stream])
+.. f:function:: cudecompUpdateHalosY(handle, grid_desc, input, work, dtype, halo_extents, halo_periods, dim[, padding, stream])
 
   Function to perform halo communication of Y-axis aligned pencil data.
 
@@ -570,7 +582,9 @@ ____________________
   :p cudecompDataType dtype [in]: The :code:`cudecompDataType` to use for the operation.
   :p integer halo_extents(3) [in]: An array of three integers to define halo region extents of the input data, in global order. The i-th entry in this array should contain the number of halo elements (per direction) expected in the along the i-th global domain axis. Symmetric halos are assumed (e.g. a value of one in halo_extents means there are 2 halo elements, one element on each side).
   :p logical halo_periods(3) [in]: An array of three boolean values to define halo periodicity of the input data, in global order. If the i-th entry in this array is true, the domain is treated periodically along the i-th global domain axis.
-  :p integer(cuda_stream_kind) stream [in, optional]: CUDA stream to enqueue GPU operations into. If not provided, operations are enqueued in the default stream.
+  :p integer dim [in]: Which pencil dimension (global indexed) to perform the halo update.
+  :p integer padding(3) [in,optional]: An array of three integers to define padding of the input data, in global order. The i-th entry in this array should contain the number of elements to treat as padding in the i-th global domain axis.
+  :p integer(cuda_stream_kind) stream [in,optional]: CUDA stream to enqueue GPU operations into. If not provided, operations are enqueued in the default stream.
   :r cudecompResult res: :code:`CUDECOMP_RESULT_SUCCESS` on success or error code on failure.
 
 ------
@@ -580,7 +594,7 @@ ____________________
 cudecompUpdateHalosZ
 ____________________
 
-.. f:function:: cudecompUpdateHalosZ(handle, grid_desc, input, work, dtype, halo_extents, halo_periods[, stream])
+.. f:function:: cudecompUpdateHalosZ(handle, grid_desc, input, work, dtype, halo_extents, halo_periods, dim[, padding, stream])
 
   Function to perform halo communication of Z-axis aligned pencil data.
 
@@ -593,5 +607,7 @@ ____________________
   :p cudecompDataType dtype [in]: The :code:`cudecompDataType` to use for the operation.
   :p integer halo_extents(3) [in]: An array of three integers to define halo region extents of the input data, in global order. The i-th entry in this array should contain the number of halo elements (per direction) expected in the along the i-th global domain axis. Symmetric halos are assumed (e.g. a value of one in halo_extents means there are 2 halo elements, one element on each side).
   :p logical halo_periods(3) [in]: An array of three boolean values to define halo periodicity of the input data, in global order. If the i-th entry in this array is true, the domain is treated periodically along the i-th global domain axis.
-  :p integer(cuda_stream_kind) stream [in, optional]: CUDA stream to enqueue GPU operations into. If not provided, operations are enqueued in the default stream.
+  :p integer dim [in]: Which pencil dimension (global indexed) to perform the halo update.
+  :p integer padding(3) [in,optional]: An array of three integers to define padding of the input data, in global order. The i-th entry in this array should contain the number of elements to treat as padding in the i-th global domain axis.
+  :p integer(cuda_stream_kind) stream [in,optional]: CUDA stream to enqueue GPU operations into. If not provided, operations are enqueued in the default stream.
   :r cudecompResult res: :code:`CUDECOMP_RESULT_SUCCESS` on success or error code on failure.

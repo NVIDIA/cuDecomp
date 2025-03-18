@@ -267,20 +267,20 @@ int main(int argc, char** argv) {
 #ifdef R2C
   // Get x-pencil information (real)
   cudecompPencilInfo_t pinfo_x_r;
-  CHECK_CUDECOMP_EXIT(cudecompGetPencilInfo(handle, grid_desc_r, &pinfo_x_r, 0, nullptr));
+  CHECK_CUDECOMP_EXIT(cudecompGetPencilInfo(handle, grid_desc_r, &pinfo_x_r, 0, nullptr, nullptr));
 #endif
 
   // Get x-pencil information (complex)
   cudecompPencilInfo_t pinfo_x_c;
-  CHECK_CUDECOMP_EXIT(cudecompGetPencilInfo(handle, grid_desc_c, &pinfo_x_c, 0, nullptr));
+  CHECK_CUDECOMP_EXIT(cudecompGetPencilInfo(handle, grid_desc_c, &pinfo_x_c, 0, nullptr, nullptr));
 
   // Get y-pencil information (complex)
   cudecompPencilInfo_t pinfo_y_c;
-  CHECK_CUDECOMP_EXIT(cudecompGetPencilInfo(handle, grid_desc_c, &pinfo_y_c, 1, nullptr));
+  CHECK_CUDECOMP_EXIT(cudecompGetPencilInfo(handle, grid_desc_c, &pinfo_y_c, 1, nullptr, nullptr));
 
   // Get z-pencil information (complex)
   cudecompPencilInfo_t pinfo_z_c;
-  CHECK_CUDECOMP_EXIT(cudecompGetPencilInfo(handle, grid_desc_c, &pinfo_z_c, 2, nullptr));
+  CHECK_CUDECOMP_EXIT(cudecompGetPencilInfo(handle, grid_desc_c, &pinfo_z_c, 2, nullptr, nullptr));
 
   // Get workspace size
   int64_t num_elements_work_c;
@@ -508,7 +508,8 @@ int main(int argc, char** argv) {
 
     if (!slab_xyz) {
       CHECK_CUDECOMP_EXIT(cudecompTransposeXToY(handle, grid_desc_c, input, output, work_c_d,
-                                                get_cudecomp_datatype(complex_t(0)), nullptr, nullptr, 0));
+                                                get_cudecomp_datatype(complex_t(0)), nullptr, nullptr,
+                                                nullptr, nullptr, 0));
     }
 
     if (!slab_xy && !slab_xyz) {
@@ -530,7 +531,8 @@ int main(int argc, char** argv) {
     // For y-z slab case, no need to perform yz transposes or z-axis FFT
     if (!slab_yz && !slab_xyz) {
       CHECK_CUDECOMP_EXIT(cudecompTransposeYToZ(handle, grid_desc_c, input, output, work_c_d,
-                                                get_cudecomp_datatype(complex_t(0)), nullptr, nullptr, 0));
+                                                get_cudecomp_datatype(complex_t(0)), nullptr, nullptr,
+                                                nullptr, nullptr, 0));
     }
 
     if (!slab_yz && !slab_xyz) {
@@ -545,7 +547,8 @@ int main(int argc, char** argv) {
 
     if (!slab_yz && !slab_xyz) {
       CHECK_CUDECOMP_EXIT(cudecompTransposeZToY(handle, grid_desc_c, input, output, work_c_d,
-                                                get_cudecomp_datatype(complex_t(0)), nullptr, nullptr, 0));
+                                                get_cudecomp_datatype(complex_t(0)), nullptr, nullptr,
+                                                nullptr, nullptr, 0));
     }
 
     if (!slab_xy && !slab_xyz) {
@@ -566,7 +569,8 @@ int main(int argc, char** argv) {
 
     if (!slab_xyz) {
       CHECK_CUDECOMP_EXIT(cudecompTransposeYToX(handle, grid_desc_c, input, output, work_c_d,
-                                                get_cudecomp_datatype(complex_t(0)), nullptr, nullptr, 0));
+                                                get_cudecomp_datatype(complex_t(0)), nullptr, nullptr,
+                                                nullptr, nullptr, 0));
     }
 #ifdef R2C
     CHECK_CUFFT_EXIT(cufftXtExec(cufft_plan_c2r_x, output, output_r, CUFFT_INVERSE));

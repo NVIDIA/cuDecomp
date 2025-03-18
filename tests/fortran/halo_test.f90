@@ -29,7 +29,6 @@
 #define CHECK_CUDECOMP_EXIT(f) if (f /= CUDECOMP_RESULT_SUCCESS) call exit(1)
 #define CHECK_CUDECOMP(f) if (f /= CUDECOMP_RESULT_SUCCESS) then; res = 1; return; endif
 #define CHECK_CUDA_EXIT(f) if (f /= cudaSuccess) call exit(1)
-#define CHECK_CUDA(f) if (f /= cudaSuccess) thenl res = 1; return; endif
 
 #ifdef R32
 #define ARRTYPE real(real32)
@@ -64,18 +63,16 @@ module halo_CUDECOMP_DOUBLE_COMPLEX_mod
   integer :: rank, nranks
   type(cudecompGridDesc) :: grid_desc_cache(5)
   logical :: grid_desc_cache_set(5) = .false.
+  ARRTYPE, pointer, device, contiguous :: work_d(:)
+  integer :: work_backend = -1
 
   contains
   function compare_pencils(ref, res, pinfo) result(mismatch)
     use cudecomp
     implicit none
     type(cudecompPencilInfo) :: pinfo
-    ARRTYPE :: ref(pinfo%lo(1) - pinfo%halo_extents(pinfo%order(1)): pinfo%hi(1) + pinfo%halo_extents(pinfo%order(1)), &
-                   pinfo%lo(2) - pinfo%halo_extents(pinfo%order(2)): pinfo%hi(2) + pinfo%halo_extents(pinfo%order(2)), &
-                   pinfo%lo(3) - pinfo%halo_extents(pinfo%order(3)): pinfo%hi(3) + pinfo%halo_extents(pinfo%order(3)))
-    ARRTYPE :: res(pinfo%lo(1) - pinfo%halo_extents(pinfo%order(1)): pinfo%hi(1) + pinfo%halo_extents(pinfo%order(1)), &
-                   pinfo%lo(2) - pinfo%halo_extents(pinfo%order(2)): pinfo%hi(2) + pinfo%halo_extents(pinfo%order(2)), &
-                   pinfo%lo(3) - pinfo%halo_extents(pinfo%order(3)): pinfo%hi(3) + pinfo%halo_extents(pinfo%order(3)))
+    ARRTYPE :: ref(pinfo%shape(1), pinfo%shape(2), pinfo%shape(3))
+    ARRTYPE :: res(pinfo%shape(1), pinfo%shape(2), pinfo%shape(3))
 
     logical :: mismatch
     mismatch = any(ref /= res)
@@ -91,10 +88,10 @@ module halo_CUDECOMP_DOUBLE_COMPLEX_mod
     integer :: gdims(3)
     integer :: gx(3)
 
-    ! Allocate reference pencil with halo regions
-    allocate(ref(pinfo%lo(1) - pinfo%halo_extents(pinfo%order(1)): pinfo%hi(1) + pinfo%halo_extents(pinfo%order(1)), &
-                 pinfo%lo(2) - pinfo%halo_extents(pinfo%order(2)): pinfo%hi(2) + pinfo%halo_extents(pinfo%order(2)), &
-                 pinfo%lo(3) - pinfo%halo_extents(pinfo%order(3)): pinfo%hi(3) + pinfo%halo_extents(pinfo%order(3))))
+    ! Allocate reference pencil with halo and padding regions
+    allocate(ref(pinfo%lo(1) - pinfo%halo_extents(pinfo%order(1)): pinfo%hi(1) + pinfo%halo_extents(pinfo%order(1)) + pinfo%padding(pinfo%order(1)), &
+                 pinfo%lo(2) - pinfo%halo_extents(pinfo%order(2)): pinfo%hi(2) + pinfo%halo_extents(pinfo%order(2)) + pinfo%padding(pinfo%order(2)), &
+                 pinfo%lo(3) - pinfo%halo_extents(pinfo%order(3)): pinfo%hi(3) + pinfo%halo_extents(pinfo%order(3)) + pinfo%padding(pinfo%order(3))))
 
     ref = -1
 
@@ -127,10 +124,10 @@ module halo_CUDECOMP_DOUBLE_COMPLEX_mod
     logical :: halo_periods(3)
     logical :: unset
 
-    ! Allocate reference pencil with halo regions
-    allocate(ref(pinfo%lo(1) - pinfo%halo_extents(pinfo%order(1)): pinfo%hi(1) + pinfo%halo_extents(pinfo%order(1)), &
-                 pinfo%lo(2) - pinfo%halo_extents(pinfo%order(2)): pinfo%hi(2) + pinfo%halo_extents(pinfo%order(2)), &
-                 pinfo%lo(3) - pinfo%halo_extents(pinfo%order(3)): pinfo%hi(3) + pinfo%halo_extents(pinfo%order(3))))
+    ! Allocate reference pencil with halo and padding regions
+    allocate(ref(pinfo%lo(1) - pinfo%halo_extents(pinfo%order(1)): pinfo%hi(1) + pinfo%halo_extents(pinfo%order(1)) + pinfo%padding(pinfo%order(1)), &
+                 pinfo%lo(2) - pinfo%halo_extents(pinfo%order(2)): pinfo%hi(2) + pinfo%halo_extents(pinfo%order(2)) + pinfo%padding(pinfo%order(2)), &
+                 pinfo%lo(3) - pinfo%halo_extents(pinfo%order(3)): pinfo%hi(3) + pinfo%halo_extents(pinfo%order(3)) + pinfo%padding(pinfo%order(3))))
 
     ref = -1
 
@@ -229,6 +226,7 @@ module halo_CUDECOMP_DOUBLE_COMPLEX_mod
     integer :: gdims_dist(3)
     integer :: halo_extents(3)
     logical :: halo_periods(3)
+    integer :: padding(3)
     integer :: mem_order(3, 3)
     logical :: use_managed_memory
     integer :: pr, pc
@@ -252,7 +250,6 @@ module halo_CUDECOMP_DOUBLE_COMPLEX_mod
     ARRTYPE, allocatable :: ref(:, :, :), init(:, :, :), data(:)
     ARRTYPE, allocatable, device, target:: data_d(:)
     ARRTYPE, allocatable, managed, target:: data_m(:)
-    ARRTYPE, pointer, device, contiguous :: work_d(:)
     ARRTYPE, pointer, device:: input(:)
     integer :: dtype = DTYPE
 
@@ -282,6 +279,7 @@ module halo_CUDECOMP_DOUBLE_COMPLEX_mod
     gdims_dist(:) = 0
     halo_extents(:) = 1
     halo_periods(:) = .true.
+    padding(:) = 0
     mem_order(:, :) = -1
     axis = 1
     use_managed_memory = .false.
@@ -369,6 +367,18 @@ module halo_CUDECOMP_DOUBLE_COMPLEX_mod
           read(arg, *) iarg
           halo_periods(3) = iarg
           skip_count = 1
+        case('--pdx')
+          read(args(i+1), *) arg
+          read(arg, *) padding(1)
+          skip_count = 1
+        case('--pdy')
+          read(args(i+1), *) arg
+          read(arg, *) padding(2)
+          skip_count = 1
+        case('--pdz')
+          read(args(i+1), *) arg
+          read(arg, *) padding(3)
+          skip_count = 1
         case('--ax')
           read(args(i+1), *) arg
           read(arg, *) axis
@@ -437,7 +447,7 @@ module halo_CUDECOMP_DOUBLE_COMPLEX_mod
     endif
 
     ! Get pencil information
-    CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, pinfo, axis, halo_extents))
+    CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, pinfo, axis, halo_extents, padding))
 
     ! Get workspace size
     CHECK_CUDECOMP(cudecompGetHaloWorkspaceSize(handle, grid_desc, axis, halo_extents, workspace_num_elements))
@@ -455,7 +465,21 @@ module halo_CUDECOMP_DOUBLE_COMPLEX_mod
     else
       allocate(data_d(data_num_elements))
     endif
-    CHECK_CUDECOMP(cudecompMalloc(handle, grid_desc, work_d, workspace_num_elements))
+
+    ! Allocate workspace (reuse exising workspace if able)
+    if (work_backend == config%halo_comm_backend) then
+      if (size(work_d) < workspace_num_elements) then
+        CHECK_CUDECOMP(cudecompFree(handle, grid_desc, work_d))
+        CHECK_CUDECOMP(cudecompMalloc(handle, grid_desc, work_d, workspace_num_elements))
+      endif
+    elseif (work_backend > 0 .and. work_backend /= config%halo_comm_backend) then
+      CHECK_CUDECOMP(cudecompFree(handle, grid_desc_cache(work_backend), work_d))
+      CHECK_CUDECOMP(cudecompMalloc(handle, grid_desc, work_d, workspace_num_elements))
+      work_backend = config%halo_comm_backend;
+    else
+      CHECK_CUDECOMP(cudecompMalloc(handle, grid_desc, work_d, workspace_num_elements))
+      work_backend = config%halo_comm_backend;
+    endif
 
     ! Running correctness tests
     if (.not. silent .and. rank == 0) write(*,"('Running correctness tests using ', a, ' backend ...')") &
@@ -477,11 +501,11 @@ module halo_CUDECOMP_DOUBLE_COMPLEX_mod
     do i = 1, 3
       select case(axis)
         case(1)
-          CHECK_CUDECOMP(cudecompUpdateHalosX(handle, grid_desc, input, work_d, dtype, pinfo%halo_extents, halo_periods, i))
+          CHECK_CUDECOMP(cudecompUpdateHalosX(handle, grid_desc, input, work_d, dtype, pinfo%halo_extents, halo_periods, i, padding))
         case(2)
-          CHECK_CUDECOMP(cudecompUpdateHalosY(handle, grid_desc, input, work_d, dtype, pinfo%halo_extents, halo_periods, i))
+          CHECK_CUDECOMP(cudecompUpdateHalosY(handle, grid_desc, input, work_d, dtype, pinfo%halo_extents, halo_periods, i, padding))
         case(3)
-          CHECK_CUDECOMP(cudecompUpdateHalosZ(handle, grid_desc, input, work_d, dtype, pinfo%halo_extents, halo_periods, i))
+          CHECK_CUDECOMP(cudecompUpdateHalosZ(handle, grid_desc, input, work_d, dtype, pinfo%halo_extents, halo_periods, i, padding))
       end select
     end do
 
@@ -497,8 +521,6 @@ module halo_CUDECOMP_DOUBLE_COMPLEX_mod
     else
       deallocate(data_d)
     endif
-
-    CHECK_CUDECOMP(cudecompFree(handle, grid_desc, work_d))
 
   end function
 end module

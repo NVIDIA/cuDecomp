@@ -154,9 +154,9 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
     grid_desc->pidx[1] = handle->rank % grid_desc->config.pdims[1];
 
     cudecompPencilInfo_t pinfo_x, pinfo_y, pinfo_z;
-    CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_x, 0, nullptr));
-    CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_y, 1, nullptr));
-    CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_z, 2, nullptr));
+    CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_x, 0, nullptr, nullptr));
+    CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_y, 1, nullptr, nullptr));
+    CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_z, 2, nullptr, nullptr));
 
     // Skip any decompositions with empty pencils
     if (grid_desc->config.pdims[0] > std::min(grid_desc->config.gdims_dist[0], grid_desc->config.gdims_dist[1]) ||
@@ -268,22 +268,22 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
         if (options->transpose_op_weights[0] != 0.0) {
           CHECK_CUDECOMP(cudecompTransposeXToY(handle, grid_desc, data,
                                                options->transpose_use_inplace_buffers[0] ? data : data2, w,
-                                               options->dtype, nullptr, nullptr, 0));
+                                               options->dtype, nullptr, nullptr, nullptr, nullptr, 0));
         }
         if (options->transpose_op_weights[1] != 0.0) {
           CHECK_CUDECOMP(cudecompTransposeYToZ(handle, grid_desc, data,
                                                options->transpose_use_inplace_buffers[1] ? data : data2, w,
-                                               options->dtype, nullptr, nullptr, 0));
+                                               options->dtype, nullptr, nullptr, nullptr, nullptr, 0));
         }
         if (options->transpose_op_weights[2] != 0.0) {
           CHECK_CUDECOMP(cudecompTransposeZToY(handle, grid_desc, data,
                                                options->transpose_use_inplace_buffers[2] ? data : data2, w,
-                                               options->dtype, nullptr, nullptr, 0));
+                                               options->dtype, nullptr, nullptr, nullptr, nullptr, 0));
         }
         if (options->transpose_op_weights[3] != 0.0) {
           CHECK_CUDECOMP(cudecompTransposeYToX(handle, grid_desc, data,
                                                options->transpose_use_inplace_buffers[3] ? data : data2, w,
-                                               options->dtype, nullptr, nullptr, 0));
+                                               options->dtype, nullptr, nullptr, nullptr, nullptr, 0));
         }
       }
 
@@ -303,25 +303,25 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
         if (options->transpose_op_weights[0] != 0.0) {
           CHECK_CUDECOMP(cudecompTransposeXToY(handle, grid_desc, data,
                                                options->transpose_use_inplace_buffers[0] ? data : data2, w,
-                                               options->dtype, nullptr, nullptr, 0));
+                                               options->dtype, nullptr, nullptr, nullptr, nullptr, 0));
         }
         CHECK_CUDA(cudaEventRecord(events[1], 0));
         if (options->transpose_op_weights[1] != 0.0) {
           CHECK_CUDECOMP(cudecompTransposeYToZ(handle, grid_desc, data,
                                                options->transpose_use_inplace_buffers[1] ? data : data2, w,
-                                               options->dtype, nullptr, nullptr, 0));
+                                               options->dtype, nullptr, nullptr, nullptr, nullptr, 0));
         }
         CHECK_CUDA(cudaEventRecord(events[2], 0));
         if (options->transpose_op_weights[2] != 0.0) {
           CHECK_CUDECOMP(cudecompTransposeZToY(handle, grid_desc, data,
                                                options->transpose_use_inplace_buffers[2] ? data : data2, w,
-                                               options->dtype, nullptr, nullptr, 0));
+                                               options->dtype, nullptr, nullptr, nullptr, nullptr, 0));
         }
         CHECK_CUDA(cudaEventRecord(events[3], 0));
         if (options->transpose_op_weights[3] != 0.0) {
           CHECK_CUDECOMP(cudecompTransposeYToX(handle, grid_desc, data,
                                                options->transpose_use_inplace_buffers[3] ? data : data2, w,
-                                               options->dtype, nullptr, nullptr, 0));
+                                               options->dtype, nullptr, nullptr, nullptr, nullptr, 0));
         }
         CHECK_CUDA(cudaEventRecord(events[4], 0));
         CHECK_CUDA(cudaDeviceSynchronize());
@@ -536,7 +536,7 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
     grid_desc->pidx[1] = handle->rank % grid_desc->config.pdims[1];
 
     cudecompPencilInfo_t pinfo;
-    CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo, options->halo_axis, options->halo_extents));
+    CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo, options->halo_axis, options->halo_extents, nullptr));
 
     // Skip any decompositions with empty pencils
     if (std::max(grid_desc->config.pdims[0], grid_desc->config.pdims[1]) >
@@ -648,15 +648,15 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
           switch (options->halo_axis) {
           case 0:
             CHECK_CUDECOMP(cudecompUpdateHalosX(handle, grid_desc, d, w, options->dtype, pinfo.halo_extents,
-                                                options->halo_periods, dim, 0));
+                                                options->halo_periods, dim, nullptr, 0));
             break;
           case 1:
             CHECK_CUDECOMP(cudecompUpdateHalosY(handle, grid_desc, d, w, options->dtype, pinfo.halo_extents,
-                                                options->halo_periods, dim, 0));
+                                                options->halo_periods, dim, nullptr, 0));
             break;
           case 2:
             CHECK_CUDECOMP(cudecompUpdateHalosZ(handle, grid_desc, d, w, options->dtype, pinfo.halo_extents,
-                                                options->halo_periods, dim, 0));
+                                                options->halo_periods, dim, nullptr, 0));
             break;
           }
         }
@@ -672,15 +672,15 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
           switch (options->halo_axis) {
           case 0:
             CHECK_CUDECOMP(cudecompUpdateHalosX(handle, grid_desc, d, w, options->dtype, pinfo.halo_extents,
-                                                options->halo_periods, dim, 0));
+                                                options->halo_periods, dim, nullptr, 0));
             break;
           case 1:
             CHECK_CUDECOMP(cudecompUpdateHalosY(handle, grid_desc, d, w, options->dtype, pinfo.halo_extents,
-                                                options->halo_periods, dim, 0));
+                                                options->halo_periods, dim, nullptr, 0));
             break;
           case 2:
             CHECK_CUDECOMP(cudecompUpdateHalosZ(handle, grid_desc, d, w, options->dtype, pinfo.halo_extents,
-                                                options->halo_periods, dim, 0));
+                                                options->halo_periods, dim, nullptr, 0));
             break;
           }
         }

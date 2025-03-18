@@ -221,10 +221,9 @@ First, we can query basic information (i.e. metadata) about the pencil configura
 assigned to this process using the :ref:`cudecompGetPencilInfo-ref` function. This function returns a
 pencil info structure (:ref:`cudecompPencilInfo_t-ref`) that contains the shape, global lower and upper
 index bounds (:code:`lo` and :code:`hi`), size of the pencil, and an :code:`order` array to indicate the memory layout
-that will be used (to handle permuted, `axis-contiguous` layouts). Additionally, there is a :code:`halo_extents` data
-member that indicates the depth of halos for the pencil, by axis, if the argument was provided
-to this function. This data member is a copy of the argument provided to the function
-and is stored for convenience.
+that will be used (to handle permuted layouts). Additionally, there are :code:`halo_extents`  and :code:`padding` data
+members that indicates halo and padding configurations for the pencil, by axis. This data member is a copy of the
+argument provided to the function and is stored for convenience.
 
 It should be noted that these metadata structures are provided solely for users to
 interpret and access data from the data buffers used as input/output arguments to the different
@@ -234,7 +233,8 @@ for pencil buffers, nor uses these pencil information structures as input argume
 In this example, we apply halo elements to the :math:`X`-pencils only. For the other pencils,
 we instead pass a :code:`nullptr` for the :code:`halo_extents` argument, which is equivalent
 to setting :code:`halo_extents = [0, 0, 0]` in C/C++. For Fortran, :code:`halo_extents` is optional
-and defaults to no halo regions.
+and defaults to no halo regions. Similarly, we pass a :code:`nullptr` for the :code:`padding` argument to specify
+no padding for all pencils. For Fortran, :code:`padding` is optional, and defaults to no padding. 
 
 .. tabs::
 
@@ -243,15 +243,15 @@ and defaults to no halo regions.
     // Get X-pencil information (with halo elements).
     cudecompPencilInfo_t pinfo_x;
     int32_t halo_extents_x[3]{1, 1, 1};
-    CHECK_CUDECOMP_EXIT(cudecompGetPencilInfo(handle, grid_desc, &pinfo_x, 0, halo_extents_x));
+    CHECK_CUDECOMP_EXIT(cudecompGetPencilInfo(handle, grid_desc, &pinfo_x, 0, halo_extents_x, nullptr));
 
     // Get Y-pencil information
     cudecompPencilInfo_t pinfo_y;
-    CHECK_CUDECOMP_EXIT(cudecompGetPencilInfo(handle, grid_desc, &pinfo_y, 1, nullptr));
+    CHECK_CUDECOMP_EXIT(cudecompGetPencilInfo(handle, grid_desc, &pinfo_y, 1, nullptr, nullptr));
 
     // Get Z-pencil information
     cudecompPencilInfo_t pinfo_z;
-    CHECK_CUDECOMP_EXIT(cudecompGetPencilInfo(handle, grid_desc, &pinfo_z, 2, nullptr));
+    CHECK_CUDECOMP_EXIT(cudecompGetPencilInfo(handle, grid_desc, &pinfo_z, 2, nullptr, nullptr));
 
   .. code-tab:: fortran
 
@@ -572,8 +572,10 @@ Transposing the data
 --------------------
 Now, we can use cuDecomp's transposition routines to transpose our data. In these calls, we are using
 the :code:`data_d` array as both input and output (in-place), but you can also use distinct input and output buffers for
-out-of-place operations. For the transposes between :math:`Y`- and :math:`Z`-pencils, we can pass
-null pointers to the halo extent arguments to the routines to ignore them in C/C++, or leave them unspecified in Fortran.
+out-of-place operations. For the transposes between :math:`Y`- and :math:`Z`-pencils, we pass
+null pointers to the halo extent arguments to the routines in C/C++, or leave them unspecified in Fortran.
+For all transposes, we pass null pointers to the padding arguments to the routines to disable padding in C/C++, or leave
+them unspecified in Fortran.
 
 .. tabs::
 
@@ -581,19 +583,19 @@ null pointers to the halo extent arguments to the routines to ignore them in C/C
 
     // Transpose from X-pencils to Y-pencils.
     CHECK_CUDECOMP_EXIT(cudecompTransposeXToY(handle, grid_desc, data_d, data_d, transpose_work_d,
-                                              CUDECOMP_DOUBLE, pinfo_x.halo_extents, nullptr, 0));
+                                              CUDECOMP_DOUBLE, pinfo_x.halo_extents, nullptr, nullptr, nullptr, 0));
 
     // Transpose from Y-pencils to Z-pencils.
     CHECK_CUDECOMP_EXIT(cudecompTransposeYToZ(handle, grid_desc, data_d, data_d, transpose_work_d,
-                                              CUDECOMP_DOUBLE, nullptr, nullptr, 0));
+                                              CUDECOMP_DOUBLE, nullptr, nullptr, nullptr, nullptr, 0));
 
     // Transpose from Z-pencils to Y-pencils.
     CHECK_CUDECOMP_EXIT(cudecompTransposeZToY(handle, grid_desc, data_d, data_d, transpose_work_d,
-                                              CUDECOMP_DOUBLE, nullptr, nullptr, 0));
+                                              CUDECOMP_DOUBLE, nullptr, nullptr, nullptr, nullptr, 0));
 
     // Transpose from Y-pencils to X-pencils.
     CHECK_CUDECOMP_EXIT(cudecompTransposeYToX(handle, grid_desc, data_d, data_d, transpose_work_d,
-                                              CUDECOMP_DOUBLE, nullptr, pinfo_x.halo_extents, 0));
+                                              CUDECOMP_DOUBLE, nullptr, pinfo_x.halo_extents, nullptr, nullptr, 0));
 
   .. code-tab:: fortran
 
@@ -618,6 +620,8 @@ Updating halo regions
 In this example, we have halos for the :math:`X`-pencils only. We can use cuDecomp's halo update
 routines to update the halo regions of this pencil in the three domain directions. In this example,
 we set the :code:`halo_periods` argument to enable periodic halos along all directions.
+We pass null pointers to the padding arguments to the routines to disable padding in C/C++, or leave
+them unspecified in Fortran.
 
 .. tabs::
 
@@ -629,17 +633,17 @@ we set the :code:`halo_periods` argument to enable periodic halos along all dire
     // Update X-pencil halos in X direction
     CHECK_CUDECOMP_EXIT(cudecompUpdateHalosX(handle, grid_desc, data_d, halo_work_d,
                                              CUDECOMP_DOUBLE, pinfo_x.halo_extents, halo_periods,
-                                             0, 0));
+                                             0, nullptr, 0));
 
     // Update X-pencil halos in Y direction
     CHECK_CUDECOMP_EXIT(cudecompUpdateHalosX(handle, grid_desc, data_d, halo_work_d,
                                              CUDECOMP_DOUBLE, pinfo_x.halo_extents, halo_periods,
-                                             1, 0));
+                                             1, nullptr, 0));
 
     // Update X-pencil halos in Z direction
     CHECK_CUDECOMP_EXIT(cudecompUpdateHalosX(handle, grid_desc, data_d, halo_work_d,
                                              CUDECOMP_DOUBLE, pinfo_x.halo_extents, halo_periods,
-                                             2, 0));
+                                             2, nullptr, 0));
 
   .. code-tab:: fortran
 
