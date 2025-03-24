@@ -37,9 +37,9 @@
 
 #include "internal/cudecomp_kernels.h"
 
-#define CUDECOMP_CUDA_NTHREADS (256)
-#define UNROLL_FACTOR (2)
-
+#define CUDECOMP_CUDA_NTHREADS (128)
+#define CUDECOMP_UNROLL_FACTOR (4)
+#define CUDECOMP_MIN_BLOCKS_PER_SM (16)
 
 namespace cudecomp {
 
@@ -156,7 +156,17 @@ void cudecomp_batched_d2d_memcpy_3d_nd_dispatch(const cudecompBatchedD2DMemcpy3D
   }
 
   int blocks_per_copy = (N + CUDECOMP_CUDA_NTHREADS - 1) / CUDECOMP_CUDA_NTHREADS;
-  blocks_per_copy = (blocks_per_copy + UNROLL_FACTOR - 1)  / UNROLL_FACTOR;
+  int blocks_per_copy_unroll = (blocks_per_copy + CUDECOMP_UNROLL_FACTOR - 1)  / CUDECOMP_UNROLL_FACTOR;
+  size_t total_blocks_unroll = params.ncopies * blocks_per_copy_unroll;
+
+  // Clamp minimum number of blocks from unrolling
+  int dev, num_sms;
+  CHECK_CUDA(cudaGetDevice(&dev));
+  CHECK_CUDA(cudaDeviceGetAttribute(&num_sms, cudaDevAttrMultiProcessorCount, dev));
+
+  if (total_blocks_unroll > CUDECOMP_MIN_BLOCKS_PER_SM * num_sms) {
+    blocks_per_copy = blocks_per_copy_unroll;
+  }
 
   switch (src_nd) {
     case 1:
