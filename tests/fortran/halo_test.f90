@@ -222,12 +222,12 @@ module halo_CUDECOMP_DOUBLE_COMPLEX_mod
     ! Command line arguments
     integer :: gx, gy, gz
     integer :: comm_backend
-    logical :: axis_contiguous(3)
+    logical :: axis_contiguous
     integer :: gdims_dist(3)
     integer :: halo_extents(3)
     logical :: halo_periods(3)
     integer :: padding(3)
-    integer :: mem_order(3, 3)
+    integer :: mem_order(3)
     logical :: use_managed_memory
     integer :: pr, pc
     integer :: axis
@@ -275,12 +275,12 @@ module halo_CUDECOMP_DOUBLE_COMPLEX_mod
     pr = 0
     pc = 0
     comm_backend = 0
-    axis_contiguous(:) = .false.
+    axis_contiguous = .false.
     gdims_dist(:) = 0
     halo_extents(:) = 1
     halo_periods(:) = .true.
     padding(:) = 0
-    mem_order(:, :) = -1
+    mem_order(:) = -1
     axis = 1
     use_managed_memory = .false.
 
@@ -316,20 +316,10 @@ module halo_CUDECOMP_DOUBLE_COMPLEX_mod
           read(args(i+1), *) arg
           read(arg, *) pc
           skip_count = 1
-        case('--acx')
+        case('--ac')
           read(args(i+1), *) arg
           read(arg, *) iarg
-          axis_contiguous(1) = iarg
-          skip_count = 1
-        case('--acy')
-          read(args(i+1), *) arg
-          read(arg, *) iarg
-          axis_contiguous(2) = iarg
-          skip_count = 1
-        case('--acz')
-          read(args(i+1), *) arg
-          read(arg, *) iarg
-          axis_contiguous(3) = iarg
+          axis_contiguous = iarg
           skip_count = 1
         case('--gd')
           read(args(i+1), *) arg
@@ -384,15 +374,11 @@ module halo_CUDECOMP_DOUBLE_COMPLEX_mod
           read(arg, *) axis
           skip_count = 1
         case('--mem_order')
-          l = 1
           do j = 1, 3
-            do k = 1, 3
-              read(args(i+l), *) arg
-              read(arg, *) mem_order(k, j)
-              l = l + 1
-            enddo
+            read(args(i+j), *) arg
+            read(arg, *) mem_order(j)
           enddo
-          skip_count = 9
+          skip_count = 3
         case('-m')
           use_managed_memory = .true.
         case(' ')
@@ -421,8 +407,10 @@ module halo_CUDECOMP_DOUBLE_COMPLEX_mod
     gdims = [gx, gy, gz]
     config%gdims = gdims
     config%gdims_dist = gdims_dist
-    config%transpose_axis_contiguous = axis_contiguous
-    config%transpose_mem_order = mem_order
+    config%transpose_axis_contiguous(:) = axis_contiguous
+    config%transpose_mem_order(:, 1) = mem_order
+    config%transpose_mem_order(:, 2) = mem_order
+    config%transpose_mem_order(:, 3) = mem_order
 
     CHECK_CUDECOMP(cudecompGridDescAutotuneOptionsSetDefaults(options))
     options%halo_extents = halo_extents
