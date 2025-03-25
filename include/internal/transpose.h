@@ -160,7 +160,8 @@ template <typename T>
 static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, const cudecompGridDesc_t grid_desc,
                                T* input, T* output, T* work, const int32_t input_halo_extents_ptr[] = nullptr,
                                const int32_t output_halo_extents_ptr[] = nullptr, const int32_t input_padding_ptr[] = nullptr,
-                               const int32_t output_padding_ptr[] = nullptr, cudaStream_t stream = 0) {
+                               const int32_t output_padding_ptr[] = nullptr, const int32_t input_mem_order_ptr[] = nullptr,
+                               const int32_t output_mem_order_ptr[] = nullptr, cudaStream_t stream = 0) {
 
   std::array<int32_t, 3> input_halo_extents{};
   std::array<int32_t, 3> output_halo_extents{};
@@ -172,6 +173,11 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
   std::array<int32_t, 3> output_padding{};
   if (input_padding_ptr) std::copy(input_padding_ptr, input_padding_ptr + 3, input_padding.begin());
   if (output_padding_ptr) std::copy(output_padding_ptr, output_padding_ptr + 3, output_padding.begin());
+
+  std::array<int32_t, 3> input_mem_order{-1, -1, -1};
+  std::array<int32_t, 3> output_mem_order{-1, -1, -1};
+  if (input_mem_order_ptr) std::copy(input_mem_order_ptr, input_mem_order_ptr + 3, input_mem_order.begin());
+  if (output_mem_order_ptr) std::copy(output_mem_order_ptr, output_mem_order_ptr + 3, output_mem_order.begin());
 
   bool fwd = dir > 0;
 
@@ -208,11 +214,11 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
 
   // Get pencil info
   cudecompPencilInfo_t pinfo_a, pinfo_a_h;
-  CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_a, ax_a, nullptr, nullptr));
-  CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_a_h, ax_a, input_halo_extents.data(), input_padding.data()));
+  CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_a, ax_a, nullptr, nullptr, input_mem_order.data()));
+  CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_a_h, ax_a, input_halo_extents.data(), input_padding.data(), input_mem_order.data()));
   cudecompPencilInfo_t pinfo_b, pinfo_b_h;
-  CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_b, ax_b, nullptr, nullptr));
-  CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_b_h, ax_b, output_halo_extents.data(), output_padding.data()));
+  CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_b, ax_b, nullptr, nullptr, output_mem_order.data()));
+  CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_b_h, ax_b, output_halo_extents.data(), output_padding.data(), output_mem_order.data()));
 
   // Check if input and output orders are the same
   bool orders_equal = true;
@@ -732,10 +738,11 @@ template <typename T>
 void cudecompTransposeXToY(const cudecompHandle_t handle, const cudecompGridDesc_t grid_desc, T* input, T* output,
                            T* work, const int32_t input_halo_extents_ptr[] = nullptr,
                            const int32_t output_halo_extents_ptr[] = nullptr, const int32_t input_padding_ptr[] = nullptr,
-                           const int32_t output_padding_ptr[] = nullptr, cudaStream_t stream = 0) {
+                           const int32_t output_padding_ptr[] = nullptr, const int32_t input_mem_order_ptr[] = nullptr,
+                           const int32_t output_mem_order_ptr[] = nullptr, cudaStream_t stream = 0) {
   nvtx::rangePush("cudecompTransposeXToY");
   cudecompTranspose_(0, 1, handle, grid_desc, input, output, work, input_halo_extents_ptr, output_halo_extents_ptr,
-                     input_padding_ptr, output_padding_ptr, stream);
+                     input_padding_ptr, output_padding_ptr, input_mem_order_ptr, output_mem_order_ptr, stream);
   nvtx::rangePop();
 }
 
@@ -743,10 +750,11 @@ template <typename T>
 void cudecompTransposeYToZ(const cudecompHandle_t handle, const cudecompGridDesc_t grid_desc, T* input, T* output,
                            T* work, const int32_t input_halo_extents_ptr[] = nullptr,
                            const int32_t output_halo_extents_ptr[] = nullptr, const int32_t input_padding_ptr[] = nullptr,
-                           const int32_t output_padding_ptr[] = nullptr, cudaStream_t stream = 0) {
+                           const int32_t output_padding_ptr[] = nullptr, const int32_t input_mem_order_ptr[] = nullptr,
+                           const int32_t output_mem_order_ptr[] = nullptr, cudaStream_t stream = 0) {
   nvtx::rangePush("cudecompTransposeYToZ");
   cudecompTranspose_(1, 1, handle, grid_desc, input, output, work, input_halo_extents_ptr, output_halo_extents_ptr,
-                     input_padding_ptr, output_padding_ptr, stream);
+                     input_padding_ptr, output_padding_ptr, input_mem_order_ptr, output_mem_order_ptr, stream);
   nvtx::rangePop();
 }
 
@@ -754,10 +762,11 @@ template <typename T>
 void cudecompTransposeZToY(const cudecompHandle_t handle, const cudecompGridDesc_t grid_desc, T* input, T* output,
                            T* work, const int32_t input_halo_extents_ptr[] = nullptr,
                            const int32_t output_halo_extents_ptr[] = nullptr, const int32_t input_padding_ptr[] = nullptr,
-                           const int32_t output_padding_ptr[] = nullptr, cudaStream_t stream = 0) {
+                           const int32_t output_padding_ptr[] = nullptr, const int32_t input_mem_order_ptr[] = nullptr,
+                           const int32_t output_mem_order_ptr[] = nullptr, cudaStream_t stream = 0) {
   nvtx::rangePush("cudecompTransposeZToY");
   cudecompTranspose_(2, -1, handle, grid_desc, input, output, work, input_halo_extents_ptr, output_halo_extents_ptr,
-                     input_padding_ptr, output_padding_ptr, stream);
+                     input_padding_ptr, output_padding_ptr, input_mem_order_ptr, output_mem_order_ptr, stream);
   nvtx::rangePop();
 }
 
@@ -765,10 +774,11 @@ template <typename T>
 void cudecompTransposeYToX(const cudecompHandle_t handle, const cudecompGridDesc_t grid_desc, T* input, T* output,
                            T* work, const int32_t input_halo_extents_ptr[] = nullptr,
                            const int32_t output_halo_extents_ptr[] = nullptr, const int32_t input_padding_ptr[] = nullptr,
-                           const int32_t output_padding_ptr[] = nullptr, cudaStream_t stream = 0) {
+                           const int32_t output_padding_ptr[] = nullptr, const int32_t input_mem_order_ptr[] = nullptr,
+                           const int32_t output_mem_order_ptr[] = nullptr, cudaStream_t stream = 0) {
   nvtx::rangePush("cudecompTransposeYToX");
   cudecompTranspose_(1, -1, handle, grid_desc, input, output, work, input_halo_extents_ptr, output_halo_extents_ptr,
-                     input_padding_ptr, output_padding_ptr, stream);
+                     input_padding_ptr, output_padding_ptr, input_mem_order_ptr, output_mem_order_ptr, stream);
   nvtx::rangePop();
 }
 

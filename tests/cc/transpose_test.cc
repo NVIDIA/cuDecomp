@@ -207,6 +207,8 @@ static void usage(const char* pname) {
           "\t\tZ-pencil padding setting. (default: 0 0 0) \n"
           "\t--mem_order\n"
           "\t\ttranspose_mem_order setting. (default: unset) \n"
+          "\t--mem_order_override\n"
+          "\t\tmem_order per-op override settings. (default: unset) \n"
           "\t-m|--use-managed-memory\n"
           "\t\tFlag to test operation with managed memory.\n"
           "\t-o|--out-of-place\n"
@@ -233,6 +235,7 @@ struct transposeTestArgs {
   bool out_of_place = false;
   bool use_managed_memory = false;
   std::array<int, 9> mem_order{-1, -1, -1, -1, -1, -1, -1, -1, -1};
+  std::array<int, 9> mem_order_override{-1, -1, -1, -1, -1, -1, -1, -1, -1};
 };
 
 static transposeTestArgs parse_arguments(const std::string& arguments) {
@@ -262,13 +265,14 @@ static transposeTestArgs parse_arguments(const std::string& arguments) {
                                            {"pdy", required_argument, 0, '*'},
                                            {"pdz", required_argument, 0, '('},
                                            {"mem_order", required_argument, 0, 'q'},
+                                           {"mem_order_override", required_argument, 0, 'v'},
                                            {"out-of-place", no_argument, 0, 'o'},
                                            {"use-managed-memory", no_argument, 0, 'm'},
                                            {"help", no_argument, 0, 'h'},
                                            {0, 0, 0, 0}};
 
     int option_index = 0;
-    int ch = getopt_long(argc, argv, "x:y:z:b:r:c:1:2:3:4:7:8:9:&:*:(:q:omh", long_options, &option_index);
+    int ch = getopt_long(argc, argv, "x:y:z:b:r:c:1:2:3:4:7:8:9:&:*:(:q:v:omh", long_options, &option_index);
     if (ch == -1) break;
 
     switch (ch) {
@@ -337,6 +341,13 @@ static transposeTestArgs parse_arguments(const std::string& arguments) {
       optind--;
       for (int i = 0; i < 9; ++i) {
         args.mem_order[i] = atoi(argv[optind]);
+        optind++;
+      }
+      break;
+    case 'v':
+      optind--;
+      for (int i = 0; i < 9; ++i) {
+        args.mem_order_override[i] = atoi(argv[optind]);
         optind++;
       }
       break;
@@ -424,15 +435,18 @@ static int run_test(const std::string& arguments, bool silent) {
 
     // Get x-pencil information
     cudecompPencilInfo_t pinfo_x;
-    CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_x, 0, args.halo_extents_x.data(), args.padding_x.data()));
+    CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_x, 0, args.halo_extents_x.data(), args.padding_x.data(),
+                                         args.mem_order_override.data()));
 
     // Get y-pencil information
     cudecompPencilInfo_t pinfo_y;
-    CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_y, 1, args.halo_extents_y.data(), args.padding_y.data()));
+    CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_y, 1, args.halo_extents_y.data(), args.padding_y.data(),
+                                         args.mem_order_override.data() + 3));
 
     // Get z-pencil information
     cudecompPencilInfo_t pinfo_z;
-    CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_z, 2, args.halo_extents_z.data(), args.padding_z.data()));
+    CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_z, 2, args.halo_extents_z.data(), args.padding_z.data(),
+                                         args.mem_order_override.data() + 6));
 
     // Get workspace size
     int64_t workspace_num_elements;
@@ -508,7 +522,8 @@ static int run_test(const std::string& arguments, bool silent) {
 
     CHECK_CUDA(cudaMemset(work_d, 0, workspace_num_elements * dtype_size));
     CHECK_CUDECOMP(cudecompTransposeXToY(handle, grid_desc, input, output, work_d, get_cudecomp_datatype(real_t(0)),
-                                              pinfo_x.halo_extents, pinfo_y.halo_extents, pinfo_x.padding, pinfo_y.padding, 0));
+                                         pinfo_x.halo_extents, pinfo_y.halo_extents, pinfo_x.padding, pinfo_y.padding,
+                                         pinfo_x.order, pinfo_y.order, 0));
     CHECK_CUDA(cudaMemcpy(data.data(), output, data.size() * sizeof(*output), cudaMemcpyDeviceToHost));
     if (!compare_pencils(yref, data, pinfo_y)) {
       fprintf(stderr, "FAILED cudecompTransposeXToY\n");
@@ -519,7 +534,8 @@ static int run_test(const std::string& arguments, bool silent) {
 
     CHECK_CUDA(cudaMemset(work_d, 0, workspace_num_elements * dtype_size));
     CHECK_CUDECOMP(cudecompTransposeYToZ(handle, grid_desc, input, output, work_d, get_cudecomp_datatype(real_t(0)),
-                                              pinfo_y.halo_extents, pinfo_z.halo_extents, pinfo_y.padding, pinfo_z.padding, 0));
+                                         pinfo_y.halo_extents, pinfo_z.halo_extents, pinfo_y.padding, pinfo_z.padding,
+                                         pinfo_y.order, pinfo_z.order, 0));
     CHECK_CUDA(cudaMemcpy(data.data(), output, data.size() * sizeof(*data_d), cudaMemcpyDeviceToHost));
     if (!compare_pencils(zref, data, pinfo_z)) {
       fprintf(stderr, "FAILED cudecompTransposeYToZ\n");
@@ -530,7 +546,8 @@ static int run_test(const std::string& arguments, bool silent) {
 
     CHECK_CUDA(cudaMemset(work_d, 0, workspace_num_elements * dtype_size));
     CHECK_CUDECOMP(cudecompTransposeZToY(handle, grid_desc, input, output, work_d, get_cudecomp_datatype(real_t(0)),
-                                              pinfo_z.halo_extents, pinfo_y.halo_extents, pinfo_z.padding, pinfo_y.padding, 0));
+                                         pinfo_z.halo_extents, pinfo_y.halo_extents, pinfo_z.padding, pinfo_y.padding,
+                                         pinfo_z.order, pinfo_y.order, 0));
     CHECK_CUDA(cudaMemcpy(data.data(), output, data.size() * sizeof(*data_d), cudaMemcpyDeviceToHost));
     if (!compare_pencils(yref, data, pinfo_y)) {
       fprintf(stderr, "FAILED cudecompTransposeZToY\n");
@@ -541,7 +558,8 @@ static int run_test(const std::string& arguments, bool silent) {
 
     CHECK_CUDA(cudaMemset(work_d, 0, workspace_num_elements * dtype_size));
     CHECK_CUDECOMP(cudecompTransposeYToX(handle, grid_desc, input, output, work_d, get_cudecomp_datatype(real_t(0)),
-                                              pinfo_y.halo_extents, pinfo_x.halo_extents, pinfo_y.padding, pinfo_x.padding, 0));
+                                         pinfo_y.halo_extents, pinfo_x.halo_extents, pinfo_y.padding, pinfo_x.padding,
+                                         pinfo_y.order, pinfo_x.order, 0));
     CHECK_CUDA(cudaMemcpy(data.data(), output, data.size() * sizeof(*data_d), cudaMemcpyDeviceToHost));
     if (!compare_pencils(xref, data, pinfo_x)) {
       fprintf(stderr, "FAILED cudecompTransposeYToX\n");

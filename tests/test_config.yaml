@@ -7,6 +7,8 @@ base: &base
   apply_skips: None
   use_single_pdim: False
   is_halo_test: False
+  test_mem_order: False
+  test_mem_order_override: False
 
 transpose_test_base: &transpose_test_base
   <<: *base
@@ -107,6 +109,27 @@ transpose_test_ac: &transpose_test_ac
 
   test_mem_order: False
 
+transpose_test_mem_order_override: &transpose_test_mem_order_override
+  <<: *transpose_test_base
+  args : ['backend',
+          'acx', 'acy', 'acz',
+          'gx', 'gy', 'gz',
+          'gd',
+          'hex' ,'hey', 'hez',
+          'pdx', 'pdy', 'pdz']
+
+  backend: [1] # Limit this testing to one backend
+  dtypes: ['R32'] # Limit to one data type
+
+  acx: [0]
+  acy: [0]
+  acz: [0]
+
+  test_mem_order: False
+  test_mem_order_override: True
+  out_of_place: [False]
+  managed_memory : [False]
+
 transpose_test_cc:
   <<: *transpose_test
   executable_prefix: 'cc/transpose_test'
@@ -129,6 +152,10 @@ transpose_test_mix_cc:
 
 transpose_test_ac_cc:
   <<: *transpose_test_ac
+  executable_prefix: 'cc/transpose_test'
+
+transpose_test_mem_order_override_cc:
+  <<: *transpose_test_mem_order_override
   executable_prefix: 'cc/transpose_test'
 
 transpose_test_fortran:
@@ -158,6 +185,11 @@ transpose_test_mix_fortran:
 
 transpose_test_ac_fortran:
   <<: *transpose_test_ac
+  executable_prefix: 'fortran/transpose_test'
+  fortran_indexing: true
+
+transpose_test_mem_order_override_fortran:
+  <<: *transpose_test_mem_order_override
   executable_prefix: 'fortran/transpose_test'
   fortran_indexing: true
 
@@ -278,6 +310,25 @@ halo_test_ac: &halo_test_ac
 
   test_mem_order: False
 
+halo_test_mem_order_override: &halo_test_mem_order_override
+  <<: *halo_test_base
+  args : ['backend',
+          'gx', 'gy', 'gz',
+          'ac', 'gd',
+          'hex' ,'hey', 'hez',
+          'hpx', 'hpy', 'hpz',
+          'pdx', 'pdy', 'pdz',
+          'ax']
+
+  backend: [1] # Limit this testing to one backend
+  dtypes: ['R32'] # Limit to one data type
+
+  ac: [0]
+
+  test_mem_order: False
+  test_mem_order_override: True
+  managed_memory : [False]
+
 halo_test_cc:
   <<: *halo_test
   executable_prefix: 'cc/halo_test'
@@ -300,6 +351,10 @@ halo_test_mix_cc:
 
 halo_test_ac_cc:
   <<: *halo_test_ac
+  executable_prefix: 'cc/halo_test'
+
+halo_test_mem_order_override_cc:
+  <<: *halo_test_mem_order_override
   executable_prefix: 'cc/halo_test'
 
 halo_test_fortran:
@@ -334,6 +389,12 @@ halo_test_mix_fortran:
 
 halo_test_ac_fortran:
   <<: *halo_test_ac
+  ax: [1, 2, 3]
+  executable_prefix: 'fortran/halo_test'
+  fortran_indexing: true
+
+halo_test_mem_order_override_fortran:
+  <<: *halo_test_mem_order_override
   ax: [1, 2, 3]
   executable_prefix: 'fortran/halo_test'
   fortran_indexing: true

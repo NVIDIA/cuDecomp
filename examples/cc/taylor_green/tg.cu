@@ -381,16 +381,16 @@ public:
     cudecompGridDescCreate(handle, &grid_desc_r, &config, nullptr);
 
     // Get x-pencil information (real)
-    cudecompGetPencilInfo(handle, grid_desc_r, &pinfo_x_r, 0, nullptr, nullptr);
+    cudecompGetPencilInfo(handle, grid_desc_r, &pinfo_x_r, 0, nullptr, nullptr, nullptr);
 
     // Get x-pencil information (complex)
-    cudecompGetPencilInfo(handle, grid_desc_c, &pinfo_x_c, 0, nullptr, nullptr);
+    cudecompGetPencilInfo(handle, grid_desc_c, &pinfo_x_c, 0, nullptr, nullptr, nullptr);
 
     // Get y-pencil information (complex)
-    cudecompGetPencilInfo(handle, grid_desc_c, &pinfo_y_c, 1, nullptr, nullptr);
+    cudecompGetPencilInfo(handle, grid_desc_c, &pinfo_y_c, 1, nullptr, nullptr, nullptr);
 
     // Get z-pencil information (complex)
-    cudecompGetPencilInfo(handle, grid_desc_c, &pinfo_z_c, 2, nullptr, nullptr);
+    cudecompGetPencilInfo(handle, grid_desc_c, &pinfo_z_c, 2, nullptr, nullptr, nullptr);
 
     // Get workspace size (only complex workspace required)
     int64_t num_elements_work_c;
@@ -665,10 +665,10 @@ private:
     for (int i = 0; i < 3; ++i) {
       CHECK_CUFFT_EXIT(cufftXtExec(cufft_plan_r2c_x, U_r[i], U_c[i], CUFFT_FORWARD));
       cudecompTransposeXToY(handle, grid_desc_c, U_c[i], U_c[i], work_c, get_cudecomp_datatype(complex_t(0)), nullptr,
-                            nullptr, nullptr, nullptr, 0);
+                            nullptr, nullptr, nullptr, nullptr, nullptr, 0);
       CHECK_CUFFT_EXIT(cufftXtExec(cufft_plan_c2c_y, U_c[i], U_c[i], CUFFT_FORWARD));
       cudecompTransposeYToZ(handle, grid_desc_c, U_c[i], U_c[i], work_c, get_cudecomp_datatype(complex_t(0)), nullptr,
-                            nullptr, nullptr, nullptr, 0);
+                            nullptr, nullptr, nullptr, nullptr, nullptr, 0);
       CHECK_CUFFT_EXIT(cufftXtExec(cufft_plan_c2c_z, U_c[i], U_c[i], CUFFT_FORWARD));
     }
   }
@@ -677,10 +677,10 @@ private:
     for (int i = 0; i < 3; ++i) {
       CHECK_CUFFT_EXIT(cufftXtExec(cufft_plan_c2c_z, U_c[i], U_c[i], CUFFT_INVERSE));
       cudecompTransposeZToY(handle, grid_desc_c, U_c[i], U_c[i], work_c, get_cudecomp_datatype(complex_t(0)), nullptr,
-                            nullptr, nullptr, nullptr, 0);
+                            nullptr, nullptr, nullptr, nullptr, nullptr, 0);
       CHECK_CUFFT_EXIT(cufftXtExec(cufft_plan_c2c_y, U_c[i], U_c[i], CUFFT_INVERSE));
       cudecompTransposeYToX(handle, grid_desc_c, U_c[i], U_c[i], work_c, get_cudecomp_datatype(complex_t(0)), nullptr,
-                            nullptr, nullptr, nullptr, 0);
+                            nullptr, nullptr, nullptr, nullptr, nullptr, 0);
       CHECK_CUFFT_EXIT(cufftXtExec(cufft_plan_c2r_x, U_c[i], U_r[i], CUFFT_INVERSE));
     }
   }

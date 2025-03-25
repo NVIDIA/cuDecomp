@@ -259,7 +259,7 @@ module cudecomp
 
   ! General functions
   interface
-    function cudecompGetPencilInfoC(handle, grid_desc, pencil_info, axis, halo_extents, padding) &
+    function cudecompGetPencilInfoC(handle, grid_desc, pencil_info, axis, halo_extents, padding, mem_order) &
       bind(C, name="cudecompGetPencilInfo") result(res)
       import
       type(cudecompHandle), value :: handle
@@ -267,6 +267,7 @@ module cudecomp
       integer(c_int32_t), value :: axis
       integer(c_int32_t) :: halo_extents(3)
       integer(c_int32_t) :: padding(3)
+      integer(c_int32_t) :: mem_order(3)
       type(cudecompPencilInfo) :: pencil_info
       integer(c_int) :: res
     end function cudecompGetPencilInfoC
@@ -383,7 +384,7 @@ module cudecomp
   interface
     function cudecompTransposeXToY_C(handle, grid_desc, input, output, work, dtype, &
                                      input_halo_extents, output_halo_extents, input_padding, &
-                                     output_padding, stream) &
+                                     output_padding, input_mem_order, output_mem_order, stream) &
       bind(C, name="cudecompTransposeXToY") result(res)
       import
       type(cudecompHandle), value :: handle
@@ -393,6 +394,7 @@ module cudecomp
       integer(c_int), value :: dtype
       integer(c_int32_t) :: input_halo_extents(3), output_halo_extents(3)
       integer(c_int32_t) :: input_padding(3), output_padding(3)
+      integer(c_int32_t) :: input_mem_order(3), output_mem_order(3)
       integer(cuda_stream_kind), value :: stream
       integer(c_int) :: res
     end function cudecompTransposeXToY_C
@@ -401,7 +403,7 @@ module cudecomp
   interface
     function cudecompTransposeYToZ_C(handle, grid_desc, input, output, work, dtype, &
                                      input_halo_extents, output_halo_extents, input_padding, &
-                                     output_padding, stream) &
+                                     output_padding, input_mem_order, output_mem_order, stream) &
       bind(C, name="cudecompTransposeYToZ") result(res)
       import
       type(cudecompHandle), value :: handle
@@ -411,6 +413,7 @@ module cudecomp
       integer(c_int), value :: dtype
       integer(c_int32_t) :: input_halo_extents(3), output_halo_extents(3)
       integer(c_int32_t) :: input_padding(3), output_padding(3)
+      integer(c_int32_t) :: input_mem_order(3), output_mem_order(3)
       integer(cuda_stream_kind), value :: stream
       integer(c_int) :: res
     end function cudecompTransposeYToZ_C
@@ -419,7 +422,7 @@ module cudecomp
   interface
     function cudecompTransposeZToY_C(handle, grid_desc, input, output, work, dtype, &
                                      input_halo_extents, output_halo_extents, input_padding, &
-                                     output_padding, stream) &
+                                     output_padding, input_mem_order, output_mem_order, stream) &
        bind(C, name="cudecompTransposeZToY") result(res)
       import
       type(cudecompHandle), value :: handle
@@ -429,6 +432,7 @@ module cudecomp
       integer(c_int), value :: dtype
       integer(c_int32_t) :: input_halo_extents(3), output_halo_extents(3)
       integer(c_int32_t) :: input_padding(3), output_padding(3)
+      integer(c_int32_t) :: input_mem_order(3), output_mem_order(3)
       integer(cuda_stream_kind), value :: stream
       integer(c_int) :: res
     end function cudecompTransposeZToY_C
@@ -437,7 +441,7 @@ module cudecomp
   interface
     function cudecompTransposeYToX_C(handle, grid_desc, input, output, work, dtype, &
                                      input_halo_extents, output_halo_extents, input_padding, &
-                                     output_padding, stream) &
+                                     output_padding, input_mem_order, output_mem_order, stream) &
       bind(C, name="cudecompTransposeYToX") result(res)
       import
       type(cudecompHandle), value :: handle
@@ -447,6 +451,7 @@ module cudecomp
       integer(c_int), value :: dtype
       integer(c_int32_t) :: input_halo_extents(3), output_halo_extents(3)
       integer(c_int32_t) :: input_padding(3), output_padding(3)
+      integer(c_int32_t) :: input_mem_order(3), output_mem_order(3)
       integer(cuda_stream_kind), value :: stream
       integer(c_int) :: res
     end function cudecompTransposeYToX_C
@@ -455,7 +460,7 @@ module cudecomp
   ! Halo functions
   interface
     function cudecompUpdateHalosX_C(handle, grid_desc, input, work, dtype, &
-                                    halo_extents, halo_periods, dim, padding, stream) &
+                                    halo_extents, halo_periods, dim, padding, mem_order, stream) &
       bind(C, name="cudecompUpdateHalosX") result(res)
       import
       type(cudecompHandle), value :: handle
@@ -467,6 +472,7 @@ module cudecomp
       logical(c_bool) :: halo_periods(3)
       integer(c_int32_t), value :: dim
       integer(c_int32_t) :: padding(3)
+      integer(c_int32_t) :: mem_order(3)
       integer(cuda_stream_kind), value :: stream
       integer(c_int) :: res
     end function cudecompUpdateHalosX_C
@@ -474,7 +480,7 @@ module cudecomp
 
   interface
     function cudecompUpdateHalosY_C(handle, grid_desc, input, work, dtype, &
-                                    halo_extents, halo_periods, dim, padding, stream) &
+                                    halo_extents, halo_periods, dim, padding, mem_order, stream) &
       bind(C, name="cudecompUpdateHalosY") result(res)
       import
       type(cudecompHandle), value :: handle
@@ -486,6 +492,7 @@ module cudecomp
       logical(c_bool) :: halo_periods(3)
       integer(c_int32_t), value :: dim
       integer(c_int32_t) :: padding(3)
+      integer(c_int32_t) :: mem_order(3)
       integer(cuda_stream_kind), value :: stream
       integer(c_int) :: res
     end function cudecompUpdateHalosY_C
@@ -493,7 +500,7 @@ module cudecomp
 
   interface
     function cudecompUpdateHalosZ_C(handle, grid_desc, input, work, dtype, &
-                                    halo_extents, halo_periods, dim, padding, stream) &
+                                    halo_extents, halo_periods, dim, padding, mem_order, stream) &
       bind(C, name="cudecompUpdateHalosZ") result(res)
       import
       type(cudecompHandle), value :: handle
@@ -505,6 +512,7 @@ module cudecomp
       logical(c_bool) :: halo_periods(3)
       integer(c_int32_t), value :: dim
       integer(c_int32_t) :: padding(3)
+      integer(c_int32_t) :: mem_order(3)
       integer(cuda_stream_kind), value :: stream
       integer(c_int) :: res
     end function cudecompUpdateHalosZ_C
@@ -606,24 +614,28 @@ contains
   end function cudecompGridDescCreate
 
   ! General functions
-  function cudecompGetPencilInfo(handle, grid_desc, pencil_info, axis, halo_extents, padding) result(res)
+  function cudecompGetPencilInfo(handle, grid_desc, pencil_info, axis, halo_extents, padding, mem_order) result(res)
     implicit none
     type(cudecompHandle) :: handle
     type(cudecompGridDesc) :: grid_desc
     integer :: axis  ! unit offset, so x/y/z = 1/2/3
     integer, optional:: halo_extents(3)
     integer, optional:: padding(3)
+    integer, optional:: mem_order(3)
     type(cudecompPencilInfo) :: pencil_info  ! res%order is unit offset, x/y/z = 1/2/3
     integer(c_int) :: res
 
     integer :: halo_extents_(3)
     integer :: padding_(3)
+    integer :: mem_order_(3)
 
     halo_extents_(:) = [0, 0, 0]
     padding_(:) = [0, 0, 0]
+    mem_order_(:) = [-1, -1, -1]
     if (present(halo_extents)) halo_extents_ = halo_extents
     if (present(padding)) padding_ = padding
-    res = cudecompGetPencilInfoC(handle, grid_desc, pencil_info, axis - 1, halo_extents_, padding_)
+    if (present(mem_order)) mem_order_ = mem_order - 1 ! update for C indexing
+    res = cudecompGetPencilInfoC(handle, grid_desc, pencil_info, axis - 1, halo_extents_, padding_, mem_order_)
     ! Update entries for Fortran indexing
     pencil_info%order = pencil_info%order + 1
     pencil_info%lo = pencil_info%lo + 1
@@ -803,7 +815,7 @@ contains
   ! Transpose functions
   function cudecompTransposeXToY(handle, grid_desc, &
        input, output, work, dtype, input_halo_extents, output_halo_extents, &
-       input_padding, output_padding, stream) result(res)
+       input_padding, output_padding, input_mem_order, output_mem_order, stream) result(res)
     implicit none
     type(cudecompHandle) :: handle
     type(cudecompGridDesc) :: grid_desc
@@ -815,6 +827,8 @@ contains
     integer, optional :: output_halo_extents(3)
     integer, optional :: input_padding(3)
     integer, optional :: output_padding(3)
+    integer, optional :: input_mem_order(3)
+    integer, optional :: output_mem_order(3)
     integer(c_int) :: res
 
     integer(cuda_stream_kind) :: stream_
@@ -822,25 +836,31 @@ contains
     integer :: output_halo_extents_(3)
     integer :: input_padding_(3)
     integer :: output_padding_(3)
+    integer :: input_mem_order_(3)
+    integer :: output_mem_order_(3)
 
     stream_ = 0
     input_halo_extents_(:) = [0, 0, 0]
     output_halo_extents_(:) = [0, 0, 0]
     input_padding_(:) = [0, 0, 0]
     output_padding_(:) = [0, 0, 0]
+    input_mem_order_(:) = [-1, -1, -1]
+    output_mem_order_(:) = [-1, -1, -1]
     if (present(stream)) stream_ = stream
     if (present(input_halo_extents)) input_halo_extents_ = input_halo_extents
     if (present(output_halo_extents)) output_halo_extents_ = output_halo_extents
     if (present(input_padding)) input_padding_ = input_padding
     if (present(output_padding)) output_padding_ = output_padding
+    if (present(input_mem_order)) input_mem_order_ = input_mem_order - 1
+    if (present(output_mem_order)) output_mem_order_ = output_mem_order - 1
     res = cudecompTransposeXToY_C(handle, grid_desc, &
           input, output, work, dtype, input_halo_extents_, output_halo_extents_, &
-          input_padding_, output_padding_, stream_)
+          input_padding_, output_padding_, input_mem_order_, output_mem_order_, stream_)
   end function cudecompTransposeXToY
 
   function cudecompTransposeYToZ(handle, grid_desc, &
        input, output, work, dtype, input_halo_extents, output_halo_extents, &
-       input_padding, output_padding, stream) result(res)
+       input_padding, output_padding, input_mem_order, output_mem_order, stream) result(res)
     implicit none
     type(cudecompHandle) :: handle
     type(cudecompGridDesc) :: grid_desc
@@ -852,6 +872,8 @@ contains
     integer, optional :: output_halo_extents(3)
     integer, optional :: input_padding(3)
     integer, optional :: output_padding(3)
+    integer, optional :: input_mem_order(3)
+    integer, optional :: output_mem_order(3)
     integer(c_int) :: res
 
     integer(cuda_stream_kind) :: stream_
@@ -859,25 +881,31 @@ contains
     integer :: output_halo_extents_(3)
     integer :: input_padding_(3)
     integer :: output_padding_(3)
+    integer :: input_mem_order_(3)
+    integer :: output_mem_order_(3)
 
     stream_ = 0
     input_halo_extents_(:) = [0, 0, 0]
     output_halo_extents_(:) = [0, 0, 0]
     input_padding_(:) = [0, 0, 0]
     output_padding_(:) = [0, 0, 0]
+    input_mem_order_(:) = [-1, -1, -1]
+    output_mem_order_(:) = [-1, -1, -1]
     if (present(stream)) stream_ = stream
     if (present(input_halo_extents)) input_halo_extents_ = input_halo_extents
     if (present(output_halo_extents)) output_halo_extents_ = output_halo_extents
     if (present(input_padding)) input_padding_ = input_padding
     if (present(output_padding)) output_padding_ = output_padding
+    if (present(input_mem_order)) input_mem_order_ = input_mem_order - 1
+    if (present(output_mem_order)) output_mem_order_ = output_mem_order - 1
     res = cudecompTransposeYToZ_C(handle, grid_desc, &
           input, output, work, dtype, input_halo_extents_, output_halo_extents_, &
-          input_padding_, output_padding_, stream_)
+          input_padding_, output_padding_, input_mem_order_, output_mem_order_, stream_)
   end function cudecompTransposeYToZ
 
   function cudecompTransposeZToY(handle, grid_desc, &
        input, output, work, dtype, input_halo_extents, output_halo_extents, &
-       input_padding, output_padding, stream) result(res)
+       input_padding, output_padding, input_mem_order, output_mem_order, stream) result(res)
     implicit none
     type(cudecompHandle) :: handle
     type(cudecompGridDesc) :: grid_desc
@@ -889,6 +917,8 @@ contains
     integer, optional :: output_halo_extents(3)
     integer, optional :: input_padding(3)
     integer, optional :: output_padding(3)
+    integer, optional :: input_mem_order(3)
+    integer, optional :: output_mem_order(3)
     integer(c_int) :: res
 
     integer(cuda_stream_kind) :: stream_
@@ -896,25 +926,31 @@ contains
     integer :: output_halo_extents_(3)
     integer :: input_padding_(3)
     integer :: output_padding_(3)
+    integer :: input_mem_order_(3)
+    integer :: output_mem_order_(3)
 
     stream_ = 0
     input_halo_extents_(:) = [0, 0, 0]
     output_halo_extents_(:) = [0, 0, 0]
     input_padding_(:) = [0, 0, 0]
     output_padding_(:) = [0, 0, 0]
+    input_mem_order_(:) = [-1, -1, -1]
+    output_mem_order_(:) = [-1, -1, -1]
     if (present(stream)) stream_ = stream
     if (present(input_halo_extents)) input_halo_extents_ = input_halo_extents
     if (present(output_halo_extents)) output_halo_extents_ = output_halo_extents
     if (present(input_padding)) input_padding_ = input_padding
     if (present(output_padding)) output_padding_ = output_padding
+    if (present(input_mem_order)) input_mem_order_ = input_mem_order - 1
+    if (present(output_mem_order)) output_mem_order_ = output_mem_order - 1
     res = cudecompTransposeZToY_C(handle, grid_desc, &
           input, output, work, dtype, input_halo_extents_, output_halo_extents_, &
-          input_padding_, output_padding_, stream_)
+          input_padding_, output_padding_, input_mem_order_, output_mem_order_, stream_)
   end function cudecompTransposeZToY
 
   function cudecompTransposeYToX(handle, grid_desc, &
        input, output, work, dtype, input_halo_extents, output_halo_extents, &
-       input_padding, output_padding ,stream) result(res)
+       input_padding, output_padding, input_mem_order, output_mem_order, stream) result(res)
     implicit none
     type(cudecompHandle) :: handle
     type(cudecompGridDesc) :: grid_desc
@@ -926,6 +962,8 @@ contains
     integer, optional :: output_halo_extents(3)
     integer, optional :: input_padding(3)
     integer, optional :: output_padding(3)
+    integer, optional :: input_mem_order(3)
+    integer, optional :: output_mem_order(3)
     integer(c_int) :: res
 
     integer(cuda_stream_kind) :: stream_
@@ -933,26 +971,32 @@ contains
     integer :: output_halo_extents_(3)
     integer :: input_padding_(3)
     integer :: output_padding_(3)
+    integer :: input_mem_order_(3)
+    integer :: output_mem_order_(3)
 
     stream_ = 0
     input_halo_extents_(:) = [0, 0, 0]
     output_halo_extents_(:) = [0, 0, 0]
     input_padding_(:) = [0, 0, 0]
     output_padding_(:) = [0, 0, 0]
+    input_mem_order_(:) = [-1, -1, -1]
+    output_mem_order_(:) = [-1, -1, -1]
     if (present(stream)) stream_ = stream
     if (present(input_halo_extents)) input_halo_extents_ = input_halo_extents
     if (present(output_halo_extents)) output_halo_extents_ = output_halo_extents
     if (present(input_padding)) input_padding_ = input_padding
     if (present(output_padding)) output_padding_ = output_padding
+    if (present(input_mem_order)) input_mem_order_ = input_mem_order - 1
+    if (present(output_mem_order)) output_mem_order_ = output_mem_order - 1
     res = cudecompTransposeYToX_C(handle, grid_desc, &
           input, output, work, dtype, input_halo_extents_, output_halo_extents_, &
-          input_padding_, output_padding_, stream_)
+          input_padding_, output_padding_, input_mem_order_, output_mem_order_, stream_)
   end function cudecompTransposeYToX
 
   ! Halo functions
   function cudecompUpdateHalosX(handle, grid_desc, &
        input, work, dtype, halo_extents, halo_periods, &
-       dim, padding, stream) result(res)
+       dim, padding, mem_order, stream) result(res)
     implicit none
     type(cudecompHandle) :: handle
     type(cudecompGridDesc) :: grid_desc
@@ -963,27 +1007,31 @@ contains
     logical :: halo_periods(3)
     integer :: dim
     integer, optional :: padding(3)
+    integer, optional :: mem_order(3)
     integer(cuda_stream_kind), optional :: stream
     integer(c_int) :: res
 
     integer(cuda_stream_kind) :: stream_
     logical(c_bool) :: halo_periods_c(3)
     integer :: padding_(3)
+    integer :: mem_order_(3)
 
     halo_periods_c(:) = halo_periods
 
     stream_ = 0
     padding_ = [0, 0, 0]
+    mem_order_ = [-1, -1, -1]
     if (present(stream)) stream_ = stream
     if (present(padding)) padding_ = padding
+    if (present(mem_order)) mem_order_ = mem_order - 1
     res = cudecompUpdateHalosX_C(handle, grid_desc, &
           input, work, dtype, halo_extents, halo_periods_c, &
-          dim - 1, padding_, stream_)
+          dim - 1, padding_, mem_order_, stream_)
   end function cudecompUpdateHalosX
 
   function cudecompUpdateHalosY(handle, grid_desc, &
        input, work, dtype, halo_extents, halo_periods, &
-       dim, padding, stream) result(res)
+       dim, padding, mem_order, stream) result(res)
     implicit none
     type(cudecompHandle) :: handle
     type(cudecompGridDesc) :: grid_desc
@@ -994,27 +1042,31 @@ contains
     logical :: halo_periods(3)
     integer :: dim
     integer, optional :: padding(3)
+    integer, optional :: mem_order(3)
     integer(cuda_stream_kind), optional :: stream
     integer(c_int) :: res
 
     integer(cuda_stream_kind) :: stream_
     logical(c_bool) :: halo_periods_c(3)
     integer :: padding_(3)
+    integer :: mem_order_(3)
 
     halo_periods_c(:) = halo_periods
 
     stream_ = 0
     padding_ = [0, 0, 0]
+    mem_order_ = [-1, -1, -1]
     if (present(stream)) stream_ = stream
     if (present(padding)) padding_ = padding
+    if (present(mem_order)) mem_order_ = mem_order - 1
     res = cudecompUpdateHalosY_C(handle, grid_desc, &
           input, work, dtype, halo_extents, halo_periods_c, &
-          dim - 1, padding_, stream_)
+          dim - 1, padding_, mem_order_, stream_)
   end function cudecompUpdateHalosY
 
   function cudecompUpdateHalosZ(handle, grid_desc, &
        input, work, dtype, halo_extents, halo_periods, &
-       dim, padding, stream) result(res)
+       dim, padding, mem_order, stream) result(res)
     implicit none
     type(cudecompHandle) :: handle
     type(cudecompGridDesc) :: grid_desc
@@ -1025,22 +1077,26 @@ contains
     logical :: halo_periods(3)
     integer :: dim
     integer, optional :: padding(3)
+    integer, optional :: mem_order(3)
     integer(cuda_stream_kind), optional :: stream
     integer(c_int) :: res
 
     integer(cuda_stream_kind) :: stream_
     logical(c_bool) :: halo_periods_c(3)
     integer :: padding_(3)
+    integer :: mem_order_(3)
 
     halo_periods_c(:) = halo_periods
 
     stream_ = 0
     padding_ = [0, 0, 0]
+    mem_order_ = [-1, -1, -1]
     if (present(stream)) stream_ = stream
     if (present(padding)) padding_ = padding
+    if (present(mem_order)) mem_order_ = mem_order - 1
     res = cudecompUpdateHalosZ_C(handle, grid_desc, &
           input, work, dtype, halo_extents, halo_periods_c, &
-          dim - 1, padding, stream_)
+          dim - 1, padding, mem_order_, stream_)
   end function cudecompUpdateHalosZ
 
   ! Helper function to copy string

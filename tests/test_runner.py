@@ -94,6 +94,10 @@ def generate_command_lines(config, args):
     config['args'].append("mem_order")
     config['mem_order'] = generate_mem_order_args(not config["fortran_indexing"], config["is_halo_test"])
 
+  if (config["test_mem_order_override"]):
+    config['args'].append("mem_order_override")
+    config['mem_order_override'] = generate_mem_order_args(not config["fortran_indexing"], config["is_halo_test"])
+
   cmds = []
   prs = get_factors(args.ngpu)
   if len(prs) > 3:

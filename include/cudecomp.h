@@ -284,12 +284,15 @@ cudecompResult_t cudecompGridDescAutotuneOptionsSetDefaults(cudecompGridDescAuto
  * @param[in] padding An array of three integers to define padding of the pencil, in global order. The i-th entry
  * in this array should contain the number of elements to treat as padding in the i-th global domain axis. If no padding is
  * necesary, a NULL pointer can be provided in place of this array.
+ * @param[in] mem_order An array of three integers to override the memory ordering of the pencil, in global order. This setting
+ * overrides the transpose_mem_order/axis_contiguous settings from the provided grid descriptor. To use the memory order from
+ * the grid descriptor, a NULL pointer can be provided in place of this array.
  *
  * @return CUDECOMP_RESULT_SUCCESS on success or error code on failure.
  */
 cudecompResult_t cudecompGetPencilInfo(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
                                        cudecompPencilInfo_t* pencil_info, int32_t axis, const int32_t halo_extents[],
-                                       const int32_t padding[]);
+                                       const int32_t padding[], const int32_t mem_order[]);
 
 /**
  * @brief Queries the required transpose workspace size, in elements, for a provided grid descriptor.
@@ -433,6 +436,11 @@ cudecompResult_t cudecompGetShiftedRank(cudecompHandle_t handle, cudecompGridDes
  * no padding, a NULL pointer can be provided.
  * @param[in] output_padding Similar to input_padding, but for the output data. If the output has no padding, a NULL pointer
  * can be provided.
+ * @param[in] input_mem_order An array of three integers to override the memory ordering of the input data, in global order. This setting
+ * overrides the transpose_mem_order/axis_contiguous settings from the provided grid descriptor. To use the memory order from
+ * the grid descriptor, a NULL pointer can be provided.
+ * @param[in] output_mem_order Similar to input_mem_order, but for the output data. To use the memory order from
+ * the grid descriptor, a NULL pointer can be provided.
  * @param[in] stream CUDA stream to enqueue GPU operations into
  *
  * @return CUDECOMP_RESULT_SUCCESS on success or error code on failure.
@@ -440,7 +448,8 @@ cudecompResult_t cudecompGetShiftedRank(cudecompHandle_t handle, cudecompGridDes
 cudecompResult_t cudecompTransposeXToY(cudecompHandle_t handle, cudecompGridDesc_t grid_desc, void* input, void* output,
                                        void* work, cudecompDataType_t dtype, const int32_t input_halo_extents[],
                                        const int32_t output_halo_extents[], const int32_t input_padding[],
-                                       const int32_t output_padding[], cudaStream_t stream);
+                                       const int32_t output_padding[], const int32_t input_mem_order[],
+                                       const int32_t output_mem_order[], cudaStream_t stream);
 
 /**
  * @brief Function to transpose data from Y-axis aligned pencils to a Z-axis aligned pencils.
@@ -462,6 +471,11 @@ cudecompResult_t cudecompTransposeXToY(cudecompHandle_t handle, cudecompGridDesc
  * no padding, a NULL pointer can be provided.
  * @param[in] output_padding Similar to input_padding, but for the output data. If the output has no padding, a NULL pointer
  * can be provided.
+ * @param[in] input_mem_order An array of three integers to override the memory ordering of the input data, in global order. This setting
+ * overrides the transpose_mem_order/axis_contiguous settings from the provided grid descriptor. To use the memory order from
+ * the grid descriptor, a NULL pointer can be provided.
+ * @param[in] output_mem_order Similar to input_mem_order, but for the output data. To use the memory order from
+ * the grid descriptor, a NULL pointer can be provided.
  * @param[in] stream CUDA stream to enqueue GPU operations into
  *
  * @return CUDECOMP_RESULT_SUCCESS on success or error code on failure.
@@ -469,7 +483,8 @@ cudecompResult_t cudecompTransposeXToY(cudecompHandle_t handle, cudecompGridDesc
 cudecompResult_t cudecompTransposeYToZ(cudecompHandle_t handle, cudecompGridDesc_t grid_desc, void* input, void* output,
                                        void* work, cudecompDataType_t dtype, const int32_t input_halo_extents[],
                                        const int32_t output_halo_extents[], const int32_t input_padding[],
-                                       const int32_t output_padding[], cudaStream_t stream);
+                                       const int32_t output_padding[], const int32_t input_mem_order[],
+                                       const int32_t output_mem_order[], cudaStream_t stream);
 
 /**
  * @brief Function to transpose data from Z-axis aligned pencils to a Y-axis aligned pencils.
@@ -491,6 +506,11 @@ cudecompResult_t cudecompTransposeYToZ(cudecompHandle_t handle, cudecompGridDesc
  * no padding, a NULL pointer can be provided.
  * @param[in] output_padding Similar to input_padding, but for the output data. If the output has no padding, a NULL pointer
  * can be provided.
+ * @param[in] input_mem_order An array of three integers to override the memory ordering of the input data, in global order. This setting
+ * overrides the transpose_mem_order/axis_contiguous settings from the provided grid descriptor. To use the memory order from
+ * the grid descriptor, a NULL pointer can be provided.
+ * @param[in] output_mem_order Similar to input_mem_order, but for the output data. To use the memory order from
+ * the grid descriptor, a NULL pointer can be provided.
  * @param[in] stream CUDA stream to enqueue GPU operations into
  *
  * @return CUDECOMP_RESULT_SUCCESS on success or error code on failure.
@@ -498,7 +518,8 @@ cudecompResult_t cudecompTransposeYToZ(cudecompHandle_t handle, cudecompGridDesc
 cudecompResult_t cudecompTransposeZToY(cudecompHandle_t handle, cudecompGridDesc_t grid_desc, void* input, void* output,
                                        void* work, cudecompDataType_t dtype, const int32_t input_halo_extents[],
                                        const int32_t output_halo_extents[], const int32_t input_padding[],
-                                       const int32_t output_padding[], cudaStream_t stream);
+                                       const int32_t output_padding[], const int32_t input_mem_order[],
+                                       const int32_t output_mem_order[], cudaStream_t stream);
 
 /**
  * @brief Function to transpose data from Y-axis aligned pencils to a X-axis aligned pencils.
@@ -520,6 +541,11 @@ cudecompResult_t cudecompTransposeZToY(cudecompHandle_t handle, cudecompGridDesc
  * no padding, a NULL pointer can be provided.
  * @param[in] output_padding Similar to input_padding, but for the output data. If the output has no padding, a NULL pointer
  * can be provided.
+ * @param[in] input_mem_order An array of three integers to override the memory ordering of the input data, in global order. This setting
+ * overrides the transpose_mem_order/axis_contiguous settings from the provided grid descriptor. To use the memory order from
+ * the grid descriptor, a NULL pointer can be provided.
+ * @param[in] output_mem_order Similar to input_mem_order, but for the output data. To use the memory order from
+ * the grid descriptor, a NULL pointer can be provided.
  * @param[in] stream CUDA stream to enqueue GPU operations into
  *
  * @return CUDECOMP_RESULT_SUCCESS on success or error code on failure.
@@ -527,7 +553,8 @@ cudecompResult_t cudecompTransposeZToY(cudecompHandle_t handle, cudecompGridDesc
 cudecompResult_t cudecompTransposeYToX(cudecompHandle_t handle, cudecompGridDesc_t grid_desc, void* input, void* output,
                                        void* work, cudecompDataType_t dtype, const int32_t input_halo_extents[],
                                        const int32_t output_halo_extents[], const int32_t input_padding[],
-                                       const int32_t output_padding[], cudaStream_t stream);
+                                       const int32_t output_padding[], const int32_t input_mem_order[],
+                                       const int32_t output_mem_order[], cudaStream_t stream);
 
 // Halo functions
 /**
@@ -549,13 +576,16 @@ cudecompResult_t cudecompTransposeYToX(cudecompHandle_t handle, cudecompGridDesc
  * @param[in] padding An array of three integers to define padding of the input data, in global order. The i-th entry
  * in this array should contain the number of elements to treat as padding in the i-th global domain axis. If the input has
  * no padding, a NULL pointer can be provided.
+ * @param[in] mem_order An array of three integers to override the memory ordering of the input data, in global order. This setting
+ * overrides the transpose_mem_order/axis_contiguous settings from the provided grid descriptor. To use the memory order from
+ * the grid descriptor, a NULL pointer can be provided.
  * @param[in] stream CUDA stream to enqueue GPU operations into
  *
  * @return CUDECOMP_RESULT_SUCCESS on success or error code on failure.
  */
 cudecompResult_t cudecompUpdateHalosX(cudecompHandle_t handle, cudecompGridDesc_t grid_desc, void* input, void* work,
                                       cudecompDataType_t dtype, const int32_t halo_extents[], const bool halo_periods[],
-                                      int32_t dim, const int32_t padding[], cudaStream_t stream);
+                                      int32_t dim, const int32_t padding[], const int32_t mem_order[], cudaStream_t stream);
 
 /**
  * @brief Function to perform halo communication of Y-axis aligned pencil data
@@ -575,13 +605,16 @@ cudecompResult_t cudecompUpdateHalosX(cudecompHandle_t handle, cudecompGridDesc_
  * @param[in] padding An array of three integers to define padding of the input data, in global order. The i-th entry
  * in this array should contain the number of elements to treat as padding in the i-th global domain axis. If the input has
  * no padding, a NULL pointer can be provided.
+ * @param[in] mem_order An array of three integers to override the memory ordering of the input data, in global order. This setting
+ * overrides the transpose_mem_order/axis_contiguous settings from the provided grid descriptor. To use the memory order from
+ * the grid descriptor, a NULL pointer can be provided.
  * @param[in] stream CUDA stream to enqueue GPU operations into
  *
  * @return CUDECOMP_RESULT_SUCCESS on success or error code on failure.
  */
 cudecompResult_t cudecompUpdateHalosY(cudecompHandle_t handle, cudecompGridDesc_t grid_desc, void* input, void* work,
                                       cudecompDataType_t dtype, const int32_t halo_extents[], const bool halo_periods[],
-                                      int32_t dim, const int32_t padding[], cudaStream_t stream);
+                                      int32_t dim, const int32_t padding[], const int32_t mem_order[], cudaStream_t stream);
 
 /**
  * @brief Function to perform halo communication of Z-axis aligned pencil data
@@ -601,13 +634,16 @@ cudecompResult_t cudecompUpdateHalosY(cudecompHandle_t handle, cudecompGridDesc_
  * @param[in] padding An array of three integers to define padding of the input data, in global order. The i-th entry
  * in this array should contain the number of elements to treat as padding in the i-th global domain axis. If the input has
  * no padding, a NULL pointer can be provided.
+ * @param[in] mem_order An array of three integers to override the memory ordering of the input data, in global order. This setting
+ * overrides the transpose_mem_order/axis_contiguous settings from the provided grid descriptor. To use the memory order from
+ * the grid descriptor, a NULL pointer can be provided.
  * @param[in] stream CUDA stream to enqueue GPU operations into
  *
  * @return CUDECOMP_RESULT_SUCCESS on success or error code on failure.
  */
 cudecompResult_t cudecompUpdateHalosZ(cudecompHandle_t handle, cudecompGridDesc_t grid_desc, void* input, void* work,
                                       cudecompDataType_t dtype, const int32_t halo_extents[], const bool halo_periods[],
-                                      int32_t dim, const int32_t padding[], cudaStream_t stream);
+                                      int32_t dim, const int32_t padding[], const int32_t mem_order[], cudaStream_t stream);
 
 #ifdef __cplusplus
 }

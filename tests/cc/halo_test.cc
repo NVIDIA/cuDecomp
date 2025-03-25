@@ -230,6 +230,8 @@ static void usage(const char* pname) {
           "\t\t Pencil configuration (by axis) to test. (default: 0) \n"
           "\t--mem_order\n"
           "\t\ttranspose_mem_order setting for tested axis. (default: unset) \n"
+          "\t--mem_order_override\n"
+          "\t\tmem_order per-op override settings for tested axis. (default: unset) \n"
           "\t-m|--use-managed-memory\n"
           "\t\tFlag to test operation with managed memory. (default: 0) \n",
           bname);
@@ -251,6 +253,7 @@ struct haloTestArgs {
   int axis = 0;
   bool use_managed_memory = false;
   std::array<int, 3> mem_order{-1, -1, -1};
+  std::array<int, 3> mem_order_override{-1, -1, -1};
 };
 
 static haloTestArgs parse_arguments(const std::string& arguments) {
@@ -274,6 +277,7 @@ static haloTestArgs parse_arguments(const std::string& arguments) {
         {"pdx", required_argument, 0, '&'}, {"pdy", required_argument, 0, '*'},
         {"pdz", required_argument, 0, '*'}, {"ax", required_argument, 0, 'a'},
         {"use-managed-memory", no_argument, 0, 'm'}, {"mem_order", required_argument, 0, 'q'},
+        {"mem_order_override", required_argument, 0, 'v'},
         {"help", no_argument, 0, 'h'},      {0, 0, 0, 0}};
 
     int option_index = 0;
@@ -311,6 +315,13 @@ static haloTestArgs parse_arguments(const std::string& arguments) {
       optind--;
       for (int i = 0; i < 3; ++i) {
         args.mem_order[i] = atoi(argv[optind]);
+        optind++;
+      }
+      break;
+    case 'v':
+      optind--;
+      for (int i = 0; i < 3; ++i) {
+        args.mem_order_override[i] = atoi(argv[optind]);
         optind++;
       }
       break;
@@ -404,7 +415,7 @@ static int run_test(const std::string& arguments, bool silent) {
 
     // Get pencil information
     cudecompPencilInfo_t pinfo;
-    CHECK_CUDECOMP_EXIT(cudecompGetPencilInfo(handle, grid_desc, &pinfo, args.axis, args.halo_extents.data(), args.padding.data()));
+    CHECK_CUDECOMP_EXIT(cudecompGetPencilInfo(handle, grid_desc, &pinfo, args.axis, args.halo_extents.data(), args.padding.data(), args.mem_order_override.data()));
 
     // Get workspace size
     int64_t workspace_num_elements;
@@ -468,15 +479,15 @@ static int run_test(const std::string& arguments, bool silent) {
       switch (args.axis) {
       case 0:
         CHECK_CUDECOMP(cudecompUpdateHalosX(handle, grid_desc, input, work_d, get_cudecomp_datatype(real_t(0)),
-                                                 pinfo.halo_extents, args.halo_periods.data(), i, pinfo.padding, 0));
+                                                 pinfo.halo_extents, args.halo_periods.data(), i, pinfo.padding, pinfo.order, 0));
         break;
       case 1:
         CHECK_CUDECOMP(cudecompUpdateHalosY(handle, grid_desc, input, work_d, get_cudecomp_datatype(real_t(0)),
-                                                 pinfo.halo_extents, args.halo_periods.data(), i, pinfo.padding, 0));
+                                                 pinfo.halo_extents, args.halo_periods.data(), i, pinfo.padding, pinfo.order, 0));
         break;
       case 2:
         CHECK_CUDECOMP(cudecompUpdateHalosZ(handle, grid_desc, input, work_d, get_cudecomp_datatype(real_t(0)),
-                                                 pinfo.halo_extents, args.halo_periods.data(), i, pinfo.padding, 0));
+                                                 pinfo.halo_extents, args.halo_periods.data(), i, pinfo.padding, pinfo.order, 0));
         break;
       }
     }

@@ -228,6 +228,7 @@ module halo_CUDECOMP_DOUBLE_COMPLEX_mod
     logical :: halo_periods(3)
     integer :: padding(3)
     integer :: mem_order(3)
+    integer :: mem_order_override(3)
     logical :: use_managed_memory
     integer :: pr, pc
     integer :: axis
@@ -255,8 +256,8 @@ module halo_CUDECOMP_DOUBLE_COMPLEX_mod
 
     integer :: i, j, k, l, idt, iarg
     integer :: skip_count, nspaces
-    character(len=16) :: arg
-    character(len=16), allocatable :: args(:)
+    character(len=32) :: arg
+    character(len=32), allocatable :: args(:)
 
     res = 0
 
@@ -281,6 +282,7 @@ module halo_CUDECOMP_DOUBLE_COMPLEX_mod
     halo_periods(:) = .true.
     padding(:) = 0
     mem_order(:) = -1
+    mem_order_override(:) = -1
     axis = 1
     use_managed_memory = .false.
 
@@ -379,6 +381,12 @@ module halo_CUDECOMP_DOUBLE_COMPLEX_mod
             read(arg, *) mem_order(j)
           enddo
           skip_count = 3
+        case('--mem_order_override')
+          do j = 1, 3
+            read(args(i+j), *) arg
+            read(arg, *) mem_order_override(j)
+          enddo
+          skip_count = 3
         case('-m')
           use_managed_memory = .true.
         case(' ')
@@ -435,7 +443,7 @@ module halo_CUDECOMP_DOUBLE_COMPLEX_mod
     endif
 
     ! Get pencil information
-    CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, pinfo, axis, halo_extents, padding))
+    CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, pinfo, axis, halo_extents, padding, mem_order_override))
 
     ! Get workspace size
     CHECK_CUDECOMP(cudecompGetHaloWorkspaceSize(handle, grid_desc, axis, halo_extents, workspace_num_elements))
@@ -489,11 +497,11 @@ module halo_CUDECOMP_DOUBLE_COMPLEX_mod
     do i = 1, 3
       select case(axis)
         case(1)
-          CHECK_CUDECOMP(cudecompUpdateHalosX(handle, grid_desc, input, work_d, dtype, pinfo%halo_extents, halo_periods, i, padding))
+          CHECK_CUDECOMP(cudecompUpdateHalosX(handle, grid_desc, input, work_d, dtype, pinfo%halo_extents, halo_periods, i, pinfo%padding, pinfo%order))
         case(2)
-          CHECK_CUDECOMP(cudecompUpdateHalosY(handle, grid_desc, input, work_d, dtype, pinfo%halo_extents, halo_periods, i, padding))
+          CHECK_CUDECOMP(cudecompUpdateHalosY(handle, grid_desc, input, work_d, dtype, pinfo%halo_extents, halo_periods, i, pinfo%padding, pinfo%order))
         case(3)
-          CHECK_CUDECOMP(cudecompUpdateHalosZ(handle, grid_desc, input, work_d, dtype, pinfo%halo_extents, halo_periods, i, padding))
+          CHECK_CUDECOMP(cudecompUpdateHalosZ(handle, grid_desc, input, work_d, dtype, pinfo%halo_extents, halo_periods, i, pinfo%padding, pinfo%order))
       end select
     end do
 
