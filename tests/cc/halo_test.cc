@@ -210,12 +210,8 @@ static void usage(const char* pname) {
           "\t\tColumn dimension of process grid. (default: 0, autotune) \n"
           "\t--backend"
           "\t\tHalo communication backend (default: 0, autotune) \n"
-          "\t--acx\n"
-          "\t\tX-dimension axis-contiguous pencils setting. (default: 0) \n"
-          "\t--acy\n"
-          "\t\tY-dimension axis-contiguous pencils setting. (default: 0) \n"
-          "\t--acz\n"
-          "\t\tZ-dimension axis-contiguous pencils setting. (default: 0) \n"
+          "\t--ac\n"
+          "\t\taxis-contiguous pencils setting. (default: 0) \n"
           "\t--gd\n"
           "\t\t gdim_dist setting, set to g[i] - gd[i]. (default: 0 0 0) \n"
           "\t--hex\n"
@@ -233,7 +229,7 @@ static void usage(const char* pname) {
           "\t--ax\n"
           "\t\t Pencil configuration (by axis) to test. (default: 0) \n"
           "\t--mem_order\n"
-          "\t\ttranspose_mem_order setting. (default: unset) \n"
+          "\t\ttranspose_mem_order setting for tested axis. (default: unset) \n"
           "\t-m|--use-managed-memory\n"
           "\t\tFlag to test operation with managed memory. (default: 0) \n",
           bname);
@@ -247,14 +243,14 @@ struct haloTestArgs {
   int pr = 0;
   int pc = 0;
   cudecompHaloCommBackend_t comm_backend = static_cast<cudecompHaloCommBackend_t>(0);
-  std::array<bool, 3> axis_contiguous{};
+  bool axis_contiguous;
   std::array<int, 3> gdims_dist{};
   std::array<int, 3> halo_extents{1, 1, 1};
   std::array<bool, 3> halo_periods{true, true, true};
   std::array<int, 3> padding{};
   int axis = 0;
   bool use_managed_memory = false;
-  std::array<int, 9> mem_order{-1, -1, -1, -1, -1, -1, -1, -1, -1};
+  std::array<int, 3> mem_order{-1, -1, -1};
 };
 
 static haloTestArgs parse_arguments(const std::string& arguments) {
@@ -271,8 +267,7 @@ static haloTestArgs parse_arguments(const std::string& arguments) {
         {"gx", required_argument, 0, 'x'},  {"gy", required_argument, 0, 'y'},
         {"gz", required_argument, 0, 'z'},  {"backend", required_argument, 0, 'b'},
         {"pr", required_argument, 0, 'r'},  {"pc", required_argument, 0, 'c'},
-        {"acx", required_argument, 0, '1'}, {"acy", required_argument, 0, '2'},
-        {"acz", required_argument, 0, '3'}, {"gd", required_argument, 0, '4'},
+        {"ac", required_argument, 0, '3'}, {"gd", required_argument, 0, '4'},
         {"hex", required_argument, 0, '7'}, {"hey", required_argument, 0, '8'},
         {"hez", required_argument, 0, '9'}, {"hpx", required_argument, 0, 'e'},
         {"hpy", required_argument, 0, 'f'}, {"hpz", required_argument, 0, 'g'},
@@ -282,7 +277,7 @@ static haloTestArgs parse_arguments(const std::string& arguments) {
         {"help", no_argument, 0, 'h'},      {0, 0, 0, 0}};
 
     int option_index = 0;
-    int ch = getopt_long(argc, argv, "x:y:z:b:r:c:1:2:3:4:7:8:9:e:f:g:a:q:&:*:(:mh", long_options, &option_index);
+    int ch = getopt_long(argc, argv, "x:y:z:b:r:c:3:4:7:8:9:e:f:g:a:q:&:*:(:mh", long_options, &option_index);
     if (ch == -1) break;
 
     switch (ch) {
@@ -293,9 +288,7 @@ static haloTestArgs parse_arguments(const std::string& arguments) {
     case 'b': args.comm_backend = static_cast<cudecompHaloCommBackend_t>(atoi(optarg)); break;
     case 'r': args.pr = atoi(optarg); break;
     case 'c': args.pc = atoi(optarg); break;
-    case '1': args.axis_contiguous[0] = atoi(optarg); break;
-    case '2': args.axis_contiguous[1] = atoi(optarg); break;
-    case '3': args.axis_contiguous[2] = atoi(optarg); break;
+    case '3': args.axis_contiguous = atoi(optarg); break;
     case '4':
       optind--;
       for (int i = 0; i < 3; ++i) {
@@ -316,7 +309,7 @@ static haloTestArgs parse_arguments(const std::string& arguments) {
     case 'm': args.use_managed_memory = true; break;
     case 'q':
       optind--;
-      for (int i = 0; i < 9; ++i) {
+      for (int i = 0; i < 3; ++i) {
         args.mem_order[i] = atoi(argv[optind]);
         optind++;
       }
@@ -374,12 +367,12 @@ static int run_test(const std::string& arguments, bool silent) {
     config.gdims_dist[0] = args.gdims_dist[0];
     config.gdims_dist[1] = args.gdims_dist[1];
     config.gdims_dist[2] = args.gdims_dist[2];
-    config.transpose_axis_contiguous[0] = args.axis_contiguous[0];
-    config.transpose_axis_contiguous[1] = args.axis_contiguous[1];
-    config.transpose_axis_contiguous[2] = args.axis_contiguous[2];
+    config.transpose_axis_contiguous[0] = args.axis_contiguous;
+    config.transpose_axis_contiguous[1] = args.axis_contiguous;
+    config.transpose_axis_contiguous[2] = args.axis_contiguous;
     for (int i = 0; i < 3; ++i) {
       for (int j = 0; j < 3; ++j) {
-        config.transpose_mem_order[i][j] = args.mem_order[i * 3 + j];
+        config.transpose_mem_order[i][j] = args.mem_order[j];
       }
     }
 

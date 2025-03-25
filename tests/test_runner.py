@@ -77,19 +77,22 @@ def should_skip_case(arg_dict, key):
 
   return skip
 
-def generate_mem_order_args(zero_indexed):
+def generate_mem_order_args(zero_indexed, is_halo_test=False):
    if zero_indexed:
      orders_ax = [" ".join(x) for x in itertools.permutations(["0", "1", "2"])]
    else:
      orders_ax = [" ".join(x) for x in itertools.permutations(["1", "2", "3"])]
-   args = [" ".join([x, y, x]) for x, y in itertools.product(orders_ax, orders_ax)]
+   if is_halo_test:
+     args = orders_ax
+   else:
+     args = [" ".join([x, y, x]) for x, y in itertools.product(orders_ax, orders_ax)]
 
    return args
 
 def generate_command_lines(config, args):
   if (config["test_mem_order"]):
     config['args'].append("mem_order")
-    config['mem_order'] = generate_mem_order_args(not config["fortran_indexing"])
+    config['mem_order'] = generate_mem_order_args(not config["fortran_indexing"], config["is_halo_test"])
 
   cmds = []
   prs = get_factors(args.ngpu)

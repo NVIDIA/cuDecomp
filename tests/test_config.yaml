@@ -6,6 +6,7 @@ base: &base
   dtypes: ['R32', 'R64', 'C32', 'C64']
   apply_skips: None
   use_single_pdim: False
+  is_halo_test: False
 
 transpose_test_base: &transpose_test_base
   <<: *base
@@ -104,6 +105,8 @@ transpose_test_ac: &transpose_test_ac
   acy: [0, 1]
   acz: [0, 1]
 
+  test_mem_order: False
+
 transpose_test_cc:
   <<: *transpose_test
   executable_prefix: 'cc/transpose_test'
@@ -196,7 +199,7 @@ halo_test_base: &halo_test_base
   run_autotuning : False
   test_mem_order: True
   fortran_indexing: False
-
+  is_halo_test: True
 
 halo_test: &halo_test
   <<: *halo_test_base
@@ -261,9 +264,8 @@ halo_test_mix: &halo_test_mix
 halo_test_ac: &halo_test_ac
   <<: *halo_test_base
   args : ['backend',
-          'acx', 'acy', 'acz',
           'gx', 'gy', 'gz',
-          'gd',
+          'ac', 'gd',
           'hex' ,'hey', 'hez',
           'hpx', 'hpy', 'hpz',
           'pdx', 'pdy', 'pdz',
@@ -272,9 +274,9 @@ halo_test_ac: &halo_test_ac
   backend: [1] # Limit this testing to one backend
   dtypes: ['R32'] # Limit to one data type
 
-  acx: [0, 1]
-  acy: [0, 1]
-  acz: [0, 1]
+  ac: [0, 1]
+
+  test_mem_order: False
 
 halo_test_cc:
   <<: *halo_test
