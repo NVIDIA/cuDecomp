@@ -11,7 +11,6 @@ option(CUDECOMP_BUILD_FORTRAN "Build Fortran bindings" ON)
 option(CUDECOMP_ENABLE_NVTX "Enable NVTX ranges" ON)
 option(CUDECOMP_ENABLE_NVSHMEM "Enable NVSHMEM" OFF)
 option(CUDECOMP_BUILD_EXTRAS "Build benchmark, examples, and tests" OFF)
-set(CUDECOMP_CUDA_CC_LIST "70;80;90" CACHE STRING "List of CUDA compute capabilities to build cuDecomp for.")
 set(CUDECOMP_NCCL_HOME CACHE STRING "Path to search for NCCL installation. Use to override NVHPC provided NCCL version.")
 set(CUDECOMP_NVSHMEM_HOME CACHE STRING "Path to search for NVSHMEM installation. Use to override NVHPC provided NVSHMEM version.")
 
@@ -32,7 +31,8 @@ set(CMAKE_PREFIX_PATH ${NVHPC_CMAKE_DIR})
 set(CMAKE_CXX_FLAGS_RELEASE "-O1 -DNDEBUG")
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O1 -g -DNDEBUG")
 set(CMAKE_Fortran_FLAGS_RELEASE "-O1 -DNDEBUG")
-set(CMAKE_Fortran_FLAGS_RELWITHDEBINFO "-O1 -g -DNDEBUG")
+# Note: Removing "-g" flag from Fortran RelWithDebInfo to enable mixed compilation with cc100 and older compute capabilities
+set(CMAKE_Fortran_FLAGS_RELWITHDEBINFO "-O1 -DNDEBUG")
 
 if (CUDECOMP_BUILD_FORTRAN)
   set(LANGS CXX CUDA Fortran)
@@ -41,6 +41,19 @@ else()
 endif()
 
 project(cudecomp LANGUAGES ${LANGS})
+
+# Set up CUDA compute capabilities by CUDA version. Users can override defaults with CUDECOMP_CUDA_CC_LIST
+if (NOT CUDECOMP_CUDA_CC_LIST)
+  if (${CMAKE_CUDA_COMPILER_VERSION} VERSION_GREATER_EQUAL 12.8)
+    set(CUDECOMP_CUDA_CC_LIST_DEFAULTS "70;80;90;100")
+  elseif (${CMAKE_CUDA_COMPILER_VERSION} VERSION_GREATER_EQUAL 11.8)
+    set(CUDECOMP_CUDA_CC_LIST_DEFAULTS "70;80;90")
+  else()
+    set(CUDECOMP_CUDA_CC_LIST_DEFAULTS "70;80")
+  endif()
+
+  set(CUDECOMP_CUDA_CC_LIST ${CUDECOMP_CUDA_CC_LIST_DEFAULTS} CACHE STRING "List of CUDA compute capabilities to build cuDecomp for.")
+endif()
 
 # Detect if Cray compiler wrappers are available to assess if in Cray environment.
 # We do not use the Cray compiler wrappers directly for greater flexibility.
@@ -139,6 +152,7 @@ else()
 endif()
 
 target_compile_options(cudecomp PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:--ptxas-options=-v >)
+target_compile_options(cudecomp PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-Wno-deprecated-gpu-targets >)
 
 target_sources(cudecomp
   PRIVATE
