@@ -10,6 +10,7 @@ if (CMAKE_VERSION VERSION_LESS 3.18)
 else()
   set_target_properties(tg PROPERTIES CUDA_ARCHITECTURES "${CUDECOMP_CUDA_CC_LIST}")
 endif()
+target_compile_options(tg PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-Wno-deprecated-gpu-targets >)
 
 target_include_directories(tg
   PRIVATE

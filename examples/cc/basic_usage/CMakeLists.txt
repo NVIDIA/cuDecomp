@@ -23,6 +23,7 @@ foreach(tgt ${basic_usage_targets_cc})
   else()
     set_target_properties(${tgt} PROPERTIES CUDA_ARCHITECTURES "${CUDECOMP_CUDA_CC_LIST}")
   endif()
+  target_compile_options(${tgt} PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-Wno-deprecated-gpu-targets >)
   target_include_directories(${tgt}
     PRIVATE
     ${CMAKE_BINARY_DIR}/include
