@@ -134,7 +134,7 @@ __global__ static void scale(T* U0, T* U1, T* U2, TS scale_factor, cudecompPenci
   U2[i] *= scale_factor;
 }
 
-__host__ __device__ static void get_gx(const cudecompPencilInfo_t& info, int64_t i, int64_t gx[3]) {
+__host__ __device__ __forceinline__ static void get_gx(const cudecompPencilInfo_t& info, int64_t i, int64_t gx[3]) {
   int64_t lx[3];
   // Compute pencil local coordinate
   lx[0] = i % info.shape[0];
@@ -143,6 +143,15 @@ __host__ __device__ static void get_gx(const cudecompPencilInfo_t& info, int64_t
   gx[info.order[0]] = lx[0] + info.lo[0];
   gx[info.order[1]] = lx[1] + info.lo[1];
   gx[info.order[2]] = lx[2] + info.lo[2];
+}
+
+__host__ __device__ __forceinline__ static void get_k(int64_t N, int64_t gx[3], real_t& kx, real_t& ky, real_t& kz) {
+  // Compute wave number
+  kx = gx[0];
+  if (gx[0] == N/2) kx *= -1;
+
+  ky = (gx[1] < N / 2) ? gx[1] : gx[1] - N;
+  kz = (gx[2] < N / 2) ? gx[2] : gx[2] - N;
 }
 
 __global__ static void initialize_U(real_t* U_r0, real_t* U_r1, real_t* U_r2, real_t dx, real_t dy, real_t dz,
@@ -169,17 +178,15 @@ __global__ static void initialize_U(real_t* U_r0, real_t* U_r1, real_t* U_r2, re
 }
 
 __global__ static void curl(const complex_t* Uh_c0, const complex_t* Uh_c1, const complex_t* Uh_c2, complex_t* dU_c0,
-                            complex_t* dU_c1, complex_t* dU_c2, real_t* K0, real_t* K1, real_t* K2,
-                            cudecompPencilInfo_t info) {
+                            complex_t* dU_c1, complex_t* dU_c2, int64_t N, cudecompPencilInfo_t info) {
 
   const int64_t i = blockIdx.x * blockDim.x + threadIdx.x;
   if (i >= info.size) return;
 
   int64_t gx[3];
   get_gx(info, i, gx);
-  real_t kx = K0[gx[0]];
-  real_t ky = K1[gx[1]];
-  real_t kz = K2[gx[2]];
+  real_t kx, ky, kz;
+  get_k(N, gx, kx, ky, kz);
   complex_t Uhu = Uh_c0[i];
   complex_t Uhv = Uh_c1[i];
   complex_t Uhw = Uh_c2[i];
@@ -193,29 +200,29 @@ __global__ static void cross(const real_t* U_r0, const real_t* U_r1, const real_
 
   const int64_t i = blockIdx.x * blockDim.x + threadIdx.x;
   if (i >= info.size) return;
-  real_t Uu = U_r0[i] / (N * N * N); // Need to scale cuFFT inverse results
-  real_t Uv = U_r1[i] / (N * N * N);
-  real_t Uw = U_r2[i] / (N * N * N);
-  real_t dUu = dU_r0[i] / (N * N * N);
-  real_t dUv = dU_r1[i] / (N * N * N);
-  real_t dUw = dU_r2[i] / (N * N * N);
+  real_t scaling = real_t(1) / (N * N * N);
+  real_t Uu = U_r0[i] * scaling; // Need to scale cuFFT inverse results
+  real_t Uv = U_r1[i] * scaling;
+  real_t Uw = U_r2[i] * scaling;
+  real_t dUu = dU_r0[i] * scaling;
+  real_t dUv = dU_r1[i] * scaling;
+  real_t dUw = dU_r2[i] * scaling;
   dU_r0[i] = (Uv * dUw - Uw * dUv);
   dU_r1[i] = (Uw * dUu - Uu * dUw);
   dU_r2[i] = (Uu * dUv - Uv * dUu);
 }
 
 __global__ static void compute_dU(const complex_t* Uh_c0, const complex_t* Uh_c1, const complex_t* Uh_c2,
-                                  complex_t* dU_c0, complex_t* dU_c1, complex_t* dU_c2, real_t* K0, real_t* K1,
-                                  real_t* K2, real_t kmax, int64_t N, real_t nu, cudecompPencilInfo_t info) {
+                                  complex_t* dU_c0, complex_t* dU_c1, complex_t* dU_c2, real_t kmax,
+                                  int64_t N, real_t nu, cudecompPencilInfo_t info) {
 
   const int64_t i = blockIdx.x * blockDim.x + threadIdx.x;
   if (i >= info.size) return;
 
   int64_t gx[3];
   get_gx(info, i, gx);
-  real_t kx = K0[gx[0]];
-  real_t ky = K1[gx[1]];
-  real_t kz = K2[gx[2]];
+  real_t kx, ky, kz;
+  get_k(N, gx, kx, ky, kz);
 
   real_t k2 = kx * kx + ky * ky + kz * kz;
 
@@ -225,16 +232,21 @@ __global__ static void compute_dU(const complex_t* Uh_c0, const complex_t* Uh_c1
   complex_t dUu = dU_c0[i];
   complex_t dUv = dU_c1[i];
   complex_t dUw = dU_c2[i];
-  complex_t Ph = (kx * dUu + ky * dUv + kz * dUw) / (k2 != 0 ? k2 : 1);
-  if (alias) {
-    dU_c0[i] = -nu * k2 * Uh_c0[i];
-    dU_c1[i] = -nu * k2 * Uh_c1[i];
-    dU_c2[i] = -nu * k2 * Uh_c2[i];
-  } else {
-    dU_c0[i] = dU_c0[i] - Ph * kx - nu * k2 * Uh_c0[i];
-    dU_c1[i] = dU_c1[i] - Ph * ky - nu * k2 * Uh_c1[i];
-    dU_c2[i] = dU_c2[i] - Ph * kz - nu * k2 * Uh_c2[i];
+  complex_t Ph = (kx * dUu + ky * dUv + kz * dUw) / (k2 == 0 ? 1 : k2);
+
+  complex_t dU0 = -nu * k2 * Uh_c0[i];
+  complex_t dU1 = -nu * k2 * Uh_c1[i];
+  complex_t dU2 = -nu * k2 * Uh_c2[i];
+
+  if (!alias) {
+    dU0 += dUu - Ph * kx;
+    dU1 += dUv - Ph * ky;
+    dU2 += dUw - Ph * kz;
   }
+
+  dU_c0[i] = dU0;
+  dU_c1[i] = dU1;
+  dU_c2[i] = dU2;
 }
 
 __global__ static void update_Uh(const complex_t* dU_c0, const complex_t* dU_c1, const complex_t* dU_c2,
@@ -262,9 +274,10 @@ __global__ static void sumsq(int64_t N, const real_t* U_r0, const real_t* U_r1, 
     return;
   }
 
-  real_t u = U_r0[i] / (N * N * N); // Scaling cuFFT result
-  real_t v = U_r1[i] / (N * N * N);
-  real_t w = U_r2[i] / (N * N * N);
+  real_t scaling = real_t(1) / (N * N * N);
+  real_t u = U_r0[i] * scaling; // Scaling cuFFT result
+  real_t v = U_r1[i] * scaling;
+  real_t w = U_r2[i] * scaling;
 
   sumsq[i] = (u * u + v * v + w * w);
 }
@@ -293,17 +306,15 @@ __global__ static void velmax(int64_t N, const real_t* U_r0, const real_t* U_r1,
 }
 
 __global__ static void spectrum(const complex_t* Uh_c0,const  complex_t* Uh_c1,const  complex_t* Uh_c2,
-                                real_t* K0, real_t* K1, real_t* K2, real_t* ek,
-                                cudecompPencilInfo_t info) {
+                                real_t* ek, int64_t N, cudecompPencilInfo_t info) {
 
   const int64_t i = blockIdx.x * blockDim.x + threadIdx.x;
   if (i >= info.size) return;
 
   int64_t gx[3];
   get_gx(info, i, gx);
-  real_t kx = K0[gx[0]];
-  real_t ky = K1[gx[1]];
-  real_t kz = K2[gx[2]];
+  real_t kx, ky, kz;
+  get_k(N, gx, kx, ky, kz);
   complex_t Uhu = Uh_c0[i];
   complex_t Uhv = Uh_c1[i];
   complex_t Uhw = Uh_c2[i];
@@ -490,17 +501,6 @@ public:
       }
     }
 
-    // Set up wavenumbers
-    CHECK_CUDA_EXIT(cudaMallocManaged(&K[0], (N / 2 + 1) * sizeof(real_t)));
-    CHECK_CUDA_EXIT(cudaMallocManaged(&K[1], N * sizeof(real_t)));
-    CHECK_CUDA_EXIT(cudaMallocManaged(&K[2], N * sizeof(real_t)));
-    for (int i = 0; i < N; ++i) {
-      K[1][i] = (i < N / 2) ? i : i - N;
-      K[2][i] = K[1][i];
-    }
-    for (int i = 0; i < N / 2 + 1; ++i) { K[0][i] = i; }
-    K[0][N / 2] *= -1;
-
     // Spectrum
     int num_shells = int(std::sqrt(9*N*N + 4*N + 4) / 4) + 1;
     CHECK_CUDA_EXIT(cudaMallocManaged(&ek, num_shells * sizeof(real_t)));
@@ -541,8 +541,7 @@ public:
   void print_stats(const std::string& logfile) {
     // Compute enstrophy
     // Recompute curl and transform to physical space (z-pencil -> x-pencil).
-    curl<<<(pinfo_z_c.size + 256 - 1) / 256, 256>>>(Uh_c[0][0], Uh_c[0][1], Uh_c[0][2], dU_c[0], dU_c[1], dU_c[2], K[0],
-                                                    K[1], K[2], pinfo_z_c);
+    curl<<<(pinfo_z_c.size + 256 - 1) / 256, 256>>>(Uh_c[0][0], Uh_c[0][1], Uh_c[0][2], dU_c[0], dU_c[1], dU_c[2], N, pinfo_z_c);
     CHECK_CUDA_LAUNCH_EXIT();
 
     backward(dU_c, dU_r);
@@ -597,7 +596,7 @@ public:
     int num_shells = int(std::sqrt(9*N*N + 4*N + 4) / 4) + 1;
     CHECK_CUDA_EXIT(cudaMemset(ek, 0, num_shells * sizeof(real_t)));
     spectrum<<<(pinfo_z_c.size + 256 - 1) / 256, 256>>>(Uh_c[0][0], Uh_c[0][1], Uh_c[0][2],
-                                                        K[0], K[1], K[2], ek, pinfo_z_c);
+                                                        ek, N, pinfo_z_c);
     CHECK_CUDA_LAUNCH_EXIT();
     CHECK_CUDA_EXIT(cudaDeviceSynchronize());
 
@@ -688,8 +687,7 @@ private:
   void compute_rhs(std::array<complex_t*, 3>& Uh_c) {
 
     // Compute curl and transform to physical space (z-pencil -> x-pencil)
-    curl<<<(pinfo_z_c.size + 256 - 1) / 256, 256>>>(Uh_c[0], Uh_c[1], Uh_c[2], dU_c[0], dU_c[1], dU_c[2], K[0], K[1],
-                                                    K[2], pinfo_z_c);
+    curl<<<(pinfo_z_c.size + 256 - 1) / 256, 256>>>(Uh_c[0], Uh_c[1], Uh_c[2], dU_c[0], dU_c[1], dU_c[2], N, pinfo_z_c);
     CHECK_CUDA_LAUNCH_EXIT();
 
     backward(dU_c, dU_r);
@@ -702,8 +700,8 @@ private:
 
     // Compute dU in frequency space (z-pencil)
     real_t kmax = 2.0 / 3.0 * (N / 2 + 1); // aliasing limit
-    compute_dU<<<(pinfo_z_c.size + 256 - 1) / 256, 256>>>(Uh_c[0], Uh_c[1], Uh_c[2], dU_c[0], dU_c[1], dU_c[2], K[0],
-                                                          K[1], K[2], kmax, N, nu, pinfo_z_c);
+    compute_dU<<<(pinfo_z_c.size + 256 - 1) / 256, 256>>>(Uh_c[0], Uh_c[1], Uh_c[2], dU_c[0], dU_c[1], dU_c[2],
+                                                          kmax, N, nu, pinfo_z_c);
     CHECK_CUDA_LAUNCH_EXIT();
   }
 
@@ -833,7 +831,6 @@ private:
   std::array<void*, 3> U, dU;          // Raw buffers
   std::array<real_t*, 3> U_r, dU_r;    // real pointers (aliased);
   std::array<complex_t*, 3> U_c, dU_c; // complex pointers (aliased)
-  std::array<real_t*, 3> K;            // wavenumbers
   real_t* ek;                          // energy spectrum
 
   std::vector<std::array<void*, 3>> Uh;
