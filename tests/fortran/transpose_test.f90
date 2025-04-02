@@ -577,7 +577,7 @@ program main
   integer :: local_comm
   integer :: res, retcode
   logical :: using_testfile
-  character(len=16) :: arg
+  character(len=32) :: arg
   character(len=256) :: binname
   character(len=256) :: testfile
   character(len=256), allocatable:: testcases(:)
