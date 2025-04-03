@@ -756,6 +756,12 @@ cudecompResult_t cudecompGridDescAutotuneOptionsSetDefaults(cudecompGridDescAuto
     for (int i = 0; i < 4; ++i) {
       options->transpose_use_inplace_buffers[i] = false;
       options->transpose_op_weights[i] = 1.0;
+      for (int j = 0; j < 3; ++j) {
+        options->transpose_input_halo_extents[i][j] = 0;
+        options->transpose_output_halo_extents[i][j] = 0;
+        options->transpose_input_padding[i][j] = 0;
+        options->transpose_output_padding[i][j] = 0;
+      }
     }
 
     // Halo-specific options
@@ -764,6 +770,7 @@ cudecompResult_t cudecompGridDescAutotuneOptionsSetDefaults(cudecompGridDescAuto
     for (int i = 0; i < 3; ++i) {
       options->halo_extents[i] = 0;
       options->halo_periods[i] = false;
+      options->halo_padding[i] = 0;
     }
 
   } catch (const cudecomp::BaseException& e) {
