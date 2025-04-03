@@ -11,6 +11,7 @@ else()
   set_target_properties(tg PROPERTIES CUDA_ARCHITECTURES "${CUDECOMP_CUDA_CC_LIST}")
 endif()
 target_compile_options(tg PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-Wno-deprecated-gpu-targets >)
+target_compile_options(tg PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-diag-suppress 177>) # Silence unused function warning
 
 target_include_directories(tg
   PRIVATE
