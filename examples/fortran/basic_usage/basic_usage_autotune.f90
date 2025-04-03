@@ -119,6 +119,8 @@ program main
   options%transpose_op_weights(2) = 1.0
   options%transpose_op_weights(3) = 1.0
   options%transpose_op_weights(4) = 1.0
+  options%transpose_input_halo_extents(:, 1) = [1, 1, 1]
+  options%transpose_output_halo_extents(:, 4) = [1, 1, 1]
 
   ! Halo communication backend autotuning options
   options%autotune_halo_backend = .true.

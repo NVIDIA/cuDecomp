@@ -160,6 +160,12 @@ int main(int argc, char** argv) {
   options.transpose_op_weights[1] = 1.0;
   options.transpose_op_weights[2] = 1.0;
   options.transpose_op_weights[3] = 1.0;
+  options.transpose_input_halo_extents[0][0] = 1;
+  options.transpose_input_halo_extents[0][1] = 1;
+  options.transpose_input_halo_extents[0][2] = 1;
+  options.transpose_output_halo_extents[3][0] = 1;
+  options.transpose_output_halo_extents[3][1] = 1;
+  options.transpose_output_halo_extents[3][2] = 1;
 
   // Halo communication backend autotuning options
   options.autotune_halo_backend = true;
