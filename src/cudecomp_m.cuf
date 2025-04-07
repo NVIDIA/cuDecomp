@@ -142,12 +142,17 @@ module cudecomp
     logical(c_bool) :: autotune_transpose_backend ! flag to enable transpose backend autotuning
     logical(c_bool) :: transpose_use_inplace_buffers(4) ! flag to control whether transpose autotuning uses in-place or out-of-place buffers
     real(c_double) :: transpose_op_weights(4) ! multiplicative weight to apply to trial time contribution by transpose operation
+    integer(c_int32_t) :: transpose_input_halo_extents(3, 4) ! input_halo_extents argument to use during autotuning by transpose operation
+    integer(c_int32_t) :: transpose_output_halo_extents(3, 4) ! output_halo_extents argument to use during autotuning by transpose operation
+    integer(c_int32_t) :: transpose_input_padding(3, 4) ! input_padding argument to use during autotuning by transpose operation
+    integer(c_int32_t) :: transpose_output_padding(3, 4) ! output_padding argument to use during autotuning by transpose operation
 
     ! Halo-specific options
     logical(c_bool) :: autotune_halo_backend ! flag to enable halo backend autotuning
-    integer(c_int32_t) :: halo_extents(3) ! halo configuration for autotuning
-    logical(c_bool) :: halo_periods(3) ! halo configuration for autotuning
-    integer(c_int32_t) :: halo_axis ! halo configuration for autotuning
+    integer(c_int32_t) :: halo_extents(3) ! extents for halo autotuning
+    logical(c_bool) :: halo_periods(3) ! periodicity for halo autotuning
+    integer(c_int32_t) :: halo_axis ! which axis pencils to use for halo autotuning
+    integer(c_int32_t) :: halo_padding(3) ! padding argument for halo autotuning
   end type cudecompGridDescAutotuneOptions
 
   ! Info structure containing pencil specific information

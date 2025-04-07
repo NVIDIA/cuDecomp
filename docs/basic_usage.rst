@@ -1,7 +1,7 @@
 Basic Usage Guide
 =================
 We can now walk through how to set up and run a basic program with cuDecomp. The code snippets in this section are taken from
-the basic usage example [link]. This example assumes we are using 4 GPUs.
+the basic usage example (`C++ <https://github.com/NVIDIA/cuDecomp/blob/main/examples/cc/basic_usage/basic_usage.cu>`_, `Fortran <https://github.com/NVIDIA/cuDecomp/blob/main/examples/fortran/basic_usage/basic_usage.f90>`_). This example assumes we are using 4 GPUs.
 
 Starting up cuDecomp
 --------------------
