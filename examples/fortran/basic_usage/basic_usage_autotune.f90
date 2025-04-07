@@ -111,16 +111,16 @@ program main
 
   ! Transpose communication backend autotuning options
   options%autotune_transpose_backend = .true.
-  options%transpose_use_inplace_buffers(1) = .true.
-  options%transpose_use_inplace_buffers(2) = .true.
-  options%transpose_use_inplace_buffers(3) = .true.
-  options%transpose_use_inplace_buffers(4) = .true.
-  options%transpose_op_weights(1) = 1.0
-  options%transpose_op_weights(2) = 1.0
-  options%transpose_op_weights(3) = 1.0
-  options%transpose_op_weights(4) = 1.0
-  options%transpose_input_halo_extents(:, 1) = [1, 1, 1]
-  options%transpose_output_halo_extents(:, 4) = [1, 1, 1]
+  options%transpose_use_inplace_buffers(1) = .true. ! use in-place buffers for X-to-Y transpose
+  options%transpose_use_inplace_buffers(2) = .true. ! use in-place buffers for Y-to-Z transpose
+  options%transpose_use_inplace_buffers(3) = .true. ! use in-place buffers for Z-to-Y transpose
+  options%transpose_use_inplace_buffers(4) = .true. ! use in-place buffers for Y-to-X transpose
+  options%transpose_op_weights(1) = 1.0 ! apply 1.0 multiplier to X-to-Y transpose timings
+  options%transpose_op_weights(2) = 1.0 ! apply 1.0 multiplier to Y-to-Z transpose timings
+  options%transpose_op_weights(3) = 1.0 ! apply 1.0 multiplier to Z-to-Y transpose timings
+  options%transpose_op_weights(4) = 1.0 ! apply 1.0 multiplier to Y-to-X transpose timings
+  options%transpose_input_halo_extents(:, 1) = [1, 1, 1] ! set input_halo_extent to [1, 1, 1] for X-to-Y transpose
+  options%transpose_output_halo_extents(:, 4) = [1, 1, 1] ! set input_halo_extent to [1, 1, 1] for Y-to-X transpose
 
   ! Halo communication backend autotuning options
   options%autotune_halo_backend = .true.
