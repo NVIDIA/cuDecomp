@@ -163,7 +163,7 @@ int main(int argc, char** argv) {
   options.transpose_input_halo_extents[0][0] = 1; // set input_halo_extent to [1, 1, 1] for X-to-Y transpose
   options.transpose_input_halo_extents[0][1] = 1;
   options.transpose_input_halo_extents[0][2] = 1;
-  options.transpose_output_halo_extents[3][0] = 1; // set input_halo_extent to [1, 1, 1] for Y-to-X transpose
+  options.transpose_output_halo_extents[3][0] = 1; // set output_halo_extent to [1, 1, 1] for Y-to-X transpose
   options.transpose_output_halo_extents[3][1] = 1;
   options.transpose_output_halo_extents[3][2] = 1;
 

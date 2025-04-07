@@ -120,7 +120,7 @@ program main
   options%transpose_op_weights(3) = 1.0 ! apply 1.0 multiplier to Z-to-Y transpose timings
   options%transpose_op_weights(4) = 1.0 ! apply 1.0 multiplier to Y-to-X transpose timings
   options%transpose_input_halo_extents(:, 1) = [1, 1, 1] ! set input_halo_extent to [1, 1, 1] for X-to-Y transpose
-  options%transpose_output_halo_extents(:, 4) = [1, 1, 1] ! set input_halo_extent to [1, 1, 1] for Y-to-X transpose
+  options%transpose_output_halo_extents(:, 4) = [1, 1, 1] ! set output_halo_extent to [1, 1, 1] for Y-to-X transpose
 
   ! Halo communication backend autotuning options
   options%autotune_halo_backend = .true.
