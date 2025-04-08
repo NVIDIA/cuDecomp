@@ -73,7 +73,9 @@ template <typename T> static std::vector<T> processTimings(cudecompHandle_t hand
   CHECK_MPI(MPI_Allreduce(MPI_IN_PLACE, &t_avg, 1, MPI_DOUBLE, MPI_SUM, handle->mpi_comm));
   t_avg /= handle->nranks;
 
-  for (auto& t : times) { t = (t - t_avg) * (t - t_avg); }
+  for (auto& t : times) {
+    t = (t - t_avg) * (t - t_avg);
+  }
   double t_var = std::accumulate(times.begin(), times.end(), T(0)) / times.size();
   CHECK_MPI(MPI_Allreduce(MPI_IN_PLACE, &t_var, 1, MPI_DOUBLE, MPI_SUM, handle->mpi_comm));
   t_var /= handle->nranks;
@@ -93,7 +95,9 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
 
   // Create cuda_events for intermediate timings
   std::vector<cudaEvent_t> events(5);
-  for (auto& event : events) { CHECK_CUDA(cudaEventCreate(&event)); }
+  for (auto& event : events) {
+    CHECK_CUDA(cudaEventCreate(&event));
+  }
 
   bool autotune_comm = options->autotune_transpose_backend;
   bool autotune_pdims = (grid_desc->config.pdims[0] == 0 && grid_desc->config.pdims[1] == 0);
@@ -156,16 +160,24 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
     cudecompPencilInfo_t pinfo_x0, pinfo_x3;
     cudecompPencilInfo_t pinfo_y0, pinfo_y1, pinfo_y2, pinfo_y3;
     cudecompPencilInfo_t pinfo_z1, pinfo_z2;
-    CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_x0, 0, options->transpose_input_halo_extents[0], options->transpose_input_padding[0]));
-    CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_x3, 0, options->transpose_output_halo_extents[3], options->transpose_output_padding[3]));
+    CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_x0, 0, options->transpose_input_halo_extents[0],
+                                         options->transpose_input_padding[0]));
+    CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_x3, 0, options->transpose_output_halo_extents[3],
+                                         options->transpose_output_padding[3]));
 
-    CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_y0, 1, options->transpose_output_halo_extents[0], options->transpose_output_padding[0]));
-    CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_y1, 1, options->transpose_input_halo_extents[1], options->transpose_input_padding[1]));
-    CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_y2, 1, options->transpose_output_halo_extents[2], options->transpose_output_padding[2]));
-    CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_y3, 1, options->transpose_input_halo_extents[3], options->transpose_input_padding[3]));
+    CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_y0, 1, options->transpose_output_halo_extents[0],
+                                         options->transpose_output_padding[0]));
+    CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_y1, 1, options->transpose_input_halo_extents[1],
+                                         options->transpose_input_padding[1]));
+    CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_y2, 1, options->transpose_output_halo_extents[2],
+                                         options->transpose_output_padding[2]));
+    CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_y3, 1, options->transpose_input_halo_extents[3],
+                                         options->transpose_input_padding[3]));
 
-    CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_z1, 2, options->transpose_output_halo_extents[1], options->transpose_output_padding[1]));
-    CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_z2, 2, options->transpose_input_halo_extents[2], options->transpose_input_padding[2]));
+    CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_z1, 2, options->transpose_output_halo_extents[1],
+                                         options->transpose_output_padding[1]));
+    CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_z2, 2, options->transpose_input_halo_extents[2],
+                                         options->transpose_input_padding[2]));
 
     // Skip any decompositions with empty pencils
     if (grid_desc->config.pdims[0] > std::min(grid_desc->config.gdims_dist[0], grid_desc->config.gdims_dist[1]) ||
@@ -210,7 +222,8 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
 #ifdef ENABLE_NVSHMEM
         if (work && work != work_nvshmem) {
           auto tmp = grid_desc->config.transpose_comm_backend;
-          grid_desc->config.transpose_comm_backend = (need_nccl) ? CUDECOMP_TRANSPOSE_COMM_NCCL : CUDECOMP_TRANSPOSE_COMM_MPI_P2P;
+          grid_desc->config.transpose_comm_backend =
+              (need_nccl) ? CUDECOMP_TRANSPOSE_COMM_NCCL : CUDECOMP_TRANSPOSE_COMM_MPI_P2P;
           CHECK_CUDECOMP(cudecompFree(handle, grid_desc, work));
           grid_desc->config.transpose_comm_backend = tmp;
         }
@@ -234,17 +247,17 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
         } else {
           CHECK_CUDA(cudaFree(work));
           auto tmp = grid_desc->config.transpose_comm_backend;
-          grid_desc->config.transpose_comm_backend = (need_nccl) ? CUDECOMP_TRANSPOSE_COMM_NCCL : CUDECOMP_TRANSPOSE_COMM_MPI_P2P;
+          grid_desc->config.transpose_comm_backend =
+              (need_nccl) ? CUDECOMP_TRANSPOSE_COMM_NCCL : CUDECOMP_TRANSPOSE_COMM_MPI_P2P;
           cudecompResult_t ret = cudecompMalloc(handle, grid_desc, reinterpret_cast<void**>(&work), work_sz);
           grid_desc->config.transpose_comm_backend = tmp;
         }
 #endif
       } else {
         auto tmp = grid_desc->config.transpose_comm_backend;
-        grid_desc->config.transpose_comm_backend = (need_nccl) ? CUDECOMP_TRANSPOSE_COMM_NCCL : CUDECOMP_TRANSPOSE_COMM_MPI_P2P;
-        if (work) {
-          CHECK_CUDECOMP(cudecompFree(handle, grid_desc, work));
-        }
+        grid_desc->config.transpose_comm_backend =
+            (need_nccl) ? CUDECOMP_TRANSPOSE_COMM_NCCL : CUDECOMP_TRANSPOSE_COMM_MPI_P2P;
+        if (work) { CHECK_CUDECOMP(cudecompFree(handle, grid_desc, work)); }
         CHECK_CUDECOMP(cudecompMalloc(handle, grid_desc, reinterpret_cast<void**>(&work), work_sz));
         grid_desc->config.transpose_comm_backend = tmp;
       }
@@ -442,7 +455,8 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
   if (need_nvshmem) {
     if (work != work_nvshmem) {
       auto tmp = grid_desc->config.transpose_comm_backend;
-      grid_desc->config.transpose_comm_backend = (need_nccl) ? CUDECOMP_TRANSPOSE_COMM_NCCL : CUDECOMP_TRANSPOSE_COMM_MPI_P2P;
+      grid_desc->config.transpose_comm_backend =
+          (need_nccl) ? CUDECOMP_TRANSPOSE_COMM_NCCL : CUDECOMP_TRANSPOSE_COMM_MPI_P2P;
       CHECK_CUDECOMP(cudecompFree(handle, grid_desc, work));
       grid_desc->config.transpose_comm_backend = tmp;
     }
@@ -455,7 +469,8 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
 #endif
   } else {
     auto tmp = grid_desc->config.transpose_comm_backend;
-    grid_desc->config.transpose_comm_backend = (need_nccl) ? CUDECOMP_TRANSPOSE_COMM_NCCL : CUDECOMP_TRANSPOSE_COMM_MPI_P2P;
+    grid_desc->config.transpose_comm_backend =
+        (need_nccl) ? CUDECOMP_TRANSPOSE_COMM_NCCL : CUDECOMP_TRANSPOSE_COMM_MPI_P2P;
     CHECK_CUDECOMP(cudecompFree(handle, grid_desc, work));
     grid_desc->config.transpose_comm_backend = tmp;
   }
@@ -464,7 +479,9 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
   if (need_data2) { CHECK_CUDA(cudaFree(data2)); }
 
   // Delete cuda events
-  for (auto& event : events) { CHECK_CUDA(cudaEventDestroy(event)); }
+  for (auto& event : events) {
+    CHECK_CUDA(cudaEventDestroy(event));
+  }
 
   // Set handle to best option (broadcast from rank 0 for consistency)
   CHECK_MPI(MPI_Bcast(&comm_backend_best, sizeof(cudecompTransposeCommBackend_t), MPI_CHAR, 0, handle->mpi_comm));
@@ -484,8 +501,9 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
   double t_end = MPI_Wtime();
   if (handle->rank == 0) printf("CUDECOMP: transpose autotuning time [s]: %f\n", t_end - t_start);
 
-  // Perform an MPI_Alltoall on small (~1 MiB) buffers to force some MPI backends (e.g. UCX) to release stale registration handles
-  // on larger test data buffers. These stale registration handles can cause to delays in freeing the test buffer GPU memory.
+  // Perform an MPI_Alltoall on small (~1 MiB) buffers to force some MPI backends (e.g. UCX) to release stale
+  // registration handles on larger test data buffers. These stale registration handles can cause to delays in freeing
+  // the test buffer GPU memory.
   char *tmp1, *tmp2;
   size_t per_rank_size = (1024 * 1024 + handle->nranks - 1) / handle->nranks;
   CHECK_CUDA(cudaMalloc(&tmp1, per_rank_size * handle->nranks * sizeof(*tmp1)));
@@ -556,7 +574,8 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
     grid_desc->pidx[1] = handle->rank % grid_desc->config.pdims[1];
 
     cudecompPencilInfo_t pinfo;
-    CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo, options->halo_axis, options->halo_extents, options->halo_padding));
+    CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo, options->halo_axis, options->halo_extents,
+                                         options->halo_padding));
 
     // Skip any decompositions with empty pencils
     if (std::max(grid_desc->config.pdims[0], grid_desc->config.pdims[1]) >
@@ -627,9 +646,7 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
       } else {
         auto tmp = grid_desc->config.halo_comm_backend;
         grid_desc->config.halo_comm_backend = (need_nccl) ? CUDECOMP_HALO_COMM_NCCL : CUDECOMP_HALO_COMM_MPI;
-        if (work) {
-          CHECK_CUDECOMP(cudecompFree(handle, grid_desc, work));
-        }
+        if (work) { CHECK_CUDECOMP(cudecompFree(handle, grid_desc, work)); }
         CHECK_CUDECOMP(cudecompMalloc(handle, grid_desc, reinterpret_cast<void**>(&work), work_sz));
         grid_desc->config.halo_comm_backend = tmp;
       }

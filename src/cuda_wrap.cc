@@ -35,19 +35,17 @@
 #include "internal/exceptions.h"
 
 #if CUDART_VERSION >= 12000
-#define LOAD_SYM(symbol)                                                                                                 \
-  do {                                                                                                                   \
-    cudaDriverEntryPointQueryResult driverStatus = cudaDriverEntryPointSymbolNotFound;                                   \
-    CHECK_CUDA(cudaGetDriverEntryPoint(#symbol, (void **) (&cuFnTable.pfn_##symbol), cudaEnableDefault, &driverStatus)); \
-    if (driverStatus != cudaDriverEntryPointSuccess) {                                                                   \
-      THROW_CUDA_ERROR("cudaGetDriverEntryPoint failed.");                                                               \
-    }                                                                                                                    \
-  } while(false)
+#define LOAD_SYM(symbol)                                                                                               \
+  do {                                                                                                                 \
+    cudaDriverEntryPointQueryResult driverStatus = cudaDriverEntryPointSymbolNotFound;                                 \
+    CHECK_CUDA(cudaGetDriverEntryPoint(#symbol, (void**)(&cuFnTable.pfn_##symbol), cudaEnableDefault, &driverStatus)); \
+    if (driverStatus != cudaDriverEntryPointSuccess) { THROW_CUDA_ERROR("cudaGetDriverEntryPoint failed."); }          \
+  } while (false)
 #else
-#define LOAD_SYM(symbol)                                                                                                 \
-  do {                                                                                                                   \
-    CHECK_CUDA(cudaGetDriverEntryPoint(#symbol, (void **) (&cuFnTable.pfn_##symbol), cudaEnableDefault));                \
-  } while(false)
+#define LOAD_SYM(symbol)                                                                                               \
+  do {                                                                                                                 \
+    CHECK_CUDA(cudaGetDriverEntryPoint(#symbol, (void**)(&cuFnTable.pfn_##symbol), cudaEnableDefault));                \
+  } while (false)
 #endif
 
 namespace cudecomp {

@@ -159,7 +159,8 @@ static void localPermute(const cudecompHandle_t handle, const std::array<int64_t
 template <typename T>
 static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, const cudecompGridDesc_t grid_desc,
                                T* input, T* output, T* work, const int32_t input_halo_extents_ptr[] = nullptr,
-                               const int32_t output_halo_extents_ptr[] = nullptr, const int32_t input_padding_ptr[] = nullptr,
+                               const int32_t output_halo_extents_ptr[] = nullptr,
+                               const int32_t input_padding_ptr[] = nullptr,
                                const int32_t output_padding_ptr[] = nullptr, cudaStream_t stream = 0) {
 
   std::array<int32_t, 3> input_halo_extents{};
@@ -209,10 +210,12 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
   // Get pencil info
   cudecompPencilInfo_t pinfo_a, pinfo_a_h;
   CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_a, ax_a, nullptr, nullptr));
-  CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_a_h, ax_a, input_halo_extents.data(), input_padding.data()));
+  CHECK_CUDECOMP(
+      cudecompGetPencilInfo(handle, grid_desc, &pinfo_a_h, ax_a, input_halo_extents.data(), input_padding.data()));
   cudecompPencilInfo_t pinfo_b, pinfo_b_h;
   CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_b, ax_b, nullptr, nullptr));
-  CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_b_h, ax_b, output_halo_extents.data(), output_padding.data()));
+  CHECK_CUDECOMP(
+      cudecompGetPencilInfo(handle, grid_desc, &pinfo_b_h, ax_b, output_halo_extents.data(), output_padding.data()));
 
   // Check if input and output orders are the same
   bool orders_equal = true;
@@ -469,7 +472,9 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
     // For special cases that skip packing and are pipelined, need to record events to
     // enforce input data dependency
     if (pipelined) {
-      for (int j = 0; j < splits_a.size(); ++j) { CHECK_CUDA(cudaEventRecord(grid_desc->events[j], stream)); }
+      for (int j = 0; j < splits_a.size(); ++j) {
+        CHECK_CUDA(cudaEventRecord(grid_desc->events[j], stream));
+      }
     }
   }
 
@@ -564,7 +569,7 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
                 if (pinfo_a_h.order[i] == ax_a) break;
                 shift_a *= shape_g_a_h[pinfo_a_h.order[i]];
               }
-               src = o2 + shift_a + getPencilPtrOffset(pinfo_a_h, input_halo_extents);
+              src = o2 + shift_a + getPencilPtrOffset(pinfo_a_h, input_halo_extents);
             }
             T* dst = o3 + shift + getPencilPtrOffset(pinfo_b_h, output_halo_extents);
             for (int i = 0; i < 3; ++i) {
@@ -731,8 +736,9 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
 template <typename T>
 void cudecompTransposeXToY(const cudecompHandle_t handle, const cudecompGridDesc_t grid_desc, T* input, T* output,
                            T* work, const int32_t input_halo_extents_ptr[] = nullptr,
-                           const int32_t output_halo_extents_ptr[] = nullptr, const int32_t input_padding_ptr[] = nullptr,
-                           const int32_t output_padding_ptr[] = nullptr, cudaStream_t stream = 0) {
+                           const int32_t output_halo_extents_ptr[] = nullptr,
+                           const int32_t input_padding_ptr[] = nullptr, const int32_t output_padding_ptr[] = nullptr,
+                           cudaStream_t stream = 0) {
   nvtx::rangePush("cudecompTransposeXToY");
   cudecompTranspose_(0, 1, handle, grid_desc, input, output, work, input_halo_extents_ptr, output_halo_extents_ptr,
                      input_padding_ptr, output_padding_ptr, stream);
@@ -742,8 +748,9 @@ void cudecompTransposeXToY(const cudecompHandle_t handle, const cudecompGridDesc
 template <typename T>
 void cudecompTransposeYToZ(const cudecompHandle_t handle, const cudecompGridDesc_t grid_desc, T* input, T* output,
                            T* work, const int32_t input_halo_extents_ptr[] = nullptr,
-                           const int32_t output_halo_extents_ptr[] = nullptr, const int32_t input_padding_ptr[] = nullptr,
-                           const int32_t output_padding_ptr[] = nullptr, cudaStream_t stream = 0) {
+                           const int32_t output_halo_extents_ptr[] = nullptr,
+                           const int32_t input_padding_ptr[] = nullptr, const int32_t output_padding_ptr[] = nullptr,
+                           cudaStream_t stream = 0) {
   nvtx::rangePush("cudecompTransposeYToZ");
   cudecompTranspose_(1, 1, handle, grid_desc, input, output, work, input_halo_extents_ptr, output_halo_extents_ptr,
                      input_padding_ptr, output_padding_ptr, stream);
@@ -753,8 +760,9 @@ void cudecompTransposeYToZ(const cudecompHandle_t handle, const cudecompGridDesc
 template <typename T>
 void cudecompTransposeZToY(const cudecompHandle_t handle, const cudecompGridDesc_t grid_desc, T* input, T* output,
                            T* work, const int32_t input_halo_extents_ptr[] = nullptr,
-                           const int32_t output_halo_extents_ptr[] = nullptr, const int32_t input_padding_ptr[] = nullptr,
-                           const int32_t output_padding_ptr[] = nullptr, cudaStream_t stream = 0) {
+                           const int32_t output_halo_extents_ptr[] = nullptr,
+                           const int32_t input_padding_ptr[] = nullptr, const int32_t output_padding_ptr[] = nullptr,
+                           cudaStream_t stream = 0) {
   nvtx::rangePush("cudecompTransposeZToY");
   cudecompTranspose_(2, -1, handle, grid_desc, input, output, work, input_halo_extents_ptr, output_halo_extents_ptr,
                      input_padding_ptr, output_padding_ptr, stream);
@@ -764,8 +772,9 @@ void cudecompTransposeZToY(const cudecompHandle_t handle, const cudecompGridDesc
 template <typename T>
 void cudecompTransposeYToX(const cudecompHandle_t handle, const cudecompGridDesc_t grid_desc, T* input, T* output,
                            T* work, const int32_t input_halo_extents_ptr[] = nullptr,
-                           const int32_t output_halo_extents_ptr[] = nullptr, const int32_t input_padding_ptr[] = nullptr,
-                           const int32_t output_padding_ptr[] = nullptr, cudaStream_t stream = 0) {
+                           const int32_t output_halo_extents_ptr[] = nullptr,
+                           const int32_t input_padding_ptr[] = nullptr, const int32_t output_padding_ptr[] = nullptr,
+                           cudaStream_t stream = 0) {
   nvtx::rangePush("cudecompTransposeYToX");
   cudecompTranspose_(1, -1, handle, grid_desc, input, output, work, input_halo_extents_ptr, output_halo_extents_ptr,
                      input_padding_ptr, output_padding_ptr, stream);

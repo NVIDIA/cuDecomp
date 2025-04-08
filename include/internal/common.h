@@ -46,23 +46,23 @@
 #include "internal/checks.h"
 
 namespace cudecomp {
-  typedef std::pair<std::array<unsigned char, NVML_GPU_FABRIC_UUID_LEN>, unsigned int> mnnvl_info;
+typedef std::pair<std::array<unsigned char, NVML_GPU_FABRIC_UUID_LEN>, unsigned int> mnnvl_info;
 }
 
 // cuDecomp handle containing general information
 struct cudecompHandle {
 
   MPI_Comm mpi_comm = MPI_COMM_NULL; // MPI communicator
-  int32_t rank;      // MPI rank
-  int32_t nranks;    // MPI size
+  int32_t rank;                      // MPI rank
+  int32_t nranks;                    // MPI size
 
   MPI_Comm mpi_local_comm = MPI_COMM_NULL; // MPI local communicator
-  int32_t local_rank;      // MPI rank
-  int32_t local_nranks;    // MPI size
+  int32_t local_rank;                      // MPI rank
+  int32_t local_nranks;                    // MPI size
 
   MPI_Comm mpi_clique_comm = MPI_COMM_NULL; // MPI MNNVL clique local communicator
-  int32_t clique_rank;      // MPI rank
-  int32_t clique_nranks;    // MPI size
+  int32_t clique_rank;                      // MPI rank
+  int32_t clique_nranks;                    // MPI size
 
   // Entries for NCCL management
   int n_grid_descs_using_nccl = 0;      // Count of grid descriptors using NCCL
@@ -94,7 +94,7 @@ struct cudecompHandle {
   size_t nvshmem_allocation_size = 0;                    // Total of NVSHMEM allocations
 
   // Multi-node NVLINK (MNNVL)
-  bool cuda_cumem_enable = false;                       // Flag to control whether cuMem* APIs are used for cudecompMalloc/Free
+  bool cuda_cumem_enable = false; // Flag to control whether cuMem* APIs are used for cudecompMalloc/Free
   std::vector<cudecomp::mnnvl_info> rank_to_mnnvl_info; // list of mnnvl information (clusterUuid, cliqueId) by rank
   std::vector<unsigned int> rank_to_clique;             // list of rank to MNNVL clique mappings
   std::vector<int> rank_to_clique_rank;                 // list of rank to MNNVL clique rank mappings
@@ -106,8 +106,8 @@ struct cudecompCommInfo {
   int32_t rank;
   int32_t nranks;
 
-  int32_t ngroups = 0;      // number of p2p groups (i.e. grouping of ranks with fast interconnect) in communicator
-  int32_t npergroup = 0;    // number of ranks per p2p group
+  int32_t ngroups = 0;   // number of p2p groups (i.e. grouping of ranks with fast interconnect) in communicator
+  int32_t npergroup = 0; // number of ranks per p2p group
 
 #ifdef ENABLE_NVSHMEM
   nvshmem_team_t nvshmem_team = NVSHMEM_TEAM_INVALID;
@@ -116,9 +116,9 @@ struct cudecompCommInfo {
 
 // cuDecomp grid descriptor containing grid-specific information
 struct cudecompGridDesc {
-  cudecompGridDescConfig_t config; // configuration struct
-  bool gdims_dist_set = false;     // flag to record if gdims_dist was set to non-default values
-  bool transpose_mem_order_set = false;     // flag to record if transpose_mem_order was set to non-default values
+  cudecompGridDescConfig_t config;      // configuration struct
+  bool gdims_dist_set = false;          // flag to record if gdims_dist was set to non-default values
+  bool transpose_mem_order_set = false; // flag to record if transpose_mem_order was set to non-default values
 
   int32_t pidx[2]; // processor grid index;
 
@@ -171,7 +171,9 @@ static size_t getPencilPtrOffset(const cudecompPencilInfo_t& pinfo, const std::a
 // Helper function to return shape in global order
 static inline std::array<int32_t, 3> getShapeG(const cudecompPencilInfo_t& pinfo) {
   std::array<int32_t, 3> shape_g;
-  for (int i = 0; i < 3; ++i) { shape_g[pinfo.order[i]] = pinfo.shape[i]; }
+  for (int i = 0; i < 3; ++i) {
+    shape_g[pinfo.order[i]] = pinfo.shape[i];
+  }
   return shape_g;
 }
 
@@ -242,9 +244,7 @@ static void setCommInfo(cudecompHandle_t& handle, cudecompGridDesc_t& grid_desc,
       if (count == 0) {
         count = e.second;
       } else {
-        if (count != e.second) {
-	  count = gcd(count, e.second);
-        }
+        if (count != e.second) { count = gcd(count, e.second); }
       }
     }
   } else {
@@ -262,9 +262,7 @@ static void setCommInfo(cudecompHandle_t& handle, cudecompGridDesc_t& grid_desc,
       if (count == 0) {
         count = e.second;
       } else {
-        if (count != e.second) {
-	  count = gcd(count, e.second);
-        }
+        if (count != e.second) { count = gcd(count, e.second); }
       }
     }
   }
@@ -321,7 +319,9 @@ static inline void getAlltoallPeerRanks(cudecompGridDesc_t grid_desc, cudecompCo
 
 static inline std::vector<int64_t> getSplits(int64_t N, int nchunks, int pad) {
   std::vector<int64_t> splits(nchunks, N / nchunks);
-  for (int i = 0; i < N % nchunks; ++i) { splits[i] += 1; }
+  for (int i = 0; i < N % nchunks; ++i) {
+    splits[i] += 1;
+  }
 
   // Add padding to last populated pencil
   splits[std::min(N, (int64_t)nchunks) - 1] += pad;
@@ -334,13 +334,10 @@ template <typename T> static inline bool anyNonzeros(const std::array<T, 3>& arr
 }
 
 // Assigns an integer ID to every unique value in a vector
-template <typename T>
-std::unordered_map<T, unsigned int> getUniqueIds(const std::vector<T>& v) {
+template <typename T> std::unordered_map<T, unsigned int> getUniqueIds(const std::vector<T>& v) {
   std::unordered_map<T, unsigned int> ids;
-  for (const auto &e : v) {
-    if (ids.count(e) == 0){
-      ids[e] = static_cast<unsigned int>(ids.size());
-    }
+  for (const auto& e : v) {
+    if (ids.count(e) == 0) { ids[e] = static_cast<unsigned int>(ids.size()); }
   }
   return ids;
 }

@@ -46,9 +46,8 @@ namespace cudecomp {
 
 template <typename T>
 void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompGridDesc_t grid_desc, T* input, T* work,
-                          const int32_t halo_extents_ptr[], const bool halo_periods_ptr[],
-                          int32_t dim, const int32_t padding_ptr[],
-                          cudaStream_t stream) {
+                          const int32_t halo_extents_ptr[], const bool halo_periods_ptr[], int32_t dim,
+                          const int32_t padding_ptr[], cudaStream_t stream) {
   std::array<int32_t, 3> halo_extents{};
   if (halo_extents_ptr) std::copy(halo_extents_ptr, halo_extents_ptr + 3, halo_extents.begin());
   std::array<bool, 3> halo_periods{};
@@ -85,8 +84,9 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
   auto comm_axis = (count == 0) ? CUDECOMP_COMM_COL : CUDECOMP_COMM_ROW;
   int comm_rank = (comm_axis == CUDECOMP_COMM_COL) ? grid_desc->col_comm_info.rank : grid_desc->row_comm_info.rank;
 
-  auto splits = getSplits(grid_desc->config.gdims_dist[dim], grid_desc->config.pdims[comm_axis == CUDECOMP_COMM_COL ? 0 : 1],
-                          grid_desc->config.gdims[dim] - grid_desc->config.gdims_dist[dim]);
+  auto splits =
+      getSplits(grid_desc->config.gdims_dist[dim], grid_desc->config.pdims[comm_axis == CUDECOMP_COMM_COL ? 0 : 1],
+                grid_desc->config.gdims[dim] - grid_desc->config.gdims_dist[dim]);
 
   int comm_rank_l = comm_rank - 1;
   int comm_rank_r = comm_rank + 1;
@@ -96,15 +96,13 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
   }
 
   if (comm_rank_l >= 0) {
-    if (halo_extents[dim] > splits[comm_rank_l] ||
-        halo_extents[dim] > splits[comm_rank]) {
+    if (halo_extents[dim] > splits[comm_rank_l] || halo_extents[dim] > splits[comm_rank]) {
       THROW_INVALID_USAGE("halo spans multiple processes, this is not currently supported.");
     }
   }
 
   if (comm_rank_r < splits.size()) {
-    if (halo_extents[dim] > splits[comm_rank_r] ||
-        halo_extents[dim] > splits[comm_rank]) {
+    if (halo_extents[dim] > splits[comm_rank_r] || halo_extents[dim] > splits[comm_rank]) {
       THROW_INVALID_USAGE("halo spans multiple processes, this is not currently supported.");
     }
   }
@@ -128,10 +126,8 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
   bool managed = isManagedPointer(input);
   bool input_has_padding = anyNonzeros(padding);
 
-  if (c == 2 &&
-      (input_has_padding ||
-       haloBackendRequiresNvshmem(grid_desc->config.halo_comm_backend) ||
-       (managed && haloBackendRequiresMpi(grid_desc->config.halo_comm_backend)))) {
+  if (c == 2 && (input_has_padding || haloBackendRequiresNvshmem(grid_desc->config.halo_comm_backend) ||
+                 (managed && haloBackendRequiresMpi(grid_desc->config.halo_comm_backend)))) {
     // For padded input, always stage to work space.
     // For managed memory, always stage to work space if using MPI.
     // For any memory, always stage to workspace if using NVSHMEM.
@@ -273,8 +269,8 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
 
 template <typename T>
 void cudecompUpdateHalosX(const cudecompHandle_t handle, const cudecompGridDesc_t grid_desc, T* input, T* work,
-                          const int32_t halo_extents_ptr[], const bool halo_periods_ptr[],
-                          int32_t dim, const int32_t padding_ptr[], cudaStream_t stream) {
+                          const int32_t halo_extents_ptr[], const bool halo_periods_ptr[], int32_t dim,
+                          const int32_t padding_ptr[], cudaStream_t stream) {
   std::stringstream os;
   os << "cudecompUpdateHalosX_" << dim;
   nvtx::rangePush(os.str());
@@ -284,8 +280,8 @@ void cudecompUpdateHalosX(const cudecompHandle_t handle, const cudecompGridDesc_
 
 template <typename T>
 void cudecompUpdateHalosY(const cudecompHandle_t handle, const cudecompGridDesc_t grid_desc, T* input, T* work,
-                          const int32_t halo_extents_ptr[], const bool halo_periods_ptr[],
-                          int32_t dim, const int32_t padding_ptr[], cudaStream_t stream) {
+                          const int32_t halo_extents_ptr[], const bool halo_periods_ptr[], int32_t dim,
+                          const int32_t padding_ptr[], cudaStream_t stream) {
   std::stringstream os;
   os << "cudecompUpdateHalosY_" << dim;
   nvtx::rangePush(os.str());
@@ -295,8 +291,8 @@ void cudecompUpdateHalosY(const cudecompHandle_t handle, const cudecompGridDesc_
 
 template <typename T>
 void cudecompUpdateHalosZ(const cudecompHandle_t handle, const cudecompGridDesc_t grid_desc, T* input, T* work,
-                          const int32_t halo_extents_ptr[], const bool halo_periods_ptr[],
-                          int32_t dim, const int32_t padding_ptr[], cudaStream_t stream) {
+                          const int32_t halo_extents_ptr[], const bool halo_periods_ptr[], int32_t dim,
+                          const int32_t padding_ptr[], cudaStream_t stream) {
   std::stringstream os;
   os << "cudecompUpdateHalosZ_" << dim;
   nvtx::rangePush(os.str());

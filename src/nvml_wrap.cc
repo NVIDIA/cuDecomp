@@ -32,25 +32,23 @@
 #include <dlfcn.h>
 
 #include "internal/checks.h"
-#include "internal/nvml_wrap.h"
 #include "internal/exceptions.h"
+#include "internal/nvml_wrap.h"
 
-#define LOAD_SYM(symbol)                                                        \
-  do {                                                                          \
-    void **fptr = (void**)(&nvmlFnTable.pfn_##symbol);                          \
-    void *sym = dlsym(nvml_handle, #symbol);                                    \
-    *fptr = sym;                                                                \
-  } while(false)
+#define LOAD_SYM(symbol)                                                                                               \
+  do {                                                                                                                 \
+    void** fptr = (void**)(&nvmlFnTable.pfn_##symbol);                                                                 \
+    void* sym = dlsym(nvml_handle, #symbol);                                                                           \
+    *fptr = sym;                                                                                                       \
+  } while (false)
 
 namespace cudecomp {
 
 nvmlFunctionTable nvmlFnTable; // global table of required NVML functions
 
 void initNvmlFunctionTable() {
-  void *nvml_handle = dlopen("libnvidia-ml.so.1", RTLD_NOW);
-  if (!nvml_handle) {
-    THROW_INVALID_USAGE("Could not dlopen libnvidia-ml.so.1");
-  }
+  void* nvml_handle = dlopen("libnvidia-ml.so.1", RTLD_NOW);
+  if (!nvml_handle) { THROW_INVALID_USAGE("Could not dlopen libnvidia-ml.so.1"); }
   LOAD_SYM(nvmlInit);
   LOAD_SYM(nvmlShutdown);
   LOAD_SYM(nvmlErrorString);

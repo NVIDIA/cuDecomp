@@ -148,7 +148,7 @@ __host__ __device__ __forceinline__ static void get_gx(const cudecompPencilInfo_
 __host__ __device__ __forceinline__ static void get_k(int64_t N, int64_t gx[3], real_t& kx, real_t& ky, real_t& kz) {
   // Compute wave number
   kx = gx[0];
-  if (gx[0] == N/2) kx *= -1;
+  if (gx[0] == N / 2) kx *= -1;
 
   ky = (gx[1] < N / 2) ? gx[1] : gx[1] - N;
   kz = (gx[2] < N / 2) ? gx[2] : gx[2] - N;
@@ -213,8 +213,8 @@ __global__ static void cross(const real_t* U_r0, const real_t* U_r1, const real_
 }
 
 __global__ static void compute_dU(const complex_t* Uh_c0, const complex_t* Uh_c1, const complex_t* Uh_c2,
-                                  complex_t* dU_c0, complex_t* dU_c1, complex_t* dU_c2, real_t kmax,
-                                  int64_t N, real_t nu, cudecompPencilInfo_t info) {
+                                  complex_t* dU_c0, complex_t* dU_c1, complex_t* dU_c2, real_t kmax, int64_t N,
+                                  real_t nu, cudecompPencilInfo_t info) {
 
   const int64_t i = blockIdx.x * blockDim.x + threadIdx.x;
   if (i >= info.size) return;
@@ -302,11 +302,11 @@ __global__ static void velmax(int64_t N, const real_t* U_r0, const real_t* U_r1,
   real_t v = U_r1[i] * scaling;
   real_t w = U_r2[i] * scaling;
 
-  velmax[i] = std::sqrt(u*u + v*v + w*w);
+  velmax[i] = std::sqrt(u * u + v * v + w * w);
 }
 
-__global__ static void spectrum(const complex_t* Uh_c0,const  complex_t* Uh_c1,const  complex_t* Uh_c2,
-                                real_t* ek, int64_t N, cudecompPencilInfo_t info) {
+__global__ static void spectrum(const complex_t* Uh_c0, const complex_t* Uh_c1, const complex_t* Uh_c2, real_t* ek,
+                                int64_t N, cudecompPencilInfo_t info) {
 
   const int64_t i = blockIdx.x * blockDim.x + threadIdx.x;
   if (i >= info.size) return;
@@ -322,8 +322,8 @@ __global__ static void spectrum(const complex_t* Uh_c0,const  complex_t* Uh_c1,c
   real_t kk = kx * kx + ky * ky + kz * kz;
   int shell = int(std::sqrt(kk) + 0.5);
 
-  real_t uu = (kx == 0 ? 0.5 : 1.0) * (abs(Uhu) * abs(Uhu) + abs(Uhv)* abs(Uhv) + abs(Uhw) * abs(Uhw));
-  atomicAdd(&ek[shell],  uu);
+  real_t uu = (kx == 0 ? 0.5 : 1.0) * (abs(Uhu) * abs(Uhu) + abs(Uhv) * abs(Uhv) + abs(Uhw) * abs(Uhw));
+  atomicAdd(&ek[shell], uu);
 }
 
 class TGSolver {
@@ -331,7 +331,8 @@ public:
   // Timestepping scheme
   enum TimeScheme { RK1, RK4 };
 
-  TGSolver(int64_t N, real_t nu, real_t dt, real_t cfl, TimeScheme tscheme = RK1) : N(N), nu(nu), dt_(dt), cfl(cfl), tscheme(tscheme){};
+  TGSolver(int64_t N, real_t nu, real_t dt, real_t cfl, TimeScheme tscheme = RK1)
+      : N(N), nu(nu), dt_(dt), cfl(cfl), tscheme(tscheme) {};
   void finalize() {
     // Free memory
     for (int i = 0; i < 3; ++i) {
@@ -360,7 +361,7 @@ public:
     CHECK_MPI_EXIT(MPI_Comm_rank(mpi_local_comm, &local_rank));
     CHECK_CUDA_EXIT(cudaSetDevice(local_rank));
 
-    if (rank == 0) printf("running on %d x %d x %d spatial grid...\n", (int) N, (int) N, (int) N);
+    if (rank == 0) printf("running on %d x %d x %d spatial grid...\n", (int)N, (int)N, (int)N);
 
     // Initialize cuDecomp
     cudecompInit(&handle, mpi_comm);
@@ -379,13 +380,13 @@ public:
     options.dtype = get_cudecomp_datatype(complex_t(0));
     options.autotune_transpose_backend = true;
 
-    std::array<int, 3> gdim_c{(int) N / 2 + 1, (int) N, (int) N};
+    std::array<int, 3> gdim_c{(int)N / 2 + 1, (int)N, (int)N};
     config.gdims[0] = gdim_c[0];
     config.gdims[1] = gdim_c[1];
     config.gdims[2] = gdim_c[2];
     cudecompGridDescCreate(handle, &grid_desc_c, &config, &options);
 
-    std::array<int, 3> gdim_r{((int) N / 2 + 1) * 2, (int) N, (int) N}; // with padding for in-place operation
+    std::array<int, 3> gdim_r{((int)N / 2 + 1) * 2, (int)N, (int)N}; // with padding for in-place operation
     config.gdims[0] = gdim_r[0];
     config.gdims[1] = gdim_r[1];
     config.gdims[2] = gdim_r[2];
@@ -502,7 +503,7 @@ public:
     }
 
     // Spectrum
-    int num_shells = int(std::sqrt(9*N*N + 4*N + 4) / 4) + 1;
+    int num_shells = int(std::sqrt(9 * N * N + 4 * N + 4) / 4) + 1;
     CHECK_CUDA_EXIT(cudaMallocManaged(&ek, num_shells * sizeof(real_t)));
 
     // Initialize U (physical space)
@@ -526,9 +527,7 @@ public:
   }
 
   void step() {
-    if (cfl > 0.0) {
-      dt_ = get_dt(cfl);
-    }
+    if (cfl > 0.0) { dt_ = get_dt(cfl); }
     switch (tscheme) {
     case RK1: update_rk1(); break;
     case RK4: update_rk4(); break;
@@ -541,7 +540,8 @@ public:
   void print_stats(const std::string& logfile) {
     // Compute enstrophy
     // Recompute curl and transform to physical space (z-pencil -> x-pencil).
-    curl<<<(pinfo_z_c.size + 256 - 1) / 256, 256>>>(Uh_c[0][0], Uh_c[0][1], Uh_c[0][2], dU_c[0], dU_c[1], dU_c[2], N, pinfo_z_c);
+    curl<<<(pinfo_z_c.size + 256 - 1) / 256, 256>>>(Uh_c[0][0], Uh_c[0][1], Uh_c[0][2], dU_c[0], dU_c[1], dU_c[2], N,
+                                                    pinfo_z_c);
     CHECK_CUDA_LAUNCH_EXIT();
 
     backward(dU_c, dU_r);
@@ -581,10 +581,10 @@ public:
         std::ofstream g;
         g.open(logfile, std::ofstream::out | std::ofstream::app);
         g << std::scientific << std::setprecision(12);
-        g  << flowtime_ << ",";
-        g  << ke << ",";
-        g  << enst << ",";
-        g  << dt_ << std::endl;
+        g << flowtime_ << ",";
+        g << ke << ",";
+        g << enst << ",";
+        g << dt_ << std::endl;
         g.close();
       }
     }
@@ -593,16 +593,15 @@ public:
   // Write spectrum
   void write_spectrum_sample(int idx) {
     // Compute spectrum per rank
-    int num_shells = int(std::sqrt(9*N*N + 4*N + 4) / 4) + 1;
+    int num_shells = int(std::sqrt(9 * N * N + 4 * N + 4) / 4) + 1;
     CHECK_CUDA_EXIT(cudaMemset(ek, 0, num_shells * sizeof(real_t)));
-    spectrum<<<(pinfo_z_c.size + 256 - 1) / 256, 256>>>(Uh_c[0][0], Uh_c[0][1], Uh_c[0][2],
-                                                        ek, N, pinfo_z_c);
+    spectrum<<<(pinfo_z_c.size + 256 - 1) / 256, 256>>>(Uh_c[0][0], Uh_c[0][1], Uh_c[0][2], ek, N, pinfo_z_c);
     CHECK_CUDA_LAUNCH_EXIT();
     CHECK_CUDA_EXIT(cudaDeviceSynchronize());
 
     if (nranks > 1) {
-      CHECK_MPI_EXIT(MPI_Reduce((rank == 0) ? MPI_IN_PLACE : ek, ek, num_shells, get_mpi_datatype(real_t(0)),
-                                MPI_SUM, 0, mpi_comm));
+      CHECK_MPI_EXIT(MPI_Reduce((rank == 0) ? MPI_IN_PLACE : ek, ek, num_shells, get_mpi_datatype(real_t(0)), MPI_SUM,
+                                0, mpi_comm));
     }
 
     if (rank == 0) {
@@ -651,13 +650,9 @@ public:
     g.close();
   }
 
-  real_t flowtime() {
-    return flowtime_;
-  }
+  real_t flowtime() { return flowtime_; }
 
-  real_t dt() {
-    return dt_;
-  }
+  real_t dt() { return dt_; }
 
 private:
   void forward(std::array<real_t*, 3>& U_r, std::array<complex_t*, 3>& U_c) {
@@ -700,8 +695,8 @@ private:
 
     // Compute dU in frequency space (z-pencil)
     real_t kmax = 2.0 / 3.0 * (N / 2 + 1); // aliasing limit
-    compute_dU<<<(pinfo_z_c.size + 256 - 1) / 256, 256>>>(Uh_c[0], Uh_c[1], Uh_c[2], dU_c[0], dU_c[1], dU_c[2],
-                                                          kmax, N, nu, pinfo_z_c);
+    compute_dU<<<(pinfo_z_c.size + 256 - 1) / 256, 256>>>(Uh_c[0], Uh_c[1], Uh_c[2], dU_c[0], dU_c[1], dU_c[2], kmax, N,
+                                                          nu, pinfo_z_c);
     CHECK_CUDA_LAUNCH_EXIT();
   }
 
@@ -778,7 +773,8 @@ private:
     velmax<<<(pinfo_x_r.size + 256 - 1) / 256, 256>>>(N, U_r[0], U_r[1], U_r[2], dU_r[0], pinfo_x_r);
     CHECK_CUDA_LAUNCH_EXIT();
 
-    CHECK_CUDA_EXIT(cub::DeviceReduce::Max(cub_work, cub_work_sz, dU_r[0], cub_sum, pinfo_x_r.size));;
+    CHECK_CUDA_EXIT(cub::DeviceReduce::Max(cub_work, cub_work_sz, dU_r[0], cub_sum, pinfo_x_r.size));
+    ;
     CHECK_CUDA_EXIT(cudaDeviceSynchronize());
     real_t velmax = *cub_sum;
     if (nranks > 1) {
@@ -938,7 +934,6 @@ int main(int argc, char** argv) {
     }
   }
 
-
   // Construct and initialize solver
   TGSolver solver(N, nu, dt, cfl, TGSolver::TimeScheme::RK4);
   solver.initialize(MPI_COMM_WORLD);
@@ -946,7 +941,7 @@ int main(int argc, char** argv) {
   if (logfile.size() != 0) {
     std::ofstream g;
     g.open(logfile, std::ofstream::out);
-    g  << "flowtime, ke, enstrophy, dt" << std::endl;
+    g << "flowtime, ke, enstrophy, dt" << std::endl;
     g.close();
   }
 
@@ -978,8 +973,7 @@ int main(int argc, char** argv) {
       ts_step = MPI_Wtime();
     }
 
-    if (specfreq > 0 &&
-        solver.flowtime() >= (spec_count + 1) * specfreq ) {
+    if (specfreq > 0 && solver.flowtime() >= (spec_count + 1) * specfreq) {
       solver.write_spectrum_sample(spec_count + 1);
       spec_count++;
     }
