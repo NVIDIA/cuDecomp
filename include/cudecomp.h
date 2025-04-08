@@ -41,8 +41,8 @@
 #include <mpi.h>
 
 #define CUDECOMP_MAJOR 0
-#define CUDECOMP_MINOR 4
-#define CUDECOMP_PATCH 2
+#define CUDECOMP_MINOR 5
+#define CUDECOMP_PATCH 0
 
 #ifdef __cplusplus
 extern "C" {
