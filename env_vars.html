@@ -4,7 +4,7 @@
   <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Environment Variables &mdash; cuDecomp 0.4.0 documentation</title>
+  <title>Environment Variables &mdash; cuDecomp 0.5.0 documentation</title>
       <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
       <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
       <link rel="stylesheet" href="_static/style.css" type="text/css" />
@@ -33,7 +33,7 @@
             <a href="index.html" class="icon icon-home"> cuDecomp
           </a>
               <div class="version">
-                0.4.0
+                0.5.0
               </div>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
@@ -85,7 +85,7 @@
 <li class="toctree-l2"><a class="reference internal" href="basic_usage.html#allocate-pencil-memory">Allocate pencil memory</a></li>
 <li class="toctree-l2"><a class="reference internal" href="basic_usage.html#working-with-pencil-data">Working with pencil data</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="basic_usage.html#c-c">C/C++</a></li>
-<li class="toctree-l3"><a class="reference internal" href="basic_usage.html#fortran">Fortran</a></li>
+<li class="toctree-l3"><a class="reference internal" href="basic_usage.html#id1">Fortran</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="basic_usage.html#allocating-workspace">Allocating workspace</a></li>
@@ -154,6 +154,7 @@
 </li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Environment Variables</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#cudecomp-enable-nccl-ubr">CUDECOMP_ENABLE_NCCL_UBR</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#cudecomp-enable-cumem">CUDECOMP_ENABLE_CUMEM</a></li>
 </ul>
 </li>
 </ul>
@@ -191,6 +192,13 @@
 <p><code class="code docutils literal notranslate"><span class="pre">CUDECOMP_ENABLE_NCCL_UBR</span></code> controls whether cuDecomp registers its communication buffers with the NCCL library using <code class="code docutils literal notranslate"><span class="pre">ncclCommRegister</span></code>/<code class="code docutils literal notranslate"><span class="pre">ncclCommDeregister</span></code> (i.e., user buffer registration).
 Registration can improve NCCL send/receive performance in some scenarios. See the <a class="reference external" href="https://docs.nvidia.com/deeplearning/nccl/user-guide/docs/usage/bufferreg.html">User Buffer Registration</a>
 section of the NCCL documentation for more details.</p>
+<p>Default setting is off (<code class="code docutils literal notranslate"><span class="pre">0</span></code>). Setting this variable to <code class="code docutils literal notranslate"><span class="pre">1</span></code> will enable this feature.</p>
+</section>
+<section id="cudecomp-enable-cumem">
+<h2>CUDECOMP_ENABLE_CUMEM<a class="headerlink" href="#cudecomp-enable-cumem" title="Permalink to this heading">¶</a></h2>
+<p>(since v0.5.0, requires CUDA 12.3 driver/toolkit or newer)</p>
+<p><code class="code docutils literal notranslate"><span class="pre">CUDECOMP_ENABLE_CUMEM</span></code> controls whether cuDecomp uses <code class="code docutils literal notranslate"><span class="pre">cuMem*</span></code> APIs to allocate fabric-registered workspace buffers via <code class="code docutils literal notranslate"><span class="pre">cudecompMalloc</span></code>. This option can improve the performance of
+some MPI distributions on multi-node NVLink (MNNVL) capable systems.</p>
 <p>Default setting is off (<code class="code docutils literal notranslate"><span class="pre">0</span></code>). Setting this variable to <code class="code docutils literal notranslate"><span class="pre">1</span></code> will enable this feature.</p>
 </section>
 </section>

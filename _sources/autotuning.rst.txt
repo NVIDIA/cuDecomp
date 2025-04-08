@@ -42,8 +42,9 @@ We will illustrate this process in the following sections.
 
 Autotuning usage
 ----------------
-In this section, we will use a modified version of the basic usage example, explaining the changes required to enable the
-autotuning feature.
+In this section, we will use a modified version of the basic usage example
+(`C++ <https://github.com/NVIDIA/cuDecomp/blob/main/examples/cc/basic_usage/basic_usage_autotune.cu>`_, `Fortran <https://github.com/NVIDIA/cuDecomp/blob/main/examples/fortran/basic_usage/basic_usage_autotune.f90>`_),
+explaining the changes required to enable the autotuning feature.
 
 Creating a grid descriptor with autotuning enabled
 __________________________________________________
@@ -262,6 +263,30 @@ the elements to :code:`1.0` generally.
     options%transpose_op_weights(3) = 1.0 ! apply 1.0 multiplier to Z-to-Y transpose timings
     options%transpose_op_weights(4) = 1.0 ! apply 1.0 multiplier to Y-to-X transpose timings
 
+There are additional entries to supply per transpose operation :code:`input_halo_extents`, :code:`output_halo_extents`,
+:code:`input_padding`, and :code:`output_padding` arguments for use during autotuning: :code:`tranpose_input_halo_extents`, :code:`transpose_output_halo_extents`,
+:code:`transpose_input_padding`, and :code:`transpose_output_padding` respectively. These entries default to supplying zero halo extent and padding
+arguments to the transpose operations. In this example, we want the autotuner to supply non-zero :code:`input_halo_extents` and :code:`output_halo_extents` arguments
+to the transpose operations involving the :math:`X`-pencil.
+
+.. tabs::
+
+  .. code-tab:: c++
+
+    options.transpose_input_halo_extents[0][0] = 1; // set input_halo_extents to [1, 1, 1] for X-to-Y transpose
+    options.transpose_input_halo_extents[0][1] = 1;
+    options.transpose_input_halo_extents[0][2] = 1;
+    options.transpose_output_halo_extents[3][0] = 1; // set output_halo_extents to [1, 1, 1] for Y-to-X transpose
+    options.transpose_output_halo_extents[3][1] = 1;
+    options.transpose_output_halo_extents[3][2] = 1;
+
+  .. code-tab:: fortran
+
+    options%transpose_input_halo_extents(:, 1) = [1, 1, 1] ! set input_halo_extents to [1, 1, 1] for X-to-Y transpose
+    options%transpose_output_halo_extents(:, 4) = [1, 1, 1] ! set output_halo_extents to [1, 1, 1] for Y-to-X transpose
+
+All other transpose operations do not have non-zero halo extents or padding arguments, so we leave those entries as their default values.
+
 Lastly, these are the options specific to halo communication backend autotuning.
 
 The :code:`autotune_halo_backend` entry is a boolean flag controlling whether the autotuner will autotune
@@ -305,6 +330,10 @@ with periodic boundaries.
     options%halo_extents = [1, 1, 1]
 
     options%halo_periods = [.true., .true., .true]
+
+There is an additional entry, :code:`halo_padding`, to supply the padding argument to use during halo autotuning.
+This entry defaults to supplying zero padding. In this example, we do not supply non-zero padding for the halo operations
+so we leave this entry default valued.
 
 With the grid descriptor configuration and autotuning options structures created and populated,
 we can now create the grid descriptor with autotuning.
