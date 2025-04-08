@@ -39,21 +39,37 @@
 
 // Useful defines for throwing with line/file info
 #define THROW_INVALID_USAGE(msg)                                                                                       \
-  do { throw cudecomp::InvalidUsage(__FILE__, __LINE__, msg); } while (false)
+  do {                                                                                                                 \
+    throw cudecomp::InvalidUsage(__FILE__, __LINE__, msg);                                                             \
+  } while (false)
 #define THROW_NOT_SUPPORTED(msg)                                                                                       \
-  do { throw cudecomp::NotSupported(__FILE__, __LINE__, msg); } while (false)
+  do {                                                                                                                 \
+    throw cudecomp::NotSupported(__FILE__, __LINE__, msg);                                                             \
+  } while (false)
 #define THROW_INTERNAL_ERROR(msg)                                                                                      \
-  do { throw cudecomp::InternalError(__FILE__, __LINE__, msg); } while (false)
+  do {                                                                                                                 \
+    throw cudecomp::InternalError(__FILE__, __LINE__, msg);                                                            \
+  } while (false)
 #define THROW_CUDA_ERROR(msg)                                                                                          \
-  do { throw cudecomp::CudaError(__FILE__, __LINE__, msg); } while (false)
+  do {                                                                                                                 \
+    throw cudecomp::CudaError(__FILE__, __LINE__, msg);                                                                \
+  } while (false)
 #define THROW_CUTENSOR_ERROR(msg)                                                                                      \
-  do { throw cudecomp::CutensorError(__FILE__, __LINE__, msg); } while (false)
+  do {                                                                                                                 \
+    throw cudecomp::CutensorError(__FILE__, __LINE__, msg);                                                            \
+  } while (false)
 #define THROW_MPI_ERROR(msg)                                                                                           \
-  do { throw cudecomp::MpiError(__FILE__, __LINE__, msg); } while (false)
+  do {                                                                                                                 \
+    throw cudecomp::MpiError(__FILE__, __LINE__, msg);                                                                 \
+  } while (false)
 #define THROW_NCCL_ERROR(msg)                                                                                          \
-  do { throw cudecomp::NcclError(__FILE__, __LINE__, msg); } while (false)
+  do {                                                                                                                 \
+    throw cudecomp::NcclError(__FILE__, __LINE__, msg);                                                                \
+  } while (false)
 #define THROW_NVSHMEM_ERROR(msg)                                                                                       \
-  do { throw cudecomp::NvshmemError(__FILE__, __LINE__, msg); } while (false)
+  do {                                                                                                                 \
+    throw cudecomp::NvshmemError(__FILE__, __LINE__, msg);                                                             \
+  } while (false)
 
 namespace cudecomp {
 
@@ -81,63 +97,63 @@ private:
 class InvalidUsage : public BaseException {
 public:
   InvalidUsage(const char* file, int line, const char* extra_info = nullptr)
-      : BaseException(file, line, "Invalid usage.", extra_info){};
+      : BaseException(file, line, "Invalid usage.", extra_info) {};
   cudecompResult_t getResult() const override { return CUDECOMP_RESULT_INVALID_USAGE; }
 };
 
 class NotSupported : public BaseException {
 public:
   NotSupported(const char* file, int line, const char* extra_info = nullptr)
-      : BaseException(file, line, "Not supported.", extra_info){};
+      : BaseException(file, line, "Not supported.", extra_info) {};
   cudecompResult_t getResult() const override { return CUDECOMP_RESULT_NOT_SUPPORTED; }
 };
 
 class InternalError : public BaseException {
 public:
   InternalError(const char* file, int line, const char* extra_info = nullptr)
-      : BaseException(file, line, "Internal error.", extra_info){};
+      : BaseException(file, line, "Internal error.", extra_info) {};
   cudecompResult_t getResult() const override { return CUDECOMP_RESULT_INTERNAL_ERROR; }
 };
 
 class CudaError : public BaseException {
 public:
   CudaError(const char* file, int line, const char* extra_info = nullptr)
-      : BaseException(file, line, "CUDA error.", extra_info){};
+      : BaseException(file, line, "CUDA error.", extra_info) {};
   cudecompResult_t getResult() const override { return CUDECOMP_RESULT_CUDA_ERROR; }
 };
 
 class CutensorError : public BaseException {
 public:
   CutensorError(const char* file, int line, const char* extra_info = nullptr)
-      : BaseException(file, line, "cuTENSOR error.", extra_info){};
+      : BaseException(file, line, "cuTENSOR error.", extra_info) {};
   cudecompResult_t getResult() const override { return CUDECOMP_RESULT_CUTENSOR_ERROR; }
 };
 
 class MpiError : public BaseException {
 public:
   MpiError(const char* file, int line, const char* extra_info = nullptr)
-      : BaseException(file, line, "MPI error.", extra_info){};
+      : BaseException(file, line, "MPI error.", extra_info) {};
   cudecompResult_t getResult() const override { return CUDECOMP_RESULT_MPI_ERROR; }
 };
 
 class NcclError : public BaseException {
 public:
   NcclError(const char* file, int line, const char* extra_info = nullptr)
-      : BaseException(file, line, "NCCL error.", extra_info){};
+      : BaseException(file, line, "NCCL error.", extra_info) {};
   cudecompResult_t getResult() const override { return CUDECOMP_RESULT_NCCL_ERROR; }
 };
 
 class NvshmemError : public BaseException {
 public:
   NvshmemError(const char* file, int line, const char* extra_info = nullptr)
-      : BaseException(file, line, "NVSHMEM error.", extra_info){};
+      : BaseException(file, line, "NVSHMEM error.", extra_info) {};
   cudecompResult_t getResult() const override { return CUDECOMP_RESULT_NVSHMEM_ERROR; }
 };
 
 class NvmlError : public BaseException {
 public:
   NvmlError(const char* file, int line, const char* extra_info = nullptr)
-      : BaseException(file, line, "NVML error.", extra_info){};
+      : BaseException(file, line, "NVML error.", extra_info) {};
   cudecompResult_t getResult() const override { return CUDECOMP_RESULT_NVML_ERROR; }
 };
 

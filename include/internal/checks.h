@@ -69,7 +69,8 @@
     if (CUDA_SUCCESS != err) {                                                                                         \
       const char* error_str;                                                                                           \
       cuFnTable.pfn_cuGetErrorString(err, &error_str);                                                                 \
-      throw cudecomp::CudaError(__FILE__, __LINE__, error_str); }                                                      \
+      throw cudecomp::CudaError(__FILE__, __LINE__, error_str);                                                        \
+    }                                                                                                                  \
   } while (false)
 
 #define CHECK_CUDA_LAUNCH()                                                                                            \

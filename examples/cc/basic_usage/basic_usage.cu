@@ -266,12 +266,12 @@ int main(int argc, char** argv) {
                                             pinfo_x.halo_extents, nullptr, nullptr, nullptr, 0));
 
   // Transpose from Y-pencils to Z-pencils.
-  CHECK_CUDECOMP_EXIT(
-      cudecompTransposeYToZ(handle, grid_desc, data_d, data_d, transpose_work_d, CUDECOMP_DOUBLE, nullptr, nullptr, nullptr, nullptr, 0));
+  CHECK_CUDECOMP_EXIT(cudecompTransposeYToZ(handle, grid_desc, data_d, data_d, transpose_work_d, CUDECOMP_DOUBLE,
+                                            nullptr, nullptr, nullptr, nullptr, 0));
 
   // Transpose from Z-pencils to Y-pencils.
-  CHECK_CUDECOMP_EXIT(
-      cudecompTransposeZToY(handle, grid_desc, data_d, data_d, transpose_work_d, CUDECOMP_DOUBLE, nullptr, nullptr, nullptr, nullptr, 0));
+  CHECK_CUDECOMP_EXIT(cudecompTransposeZToY(handle, grid_desc, data_d, data_d, transpose_work_d, CUDECOMP_DOUBLE,
+                                            nullptr, nullptr, nullptr, nullptr, 0));
 
   // Transpose from Y-pencils to X-pencils.
   CHECK_CUDECOMP_EXIT(cudecompTransposeYToX(handle, grid_desc, data_d, data_d, transpose_work_d, CUDECOMP_DOUBLE,

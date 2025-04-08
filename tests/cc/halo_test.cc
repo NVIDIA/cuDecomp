@@ -30,8 +30,8 @@
 
 #include <array>
 #include <complex>
-#include <cstring>
 #include <cstdio>
+#include <cstring>
 #include <fstream>
 #include <numeric>
 #include <sstream>
@@ -136,9 +136,12 @@ static void initialize_pencil(std::vector<real_t>& ref, const cudecompPencilInfo
     int64_t gi = gx[0] + gdims[0] * (gx[1] + gx[2] * gdims[1]);
 
     // Only set values inside internal region
-    if (lx[0] >= pinfo.halo_extents[pinfo.order[0]] && lx[0] < (pinfo.shape[0] - pinfo.halo_extents[pinfo.order[0]] - pinfo.padding[pinfo.order[0]]) &&
-        lx[1] >= pinfo.halo_extents[pinfo.order[1]] && lx[1] < (pinfo.shape[1] - pinfo.halo_extents[pinfo.order[1]] - pinfo.padding[pinfo.order[1]]) &&
-        lx[2] >= pinfo.halo_extents[pinfo.order[2]] && lx[2] < (pinfo.shape[2] - pinfo.halo_extents[pinfo.order[2]] - pinfo.padding[pinfo.order[2]])) {
+    if (lx[0] >= pinfo.halo_extents[pinfo.order[0]] &&
+        lx[0] < (pinfo.shape[0] - pinfo.halo_extents[pinfo.order[0]] - pinfo.padding[pinfo.order[0]]) &&
+        lx[1] >= pinfo.halo_extents[pinfo.order[1]] &&
+        lx[1] < (pinfo.shape[1] - pinfo.halo_extents[pinfo.order[1]] - pinfo.padding[pinfo.order[1]]) &&
+        lx[2] >= pinfo.halo_extents[pinfo.order[2]] &&
+        lx[2] < (pinfo.shape[2] - pinfo.halo_extents[pinfo.order[2]] - pinfo.padding[pinfo.order[2]])) {
       ref[i] = gi;
     } else {
       ref[i] = -1;
@@ -263,18 +266,28 @@ static haloTestArgs parse_arguments(const std::string& arguments) {
   // Parse command-line arguments
   optind = 0;
   while (1) {
-    static struct option long_options[] = {
-        {"gx", required_argument, 0, 'x'},  {"gy", required_argument, 0, 'y'},
-        {"gz", required_argument, 0, 'z'},  {"backend", required_argument, 0, 'b'},
-        {"pr", required_argument, 0, 'r'},  {"pc", required_argument, 0, 'c'},
-        {"ac", required_argument, 0, '3'}, {"gd", required_argument, 0, '4'},
-        {"hex", required_argument, 0, '7'}, {"hey", required_argument, 0, '8'},
-        {"hez", required_argument, 0, '9'}, {"hpx", required_argument, 0, 'e'},
-        {"hpy", required_argument, 0, 'f'}, {"hpz", required_argument, 0, 'g'},
-        {"pdx", required_argument, 0, '&'}, {"pdy", required_argument, 0, '*'},
-        {"pdz", required_argument, 0, '*'}, {"ax", required_argument, 0, 'a'},
-        {"use-managed-memory", no_argument, 0, 'm'}, {"mem_order", required_argument, 0, 'q'},
-        {"help", no_argument, 0, 'h'},      {0, 0, 0, 0}};
+    static struct option long_options[] = {{"gx", required_argument, 0, 'x'},
+                                           {"gy", required_argument, 0, 'y'},
+                                           {"gz", required_argument, 0, 'z'},
+                                           {"backend", required_argument, 0, 'b'},
+                                           {"pr", required_argument, 0, 'r'},
+                                           {"pc", required_argument, 0, 'c'},
+                                           {"ac", required_argument, 0, '3'},
+                                           {"gd", required_argument, 0, '4'},
+                                           {"hex", required_argument, 0, '7'},
+                                           {"hey", required_argument, 0, '8'},
+                                           {"hez", required_argument, 0, '9'},
+                                           {"hpx", required_argument, 0, 'e'},
+                                           {"hpy", required_argument, 0, 'f'},
+                                           {"hpz", required_argument, 0, 'g'},
+                                           {"pdx", required_argument, 0, '&'},
+                                           {"pdy", required_argument, 0, '*'},
+                                           {"pdz", required_argument, 0, '*'},
+                                           {"ax", required_argument, 0, 'a'},
+                                           {"use-managed-memory", no_argument, 0, 'm'},
+                                           {"mem_order", required_argument, 0, 'q'},
+                                           {"help", no_argument, 0, 'h'},
+                                           {0, 0, 0, 0}};
 
     int option_index = 0;
     int ch = getopt_long(argc, argv, "x:y:z:b:r:c:3:4:7:8:9:e:f:g:a:q:&:*:(:mh", long_options, &option_index);
@@ -404,7 +417,8 @@ static int run_test(const std::string& arguments, bool silent) {
 
     // Get pencil information
     cudecompPencilInfo_t pinfo;
-    CHECK_CUDECOMP_EXIT(cudecompGetPencilInfo(handle, grid_desc, &pinfo, args.axis, args.halo_extents.data(), args.padding.data()));
+    CHECK_CUDECOMP_EXIT(
+        cudecompGetPencilInfo(handle, grid_desc, &pinfo, args.axis, args.halo_extents.data(), args.padding.data()));
 
     // Get workspace size
     int64_t workspace_num_elements;
@@ -433,7 +447,7 @@ static int run_test(const std::string& arguments, bool silent) {
     CHECK_CUDECOMP(cudecompGetDataTypeSize(get_cudecomp_datatype(real_t(0)), &dtype_size));
 
     // Allocate workspace (reuse exising workspace if able)
-    if (std::get<0>(workspace) == static_cast<int>(config.halo_comm_backend)){
+    if (std::get<0>(workspace) == static_cast<int>(config.halo_comm_backend)) {
       work_d = std::get<1>(workspace);
       if (std::get<2>(workspace) < workspace_num_elements * dtype_size) {
         CHECK_CUDECOMP(cudecompFree(handle, grid_desc, work_d));
@@ -443,7 +457,8 @@ static int run_test(const std::string& arguments, bool silent) {
         std::get<2>(workspace) = workspace_num_elements * dtype_size;
       }
     } else if (std::get<0>(workspace) > 0 && std::get<0>(workspace) != static_cast<int>(config.halo_comm_backend)) {
-      CHECK_CUDECOMP(cudecompFree(handle, grid_desc_cache[static_cast<cudecompHaloCommBackend_t>(std::get<0>(workspace))],
+      CHECK_CUDECOMP(cudecompFree(handle,
+                                  grid_desc_cache[static_cast<cudecompHaloCommBackend_t>(std::get<0>(workspace))],
                                   std::get<1>(workspace)));
       CHECK_CUDECOMP(
           cudecompMalloc(handle, grid_desc, reinterpret_cast<void**>(&work_d), workspace_num_elements * dtype_size));
@@ -468,15 +483,15 @@ static int run_test(const std::string& arguments, bool silent) {
       switch (args.axis) {
       case 0:
         CHECK_CUDECOMP(cudecompUpdateHalosX(handle, grid_desc, input, work_d, get_cudecomp_datatype(real_t(0)),
-                                                 pinfo.halo_extents, args.halo_periods.data(), i, pinfo.padding, 0));
+                                            pinfo.halo_extents, args.halo_periods.data(), i, pinfo.padding, 0));
         break;
       case 1:
         CHECK_CUDECOMP(cudecompUpdateHalosY(handle, grid_desc, input, work_d, get_cudecomp_datatype(real_t(0)),
-                                                 pinfo.halo_extents, args.halo_periods.data(), i, pinfo.padding, 0));
+                                            pinfo.halo_extents, args.halo_periods.data(), i, pinfo.padding, 0));
         break;
       case 2:
         CHECK_CUDECOMP(cudecompUpdateHalosZ(handle, grid_desc, input, work_d, get_cudecomp_datatype(real_t(0)),
-                                                 pinfo.halo_extents, args.halo_periods.data(), i, pinfo.padding, 0));
+                                            pinfo.halo_extents, args.halo_periods.data(), i, pinfo.padding, 0));
         break;
       }
     }
@@ -488,9 +503,7 @@ static int run_test(const std::string& arguments, bool silent) {
     }
 
     CHECK_CUDA(cudaFree(data_d));
-  } catch (const std::exception& e) {
-    return 1;
-  }
+  } catch (const std::exception& e) { return 1; }
 
   return 0;
 }
@@ -511,7 +524,7 @@ int main(int argc, char** argv) {
   bool using_testfile = false;
   for (int i = 0; i < argc; ++i) {
     if (strcmp(argv[i], "-f") == 0 || strcmp(argv[i], "--testfile") == 0) {
-      testfile = std::string(argv[i+1]);
+      testfile = std::string(argv[i + 1]);
       using_testfile = true;
       break;
     }
@@ -523,11 +536,9 @@ int main(int argc, char** argv) {
   std::vector<std::string> testcases;
   if (!using_testfile) {
     std::string arguments;
-    for (int i = 1;  i < argc; ++i) {
+    for (int i = 1; i < argc; ++i) {
       arguments += argv[i];
-      if (i < argc - 1) {
-        arguments += " ";
-      }
+      if (i < argc - 1) { arguments += " "; }
     }
     testcases.push_back(arguments);
   } else {
@@ -540,7 +551,7 @@ int main(int argc, char** argv) {
   for (int i = 0; i < testcases.size(); ++i) {
     if (using_testfile && rank == 0) printf("command: %s %s\n", argv[0], testcases[i].c_str());
     int res = run_test(testcases[i], using_testfile);
-    CHECK_MPI_EXIT(MPI_Reduce((rank == 0) ? MPI_IN_PLACE: &res, &res, 1, MPI_INT, MPI_MAX, 0, MPI_COMM_WORLD));
+    CHECK_MPI_EXIT(MPI_Reduce((rank == 0) ? MPI_IN_PLACE : &res, &res, 1, MPI_INT, MPI_MAX, 0, MPI_COMM_WORLD));
     if (using_testfile && rank == 0) {
       if (res != 0) {
         printf(" FAILED\n");
@@ -551,7 +562,10 @@ int main(int argc, char** argv) {
     }
     CHECK_MPI_EXIT(MPI_Barrier(MPI_COMM_WORLD));
     if (using_testfile && (i + 1) % 10 == 0) {
-      if (rank == 0) printf("Completed %d/%d tests, running time %f s\n", i + 1, static_cast<int>(testcases.size()), MPI_Wtime() - t0);
+      if (rank == 0) {
+        printf("Completed %d/%d tests, running time %f s\n", i + 1, static_cast<int>(testcases.size()),
+               MPI_Wtime() - t0);
+      }
     }
   }
 
@@ -562,7 +576,8 @@ int main(int argc, char** argv) {
       if (failed_cases.size() == 0) {
         printf("Passed all tests.\n");
       } else {
-        printf("Failed %d/%d tests. Failing cases:\n", static_cast<int>(failed_cases.size()), static_cast<int>(testcases.size()));
+        printf("Failed %d/%d tests. Failing cases:\n", static_cast<int>(failed_cases.size()),
+               static_cast<int>(testcases.size()));
         for (int i = 0; i < failed_cases.size(); ++i) {
           printf(" %s %s\n", argv[0], failed_cases[i].c_str());
         }
@@ -576,5 +591,4 @@ int main(int argc, char** argv) {
   CHECK_MPI_EXIT(MPI_Finalize());
 
   return retcode;
-
 }

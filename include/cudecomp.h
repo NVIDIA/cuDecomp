@@ -41,15 +41,15 @@
 #include <mpi.h>
 
 #define CUDECOMP_MAJOR 0
-#define CUDECOMP_MINOR 4
-#define CUDECOMP_PATCH 2
+#define CUDECOMP_MINOR 5
+#define CUDECOMP_PATCH 0
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#include <stdint.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 /**
  * @brief This enum lists the different available transpose backend options.
@@ -134,10 +134,9 @@ typedef struct {
                                                          ///< (default: CUDECOMP_TRANSPOSE_COMM_MPI_P2P)
   bool transpose_axis_contiguous[3]; ///< flag (by axis) indicating if memory should be contiguous along pencil axis
                                      ///< (default: [false, false, false])
-  int32_t transpose_mem_order[3][3]; ///< user-specified memory ordering by axis, overrides transpose_axis_contiguous setting;
-                                     ///< first index specifies axis, second index specifies memory order
+  int32_t transpose_mem_order[3][3]; ///< user-specified memory ordering by axis, overrides transpose_axis_contiguous
+                                     ///< setting; first index specifies axis, second index specifies memory order
                                      ///< setting (default: unset)
-
 
   // Halo settings
   cudecompHaloCommBackend_t
@@ -176,23 +175,23 @@ typedef struct {
                                   ///< in the following order: X-to-Y, Y-to-Z, Z-to-Y, Y-to-X
                                   ///< (default: [1.0, 1.0, 1.0, 1.0])
 
-  int32_t transpose_input_halo_extents[4][3];  ///< input_halo_extents argument to use during autotuning by transpose operation;
-                                               ///< first index specifies operation in the following order: X-to-Y, Y-to-Z, Z-to-Y, Y-to-X,
-                                               ///< second index specifies halo_extent argument
-                                               ///< (default: all zeros, no halos)
-  int32_t transpose_output_halo_extents[4][3]; ///< output_halo_extents argument to use during autotuning by transpose operation;
-                                               ///< first index specifies operation in the following order: X-to-Y, Y-to-Z, Z-to-Y, Y-to-X,
-                                               ///< second index specifies halo_extent argument
-                                               ///< (default: all zeros, no halos)
+  int32_t transpose_input_halo_extents[4][3]; ///< input_halo_extents argument to use during autotuning by transpose
+                                              ///< operation; first index specifies operation in the following order:
+                                              ///< X-to-Y, Y-to-Z, Z-to-Y, Y-to-X, second index specifies halo_extent
+                                              ///< argument (default: all zeros, no halos)
+  int32_t transpose_output_halo_extents[4][3]; ///< output_halo_extents argument to use during autotuning by transpose
+                                               ///< operation; first index specifies operation in the following order:
+                                               ///< X-to-Y, Y-to-Z, Z-to-Y, Y-to-X, second index specifies halo_extent
+                                               ///< argument (default: all zeros, no halos)
 
-  int32_t transpose_input_padding[4][3];  ///< input_padding argument to use during autotuning by transpose operation;
-                                          ///< first index specifies operation in the following order: X-to-Y, Y-to-Z, Z-to-Y, Y-to-X,
-                                          ///< second index specifies input_padding argument
-                                          ///< (default: all zeros, no padding)
+  int32_t transpose_input_padding[4][3]; ///< input_padding argument to use during autotuning by transpose operation;
+                                         ///< first index specifies operation in the following order: X-to-Y, Y-to-Z,
+                                         ///< Z-to-Y, Y-to-X, second index specifies input_padding argument (default:
+                                         ///< all zeros, no padding)
   int32_t transpose_output_padding[4][3]; ///< output_padding argument to use during autotuning by transpose operation;
-                                          ///< first index specifies operation in the following order: X-to-Y, Y-to-Z, Z-to-Y, Y-to-X,
-                                          ///< second index specifies input_padding argument
-                                          ///< (default: all zeros, no padding)
+                                          ///< first index specifies operation in the following order: X-to-Y, Y-to-Z,
+                                          ///< Z-to-Y, Y-to-X, second index specifies input_padding argument (default:
+                                          ///< all zeros, no padding)
 
   // Halo-specific options
   bool autotune_halo_backend; ///< flag to enable halo backend autotuning (default: false)
@@ -301,8 +300,8 @@ cudecompResult_t cudecompGridDescAutotuneOptionsSetDefaults(cudecompGridDescAuto
  * global domain axis. Symmetric halos are assumed (e.g. a value of one in halo_extents means there are 2 halo elements,
  * one element on each side). If no halo regions are necessary, a NULL pointer can be provided in place of this array.
  * @param[in] padding An array of three integers to define padding of the pencil, in global order. The i-th entry
- * in this array should contain the number of elements to treat as padding in the i-th global domain axis. If no padding is
- * necesary, a NULL pointer can be provided in place of this array.
+ * in this array should contain the number of elements to treat as padding in the i-th global domain axis. If no padding
+ * is necesary, a NULL pointer can be provided in place of this array.
  *
  * @return CUDECOMP_RESULT_SUCCESS on success or error code on failure.
  */
@@ -447,11 +446,11 @@ cudecompResult_t cudecompGetShiftedRank(cudecompHandle_t handle, cudecompGridDes
  * elements, one element on each side). If the input has no halo regions, a NULL pointer can be provided.
  * @param[in] output_halo_extents Similar to input_halo_extents, but for the output data. If the output has no halo
  * regions, a NULL pointer can be provided.
- * @param[in] input_padding An array of three integers to define padding of the input data, in global order. The i-th entry
- * in this array should contain the number of elements to treat as padding in the i-th global domain axis. If the input has
- * no padding, a NULL pointer can be provided.
- * @param[in] output_padding Similar to input_padding, but for the output data. If the output has no padding, a NULL pointer
- * can be provided.
+ * @param[in] input_padding An array of three integers to define padding of the input data, in global order. The i-th
+ * entry in this array should contain the number of elements to treat as padding in the i-th global domain axis. If the
+ * input has no padding, a NULL pointer can be provided.
+ * @param[in] output_padding Similar to input_padding, but for the output data. If the output has no padding, a NULL
+ * pointer can be provided.
  * @param[in] stream CUDA stream to enqueue GPU operations into
  *
  * @return CUDECOMP_RESULT_SUCCESS on success or error code on failure.
@@ -476,11 +475,11 @@ cudecompResult_t cudecompTransposeXToY(cudecompHandle_t handle, cudecompGridDesc
  * elements, one element on each side). If the input has no halo regions, a NULL pointer can be provided.
  * @param[in] output_halo_extents Similar to input_halo_extents, but for the output data. If the output has no halo
  * regions, a NULL pointer can be provided.
- * @param[in] input_padding An array of three integers to define padding of the input data, in global order. The i-th entry
- * in this array should contain the number of elements to treat as padding in the i-th global domain axis. If the input has
- * no padding, a NULL pointer can be provided.
- * @param[in] output_padding Similar to input_padding, but for the output data. If the output has no padding, a NULL pointer
- * can be provided.
+ * @param[in] input_padding An array of three integers to define padding of the input data, in global order. The i-th
+ * entry in this array should contain the number of elements to treat as padding in the i-th global domain axis. If the
+ * input has no padding, a NULL pointer can be provided.
+ * @param[in] output_padding Similar to input_padding, but for the output data. If the output has no padding, a NULL
+ * pointer can be provided.
  * @param[in] stream CUDA stream to enqueue GPU operations into
  *
  * @return CUDECOMP_RESULT_SUCCESS on success or error code on failure.
@@ -505,11 +504,11 @@ cudecompResult_t cudecompTransposeYToZ(cudecompHandle_t handle, cudecompGridDesc
  * elements, one element on each side). If the input has no halo regions, a NULL pointer can be provided.
  * @param[in] output_halo_extents Similar to input_halo_extents, but for the output data. If the output has no halo
  * regions, a NULL pointer can be provided.
- * @param[in] input_padding An array of three integers to define padding of the input data, in global order. The i-th entry
- * in this array should contain the number of elements to treat as padding in the i-th global domain axis. If the input has
- * no padding, a NULL pointer can be provided.
- * @param[in] output_padding Similar to input_padding, but for the output data. If the output has no padding, a NULL pointer
- * can be provided.
+ * @param[in] input_padding An array of three integers to define padding of the input data, in global order. The i-th
+ * entry in this array should contain the number of elements to treat as padding in the i-th global domain axis. If the
+ * input has no padding, a NULL pointer can be provided.
+ * @param[in] output_padding Similar to input_padding, but for the output data. If the output has no padding, a NULL
+ * pointer can be provided.
  * @param[in] stream CUDA stream to enqueue GPU operations into
  *
  * @return CUDECOMP_RESULT_SUCCESS on success or error code on failure.
@@ -534,11 +533,11 @@ cudecompResult_t cudecompTransposeZToY(cudecompHandle_t handle, cudecompGridDesc
  * elements, one element on each side). If the input has no halo regions, a NULL pointer can be provided.
  * @param[in] output_halo_extents Similar to input_halo_extents, but for the output data. If the output has no halo
  * regions, a NULL pointer can be provided.
- * @param[in] input_padding An array of three integers to define padding of the input data, in global order. The i-th entry
- * in this array should contain the number of elements to treat as padding in the i-th global domain axis. If the input has
- * no padding, a NULL pointer can be provided.
- * @param[in] output_padding Similar to input_padding, but for the output data. If the output has no padding, a NULL pointer
- * can be provided.
+ * @param[in] input_padding An array of three integers to define padding of the input data, in global order. The i-th
+ * entry in this array should contain the number of elements to treat as padding in the i-th global domain axis. If the
+ * input has no padding, a NULL pointer can be provided.
+ * @param[in] output_padding Similar to input_padding, but for the output data. If the output has no padding, a NULL
+ * pointer can be provided.
  * @param[in] stream CUDA stream to enqueue GPU operations into
  *
  * @return CUDECOMP_RESULT_SUCCESS on success or error code on failure.
@@ -566,8 +565,8 @@ cudecompResult_t cudecompTransposeYToX(cudecompHandle_t handle, cudecompGridDesc
  * pointer can be provided if none of the domain axes are periodic.
  * @param[in] dim Which pencil dimension (global indexed) to perform the halo update
  * @param[in] padding An array of three integers to define padding of the input data, in global order. The i-th entry
- * in this array should contain the number of elements to treat as padding in the i-th global domain axis. If the input has
- * no padding, a NULL pointer can be provided.
+ * in this array should contain the number of elements to treat as padding in the i-th global domain axis. If the input
+ * has no padding, a NULL pointer can be provided.
  * @param[in] stream CUDA stream to enqueue GPU operations into
  *
  * @return CUDECOMP_RESULT_SUCCESS on success or error code on failure.
@@ -592,8 +591,8 @@ cudecompResult_t cudecompUpdateHalosX(cudecompHandle_t handle, cudecompGridDesc_
  * If the i-th entry in this array is true, the domain is treated periodically along the i-th global domain axis.
  * @param[in] dim Which pencil dimension (global indexed) to perform the halo update
  * @param[in] padding An array of three integers to define padding of the input data, in global order. The i-th entry
- * in this array should contain the number of elements to treat as padding in the i-th global domain axis. If the input has
- * no padding, a NULL pointer can be provided.
+ * in this array should contain the number of elements to treat as padding in the i-th global domain axis. If the input
+ * has no padding, a NULL pointer can be provided.
  * @param[in] stream CUDA stream to enqueue GPU operations into
  *
  * @return CUDECOMP_RESULT_SUCCESS on success or error code on failure.
@@ -618,8 +617,8 @@ cudecompResult_t cudecompUpdateHalosY(cudecompHandle_t handle, cudecompGridDesc_
  * If the i-th entry in this array is true, the domain is treated periodically along the i-th global domain axis.
  * @param[in] dim Which pencil dimension (global indexed) to perform the halo update
  * @param[in] padding An array of three integers to define padding of the input data, in global order. The i-th entry
- * in this array should contain the number of elements to treat as padding in the i-th global domain axis. If the input has
- * no padding, a NULL pointer can be provided.
+ * in this array should contain the number of elements to treat as padding in the i-th global domain axis. If the input
+ * has no padding, a NULL pointer can be provided.
  * @param[in] stream CUDA stream to enqueue GPU operations into
  *
  * @return CUDECOMP_RESULT_SUCCESS on success or error code on failure.

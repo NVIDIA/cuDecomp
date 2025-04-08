@@ -1,5 +1,4 @@
 ---
-AllowShortIfStatementsOnASingleLine: true
 BasedOnStyle: LLVM
 ColumnLimit: 120
 CommentPragmas:  '^\\.+'
@@ -12,5 +11,6 @@ AlignTrailingComments: true
 AllowShortBlocksOnASingleLine: true
 AllowShortCaseLabelsOnASingleLine : true
 AllowShortIfStatementsOnASingleLine: true
-AllowShortLoopsOnASingleLine: true
+AllowShortLoopsOnASingleLine: false
+PenaltyBreakBeforeFirstCallParameter: 100
 ...

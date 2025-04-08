@@ -57,7 +57,9 @@ template <typename T> static std::vector<T> process_timings(std::vector<T> times
   CHECK_MPI_EXIT(MPI_Comm_size(MPI_COMM_WORLD, &nranks));
   t_avg /= nranks;
 
-  for (auto& t : times) { t = (t - t_avg) * (t - t_avg); }
+  for (auto& t : times) {
+    t = (t - t_avg) * (t - t_avg);
+  }
   double t_var = std::accumulate(times.begin(), times.end(), T(0)) / times.size();
   CHECK_MPI_EXIT(MPI_Allreduce(MPI_IN_PLACE, &t_var, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD));
   t_var /= nranks;
@@ -222,7 +224,9 @@ int main(int argc, char** argv) {
   cudecompGridDescAutotuneOptions_t options;
   CHECK_CUDECOMP_EXIT(cudecompGridDescAutotuneOptionsSetDefaults(&options));
   options.dtype = get_cudecomp_datatype(complex_t(0));
-  for (int i = 0; i < 4; ++i) { options.transpose_use_inplace_buffers[i] = !out_of_place; }
+  for (int i = 0; i < 4; ++i) {
+    options.transpose_use_inplace_buffers[i] = !out_of_place;
+  }
 
   if (comm_backend != 0) {
     config.transpose_comm_backend = comm_backend;
@@ -306,20 +310,20 @@ int main(int argc, char** argv) {
   if (!no_slab_opt && config.pdims[0] == 1 && config.pdims[1] == 1) {
     // single rank, x-y-z slab: use 3D FFT
     slab_xyz = true;
-    CHECK_CUFFT_EXIT(cufftMakePlan3d(cufft_plan_r2c_x, gx, gy, gz, get_cufft_type_r2c(real_t(0)),
-                                     &work_sz_r2c_x));
-    CHECK_CUFFT_EXIT(cufftMakePlan3d(cufft_plan_c2r_x, gx, gy, gz, get_cufft_type_c2r(real_t(0)),
-                                     &work_sz_c2r_x));
+    CHECK_CUFFT_EXIT(cufftMakePlan3d(cufft_plan_r2c_x, gx, gy, gz, get_cufft_type_r2c(real_t(0)), &work_sz_r2c_x));
+    CHECK_CUFFT_EXIT(cufftMakePlan3d(cufft_plan_c2r_x, gx, gy, gz, get_cufft_type_c2r(real_t(0)), &work_sz_c2r_x));
   } else if (!no_slab_opt && config.pdims[0] == 1) {
     // x-y slab: use 2D FFT
     slab_xy = true;
     std::array<int, 2> n{gx, gy};
-    CHECK_CUFFT_EXIT(cufftMakePlanMany(
-        cufft_plan_r2c_x, 2, n.data(), nullptr, 1, pinfo_x_r.shape[0] * pinfo_x_r.shape[1], nullptr, 1,
-        pinfo_x_c.shape[0] * pinfo_x_c.shape[1], get_cufft_type_r2c(real_t(0)), pinfo_x_r.shape[2], &work_sz_r2c_x));
-    CHECK_CUFFT_EXIT(cufftMakePlanMany(
-        cufft_plan_c2r_x, 2, n.data(), nullptr, 1, pinfo_x_c.shape[0] * pinfo_x_c.shape[1], nullptr, 1,
-        pinfo_x_r.shape[0] * pinfo_x_r.shape[1], get_cufft_type_c2r(real_t(0)), pinfo_x_c.shape[2], &work_sz_c2r_x));
+    CHECK_CUFFT_EXIT(cufftMakePlanMany(cufft_plan_r2c_x, 2, n.data(), nullptr, 1,
+                                       pinfo_x_r.shape[0] * pinfo_x_r.shape[1], nullptr, 1,
+                                       pinfo_x_c.shape[0] * pinfo_x_c.shape[1], get_cufft_type_r2c(real_t(0)),
+                                       pinfo_x_r.shape[2], &work_sz_r2c_x));
+    CHECK_CUFFT_EXIT(cufftMakePlanMany(cufft_plan_c2r_x, 2, n.data(), nullptr, 1,
+                                       pinfo_x_c.shape[0] * pinfo_x_c.shape[1], nullptr, 1,
+                                       pinfo_x_r.shape[0] * pinfo_x_r.shape[1], get_cufft_type_c2r(real_t(0)),
+                                       pinfo_x_c.shape[2], &work_sz_c2r_x));
   } else {
     CHECK_CUFFT_EXIT(cufftMakePlan1d(cufft_plan_r2c_x, gx, get_cufft_type_r2c(real_t(0)),
                                      pinfo_x_r.shape[1] * pinfo_x_r.shape[2], &work_sz_r2c_x));
@@ -336,15 +340,15 @@ int main(int argc, char** argv) {
   if (!no_slab_opt && config.pdims[0] == 1 && config.pdims[1] == 1) {
     // single rank, x-y-z slab: use 3D FFT
     slab_xyz = true;
-    CHECK_CUFFT_EXIT(cufftMakePlan3d(cufft_plan_c2c_x, gx, gy, gz, get_cufft_type_c2c(real_t(0)),
-                                     &work_sz_c2c_x));
+    CHECK_CUFFT_EXIT(cufftMakePlan3d(cufft_plan_c2c_x, gx, gy, gz, get_cufft_type_c2c(real_t(0)), &work_sz_c2c_x));
   } else if (!no_slab_opt && config.pdims[0] == 1) {
     // x-y slab: use 2D FFT
     slab_xy = true;
     std::array<int, 2> n{gy, gx};
-    CHECK_CUFFT_EXIT(cufftMakePlanMany(
-        cufft_plan_c2c_x, 2, n.data(), nullptr, 1, pinfo_x_c.shape[0] * pinfo_x_c.shape[1], nullptr, 1,
-        pinfo_x_c.shape[0] * pinfo_x_c.shape[1], get_cufft_type_c2c(real_t(0)), pinfo_x_c.shape[2], &work_sz_c2c_x));
+    CHECK_CUFFT_EXIT(cufftMakePlanMany(cufft_plan_c2c_x, 2, n.data(), nullptr, 1,
+                                       pinfo_x_c.shape[0] * pinfo_x_c.shape[1], nullptr, 1,
+                                       pinfo_x_c.shape[0] * pinfo_x_c.shape[1], get_cufft_type_c2c(real_t(0)),
+                                       pinfo_x_c.shape[2], &work_sz_c2c_x));
   } else {
     CHECK_CUFFT_EXIT(cufftMakePlan1d(cufft_plan_c2c_x, gx, get_cufft_type_c2c(real_t(0)),
                                      pinfo_x_c.shape[1] * pinfo_x_c.shape[2], &work_sz_c2c_x));
@@ -363,9 +367,10 @@ int main(int argc, char** argv) {
     slab_yz = true;
     if (axis_contiguous[1]) {
       std::array<int, 2> n{gz, gy};
-      CHECK_CUFFT_EXIT(cufftMakePlanMany(
-          cufft_plan_c2c_y, 2, n.data(), nullptr, 1, pinfo_y_c.shape[0] * pinfo_y_c.shape[1], nullptr, 1,
-          pinfo_y_c.shape[0] * pinfo_y_c.shape[1], get_cufft_type_c2c(real_t(0)), pinfo_y_c.shape[2], &work_sz_c2c_y));
+      CHECK_CUFFT_EXIT(cufftMakePlanMany(cufft_plan_c2c_y, 2, n.data(), nullptr, 1,
+                                         pinfo_y_c.shape[0] * pinfo_y_c.shape[1], nullptr, 1,
+                                         pinfo_y_c.shape[0] * pinfo_y_c.shape[1], get_cufft_type_c2c(real_t(0)),
+                                         pinfo_y_c.shape[2], &work_sz_c2c_y));
     } else {
       // Note: In this case, both slab dimensions are strided, leading to slower performance using
       // 2D FFT. Run 1D + 1D instead.
@@ -508,8 +513,8 @@ int main(int argc, char** argv) {
 
     if (!slab_xyz) {
       CHECK_CUDECOMP_EXIT(cudecompTransposeXToY(handle, grid_desc_c, input, output, work_c_d,
-                                                get_cudecomp_datatype(complex_t(0)), nullptr, nullptr,
-                                                nullptr, nullptr, 0));
+                                                get_cudecomp_datatype(complex_t(0)), nullptr, nullptr, nullptr, nullptr,
+                                                0));
     }
 
     if (!slab_xy && !slab_xyz) {
@@ -531,8 +536,8 @@ int main(int argc, char** argv) {
     // For y-z slab case, no need to perform yz transposes or z-axis FFT
     if (!slab_yz && !slab_xyz) {
       CHECK_CUDECOMP_EXIT(cudecompTransposeYToZ(handle, grid_desc_c, input, output, work_c_d,
-                                                get_cudecomp_datatype(complex_t(0)), nullptr, nullptr,
-                                                nullptr, nullptr, 0));
+                                                get_cudecomp_datatype(complex_t(0)), nullptr, nullptr, nullptr, nullptr,
+                                                0));
     }
 
     if (!slab_yz && !slab_xyz) {
@@ -547,8 +552,8 @@ int main(int argc, char** argv) {
 
     if (!slab_yz && !slab_xyz) {
       CHECK_CUDECOMP_EXIT(cudecompTransposeZToY(handle, grid_desc_c, input, output, work_c_d,
-                                                get_cudecomp_datatype(complex_t(0)), nullptr, nullptr,
-                                                nullptr, nullptr, 0));
+                                                get_cudecomp_datatype(complex_t(0)), nullptr, nullptr, nullptr, nullptr,
+                                                0));
     }
 
     if (!slab_xy && !slab_xyz) {
@@ -569,8 +574,8 @@ int main(int argc, char** argv) {
 
     if (!slab_xyz) {
       CHECK_CUDECOMP_EXIT(cudecompTransposeYToX(handle, grid_desc_c, input, output, work_c_d,
-                                                get_cudecomp_datatype(complex_t(0)), nullptr, nullptr,
-                                                nullptr, nullptr, 0));
+                                                get_cudecomp_datatype(complex_t(0)), nullptr, nullptr, nullptr, nullptr,
+                                                0));
     }
 #ifdef R2C
     CHECK_CUFFT_EXIT(cufftXtExec(cufft_plan_c2r_x, output, output_r, CUFFT_INVERSE));
@@ -650,7 +655,9 @@ int main(int argc, char** argv) {
   std::sort(trial_times.begin(), trial_times.end());
   double flopcount = 5.0 * fftsize * std::log(static_cast<double>(fftsize)) * 1e-9 / std::log(2.0);
   std::vector<double> trial_flops(ntrials);
-  for (int i = 0; i < ntrials; ++i) { trial_flops[i] = flopcount / trial_times[i]; }
+  for (int i = 0; i < ntrials; ++i) {
+    trial_flops[i] = flopcount / trial_times[i];
+  }
 
   auto times = process_timings(trial_times, 1000.);
   auto flops = process_timings(trial_flops);

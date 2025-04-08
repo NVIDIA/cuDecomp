@@ -156,11 +156,11 @@ int main(int argc, char** argv) {
   options.transpose_use_inplace_buffers[1] = true; // use in-place buffers for Y-to-Z transpose
   options.transpose_use_inplace_buffers[2] = true; // use in-place buffers for Z-to-Y transpose
   options.transpose_use_inplace_buffers[3] = true; // use in-place buffers for Y-to-X transpose
-  options.transpose_op_weights[0] = 1.0; // apply 1.0 multiplier to X-to-Y transpose timings
-  options.transpose_op_weights[1] = 1.0; // apply 1.0 multiplier to Y-to-Z transpose timings
-  options.transpose_op_weights[2] = 1.0; // apply 1.0 multiplier to Z-to-Y transpose timings
-  options.transpose_op_weights[3] = 1.0; // apply 1.0 multiplier to Y-to-X transpose timings
-  options.transpose_input_halo_extents[0][0] = 1; // set input_halo_extent to [1, 1, 1] for X-to-Y transpose
+  options.transpose_op_weights[0] = 1.0;           // apply 1.0 multiplier to X-to-Y transpose timings
+  options.transpose_op_weights[1] = 1.0;           // apply 1.0 multiplier to Y-to-Z transpose timings
+  options.transpose_op_weights[2] = 1.0;           // apply 1.0 multiplier to Z-to-Y transpose timings
+  options.transpose_op_weights[3] = 1.0;           // apply 1.0 multiplier to Y-to-X transpose timings
+  options.transpose_input_halo_extents[0][0] = 1;  // set input_halo_extent to [1, 1, 1] for X-to-Y transpose
   options.transpose_input_halo_extents[0][1] = 1;
   options.transpose_input_halo_extents[0][2] = 1;
   options.transpose_output_halo_extents[3][0] = 1; // set output_halo_extent to [1, 1, 1] for Y-to-X transpose
@@ -250,12 +250,12 @@ int main(int argc, char** argv) {
                                             pinfo_x.halo_extents, nullptr, nullptr, nullptr, 0));
 
   // Transpose from Y-pencils to Z-pencils.
-  CHECK_CUDECOMP_EXIT(
-      cudecompTransposeYToZ(handle, grid_desc, data_d, data_d, transpose_work_d, CUDECOMP_DOUBLE, nullptr, nullptr, nullptr, nullptr, 0));
+  CHECK_CUDECOMP_EXIT(cudecompTransposeYToZ(handle, grid_desc, data_d, data_d, transpose_work_d, CUDECOMP_DOUBLE,
+                                            nullptr, nullptr, nullptr, nullptr, 0));
 
   // Transpose from Z-pencils to Y-pencils.
-  CHECK_CUDECOMP_EXIT(
-      cudecompTransposeZToY(handle, grid_desc, data_d, data_d, transpose_work_d, CUDECOMP_DOUBLE, nullptr, nullptr, nullptr, nullptr, 0));
+  CHECK_CUDECOMP_EXIT(cudecompTransposeZToY(handle, grid_desc, data_d, data_d, transpose_work_d, CUDECOMP_DOUBLE,
+                                            nullptr, nullptr, nullptr, nullptr, 0));
 
   // Transpose from Y-pencils to X-pencils.
   CHECK_CUDECOMP_EXIT(cudecompTransposeYToX(handle, grid_desc, data_d, data_d, transpose_work_d, CUDECOMP_DOUBLE,
