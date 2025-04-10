@@ -498,12 +498,12 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
 #if CUDART_VERSION >= 11010
           if (pipelined) {
             cudaStreamCaptureStatus capture_status;
-            CHECK_CUDA(cudaStreamIsCapturing(stream, &capture_status));
+            CHECK_CUDA(cudaStreamIsCapturing(graph_stream, &capture_status));
             CHECK_CUDA(cudaEventRecordWithFlags(grid_desc->events[dst_rank], graph_stream,
                                                 capture_status == cudaStreamCaptureStatusActive ? cudaEventRecordExternal : cudaEventRecordDefault));
           }
 #else
-          if (pipelined) CHECK_CUDA(cudaEventRecord((grid_desc->events[dst_rank], stream));
+          if (pipelined) CHECK_CUDA(cudaEventRecord((grid_desc->events[dst_rank], graph_stream));
 #endif
         }
         if (handle->cuda_graphs_enable && pipelined && splits_a.size() > 1) {
