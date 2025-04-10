@@ -46,6 +46,10 @@ graphCache::graphCache() {
 
 graphCache::~graphCache() {
   CHECK_CUDA(cudaStreamDestroy(graph_stream_));
+
+  for (auto& entry : graph_cache_) {
+    CHECK_CUDA(cudaGraphExecDestroy(entry.second));
+  }
 }
 
 void graphCache::replay(const graphCache::key_type& key, cudaStream_t stream) const {
