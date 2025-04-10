@@ -44,6 +44,7 @@
 
 #include "cudecomp.h"
 #include "internal/checks.h"
+#include "internal/graph.h"
 
 namespace cudecomp {
 typedef std::pair<std::array<unsigned char, NVML_GPU_FABRIC_UUID_LEN>, unsigned int> mnnvl_info;
@@ -98,6 +99,13 @@ struct cudecompHandle {
   std::vector<cudecomp::mnnvl_info> rank_to_mnnvl_info; // list of mnnvl information (clusterUuid, cliqueId) by rank
   std::vector<unsigned int> rank_to_clique;             // list of rank to MNNVL clique mappings
   std::vector<int> rank_to_clique_rank;                 // list of rank to MNNVL clique rank mappings
+
+  // CUDA graphs
+#if CUDART_VERSION > 11010
+  bool cuda_graphs_enable = true; // Flag to control whether CUDA graphs are used for packing launches in pipelined backends
+#else
+  bool cuda_graphs_enable = false;
+#endif
 };
 
 // Structure with information about row/column communicator
@@ -126,6 +134,8 @@ struct cudecompGridDesc {
   cudecompCommInfo col_comm_info; // column communicator information
 
   std::vector<cudaEvent_t> events{nullptr}; // CUDA events used for scheduling
+
+  cudecomp::graphCache graph_cache; // CUDA graph cache
 
   bool initialized = false;
 };

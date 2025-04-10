@@ -161,6 +161,7 @@ target_sources(cudecomp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/cudecomp_kernels.cu
   ${CMAKE_CURRENT_SOURCE_DIR}/src/cudecomp_kernels_rdc.cu
   ${CMAKE_CURRENT_SOURCE_DIR}/src/cudecomp.cc
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/graph.cc
   ${CMAKE_CURRENT_SOURCE_DIR}/src/nvml_wrap.cc
 )
 
