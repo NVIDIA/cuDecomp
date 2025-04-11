@@ -175,19 +175,19 @@ typedef struct {
                                   ///< in the following order: X-to-Y, Y-to-Z, Z-to-Y, Y-to-X
                                   ///< (default: [1.0, 1.0, 1.0, 1.0])
 
-  int32_t transpose_input_halo_extents[4][3]; ///< input_halo_extents argument to use during autotuning by transpose
-                                              ///< operation; first index specifies operation in the following order:
-                                              ///< X-to-Y, Y-to-Z, Z-to-Y, Y-to-X, second index specifies halo_extent
-                                              ///< argument (default: all zeros, no halos)
+  int32_t transpose_input_halo_extents[4][3];  ///< input_halo_extents argument to use during autotuning by transpose
+                                               ///< operation; first index specifies operation in the following order:
+                                               ///< X-to-Y, Y-to-Z, Z-to-Y, Y-to-X, second index specifies halo_extent
+                                               ///< argument (default: all zeros, no halos)
   int32_t transpose_output_halo_extents[4][3]; ///< output_halo_extents argument to use during autotuning by transpose
                                                ///< operation; first index specifies operation in the following order:
                                                ///< X-to-Y, Y-to-Z, Z-to-Y, Y-to-X, second index specifies halo_extent
                                                ///< argument (default: all zeros, no halos)
 
-  int32_t transpose_input_padding[4][3]; ///< input_padding argument to use during autotuning by transpose operation;
-                                         ///< first index specifies operation in the following order: X-to-Y, Y-to-Z,
-                                         ///< Z-to-Y, Y-to-X, second index specifies input_padding argument (default:
-                                         ///< all zeros, no padding)
+  int32_t transpose_input_padding[4][3];  ///< input_padding argument to use during autotuning by transpose operation;
+                                          ///< first index specifies operation in the following order: X-to-Y, Y-to-Z,
+                                          ///< Z-to-Y, Y-to-X, second index specifies input_padding argument (default:
+                                          ///< all zeros, no padding)
   int32_t transpose_output_padding[4][3]; ///< output_padding argument to use during autotuning by transpose operation;
                                           ///< first index specifies operation in the following order: X-to-Y, Y-to-Z,
                                           ///< Z-to-Y, Y-to-X, second index specifies input_padding argument (default:
