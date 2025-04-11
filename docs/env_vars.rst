@@ -32,3 +32,12 @@ CUDECOMP_ENABLE_CUDA_GRAPHS
 and communication overlap of packing kernels in large scale cases.
 
 Default setting is off (:code:`0`). Setting this variable to :code:`1` will enable this feature.
+
+CUDECOMP_ENABLE_NVSHMEM_SYNC
+----------------------------
+(since v0.5.1, requires NVSHMEM 2.5.0 or newer)
+
+:code:`CUDECOMP_ENABLE_NVSHMEM_SYNC` controls whether cuDecomp uses NVSHMEM synchronization APIs in communication backends using NVSHMEM. This option makes these backends CPU synchronization free which
+can improve performance in some cases.
+
+Default setting is off (:code:`0`). Setting this variable to :code:`1` will enable this feature.
