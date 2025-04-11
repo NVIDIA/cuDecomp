@@ -314,8 +314,25 @@ static void getCudecompEnvVars(cudecompHandle_t& handle) {
         handle->cuda_cumem_enable = false;
       }
     }
+  }
+#endif
+
+#ifdef ENABLE_NVSHMEM
+  // Check CUDECOMP_ENABLE_NVSHMEM_SYNC (NVSHMEM synchronization APIs in NVSHMEM backends)
+  const char* nvshmem_sync_enable_str = std::getenv("CUDECOMP_ENABLE_NVSHMEM_SYNC");
+  if (nvshmem_sync_enable_str) { handle->nvshmem_sync_enable = std::strtol(nvshmem_sync_enable_str, nullptr, 10) == 1; }
+
+  if (handle->nvshmem_sync_enable) {
+#if NVSHMEM_VENDOR_VERSION < 20500
+    // NVSHMEM versions earlier than 2.5.0 have bugs in the barrier implementation. Disabling this feature for those versions.
+    if (handle->rank == 0) {
+      printf("CUDECOMP:WARN: CUDECOMP_ENABLE_NVSHMEM_SYNC is set but NVSHMEM version used for compilation is "
+             "too old for this feature. Disabling this feature.\n");
+    }
+    handle->nvshmem_sync_enable = false;
 #endif
   }
+#endif
 }
 
 #ifdef ENABLE_NVSHMEM

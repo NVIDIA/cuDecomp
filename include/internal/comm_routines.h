@@ -61,12 +61,18 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
                  const std::vector<comm_count_t>& send_counts, const std::vector<comm_count_t>& send_offsets,
                  T* recv_buff, const std::vector<comm_count_t>& recv_counts,
                  const std::vector<comm_count_t>& recv_offsets, cudecompCommAxis comm_axis, cudaStream_t stream = 0) {
+  auto comm = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info.mpi_comm : grid_desc->col_comm_info.mpi_comm;
   auto team = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info.nvshmem_team :
                                                  grid_desc->col_comm_info.nvshmem_team;
 
   int self_rank = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info.rank : grid_desc->col_comm_info.rank;
 
-  nvshmemx_team_sync_on_stream(team, stream);
+  if (handle->nvshmem_sync_enable) {
+    nvshmemx_team_sync_on_stream(team, stream);
+  } else {
+    CHECK_CUDA(cudaStreamSynchronize(stream));
+    CHECK_MPI(MPI_Barrier(comm));
+  }
 
   cudecompNvshmemA2AParams<T> params;
   params.send_buff = send_buff;
@@ -111,12 +117,13 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
   CHECK_CUDA(cudaMemcpyAsync(recv_buff + recv_offsets[self_rank], send_buff + send_offsets[self_rank],
                              send_counts[self_rank] * sizeof(T), cudaMemcpyDeviceToDevice, stream));
 
-#if NVSHMEM_VENDOR_VERSION >= 20500
-  nvshmemx_barrier_on_stream(team, stream);
-#else
-  nvshmemx_quiet_on_stream(stream);
-  nvshmemx_team_sync_on_stream(team, stream);
-#endif
+  if (handle->nvshmem_sync_enable) {
+    nvshmemx_barrier_on_stream(team, stream);
+  } else {
+    nvshmemx_quiet_on_stream(stream);
+    CHECK_CUDA(cudaStreamSynchronize(stream));
+    CHECK_MPI(MPI_Barrier(comm));
+  }
 }
 #endif
 
@@ -269,6 +276,8 @@ static void cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cude
   case CUDECOMP_TRANSPOSE_COMM_NVSHMEM_PL: {
 #ifdef ENABLE_NVSHMEM
     if (nvshmem_ptr(send_buff, handle->rank) && nvshmem_ptr(recv_buff, handle->rank)) {
+      auto comm = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info.mpi_comm
+                                                   : grid_desc->col_comm_info.mpi_comm;
       auto team = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info.nvshmem_team
                                                    : grid_desc->col_comm_info.nvshmem_team;
       auto pl_stream = handle->pl_stream;
@@ -286,7 +295,12 @@ static void cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cude
         } else {
           CHECK_CUDA(cudaStreamWaitEvent(pl_stream, grid_desc->events[dst_rank], 0));
           if (!synced) {
-            nvshmemx_team_sync_on_stream(team, pl_stream);
+            if (handle->nvshmem_sync_enable) {
+              nvshmemx_team_sync_on_stream(team, pl_stream);
+            } else {
+              CHECK_CUDA(cudaStreamSynchronize(pl_stream));
+              CHECK_MPI(MPI_Barrier(comm));
+            }
             // Only need to sync on the first remote operation of an alltoall sequence to ensure reads on other ranks
             // from previous communication have completed.
             synced = true;
@@ -309,21 +323,21 @@ static void cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cude
       }
 
       if (barrier) {
-#if NVSHMEM_VENDOR_VERSION >= 20500
-        nvshmemx_barrier_on_stream(team, pl_stream);
-#else
-        nvshmemx_quiet_on_stream(pl_stream);
-        nvshmemx_team_sync_on_stream(team, pl_stream);
-#endif
-        for (int i = 0; i < src_ranks.size(); ++i) {
-          int src_rank = src_ranks[i];
-          int dst_rank = dst_ranks[i];
-          if (src_rank != self_rank) {
-            CHECK_CUDA(cudaEventRecord(grid_desc->events[dst_rank], pl_stream));
-            CHECK_CUDA(cudaStreamWaitEvent(stream, grid_desc->events[dst_rank], 0));
+        if (handle->nvshmem_sync_enable) {
+          nvshmemx_barrier_on_stream(team, pl_stream);
+          for (int i = 0; i < src_ranks.size(); ++i) {
+            int src_rank = src_ranks[i];
+            int dst_rank = dst_ranks[i];
+            if (src_rank != self_rank) {
+              CHECK_CUDA(cudaEventRecord(grid_desc->events[dst_rank], pl_stream));
+              CHECK_CUDA(cudaStreamWaitEvent(stream, grid_desc->events[dst_rank], 0));
+            }
           }
+        } else {
+          nvshmemx_quiet_on_stream(pl_stream);
+          CHECK_CUDA(cudaStreamSynchronize(pl_stream));
+          CHECK_MPI(MPI_Barrier(comm));
         }
-
       }
       break;
     } else {
