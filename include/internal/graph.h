@@ -52,6 +52,7 @@ public:
   cudaStream_t startCapture(const key_type& key, cudaStream_t stream) const;
   void endCapture(const key_type& key);
   bool cached(const key_type& key) const;
+  void clear();
 
 private:
   std::unordered_map<key_type, cudaGraphExec_t> graph_cache_;

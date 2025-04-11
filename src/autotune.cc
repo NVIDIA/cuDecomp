@@ -449,6 +449,9 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
       grid_desc->col_comm_info.nvshmem_team = NVSHMEM_TEAM_INVALID;
 #endif
     }
+
+    // Clear CUDA graph cache between tested process decompositions
+    grid_desc->graph_cache.clear();
   }
 
   // Free test data and workspace
