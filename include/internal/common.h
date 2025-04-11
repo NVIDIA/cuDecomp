@@ -101,7 +101,7 @@ struct cudecompHandle {
   std::vector<int> rank_to_clique_rank;                 // list of rank to MNNVL clique rank mappings
 
   // CUDA graphs
-  bool cuda_graphs_enable = false; // Flag to control whether CUDA graphs are used for packing launches in pipelined backends
+  bool cuda_graphs_enable = false; // Flag to control whether CUDA graphs are used
 };
 
 // Structure with information about row/column communicator

@@ -40,9 +40,7 @@
 
 namespace cudecomp {
 
-graphCache::graphCache() {
-  CHECK_CUDA(cudaStreamCreateWithFlags(&graph_stream_, cudaStreamNonBlocking));
-}
+graphCache::graphCache() { CHECK_CUDA(cudaStreamCreateWithFlags(&graph_stream_, cudaStreamNonBlocking)); }
 
 graphCache::~graphCache() {
   CHECK_CUDA(cudaStreamDestroy(graph_stream_));
@@ -58,7 +56,7 @@ cudaStream_t graphCache::startCapture(const graphCache::key_type& key, cudaStrea
   return graph_stream_;
 }
 
-void graphCache::endCapture(const graphCache::key_type& key){
+void graphCache::endCapture(const graphCache::key_type& key) {
   cudaGraph_t graph;
   cudaGraphExec_t graph_exec;
   CHECK_CUDA(cudaStreamEndCapture(graph_stream_, &graph));
@@ -79,4 +77,3 @@ void graphCache::clear() {
 }
 
 } // namespace cudecomp
-

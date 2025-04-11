@@ -408,7 +408,9 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
             cudaStreamCaptureStatus capture_status;
             CHECK_CUDA(cudaStreamIsCapturing(graph_stream, &capture_status));
             CHECK_CUDA(cudaEventRecordWithFlags(grid_desc->events[dst_rank], graph_stream,
-                                                capture_status == cudaStreamCaptureStatusActive ? cudaEventRecordExternal : cudaEventRecordDefault));
+                                                capture_status == cudaStreamCaptureStatusActive
+                                                    ? cudaEventRecordExternal
+                                                    : cudaEventRecordDefault));
 #else
             CHECK_CUDA(cudaEventRecord((grid_desc->events[dst_rank], graph_stream));
 #endif
@@ -418,7 +420,6 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
             grid_desc->graph_cache.endCapture(key);
             grid_desc->graph_cache.replay(key, stream);
           }
-
         }
       } else {
         T* src = i1 + getPencilPtrOffset(pinfo_a_h, input_halo_extents);
@@ -500,7 +501,9 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
             cudaStreamCaptureStatus capture_status;
             CHECK_CUDA(cudaStreamIsCapturing(graph_stream, &capture_status));
             CHECK_CUDA(cudaEventRecordWithFlags(grid_desc->events[dst_rank], graph_stream,
-                                                capture_status == cudaStreamCaptureStatusActive ? cudaEventRecordExternal : cudaEventRecordDefault));
+                                                capture_status == cudaStreamCaptureStatusActive
+                                                    ? cudaEventRecordExternal
+                                                    : cudaEventRecordDefault));
           }
 #else
           if (pipelined) CHECK_CUDA(cudaEventRecord((grid_desc->events[dst_rank], graph_stream));

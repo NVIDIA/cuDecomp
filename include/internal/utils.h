@@ -33,9 +33,8 @@
 inline bool operator==(const cudecompPencilInfo_t& a, const cudecompPencilInfo_t& b) {
   if (a.size != b.size) return false;
   for (int i = 0; i < 3; ++i) {
-    if ((a.shape[i] != b.shape[i]) || (a.lo[i] != b.lo[i]) || (a.hi[i] != b.hi[i]) ||
-        (a.order[i] != b.order[i]) || (a.halo_extents[i] != b.halo_extents[i]) ||
-        (a.padding[i] != b.padding[i])) {
+    if ((a.shape[i] != b.shape[i]) || (a.lo[i] != b.lo[i]) || (a.hi[i] != b.hi[i]) || (a.order[i] != b.order[i]) ||
+        (a.halo_extents[i] != b.halo_extents[i]) || (a.padding[i] != b.padding[i])) {
       return false;
     }
   }
