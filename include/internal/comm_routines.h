@@ -280,6 +280,8 @@ static void cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cude
                                                    : grid_desc->col_comm_info.mpi_comm;
       auto team = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info.nvshmem_team
                                                    : grid_desc->col_comm_info.nvshmem_team;
+      auto& comm_info = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info
+                                                         : grid_desc->col_comm_info;
       auto pl_stream = handle->pl_stream;
       int self_rank = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info.rank : grid_desc->col_comm_info.rank;
 
@@ -311,11 +313,13 @@ static void cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cude
           size_t send_bytes = send_counts[dst_rank] * sizeof(T);
           int nchunks = (send_bytes + CUDECOMP_NVSHMEM_CHUNK_SZ - 1) / CUDECOMP_NVSHMEM_CHUNK_SZ;
           for (int j = 0; j < nchunks; ++j) {
-            nvshmemx_putmem_nbi_on_stream(
+            nvshmemx_putmem_signal_nbi_on_stream(
                 recv_buff + recv_offsets_nvshmem[dst_rank] + j * (CUDECOMP_NVSHMEM_CHUNK_SZ / sizeof(T)),
                 send_buff + send_offsets[dst_rank] + j * (CUDECOMP_NVSHMEM_CHUNK_SZ / sizeof(T)),
                 std::min(static_cast<size_t>(CUDECOMP_NVSHMEM_CHUNK_SZ), send_bytes - j * CUDECOMP_NVSHMEM_CHUNK_SZ),
+                &comm_info.nvshmem_signals[comm_info.rank], 1, NVSHMEM_SIGNAL_ADD,
                 dst_rank_global, pl_stream);
+            comm_info.nvshmem_signal_counts[src_rank]++;
           }
 
           barrier = true;
@@ -324,11 +328,13 @@ static void cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cude
 
       if (barrier) {
         if (handle->nvshmem_sync_enable) {
-          nvshmemx_barrier_on_stream(team, pl_stream);
+          nvshmemx_quiet_on_stream(pl_stream);
           for (int i = 0; i < src_ranks.size(); ++i) {
             int src_rank = src_ranks[i];
             int dst_rank = dst_ranks[i];
             if (src_rank != self_rank) {
+              nvshmemx_signal_wait_until_on_stream(&comm_info.nvshmem_signals[src_rank], NVSHMEM_CMP_EQ,
+                                                   comm_info.nvshmem_signal_counts[src_rank], pl_stream);
               CHECK_CUDA(cudaEventRecord(grid_desc->events[dst_rank], pl_stream));
               CHECK_CUDA(cudaStreamWaitEvent(stream, grid_desc->events[dst_rank], 0));
             }

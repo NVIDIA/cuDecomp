@@ -116,6 +116,8 @@ struct cudecompCommInfo {
 
 #ifdef ENABLE_NVSHMEM
   nvshmem_team_t nvshmem_team = NVSHMEM_TEAM_INVALID;
+  uint64_t* nvshmem_signals = nullptr;
+  std::vector<uint64_t> nvshmem_signal_counts;
 #endif
 };
 
