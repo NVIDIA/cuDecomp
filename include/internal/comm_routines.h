@@ -113,7 +113,7 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
       continue;
     }
 
-#if 1
+#if 0
     // Use host call for direct P2P accessible entries
     // Need to chunk host API calls due to 2 GiB limitation in API
     size_t send_bytes = send_counts[dst_rank] * sizeof(T);
@@ -134,14 +134,14 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
 
     if (count == CUDECOMP_NVSHMEM_A2A_PARAM_CAPACITY) {
       params.ntransfers = count;
-      cudecomp_nvshmem_alltoallv_p2p(params, stream);
+      cudecomp_nvshmem_alltoallv_p2p(params, 128, stream);
       count = 0;
     }
 #endif
   }
   if (count != 0) {
     params.ntransfers = count;
-    cudecomp_nvshmem_alltoallv_p2p(params, stream);
+    cudecomp_nvshmem_alltoallv_p2p(params, 128, stream);
   }
 
   // Self-copy with cudaMemcpy

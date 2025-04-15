@@ -43,6 +43,8 @@
 #define CUDECOMP_UNROLL_FACTOR (4)
 #define CUDECOMP_MIN_BLOCKS_PER_SM (16)
 
+#define CUDECOMP_NVSHMEM_NTHREADS (512)
+
 namespace cudecomp {
 
 #ifdef ENABLE_NVSHMEM
@@ -64,7 +66,7 @@ __launch_bounds__(CUDECOMP_CUDA_NTHREADS) __global__
 }
 
 template <typename T>
-__launch_bounds__(256) __global__
+__launch_bounds__(CUDECOMP_NVSHMEM_NTHREADS) __global__
     void cudecomp_nvshmem_alltoallv_p2p_k(cudecompNvshmemA2AParams<T> params) {
 
   T* send_buff = params.send_buff;

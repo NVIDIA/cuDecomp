@@ -53,10 +53,10 @@ void cudecomp_nvshmem_alltoallv(const cudecompNvshmemA2AParams<cuda::std::comple
 void cudecomp_nvshmem_alltoallv(const cudecompNvshmemA2AParams<cuda::std::complex<double>>& params,
                                 cudaStream_t stream);
 
-void cudecomp_nvshmem_alltoallv_p2p(const cudecompNvshmemA2AParams<float>& params, cudaStream_t stream);
-void cudecomp_nvshmem_alltoallv_p2p(const cudecompNvshmemA2AParams<double>& params, cudaStream_t stream);
-void cudecomp_nvshmem_alltoallv_p2p(const cudecompNvshmemA2AParams<cuda::std::complex<float>>& params, cudaStream_t stream);
-void cudecomp_nvshmem_alltoallv_p2p(const cudecompNvshmemA2AParams<cuda::std::complex<double>>& params,
+void cudecomp_nvshmem_alltoallv_p2p(const cudecompNvshmemA2AParams<float>& params, int nblocks, cudaStream_t stream);
+void cudecomp_nvshmem_alltoallv_p2p(const cudecompNvshmemA2AParams<double>& params, int nblocks, cudaStream_t stream);
+void cudecomp_nvshmem_alltoallv_p2p(const cudecompNvshmemA2AParams<cuda::std::complex<float>>& params, int nblocks, cudaStream_t stream);
+void cudecomp_nvshmem_alltoallv_p2p(const cudecompNvshmemA2AParams<cuda::std::complex<double>>& params, int nblocks,
                                     cudaStream_t stream);
 #endif
 
