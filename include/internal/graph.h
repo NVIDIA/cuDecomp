@@ -44,7 +44,7 @@
 namespace cudecomp {
 
 class graphCache {
-  using key_type = std::tuple<void*, void*, int, int, cudecompPencilInfo_t, cudecompPencilInfo_t>;
+  using key_type = std::tuple<void*, void*, int, int, cudecompPencilInfo_t, cudecompPencilInfo_t, cudecompDataType_t>;
 
 public:
   graphCache();

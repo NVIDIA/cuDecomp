@@ -36,6 +36,7 @@
 #include <vector>
 
 #include <cuda_runtime.h>
+#include <cuda/std/complex>
 #include <cutensor.h>
 #include <mpi.h>
 
@@ -364,7 +365,8 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
       }
 
       if (pipelined) {
-        auto key = std::tie(i1, o1, ax, dir, pinfo_a_h, pinfo_b_h);
+        auto dtype = getCudecompDataType<T>();
+        auto key = std::tie(i1, o1, ax, dir, pinfo_a_h, pinfo_b_h, dtype);
 
         if (handle->cuda_graphs_enable && grid_desc->graph_cache.cached(key)) {
           grid_desc->graph_cache.replay(key, stream);
@@ -439,7 +441,8 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
       int memcpy_count = 0;
       cudecompBatchedD2DMemcpy3DParams<T> memcpy_params;
 
-      auto key = std::tie(i1, o1, ax, dir, pinfo_a_h, pinfo_b_h);
+      auto dtype = getCudecompDataType<T>();
+      auto key = std::tie(i1, o1, ax, dir, pinfo_a_h, pinfo_b_h, dtype);
 
       if (handle->cuda_graphs_enable && grid_desc->graph_cache.cached(key)) {
         grid_desc->graph_cache.replay(key, stream);
