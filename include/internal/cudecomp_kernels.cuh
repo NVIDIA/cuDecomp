@@ -96,7 +96,7 @@ __launch_bounds__(CUDECOMP_NVSHMEM_NTHREADS) __global__
 
 template <typename T>
 __launch_bounds__(CUDECOMP_NVSHMEM_NTHREADS) __global__
-    void cudecomp_nvshmem_alltoallv_signal_p2p_k(cudecompNvshmemA2ASignalParams<T> params, volatile unsigned int *counter) {
+    void cudecomp_nvshmem_alltoallv_signal_p2p_k(cudecompNvshmemA2ASignalParams<T> params, unsigned int *counter) {
 
   T* send_buff = params.send_buff;
   T* recv_buff = params.recv_buff;
@@ -126,7 +126,7 @@ __launch_bounds__(CUDECOMP_NVSHMEM_NTHREADS) __global__
   __syncthreads();
 
   if (tid == 0) {
-    __threadfence(); // Not sure if this is necessary
+    //__threadfence(); // Not sure if this is necessary
     unsigned int block_count = atomicAdd((unsigned int *)counter, 1);
     if (block_count == (gridDim.x - 1)) {
       nvshmem_quiet();

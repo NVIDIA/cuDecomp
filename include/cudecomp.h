@@ -61,7 +61,9 @@ typedef enum {
   CUDECOMP_TRANSPOSE_COMM_NCCL = 4,       ///< NCCL backend
   CUDECOMP_TRANSPOSE_COMM_NCCL_PL = 5,    ///< NCCL backend with pipelining
   CUDECOMP_TRANSPOSE_COMM_NVSHMEM = 6,    ///< NVSHMEM backend
-  CUDECOMP_TRANSPOSE_COMM_NVSHMEM_PL = 7  ///< NVSHMEM backend with pipelining
+  CUDECOMP_TRANSPOSE_COMM_NVSHMEM_PL = 7, ///< NVSHMEM backend with pipelining
+  CUDECOMP_TRANSPOSE_COMM_NVSHMEM_SM = 8,    ///< NVSHMEM backend using SM-based transfers
+  CUDECOMP_TRANSPOSE_COMM_NVSHMEM_SM_PL = 9  ///< NVSHMEM backend using SM-based transfers with pipelining
 } cudecompTransposeCommBackend_t;
 
 /**

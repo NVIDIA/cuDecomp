@@ -215,7 +215,8 @@ static inline bool haloBackendRequiresNccl(cudecompHaloCommBackend_t comm_backen
 }
 
 static inline bool transposeBackendRequiresNvshmem(cudecompTransposeCommBackend_t comm_backend) {
-  return (comm_backend == CUDECOMP_TRANSPOSE_COMM_NVSHMEM || comm_backend == CUDECOMP_TRANSPOSE_COMM_NVSHMEM_PL);
+  return (comm_backend == CUDECOMP_TRANSPOSE_COMM_NVSHMEM || comm_backend == CUDECOMP_TRANSPOSE_COMM_NVSHMEM_PL ||
+          comm_backend == CUDECOMP_TRANSPOSE_COMM_NVSHMEM_SM || comm_backend == CUDECOMP_TRANSPOSE_COMM_NVSHMEM_SM_PL);
 }
 
 static inline bool haloBackendRequiresNvshmem(cudecompHaloCommBackend_t comm_backend) {

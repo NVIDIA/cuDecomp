@@ -60,7 +60,7 @@ static void
 nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_desc, T* send_buff,
                  const std::vector<comm_count_t>& send_counts, const std::vector<comm_count_t>& send_offsets,
                  T* recv_buff, const std::vector<comm_count_t>& recv_counts,
-                 const std::vector<comm_count_t>& recv_offsets, cudecompCommAxis comm_axis, cudaStream_t stream = 0) {
+                 const std::vector<comm_count_t>& recv_offsets, cudecompCommAxis comm_axis, bool use_sm, cudaStream_t stream = 0) {
   auto comm = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info.mpi_comm : grid_desc->col_comm_info.mpi_comm;
   auto team = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info.nvshmem_team :
                                                  grid_desc->col_comm_info.nvshmem_team;
@@ -84,6 +84,8 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
     int src_rank, dst_rank;
     getAlltoallPeerRanks(grid_desc, comm_axis, i, src_rank, dst_rank);
     int dst_rank_global = getGlobalRank(grid_desc, comm_axis, dst_rank);
+
+    // Skip P2P transfers in this loop
     if (nvshmem_ptr(recv_buff, dst_rank_global)) {
       continue;
     }
@@ -111,36 +113,38 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
     int src_rank, dst_rank;
     getAlltoallPeerRanks(grid_desc, comm_axis, i, src_rank, dst_rank);
     int dst_rank_global = getGlobalRank(grid_desc, comm_axis, dst_rank);
+ 
+    // Skip non-P2P transfers in this loop
     if (!nvshmem_ptr(recv_buff, dst_rank_global)) {
       continue;
     }
 
-#if 0
-    // Use host call for direct P2P accessible entries
-    // Need to chunk host API calls due to 2 GiB limitation in API
-    size_t send_bytes = send_counts[dst_rank] * sizeof(T);
-    size_t nchunks = (send_bytes + CUDECOMP_NVSHMEM_CHUNK_SZ - 1) / CUDECOMP_NVSHMEM_CHUNK_SZ;
-    for (size_t j = 0; j < nchunks; ++j) {
-      nvshmemx_putmem_nbi_on_stream(recv_buff + recv_offsets[dst_rank] + j * (CUDECOMP_NVSHMEM_CHUNK_SZ / sizeof(T)),
-                                    send_buff + send_offsets[dst_rank] + j * (CUDECOMP_NVSHMEM_CHUNK_SZ / sizeof(T)),
-                                    std::min(CUDECOMP_NVSHMEM_CHUNK_SZ, send_bytes - j * CUDECOMP_NVSHMEM_CHUNK_SZ),
-                                    dst_rank_global, stream);
-    }
-#else
+    if (!use_sm) {
+      // Use host call for direct P2P accessible entries
+      // Need to chunk host API calls due to 2 GiB limitation in API
+      size_t send_bytes = send_counts[dst_rank] * sizeof(T);
+      size_t nchunks = (send_bytes + CUDECOMP_NVSHMEM_CHUNK_SZ - 1) / CUDECOMP_NVSHMEM_CHUNK_SZ;
+      for (size_t j = 0; j < nchunks; ++j) {
+        nvshmemx_putmem_nbi_on_stream(recv_buff + recv_offsets[dst_rank] + j * (CUDECOMP_NVSHMEM_CHUNK_SZ / sizeof(T)),
+                                      send_buff + send_offsets[dst_rank] + j * (CUDECOMP_NVSHMEM_CHUNK_SZ / sizeof(T)),
+                                      std::min(CUDECOMP_NVSHMEM_CHUNK_SZ, send_bytes - j * CUDECOMP_NVSHMEM_CHUNK_SZ),
+                                      dst_rank_global, stream);
+      }
+    } else {
+      params.send_offsets[count] = send_offsets[dst_rank];
+      params.recv_offsets[count] = recv_offsets[dst_rank];
+      params.send_counts[count] = send_counts[dst_rank];
+      params.peer_ranks[count] = dst_rank_global;
+      count++;
 
-    params.send_offsets[count] = send_offsets[dst_rank];
-    params.recv_offsets[count] = recv_offsets[dst_rank];
-    params.send_counts[count] = send_counts[dst_rank];
-    params.peer_ranks[count] = dst_rank_global;
-    count++;
-
-    if (count == CUDECOMP_NVSHMEM_A2A_PARAM_CAPACITY) {
-      params.ntransfers = count;
-      cudecomp_nvshmem_alltoallv_p2p(params, 128, stream);
-      count = 0;
+      if (count == CUDECOMP_NVSHMEM_A2A_PARAM_CAPACITY) {
+        params.ntransfers = count;
+        cudecomp_nvshmem_alltoallv_p2p(params, 128, stream);
+        count = 0;
+      }
     }
-#endif
   }
+
   if (count != 0) {
     params.ntransfers = count;
     cudecomp_nvshmem_alltoallv_p2p(params, 128, stream);
@@ -183,11 +187,13 @@ cudecompAlltoall(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
 
   std::vector<MPI_Request> reqs;
   switch (grid_desc->config.transpose_comm_backend) {
-  case CUDECOMP_TRANSPOSE_COMM_NVSHMEM: {
+  case CUDECOMP_TRANSPOSE_COMM_NVSHMEM:
+  case CUDECOMP_TRANSPOSE_COMM_NVSHMEM_SM: {
 #ifdef ENABLE_NVSHMEM
     if (nvshmem_ptr(send_buff, handle->rank) && nvshmem_ptr(recv_buff, handle->rank)) {
       nvshmemAlltoallV(handle, grid_desc, send_buff, send_counts, send_offsets, recv_buff, recv_counts,
-                       recv_offsets_nvshmem, comm_axis, stream);
+                       recv_offsets_nvshmem, comm_axis, grid_desc->config.transpose_comm_backend == CUDECOMP_TRANSPOSE_COMM_NVSHMEM_SM,
+                       stream);
       break;
     } else {
       THROW_INVALID_USAGE("NVSHMEM communication backends require workspace allocated via cudecompMalloc.");
@@ -306,7 +312,8 @@ static void cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cude
 #endif
 
   switch (grid_desc->config.transpose_comm_backend) {
-  case CUDECOMP_TRANSPOSE_COMM_NVSHMEM_PL: {
+  case CUDECOMP_TRANSPOSE_COMM_NVSHMEM_PL:
+  case CUDECOMP_TRANSPOSE_COMM_NVSHMEM_SM_PL: {
 #ifdef ENABLE_NVSHMEM
     if (nvshmem_ptr(send_buff, handle->rank) && nvshmem_ptr(recv_buff, handle->rank)) {
       auto comm = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info.mpi_comm
@@ -342,21 +349,8 @@ static void cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cude
           }
 
           int dst_rank_global = getGlobalRank(grid_desc, comm_axis, dst_rank);
-#if 0
-          // Need to chunk host API calls due to 2 GiB limitation in API
-          size_t send_bytes = send_counts[dst_rank] * sizeof(T);
-          int nchunks = (send_bytes + CUDECOMP_NVSHMEM_CHUNK_SZ - 1) / CUDECOMP_NVSHMEM_CHUNK_SZ;
-          for (int j = 0; j < nchunks; ++j) {
-            nvshmemx_putmem_signal_nbi_on_stream(
-                recv_buff + recv_offsets_nvshmem[dst_rank] + j * (CUDECOMP_NVSHMEM_CHUNK_SZ / sizeof(T)),
-                send_buff + send_offsets[dst_rank] + j * (CUDECOMP_NVSHMEM_CHUNK_SZ / sizeof(T)),
-                std::min(static_cast<size_t>(CUDECOMP_NVSHMEM_CHUNK_SZ), send_bytes - j * CUDECOMP_NVSHMEM_CHUNK_SZ),
-                &comm_info.nvshmem_signals[comm_info.rank], 1, NVSHMEM_SIGNAL_ADD,
-                dst_rank_global, pl_stream);
-            comm_info.nvshmem_signal_counts[src_rank]++;
-          }
-#else
-          if (!nvshmem_ptr(recv_buff, dst_rank_global)) {
+          
+          if (!nvshmem_ptr(recv_buff, dst_rank_global) || grid_desc->config.transpose_comm_backend == CUDECOMP_TRANSPOSE_COMM_NVSHMEM_PL) {
             // Need to chunk host API calls due to 2 GiB limitation in API
             size_t send_bytes = send_counts[dst_rank] * sizeof(T);
             int nchunks = (send_bytes + CUDECOMP_NVSHMEM_CHUNK_SZ - 1) / CUDECOMP_NVSHMEM_CHUNK_SZ;
@@ -380,9 +374,8 @@ static void cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cude
             params.signals[0] = &comm_info.nvshmem_signals[comm_info.rank];
             params.ntransfers = 1;
             cudecomp_nvshmem_alltoallv_signal_p2p(params, 128, comm_info.nvshmem_counter, pl_stream);
+            comm_info.nvshmem_signal_counts[src_rank]++;
           }
-          comm_info.nvshmem_signal_counts[src_rank]++;
-#endif
 
           barrier = true;
         }

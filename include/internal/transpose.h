@@ -51,6 +51,7 @@ static inline bool isTransposeCommPipelined(cudecompTransposeCommBackend_t commT
   return (commType == CUDECOMP_TRANSPOSE_COMM_NCCL_PL ||
 #ifdef ENABLE_NVSHMEM
           commType == CUDECOMP_TRANSPOSE_COMM_NVSHMEM_PL ||
+          commType == CUDECOMP_TRANSPOSE_COMM_NVSHMEM_SM_PL ||
 #endif
           commType == CUDECOMP_TRANSPOSE_COMM_MPI_P2P_PL);
 }

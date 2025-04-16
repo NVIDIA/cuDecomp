@@ -117,6 +117,8 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
     if (!options->disable_nvshmem_backends) {
       comm_backend_list.push_back(CUDECOMP_TRANSPOSE_COMM_NVSHMEM);
       comm_backend_list.push_back(CUDECOMP_TRANSPOSE_COMM_NVSHMEM_PL);
+      comm_backend_list.push_back(CUDECOMP_TRANSPOSE_COMM_NVSHMEM_SM);
+      comm_backend_list.push_back(CUDECOMP_TRANSPOSE_COMM_NVSHMEM_SM_PL);
       need_nvshmem = true;
     }
 #endif
