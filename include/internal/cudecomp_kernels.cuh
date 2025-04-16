@@ -31,6 +31,8 @@
 #ifndef CUDECOMP_KERNELS_CUH
 #define CUDECOMP_KERNELS_CUH
 
+#include <algorithm>
+
 #ifdef ENABLE_NVSHMEM
 #include <nvshmem.h>
 #endif
@@ -40,6 +42,8 @@
 #define CUDECOMP_CUDA_NTHREADS (128)
 #define CUDECOMP_UNROLL_FACTOR (4)
 #define CUDECOMP_MIN_BLOCKS_PER_SM (16)
+
+#define CUDECOMP_NVSHMEM_NTHREADS (512)
 
 namespace cudecomp {
 
@@ -59,6 +63,35 @@ __launch_bounds__(CUDECOMP_CUDA_NTHREADS) __global__
   size_t send_count = params.send_counts[tid];
 
   nvshmem_putmem_nbi(recv_buff + recv_offset, send_buff + send_offset, send_count * sizeof(T), peer_rank);
+}
+
+template <typename T>
+__launch_bounds__(CUDECOMP_NVSHMEM_NTHREADS) __global__
+    void cudecomp_nvshmem_alltoallv_p2p_k(cudecompNvshmemA2AParams<T> params) {
+
+  T* send_buff = params.send_buff;
+  T* recv_buff = params.recv_buff;
+  int bid = blockIdx.x;
+
+  for (int copyid = 0; copyid < params.ntransfers; ++copyid) {
+    int peer_rank = params.peer_ranks[copyid];
+    size_t send_offset = params.send_offsets[copyid];
+    size_t recv_offset = params.recv_offsets[copyid];
+    size_t send_count = params.send_counts[copyid];
+
+    size_t nelems_per_block = (send_count + gridDim.x  - 1) / gridDim.x;
+    if (nelems_per_block * bid < send_count) {
+      size_t block_offset = bid * nelems_per_block;
+      size_t block_count = min(nelems_per_block, send_count - block_offset);
+      nvshmemx_putmem_nbi_block(recv_buff + recv_offset + block_offset,
+                                send_buff + send_offset + block_offset,
+                                block_count * sizeof(T),
+                                peer_rank);
+    }
+
+    // Roll block ID assignments to ensure all blocks are active
+    bid = (bid + (send_count + nelems_per_block - 1) / send_count) % gridDim.x;
+  }
 }
 #endif
 
