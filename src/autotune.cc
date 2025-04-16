@@ -389,6 +389,9 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
         }
       }
 
+      // Clear CUDA graph cache between backend/process decomposition pairs
+      grid_desc->graph_cache.clear();
+
       auto times = processTimings(handle, trial_times);
       auto times_w = processTimings(handle, trial_times_w);
       auto xy_times = processTimings(handle, trial_xy_times);
@@ -449,6 +452,7 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
       grid_desc->col_comm_info.nvshmem_team = NVSHMEM_TEAM_INVALID;
 #endif
     }
+
   }
 
   // Free test data and workspace

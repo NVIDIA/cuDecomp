@@ -36,6 +36,7 @@
 #include <vector>
 
 #include <cuda_runtime.h>
+#include <cuda/std/complex>
 #include <cutensor.h>
 #include <mpi.h>
 
@@ -364,37 +365,63 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
       }
 
       if (pipelined) {
-        for (int j = 1; j < splits_a.size() + 1; ++j) {
-          int src_rank, dst_rank;
-          getAlltoallPeerRanks(grid_desc, comm_axis, j, src_rank, dst_rank);
-          if (j == splits_a.size()) dst_rank = comm_rank;
+        auto dtype = getCudecompDataType<T>();
+        auto key = std::tie(i1, o1, ax, dir, pinfo_a_h, pinfo_b_h, dtype);
 
-          size_t shift = offsets_a[dst_rank];
-          for (int i = 0; i < 3; ++i) {
-            if (pinfo_a_h.order[i] == ax_a) break;
-            shift *= shape_g_a_h[pinfo_a_h.order[i]];
+        if (handle->cuda_graphs_enable && grid_desc->graph_cache.cached(key)) {
+          grid_desc->graph_cache.replay(key, stream);
+        } else {
+          cudaStream_t graph_stream = stream;
+          if (handle->cuda_graphs_enable && splits_a.size() > 1) {
+            graph_stream = grid_desc->graph_cache.startCapture(key, stream);
           }
 
-          T* src = i1 + shift + getPencilPtrOffset(pinfo_a_h, input_halo_extents);
-          T* dst;
-          if (!direct_transpose) {
-            dst = o1 + send_offsets[dst_rank];
-          } else {
-            size_t shift_b = offsets_b[src_rank];
+          for (int j = 1; j < splits_a.size() + 1; ++j) {
+            int src_rank, dst_rank;
+            getAlltoallPeerRanks(grid_desc, comm_axis, j, src_rank, dst_rank);
+            if (j == splits_a.size()) dst_rank = comm_rank;
+
+            size_t shift = offsets_a[dst_rank];
             for (int i = 0; i < 3; ++i) {
-              if (pinfo_b_h.order[i] == ax_b) break;
-              shift *= shape_g_b_h[pinfo_b_h.order[i]];
+              if (pinfo_a_h.order[i] == ax_a) break;
+              shift *= shape_g_a_h[pinfo_a_h.order[i]];
             }
 
-            dst = o1 + shift + getPencilPtrOffset(pinfo_b_h, output_halo_extents);
+            T* src = i1 + shift + getPencilPtrOffset(pinfo_a_h, input_halo_extents);
+            T* dst;
+            if (!direct_transpose) {
+              dst = o1 + send_offsets[dst_rank];
+            } else {
+              size_t shift_b = offsets_b[src_rank];
+              for (int i = 0; i < 3; ++i) {
+                if (pinfo_b_h.order[i] == ax_b) break;
+                shift *= shape_g_b_h[pinfo_b_h.order[i]];
+              }
+
+              dst = o1 + shift + getPencilPtrOffset(pinfo_b_h, output_halo_extents);
+            }
+
+            for (int i = 0; i < 3; ++i) {
+              if (ax_a == pinfo_a.order[i]) extents[i] = splits_a[dst_rank];
+            }
+
+            localPermute(handle, extents, order, strides_in, strides_out, src, dst, graph_stream);
+#if CUDART_VERSION >= 11010
+            cudaStreamCaptureStatus capture_status;
+            CHECK_CUDA(cudaStreamIsCapturing(graph_stream, &capture_status));
+            CHECK_CUDA(cudaEventRecordWithFlags(grid_desc->events[dst_rank], graph_stream,
+                                                capture_status == cudaStreamCaptureStatusActive
+                                                    ? cudaEventRecordExternal
+                                                    : cudaEventRecordDefault));
+#else
+            CHECK_CUDA(cudaEventRecord((grid_desc->events[dst_rank], graph_stream));
+#endif
           }
 
-          for (int i = 0; i < 3; ++i) {
-            if (ax_a == pinfo_a.order[i]) extents[i] = splits_a[dst_rank];
+          if (handle->cuda_graphs_enable && splits_a.size() > 1) {
+            grid_desc->graph_cache.endCapture(key);
+            grid_desc->graph_cache.replay(key, stream);
           }
-
-          localPermute(handle, extents, order, strides_in, strides_out, src, dst, stream);
-          CHECK_CUDA(cudaEventRecord(grid_desc->events[dst_rank], stream));
         }
       } else {
         T* src = i1 + getPencilPtrOffset(pinfo_a_h, input_halo_extents);
@@ -413,54 +440,82 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
       // Pack
       int memcpy_count = 0;
       cudecompBatchedD2DMemcpy3DParams<T> memcpy_params;
-      for (int j = 1; j < splits_a.size() + 1; ++j) {
-        int src_rank, dst_rank;
-        getAlltoallPeerRanks(grid_desc, comm_axis, j, src_rank, dst_rank);
-        if (j == splits_a.size()) dst_rank = comm_rank;
 
-        size_t shift = offsets_a[dst_rank];
-        for (int i = 0; i < 3; ++i) {
-          if (pinfo_a_h.order[i] == ax_a) break;
-          shift *= shape_g_a_h[pinfo_a_h.order[i]];
+      auto dtype = getCudecompDataType<T>();
+      auto key = std::tie(i1, o1, ax, dir, pinfo_a_h, pinfo_b_h, dtype);
+
+      if (handle->cuda_graphs_enable && grid_desc->graph_cache.cached(key)) {
+        grid_desc->graph_cache.replay(key, stream);
+      } else {
+        cudaStream_t graph_stream = stream;
+        if (handle->cuda_graphs_enable && pipelined && splits_a.size() > 1) {
+          graph_stream = grid_desc->graph_cache.startCapture(key, stream);
         }
 
-        T* src = i1 + shift + getPencilPtrOffset(pinfo_a_h, input_halo_extents);
-        T* dst;
-        if (!direct_pack) {
-          dst = o1 + send_offsets[dst_rank];
-        } else {
-          size_t shift_b = offsets_b[src_rank];
+        for (int j = 1; j < splits_a.size() + 1; ++j) {
+          int src_rank, dst_rank;
+          getAlltoallPeerRanks(grid_desc, comm_axis, j, src_rank, dst_rank);
+          if (j == splits_a.size()) dst_rank = comm_rank;
+
+          size_t shift = offsets_a[dst_rank];
           for (int i = 0; i < 3; ++i) {
-            if (pinfo_b_h.order[i] == ax_b) break;
-            shift_b *= shape_g_b_h[pinfo_b_h.order[i]];
+            if (pinfo_a_h.order[i] == ax_a) break;
+            shift *= shape_g_a_h[pinfo_a_h.order[i]];
           }
-          dst = o1 + shift_b + getPencilPtrOffset(pinfo_b_h, output_halo_extents);
-        }
 
-        memcpy_params.src[memcpy_count] = src;
-        memcpy_params.dest[memcpy_count] = dst;
-        memcpy_params.src_strides[0][memcpy_count] = pinfo_a_h.shape[0] * pinfo_a_h.shape[1];
-        memcpy_params.src_strides[1][memcpy_count] = pinfo_a_h.shape[0];
-        if (!direct_pack) {
-          memcpy_params.dest_strides[1][memcpy_count] =
-              (ax_a == pinfo_a.order[0]) ? splits_a[dst_rank] : pinfo_a.shape[0];
-          memcpy_params.dest_strides[0][memcpy_count] =
-              memcpy_params.dest_strides[1][memcpy_count] *
-              ((ax_a == pinfo_a.order[1]) ? splits_a[dst_rank] : pinfo_a.shape[1]);
-        } else {
-          memcpy_params.dest_strides[0][memcpy_count] = pinfo_b_h.shape[0] * pinfo_b_h.shape[1];
-          memcpy_params.dest_strides[1][memcpy_count] = pinfo_b_h.shape[0];
+          T* src = i1 + shift + getPencilPtrOffset(pinfo_a_h, input_halo_extents);
+          T* dst;
+          if (!direct_pack) {
+            dst = o1 + send_offsets[dst_rank];
+          } else {
+            size_t shift_b = offsets_b[src_rank];
+            for (int i = 0; i < 3; ++i) {
+              if (pinfo_b_h.order[i] == ax_b) break;
+              shift_b *= shape_g_b_h[pinfo_b_h.order[i]];
+            }
+            dst = o1 + shift_b + getPencilPtrOffset(pinfo_b_h, output_halo_extents);
+          }
+
+          memcpy_params.src[memcpy_count] = src;
+          memcpy_params.dest[memcpy_count] = dst;
+          memcpy_params.src_strides[0][memcpy_count] = pinfo_a_h.shape[0] * pinfo_a_h.shape[1];
+          memcpy_params.src_strides[1][memcpy_count] = pinfo_a_h.shape[0];
+          if (!direct_pack) {
+            memcpy_params.dest_strides[1][memcpy_count] =
+                (ax_a == pinfo_a.order[0]) ? splits_a[dst_rank] : pinfo_a.shape[0];
+            memcpy_params.dest_strides[0][memcpy_count] =
+                memcpy_params.dest_strides[1][memcpy_count] *
+                ((ax_a == pinfo_a.order[1]) ? splits_a[dst_rank] : pinfo_a.shape[1]);
+          } else {
+            memcpy_params.dest_strides[0][memcpy_count] = pinfo_b_h.shape[0] * pinfo_b_h.shape[1];
+            memcpy_params.dest_strides[1][memcpy_count] = pinfo_b_h.shape[0];
+          }
+          memcpy_params.extents[2][memcpy_count] = (ax_a == pinfo_a.order[0]) ? splits_a[dst_rank] : pinfo_a.shape[0];
+          memcpy_params.extents[1][memcpy_count] = (ax_a == pinfo_a.order[1]) ? splits_a[dst_rank] : pinfo_a.shape[1];
+          memcpy_params.extents[0][memcpy_count] = (ax_a == pinfo_a.order[2]) ? splits_a[dst_rank] : pinfo_a.shape[2];
+          memcpy_count++;
+          if (memcpy_count == memcpy_limit || j == splits_a.size()) {
+            memcpy_params.ncopies = memcpy_count;
+            cudecomp_batched_d2d_memcpy_3d(memcpy_params, graph_stream);
+            memcpy_count = 0;
+          }
+#if CUDART_VERSION >= 11010
+          if (pipelined) {
+            cudaStreamCaptureStatus capture_status;
+            CHECK_CUDA(cudaStreamIsCapturing(graph_stream, &capture_status));
+            CHECK_CUDA(cudaEventRecordWithFlags(grid_desc->events[dst_rank], graph_stream,
+                                                capture_status == cudaStreamCaptureStatusActive
+                                                    ? cudaEventRecordExternal
+                                                    : cudaEventRecordDefault));
+          }
+#else
+          if (pipelined) CHECK_CUDA(cudaEventRecord((grid_desc->events[dst_rank], graph_stream));
+#endif
         }
-        memcpy_params.extents[2][memcpy_count] = (ax_a == pinfo_a.order[0]) ? splits_a[dst_rank] : pinfo_a.shape[0];
-        memcpy_params.extents[1][memcpy_count] = (ax_a == pinfo_a.order[1]) ? splits_a[dst_rank] : pinfo_a.shape[1];
-        memcpy_params.extents[0][memcpy_count] = (ax_a == pinfo_a.order[2]) ? splits_a[dst_rank] : pinfo_a.shape[2];
-        memcpy_count++;
-        if (memcpy_count == memcpy_limit || j == splits_a.size()) {
-          memcpy_params.ncopies = memcpy_count;
-          cudecomp_batched_d2d_memcpy_3d(memcpy_params, stream);
-          memcpy_count = 0;
+        if (handle->cuda_graphs_enable && pipelined && splits_a.size() > 1) {
+          grid_desc->graph_cache.endCapture(key);
+          grid_desc->graph_cache.replay(key, stream);
         }
-        if (pipelined) CHECK_CUDA(cudaEventRecord(grid_desc->events[dst_rank], stream));
       }
     }
 

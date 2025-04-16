@@ -316,6 +316,19 @@ static void getCudecompEnvVars(cudecompHandle_t& handle) {
     }
 #endif
   }
+
+  // Check CUDECOMP_ENABLE_CUDA_GRAPHS (CUDA Graphs usage in pipelined backends)
+  const char* graphs_enable_str = std::getenv("CUDECOMP_ENABLE_CUDA_GRAPHS");
+  if (graphs_enable_str) { handle->cuda_graphs_enable = std::strtol(graphs_enable_str, nullptr, 10) == 1; }
+  if (handle->cuda_graphs_enable) {
+#if CUDART_VERSION < 11010
+    if (handle->rank == 0) {
+      printf("CUDECOMP:WARN: CUDECOMP_ENABLE_CUDA_GRAPHS is set but CUDA version used for compilation does not "
+             "support cudaEventRecordWithFlags which is required. Disabling this feature.\n");
+    }
+    handle->cuda_graphs_enable = false;
+#endif
+  }
 }
 
 #ifdef ENABLE_NVSHMEM

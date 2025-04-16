@@ -23,3 +23,12 @@ CUDECOMP_ENABLE_CUMEM
 some MPI distributions on multi-node NVLink (MNNVL) capable systems.
 
 Default setting is off (:code:`0`). Setting this variable to :code:`1` will enable this feature.
+
+CUDECOMP_ENABLE_CUDA_GRAPHS
+---------------------------
+(since v0.5.1, requires CUDA 11.1 driver/toolkit or newer)
+
+:code:`CUDECOMP_ENABLE_CUDA_GRAPHS` controls whether cuDecomp uses CUDA Graphs APIs to capture/replay packing operations for pipelined backends. This option can improve the launch efficiency
+and communication overlap of packing kernels in large scale cases.
+
+Default setting is off (:code:`0`). Setting this variable to :code:`1` will enable this feature.
