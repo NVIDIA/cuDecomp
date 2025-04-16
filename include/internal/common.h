@@ -118,6 +118,7 @@ struct cudecompCommInfo {
   nvshmem_team_t nvshmem_team = NVSHMEM_TEAM_INVALID;
   uint64_t* nvshmem_signals = nullptr;
   std::vector<uint64_t> nvshmem_signal_counts;
+  unsigned int* nvshmem_counter = nullptr;
 #endif
 };
 

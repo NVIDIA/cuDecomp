@@ -356,19 +356,32 @@ static void cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cude
             comm_info.nvshmem_signal_counts[src_rank]++;
           }
 #else
-          cudecompNvshmemA2AParams<T> params;
-          params.send_buff = send_buff;
-          params.recv_buff = recv_buff;
-          params.send_offsets[0] = send_offsets[dst_rank];
-          params.recv_offsets[0] = recv_offsets_nvshmem[dst_rank];
-          params.send_counts[0] = send_counts[dst_rank];
-          params.peer_ranks[0] = dst_rank_global;
-          params.ntransfers = 1;
           if (!nvshmem_ptr(recv_buff, dst_rank_global)) {
-            cudecomp_nvshmem_alltoallv(params, pl_stream);
+            // Need to chunk host API calls due to 2 GiB limitation in API
+            size_t send_bytes = send_counts[dst_rank] * sizeof(T);
+            int nchunks = (send_bytes + CUDECOMP_NVSHMEM_CHUNK_SZ - 1) / CUDECOMP_NVSHMEM_CHUNK_SZ;
+            for (int j = 0; j < nchunks; ++j) {
+              nvshmemx_putmem_signal_nbi_on_stream(
+                  recv_buff + recv_offsets_nvshmem[dst_rank] + j * (CUDECOMP_NVSHMEM_CHUNK_SZ / sizeof(T)),
+                  send_buff + send_offsets[dst_rank] + j * (CUDECOMP_NVSHMEM_CHUNK_SZ / sizeof(T)),
+                  std::min(static_cast<size_t>(CUDECOMP_NVSHMEM_CHUNK_SZ), send_bytes - j * CUDECOMP_NVSHMEM_CHUNK_SZ),
+                  &comm_info.nvshmem_signals[comm_info.rank], 1, NVSHMEM_SIGNAL_ADD,
+                  dst_rank_global, pl_stream);
+              comm_info.nvshmem_signal_counts[src_rank]++;
+            }
           } else {
-            cudecomp_nvshmem_alltoallv_p2p(params, 128, pl_stream);
+            cudecompNvshmemA2ASignalParams<T> params;
+            params.send_buff = send_buff;
+            params.recv_buff = recv_buff;
+            params.send_offsets[0] = send_offsets[dst_rank];
+            params.recv_offsets[0] = recv_offsets_nvshmem[dst_rank];
+            params.send_counts[0] = send_counts[dst_rank];
+            params.peer_ranks[0] = dst_rank_global;
+            params.signals[0] = &comm_info.nvshmem_signals[comm_info.rank];
+            params.ntransfers = 1;
+            cudecomp_nvshmem_alltoallv_signal_p2p(params, 128, comm_info.nvshmem_counter, pl_stream);
           }
+          comm_info.nvshmem_signal_counts[src_rank]++;
 #endif
 
           barrier = true;

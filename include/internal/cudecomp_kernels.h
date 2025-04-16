@@ -36,7 +36,7 @@
 namespace cudecomp {
 
 #ifdef ENABLE_NVSHMEM
-#define CUDECOMP_NVSHMEM_A2A_PARAM_CAPACITY 96
+#define CUDECOMP_NVSHMEM_A2A_PARAM_CAPACITY 144
 template <typename T> struct cudecompNvshmemA2AParams {
   int ntransfers;
   T* send_buff = nullptr;
@@ -45,6 +45,18 @@ template <typename T> struct cudecompNvshmemA2AParams {
   size_t recv_offsets[CUDECOMP_NVSHMEM_A2A_PARAM_CAPACITY];
   size_t send_counts[CUDECOMP_NVSHMEM_A2A_PARAM_CAPACITY];
   int peer_ranks[CUDECOMP_NVSHMEM_A2A_PARAM_CAPACITY];
+};
+
+#define CUDECOMP_NVSHMEM_A2A_SIGNAL_PARAM_CAPACITY 112
+template <typename T> struct cudecompNvshmemA2ASignalParams {
+  int ntransfers;
+  T* send_buff = nullptr;
+  T* recv_buff = nullptr;
+  size_t send_offsets[CUDECOMP_NVSHMEM_A2A_SIGNAL_PARAM_CAPACITY];
+  size_t recv_offsets[CUDECOMP_NVSHMEM_A2A_SIGNAL_PARAM_CAPACITY];
+  size_t send_counts[CUDECOMP_NVSHMEM_A2A_SIGNAL_PARAM_CAPACITY];
+  int peer_ranks[CUDECOMP_NVSHMEM_A2A_SIGNAL_PARAM_CAPACITY];
+  uint64_t* signals[CUDECOMP_NVSHMEM_A2A_SIGNAL_PARAM_CAPACITY];
 };
 
 void cudecomp_nvshmem_alltoallv(const cudecompNvshmemA2AParams<float>& params, cudaStream_t stream);
@@ -58,6 +70,12 @@ void cudecomp_nvshmem_alltoallv_p2p(const cudecompNvshmemA2AParams<double>& para
 void cudecomp_nvshmem_alltoallv_p2p(const cudecompNvshmemA2AParams<cuda::std::complex<float>>& params, int nblocks, cudaStream_t stream);
 void cudecomp_nvshmem_alltoallv_p2p(const cudecompNvshmemA2AParams<cuda::std::complex<double>>& params, int nblocks,
                                     cudaStream_t stream);
+
+void cudecomp_nvshmem_alltoallv_signal_p2p(const cudecompNvshmemA2ASignalParams<float>& params, int nblocks, unsigned int* counter, cudaStream_t stream);
+void cudecomp_nvshmem_alltoallv_signal_p2p(const cudecompNvshmemA2ASignalParams<double>& params, int nblocks, unsigned int* counter, cudaStream_t stream);
+void cudecomp_nvshmem_alltoallv_signal_p2p(const cudecompNvshmemA2ASignalParams<cuda::std::complex<float>>& params, int nblocks, unsigned int* counter, cudaStream_t stream);
+void cudecomp_nvshmem_alltoallv_signal_p2p(const cudecompNvshmemA2ASignalParams<cuda::std::complex<double>>& params, int nblocks, unsigned int* counter,
+                                           cudaStream_t stream);
 #endif
 
 #define CUDECOMP_BATCHED_D2D_3D_PARAM_CAPACITY 56

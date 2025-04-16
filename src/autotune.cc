@@ -284,6 +284,10 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
       grid_desc->col_comm_info.nvshmem_signals = (uint64_t*) nvshmem_malloc(grid_desc->col_comm_info.nranks * sizeof(uint64_t));
       CHECK_CUDA(cudaMemset(grid_desc->col_comm_info.nvshmem_signals, 0, grid_desc->col_comm_info.nranks * sizeof(uint64_t)));
       grid_desc->col_comm_info.nvshmem_signal_counts.resize(grid_desc->col_comm_info.nranks);
+      CHECK_CUDA(cudaMalloc(&grid_desc->row_comm_info.nvshmem_counter, sizeof(unsigned int)));
+      CHECK_CUDA(cudaMemset(grid_desc->row_comm_info.nvshmem_counter, 0,  sizeof(unsigned int)));
+      CHECK_CUDA(cudaMalloc(&grid_desc->col_comm_info.nvshmem_counter, sizeof(unsigned int)));
+      CHECK_CUDA(cudaMemset(grid_desc->col_comm_info.nvshmem_counter, 0,  sizeof(unsigned int)));
 #endif
     }
 
@@ -456,6 +460,8 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
       nvshmem_team_destroy(grid_desc->col_comm_info.nvshmem_team);
       nvshmem_free(grid_desc->row_comm_info.nvshmem_signals);
       nvshmem_free(grid_desc->col_comm_info.nvshmem_signals);
+      CHECK_CUDA(cudaFree(grid_desc->row_comm_info.nvshmem_counter));
+      CHECK_CUDA(cudaFree(grid_desc->col_comm_info.nvshmem_counter));
       grid_desc->row_comm_info.nvshmem_signal_counts.clear();
       grid_desc->col_comm_info.nvshmem_signal_counts.clear();
       grid_desc->row_comm_info.nvshmem_team = NVSHMEM_TEAM_INVALID;
@@ -687,6 +693,10 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
       grid_desc->col_comm_info.nvshmem_signals = (uint64_t*) nvshmem_malloc(grid_desc->col_comm_info.nranks * sizeof(uint64_t));
       CHECK_CUDA(cudaMemset(grid_desc->col_comm_info.nvshmem_signals, 0, grid_desc->col_comm_info.nranks * sizeof(uint64_t)));
       grid_desc->col_comm_info.nvshmem_signal_counts.resize(grid_desc->col_comm_info.nranks);
+      CHECK_CUDA(cudaMalloc(&grid_desc->row_comm_info.nvshmem_counter, sizeof(unsigned int)));
+      CHECK_CUDA(cudaMemset(grid_desc->row_comm_info.nvshmem_counter, 0,  sizeof(unsigned int)));
+      CHECK_CUDA(cudaMalloc(&grid_desc->col_comm_info.nvshmem_counter, sizeof(unsigned int)));
+      CHECK_CUDA(cudaMemset(grid_desc->col_comm_info.nvshmem_counter, 0,  sizeof(unsigned int)));
 #endif
     }
 
@@ -795,6 +805,8 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
       nvshmem_team_destroy(grid_desc->col_comm_info.nvshmem_team);
       nvshmem_free(grid_desc->row_comm_info.nvshmem_signals);
       nvshmem_free(grid_desc->col_comm_info.nvshmem_signals);
+      CHECK_CUDA(cudaFree(grid_desc->row_comm_info.nvshmem_counter));
+      CHECK_CUDA(cudaFree(grid_desc->col_comm_info.nvshmem_counter));
       grid_desc->row_comm_info.nvshmem_signal_counts.clear();
       grid_desc->col_comm_info.nvshmem_signal_counts.clear();
       grid_desc->row_comm_info.nvshmem_team = NVSHMEM_TEAM_INVALID;

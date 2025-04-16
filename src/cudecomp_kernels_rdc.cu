@@ -79,6 +79,28 @@ void cudecomp_nvshmem_alltoallv_p2p(const cudecompNvshmemA2AParams<cuda::std::co
   cudecomp_nvshmem_alltoallv_p2p_k<<<nblocks, CUDECOMP_NVSHMEM_NTHREADS, 0, stream>>>(params);
   CHECK_CUDA_LAUNCH();
 }
+
+void cudecomp_nvshmem_alltoallv_signal_p2p(const cudecompNvshmemA2ASignalParams<float>& params, int nblocks, unsigned int *counter, cudaStream_t stream) {
+  cudecomp_nvshmem_alltoallv_signal_p2p_k<<<nblocks, CUDECOMP_NVSHMEM_NTHREADS, 0, stream>>>(params, counter);
+  CHECK_CUDA_LAUNCH();
+}
+
+void cudecomp_nvshmem_alltoallv_signal_p2p(const cudecompNvshmemA2ASignalParams<double>& params, int nblocks, unsigned int *counter, cudaStream_t stream) {
+  cudecomp_nvshmem_alltoallv_signal_p2p_k<<<nblocks, CUDECOMP_NVSHMEM_NTHREADS, 0, stream>>>(params, counter);
+  CHECK_CUDA_LAUNCH();
+}
+
+void cudecomp_nvshmem_alltoallv_signal_p2p(const cudecompNvshmemA2ASignalParams<cuda::std::complex<float>>& params,
+                                    int nblocks, unsigned int *counter, cudaStream_t stream) {
+  cudecomp_nvshmem_alltoallv_signal_p2p_k<<<nblocks, CUDECOMP_NVSHMEM_NTHREADS, 0, stream>>>(params, counter);
+  CHECK_CUDA_LAUNCH();
+}
+
+void cudecomp_nvshmem_alltoallv_signal_p2p(const cudecompNvshmemA2ASignalParams<cuda::std::complex<double>>& params,
+                                    int nblocks, unsigned int *counter, cudaStream_t stream) {
+  cudecomp_nvshmem_alltoallv_signal_p2p_k<<<nblocks, CUDECOMP_NVSHMEM_NTHREADS, 0, stream>>>(params, counter);
+  CHECK_CUDA_LAUNCH();
+}
 #endif
 
 } // namespace cudecomp

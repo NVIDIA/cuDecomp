@@ -89,9 +89,54 @@ __launch_bounds__(CUDECOMP_NVSHMEM_NTHREADS) __global__
                                 peer_rank);
     }
 
-    // Roll block ID assignments to ensure all blocks are active
-    bid = (bid + (send_count + nelems_per_block - 1) / send_count) % gridDim.x;
+    //// Roll block ID assignments to ensure all blocks are active
+    //bid = (bid + (send_count + nelems_per_block - 1) / send_count) % gridDim.x;
   }
+}
+
+template <typename T>
+__launch_bounds__(CUDECOMP_NVSHMEM_NTHREADS) __global__
+    void cudecomp_nvshmem_alltoallv_signal_p2p_k(cudecompNvshmemA2ASignalParams<T> params, volatile unsigned int *counter) {
+
+  T* send_buff = params.send_buff;
+  T* recv_buff = params.recv_buff;
+  int bid = blockIdx.x;
+  int tid = threadIdx.x;
+
+  for (int copyid = 0; copyid < params.ntransfers; ++copyid) {
+    int peer_rank = params.peer_ranks[copyid];
+    size_t send_offset = params.send_offsets[copyid];
+    size_t recv_offset = params.recv_offsets[copyid];
+    size_t send_count = params.send_counts[copyid];
+
+    size_t nelems_per_block = (send_count + gridDim.x  - 1) / gridDim.x;
+    if (nelems_per_block * bid < send_count) {
+      size_t block_offset = bid * nelems_per_block;
+      size_t block_count = min(nelems_per_block, send_count - block_offset);
+      nvshmemx_putmem_nbi_block(recv_buff + recv_offset + block_offset,
+                                send_buff + send_offset + block_offset,
+                                block_count * sizeof(T),
+                                peer_rank);
+    }
+
+    //// Roll block ID assignments to ensure all blocks are active
+    //bid = (bid + (send_count + nelems_per_block - 1) / send_count) % gridDim.x;
+  }
+
+  __syncthreads();
+
+  if (tid == 0) {
+    __threadfence(); // Not sure if this is necessary
+    unsigned int block_count = atomicAdd((unsigned int *)counter, 1);
+    if (block_count == (gridDim.x - 1)) {
+      nvshmem_quiet();
+      for (int copyid = 0; copyid < params.ntransfers; ++copyid) {
+        nvshmemx_signal_op(params.signals[copyid], 1, NVSHMEM_SIGNAL_ADD, params.peer_ranks[copyid]);
+      }
+      *counter = 0; // reset counter
+    }
+  }
+
 }
 #endif
 
