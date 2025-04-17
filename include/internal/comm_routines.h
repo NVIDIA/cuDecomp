@@ -326,6 +326,11 @@ static void cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cude
       int self_rank = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info.rank : grid_desc->col_comm_info.rank;
 
       bool barrier = false;
+      int count = 0;
+      cudecompNvshmemA2ASignalParams<T> params;
+      params.send_buff = send_buff;
+      params.recv_buff = recv_buff;
+
       for (int i = 0; i < src_ranks.size(); ++i) {
         int src_rank = src_ranks[i];
         int dst_rank = dst_ranks[i];
@@ -364,21 +369,27 @@ static void cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cude
               comm_info.nvshmem_signal_counts[src_rank]++;
             }
           } else {
-            cudecompNvshmemA2ASignalParams<T> params;
-            params.send_buff = send_buff;
-            params.recv_buff = recv_buff;
-            params.send_offsets[0] = send_offsets[dst_rank];
-            params.recv_offsets[0] = recv_offsets_nvshmem[dst_rank];
-            params.send_counts[0] = send_counts[dst_rank];
-            params.peer_ranks[0] = dst_rank_global;
-            params.signals[0] = &comm_info.nvshmem_signals[comm_info.rank];
-            params.ntransfers = 1;
-            cudecomp_nvshmem_alltoallv_signal_p2p(params, 128, comm_info.nvshmem_counter, pl_stream);
+            params.send_offsets[count] = send_offsets[dst_rank];
+            params.recv_offsets[count] = recv_offsets_nvshmem[dst_rank];
+            params.send_counts[count] = send_counts[dst_rank];
+            params.peer_ranks[count] = dst_rank_global;
+            params.signals[count] = &comm_info.nvshmem_signals[comm_info.rank];
             comm_info.nvshmem_signal_counts[src_rank]++;
+            count++;
+            if (count == CUDECOMP_NVSHMEM_A2A_SIGNAL_PARAM_CAPACITY) {
+              params.ntransfers = count;
+              cudecomp_nvshmem_alltoallv_signal_p2p(params, 128, comm_info.nvshmem_counter, pl_stream);
+              count = 0;
+            }
           }
 
           barrier = true;
         }
+      }
+
+      if (count != 0) {
+        params.ntransfers = count;
+        cudecomp_nvshmem_alltoallv_signal_p2p(params, 128, comm_info.nvshmem_counter, pl_stream);
       }
 
       if (barrier) {
