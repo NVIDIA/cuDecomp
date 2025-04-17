@@ -73,7 +73,9 @@ __launch_bounds__(CUDECOMP_NVSHMEM_NTHREADS) __global__
   T* recv_buff = params.recv_buff;
   int bid = blockIdx.x;
 
-  for (int copyid = 0; copyid < params.ntransfers; ++copyid) {
+  for (int i = 0; i < params.ntransfers; ++i) {
+    // Assign blocks across copies
+    int copyid = (bid + i) % params.ntransfers;
     int peer_rank = params.peer_ranks[copyid];
     size_t send_offset = params.send_offsets[copyid];
     size_t recv_offset = params.recv_offsets[copyid];
