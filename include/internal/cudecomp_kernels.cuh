@@ -131,13 +131,13 @@ __launch_bounds__(CUDECOMP_NVSHMEM_NTHREADS) __global__
 
   if (tid == 0) {
     //__threadfence(); // Not sure if this is necessary
-    unsigned int block_count = atomicAdd((unsigned int *)counter, 1);
+    unsigned int block_count = atomicInc(counter, gridDim.x - 1);
     if (block_count == (gridDim.x - 1)) {
-      nvshmem_quiet();
+      nvshmem_fence();
       for (int copyid = 0; copyid < params.ntransfers; ++copyid) {
-        nvshmemx_signal_op(params.signals[copyid], 1, NVSHMEM_SIGNAL_ADD, params.peer_ranks[copyid]);
+        nvshmemx_signal_op(params.signals[copyid], params.signal_values[copyid], NVSHMEM_SIGNAL_SET, params.peer_ranks[copyid]);
+        //nvshmem_uint64_p(params.signals[copyid], params.signal_values[copyid], params.peer_ranks[copyid]);
       }
-      *counter = 0; // reset counter
     }
   }
 

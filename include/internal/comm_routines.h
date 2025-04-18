@@ -120,6 +120,10 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
     }
 
     if (!use_sm) {
+#if NVSHMEM_VENDOR_VERSION >= 20600
+      nvshmemx_putmem_nbi_on_stream(recv_buff + recv_offsets[dst_rank], send_buff + send_offsets[dst_rank],
+                                    send_counts[dst_rank] * sizeof(T), dst_rank_global, stream);
+#else
       // Use host call for direct P2P accessible entries
       // Need to chunk host API calls due to 2 GiB limitation in API
       size_t send_bytes = send_counts[dst_rank] * sizeof(T);
@@ -130,6 +134,7 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
                                       std::min(CUDECOMP_NVSHMEM_CHUNK_SZ, send_bytes - j * CUDECOMP_NVSHMEM_CHUNK_SZ),
                                       dst_rank_global, stream);
       }
+#endif
     } else {
       params.send_offsets[count] = send_offsets[dst_rank];
       params.recv_offsets[count] = recv_offsets[dst_rank];
@@ -356,6 +361,14 @@ static void cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cude
           int dst_rank_global = getGlobalRank(grid_desc, comm_axis, dst_rank);
           
           if (!nvshmem_ptr(recv_buff, dst_rank_global) || grid_desc->config.transpose_comm_backend == CUDECOMP_TRANSPOSE_COMM_NVSHMEM_PL) {
+#if NVSHMEM_VENDOR_VERSION >= 20600
+            comm_info.nvshmem_signal_counts[src_rank]++;
+            nvshmemx_putmem_signal_nbi_on_stream(
+                recv_buff + recv_offsets_nvshmem[dst_rank], send_buff + send_offsets[dst_rank],
+                send_counts[dst_rank] * sizeof(T),
+                &comm_info.nvshmem_signals[comm_info.rank], comm_info.nvshmem_signal_counts[src_rank], NVSHMEM_SIGNAL_SET,
+                dst_rank_global, pl_stream);
+#else
             // Need to chunk host API calls due to 2 GiB limitation in API
             size_t send_bytes = send_counts[dst_rank] * sizeof(T);
             int nchunks = (send_bytes + CUDECOMP_NVSHMEM_CHUNK_SZ - 1) / CUDECOMP_NVSHMEM_CHUNK_SZ;
@@ -368,13 +381,15 @@ static void cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cude
                   dst_rank_global, pl_stream);
               comm_info.nvshmem_signal_counts[src_rank]++;
             }
+#endif
           } else {
+            comm_info.nvshmem_signal_counts[src_rank]++;
             params.send_offsets[count] = send_offsets[dst_rank];
             params.recv_offsets[count] = recv_offsets_nvshmem[dst_rank];
             params.send_counts[count] = send_counts[dst_rank];
             params.peer_ranks[count] = dst_rank_global;
             params.signals[count] = &comm_info.nvshmem_signals[comm_info.rank];
-            comm_info.nvshmem_signal_counts[src_rank]++;
+            params.signal_values[count] = comm_info.nvshmem_signal_counts[src_rank];
             count++;
             if (count == CUDECOMP_NVSHMEM_A2A_SIGNAL_PARAM_CAPACITY) {
               params.ntransfers = count;
