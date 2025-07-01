@@ -32,3 +32,12 @@ CUDECOMP_ENABLE_CUDA_GRAPHS
 and communication overlap of packing kernels in large scale cases.
 
 Default setting is off (:code:`0`). Setting this variable to :code:`1` will enable this feature.
+
+CUDECOMP_ENABLE_PERFORMANCE_REPORTING
+-------------------------------------
+(since v0.5.1)
+
+:code:`CUDECOMP_ENABLE_PERFORMANCE_REPORTING` controls whether cuDecomp prints performance reports to the console. With this option enabled, cuDecomp will print performance metrics for each transpose operation called.
+This option requires a device synchronization after each transpose operation to capture event timings which can impact performance.
+
+Default setting is off (:code:`0`). Setting this variable to :code:`1` will enable this feature.

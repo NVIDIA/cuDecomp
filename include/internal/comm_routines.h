@@ -158,6 +158,10 @@ cudecompAlltoall(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
                  cudecompCommAxis comm_axis, cudaStream_t stream) {
   nvtx::rangePush("cudecompAlltoall");
 
+  if (handle->performance_report_enable) {
+    CHECK_CUDA(cudaEventRecord(grid_desc->alltoall_start_events[0], stream));
+  }
+
 #ifdef ENABLE_NVSHMEM
   if (handle->rank == 0 && handle->nvshmem_initialized && !handle->nvshmem_mixed_buffer_warning_issued &&
       transposeBackendRequiresMpi(grid_desc->config.transpose_comm_backend) &&
@@ -269,6 +273,12 @@ cudecompAlltoall(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
     break;
   }
   }
+
+  if (handle->performance_report_enable) {
+    CHECK_CUDA(cudaEventRecord(grid_desc->alltoall_end_events[0], stream));
+    grid_desc->alltoall_timing_count++;
+  }
+
   nvtx::rangePop();
 }
 
@@ -281,6 +291,12 @@ static void cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cude
                                       const std::vector<comm_count_t>& recv_offsets_nvshmem, cudecompCommAxis comm_axis,
                                       const std::vector<int>& src_ranks, const std::vector<int>& dst_ranks,
                                       cudaStream_t stream, bool& synced) {
+
+  // If there are no transfers to complete, quick return
+  if (send_counts.size() == 0 && recv_counts.size() == 0) {
+    return;
+  }
+
   std::ostringstream os;
   os << "cudecompAlltoallPipelined_";
   for (int i = 0; i < src_ranks.size(); ++i) {
@@ -288,6 +304,13 @@ static void cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cude
     if (i != src_ranks.size() - 1) os << "_";
   }
   nvtx::rangePush(os.str());
+
+  int self_rank = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info.rank : grid_desc->col_comm_info.rank;
+  if (handle->performance_report_enable && src_ranks[0] != self_rank) {
+    // Note: skipping self-copy for timing as it should be overlapped
+    CHECK_CUDA(cudaStreamWaitEvent(handle->pl_stream, grid_desc->events[dst_ranks[0]], 0));
+    CHECK_CUDA(cudaEventRecord(grid_desc->alltoall_start_events[grid_desc->alltoall_timing_count], handle->pl_stream));
+  }
 
 #ifdef ENABLE_NVSHMEM
   if (handle->rank == 0 && handle->nvshmem_initialized && !handle->nvshmem_mixed_buffer_warning_issued &&
@@ -458,6 +481,11 @@ static void cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cude
   default: {
     break;
   }
+  }
+
+  if (handle->performance_report_enable && src_ranks[0] != self_rank) {
+    CHECK_CUDA(cudaEventRecord(grid_desc->alltoall_end_events[grid_desc->alltoall_timing_count], handle->pl_stream));
+    grid_desc->alltoall_timing_count++;
   }
   nvtx::rangePop();
 }

@@ -108,6 +108,9 @@ struct cudecompHandle {
 
   // CUDA graphs
   bool cuda_graphs_enable = false; // Flag to control whether CUDA graphs are used
+
+  // Performance reporting related entries
+  bool performance_report_enable = false;              // Flag to enable performance reporting
 };
 
 // Structure with information about row/column communicator
@@ -143,6 +146,13 @@ struct cudecompGridDesc {
   cudecomp::ncclComm nccl_comm; // NCCL communicator (global), shared from handle
   cudecomp::ncclComm
       nccl_local_comm; // NCCL communicator (intra-node, or intra-clique on MNNVL systems), shared from handle
+
+  // Performance reporting related entries
+  std::vector<cudaEvent_t> alltoall_start_events;  // events for alltoall timing
+  std::vector<cudaEvent_t> alltoall_end_events;    // events for alltoall timing
+  int32_t alltoall_timing_count = 0;               // count of alltoall timing events pairs (for pipelined alltoall)
+  cudaEvent_t transpose_start_event;               // event for transpose timing
+  cudaEvent_t transpose_end_event;                 // event for transpose timing
 
   bool initialized = false;
 };

@@ -157,6 +157,36 @@ static void localPermute(const cudecompHandle_t handle, const std::array<int64_t
 }
 #endif
 
+static void printPerformanceReport(const cudecompHandle_t handle, const cudecompGridDesc_t grid_desc, int ax, int dir, size_t alltoall_bytes) {
+
+  // Compute total timing by summing all individual timings
+  float alltoall_timing_ms = 0.0f;
+  float transpose_timing_ms = 0.0f;
+  for (int i = 0; i < grid_desc->alltoall_timing_count; ++i) {
+    float elapsed_time;
+    CHECK_CUDA(cudaEventElapsedTime(&elapsed_time, grid_desc->alltoall_start_events[i], grid_desc->alltoall_end_events[i]));
+    alltoall_timing_ms += elapsed_time;
+  }
+  CHECK_CUDA(cudaEventElapsedTime(&transpose_timing_ms, grid_desc->transpose_start_event, grid_desc->transpose_end_event));
+  // Report on rank 0 only for now.
+  if (handle->rank == 0) {
+    std::string op_name;
+    if (ax == 0) {
+      op_name = "cudecompTransposeXToY";
+    } else if (ax == 1 && dir == 1) {
+      op_name = "cudecompTransposeYToZ";
+    } else if (ax == 2) {
+      op_name = "cudecompTransposeZToY";
+    } else if (ax == 1 && dir == -1) {
+      op_name = "cudecompTransposeYToX";
+    }
+    float alltoall_bw = (alltoall_timing_ms > 0) ? alltoall_bytes * 1e-6/ alltoall_timing_ms : 0;
+    printf("CUDECOMP:PERFORMANCE: rank: %d, op: %s, total time: %.3f ms, alltoall time: %.3f ms, local operation time: %.3f ms, alltoall bw: %.3f GB/s\n",
+           handle->rank, op_name.c_str(), transpose_timing_ms, alltoall_timing_ms, transpose_timing_ms - alltoall_timing_ms, alltoall_bw);
+  }
+
+}
+
 template <typename T>
 static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, const cudecompGridDesc_t grid_desc,
                                T* input, T* output, T* work, const int32_t input_halo_extents_ptr[] = nullptr,
@@ -250,6 +280,10 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
     CHECK_CUDA(cudaEventRecord(grid_desc->nvshmem_sync_event, stream));
   }
 
+  if (handle->performance_report_enable) {
+    CHECK_CUDA(cudaEventRecord(grid_desc->transpose_start_event, stream));
+  }
+
   // Adjust pointers to handle special cases
   bool direct_pack = false;
   bool direct_transpose = false;
@@ -259,6 +293,12 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
       if (inplace) {
         if (halos_padding_equal) {
           // Single rank, in place, Pack -> Unpack: No transpose necessary.
+          if (handle->performance_report_enable) {
+            // Synchronize and print performance report
+            CHECK_CUDA(cudaEventRecord(grid_desc->transpose_end_event, stream));
+            CHECK_CUDA(cudaDeviceSynchronize());
+            printPerformanceReport(handle, grid_desc, ax, dir, pinfo_a.size * sizeof(T));
+          }
           return;
         }
       } else {
@@ -333,6 +373,7 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
   }
 
   bool data_transposed = false;
+
   if (o1 != i1) {
     if (pinfo_b.order[2] == ax_a && !orders_equal) {
       // Transpose/Pack
@@ -523,6 +564,12 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
 
     if (o1 == output) {
       // o1 is output. Return.
+      if (handle->performance_report_enable) {
+        // Synchronize and print performance report
+        CHECK_CUDA(cudaEventRecord(grid_desc->transpose_end_event, stream));
+        CHECK_CUDA(cudaDeviceSynchronize());
+        printPerformanceReport(handle, grid_desc, ax, dir, pinfo_a.size * sizeof(T));
+      }
       return;
     }
   } else {
@@ -794,6 +841,17 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
       }
     }
   }
+
+  if (handle->performance_report_enable) {
+    // Synchronize and print performance report
+    CHECK_CUDA(cudaEventRecord(grid_desc->transpose_end_event, stream));
+    CHECK_CUDA(cudaDeviceSynchronize());
+    printPerformanceReport(handle, grid_desc, ax, dir, pinfo_a.size * sizeof(T));
+
+    // Reset count for next report
+    grid_desc->alltoall_timing_count = 0;
+  }
+
 }
 
 template <typename T>

@@ -329,6 +329,10 @@ static void getCudecompEnvVars(cudecompHandle_t& handle) {
     handle->cuda_graphs_enable = false;
 #endif
   }
+
+  // Check CUDECOMP_ENABLE_PERFORMANCE_REPORTING (Performance reporting)
+  const char* performance_report_str = std::getenv("CUDECOMP_ENABLE_PERFORMANCE_REPORTING");
+  if (performance_report_str) { handle->performance_report_enable = std::strtol(performance_report_str, nullptr, 10) == 1; }
 }
 
 #ifdef ENABLE_NVSHMEM
@@ -582,12 +586,13 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
         handle->nvshmem_initialized = true;
         handle->nvshmem_allocation_size = 0;
       }
-      if (!handle->pl_stream) {
-        int greatest_priority;
-        CHECK_CUDA(cudaDeviceGetStreamPriorityRange(nullptr, &greatest_priority));
-        CHECK_CUDA(cudaStreamCreateWithPriority(&handle->pl_stream, cudaStreamNonBlocking, greatest_priority));
-      }
 #endif
+    }
+
+    if (!handle->pl_stream) {
+      int greatest_priority;
+      CHECK_CUDA(cudaDeviceGetStreamPriorityRange(nullptr, &greatest_priority));
+      CHECK_CUDA(cudaStreamCreateWithPriority(&handle->pl_stream, cudaStreamNonBlocking, greatest_priority));
     }
 
     // Create CUDA events for scheduling
@@ -598,6 +603,18 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
 #ifdef ENABLE_NVSHMEM
     CHECK_CUDA(cudaEventCreateWithFlags(&grid_desc->nvshmem_sync_event, cudaEventDisableTiming));
 #endif
+
+    // Create timing events for AlltoAll operations
+    if (handle->performance_report_enable) {
+      grid_desc->alltoall_start_events.resize(handle->nranks);
+      grid_desc->alltoall_end_events.resize(handle->nranks);
+      for (int i = 0; i < handle->nranks; ++i) {
+        CHECK_CUDA(cudaEventCreate(&grid_desc->alltoall_start_events[i]));
+        CHECK_CUDA(cudaEventCreate(&grid_desc->alltoall_end_events[i]));
+      }
+      CHECK_CUDA(cudaEventCreate(&grid_desc->transpose_start_event));
+      CHECK_CUDA(cudaEventCreate(&grid_desc->transpose_end_event));
+    }
 
     // Disable decompositions with empty pencils
     if (!autotune_pdims &&
@@ -721,6 +738,15 @@ cudecompResult_t cudecompGridDescDestroy(cudecompHandle_t handle, cudecompGridDe
 #ifdef ENABLE_NVSHMEM
     if (grid_desc->nvshmem_sync_event) { CHECK_CUDA(cudaEventDestroy(grid_desc->nvshmem_sync_event)); }
 #endif
+
+    // Destroy timing events for AlltoAll operations
+    if (handle->performance_report_enable) {
+      for (auto& event : grid_desc->alltoall_start_events) { CHECK_CUDA(cudaEventDestroy(event)); }
+      for (auto& event : grid_desc->alltoall_end_events) { CHECK_CUDA(cudaEventDestroy(event)); }
+
+      CHECK_CUDA(cudaEventDestroy(grid_desc->transpose_start_event));
+      CHECK_CUDA(cudaEventDestroy(grid_desc->transpose_end_event));
+    }
 
     if (transposeBackendRequiresNccl(grid_desc->config.transpose_comm_backend) ||
         haloBackendRequiresNccl(grid_desc->config.halo_comm_backend)) {
