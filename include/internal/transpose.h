@@ -535,8 +535,10 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
 
   // Communicate
   if (splits_a.size() > 1) {
-    cudecompAlltoall(handle, grid_desc, o1, send_counts, send_offsets, o2, recv_counts, recv_offsets,
-                     recv_offsets_nvshmem, comm_axis, stream);
+    if (!pipelined) {
+      cudecompAlltoall(handle, grid_desc, o1, send_counts, send_offsets, o2, recv_counts, recv_offsets,
+                       recv_offsets_nvshmem, comm_axis, stream);
+    }
   } else {
     o2 = o1;
   }
@@ -678,28 +680,30 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
           src_rank = comm_rank;
         }
 
-        std::vector<int> dst_ranks{dst_rank};
-        std::vector<int> src_ranks{src_rank};
+        if (pipelined) {
+          std::vector<int> dst_ranks{dst_rank};
+          std::vector<int> src_ranks{src_rank};
 
-        if (j != 0 && comm_info.ngroups != 1) {
-          // Perform pipelining in pairs to hide intra-group comms behind inter-group transfers
-          if (j % 2 == 1) {
-            if (j + 1 < splits_b.size()) {
-              int src_rank_next, dst_rank_next;
-              getAlltoallPeerRanks(grid_desc, comm_axis, j + 1, src_rank_next, dst_rank_next);
-              dst_ranks.push_back(dst_rank_next);
-              src_ranks.push_back(src_rank_next);
+          if (j != 0 && comm_info.ngroups != 1) {
+            // Perform pipelining in pairs to hide intra-group comms behind inter-group transfers
+            if (j % 2 == 1) {
+              if (j + 1 < splits_b.size()) {
+                int src_rank_next, dst_rank_next;
+                getAlltoallPeerRanks(grid_desc, comm_axis, j + 1, src_rank_next, dst_rank_next);
+                dst_ranks.push_back(dst_rank_next);
+                src_ranks.push_back(src_rank_next);
+              }
+            } else {
+              // Skip alltoall, this transfer was paired with previous one.
+              dst_ranks.resize(0);
+              src_ranks.resize(0);
             }
-          } else {
-            // Skip alltoall, this transfer was paired with previous one.
-            dst_ranks.resize(0);
-            src_ranks.resize(0);
           }
-        }
 
-        if (o2 != o1) {
-          cudecompAlltoallPipelined(handle, grid_desc, o1, send_counts, send_offsets, o2, recv_counts, recv_offsets,
-                                    recv_offsets_nvshmem, comm_axis, src_ranks, dst_ranks, stream, nvshmem_synced);
+          if (o2 != o1) {
+            cudecompAlltoallPipelined(handle, grid_desc, o1, send_counts, send_offsets, o2, recv_counts, recv_offsets,
+                                      recv_offsets_nvshmem, comm_axis, src_ranks, dst_ranks, stream, nvshmem_synced);
+          }
         }
 
         if (o2 != o3) {
@@ -733,28 +737,30 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
         src_rank = comm_rank;
       }
 
-      std::vector<int> dst_ranks{dst_rank};
-      std::vector<int> src_ranks{src_rank};
+      if (pipelined) {
+        std::vector<int> dst_ranks{dst_rank};
+        std::vector<int> src_ranks{src_rank};
 
-      if (j != 0 && comm_info.ngroups != 1) {
-        // Perform pipelining in pairs to hide intra-group comms behind inter-group transfers
-        if (j % 2 == 1) {
-          if (j + 1 < splits_b.size()) {
-            int src_rank_next, dst_rank_next;
-            getAlltoallPeerRanks(grid_desc, comm_axis, j + 1, src_rank_next, dst_rank_next);
-            dst_ranks.push_back(dst_rank_next);
-            src_ranks.push_back(src_rank_next);
+        if (j != 0 && comm_info.ngroups != 1) {
+          // Perform pipelining in pairs to hide intra-group comms behind inter-group transfers
+          if (j % 2 == 1) {
+            if (j + 1 < splits_b.size()) {
+              int src_rank_next, dst_rank_next;
+              getAlltoallPeerRanks(grid_desc, comm_axis, j + 1, src_rank_next, dst_rank_next);
+              dst_ranks.push_back(dst_rank_next);
+              src_ranks.push_back(src_rank_next);
+            }
+          } else {
+            // Skip alltoall, this transfer was paired with previous one.
+            dst_ranks.resize(0);
+            src_ranks.resize(0);
           }
-        } else {
-          // Skip alltoall, this transfer was paired with previous one.
-          dst_ranks.resize(0);
-          src_ranks.resize(0);
         }
-      }
 
-      if (o2 != o1) {
-        cudecompAlltoallPipelined(handle, grid_desc, o1, send_counts, send_offsets, o2, recv_counts, recv_offsets,
-                                  recv_offsets_nvshmem, comm_axis, src_ranks, dst_ranks, stream, nvshmem_synced);
+        if (o2 != o1) {
+          cudecompAlltoallPipelined(handle, grid_desc, o1, send_counts, send_offsets, o2, recv_counts, recv_offsets,
+                                    recv_offsets_nvshmem, comm_axis, src_ranks, dst_ranks, stream, nvshmem_synced);
+        }
       }
 
       if (o2 != o3) {
