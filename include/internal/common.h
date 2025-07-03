@@ -33,8 +33,10 @@
 
 #include <array>
 #include <complex>
+#include <functional>
 #include <map>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -43,6 +45,10 @@
 #include <cuda_runtime.h>
 #include <mpi.h>
 #include <nccl.h>
+#ifdef ENABLE_NVSHMEM
+#include <nvshmem.h>
+#include <nvshmemx.h>
+#endif
 
 #include "cudecomp.h"
 #include "internal/checks.h"
@@ -110,7 +116,9 @@ struct cudecompHandle {
   bool cuda_graphs_enable = false; // Flag to control whether CUDA graphs are used
 
   // Performance reporting related entries
-  bool performance_report_enable = false;              // Flag to enable performance reporting
+  int32_t performance_report_enable = 0;               // performance reporting level: 0=off, 1=final only, 2=verbose
+  int32_t performance_report_samples = 20;             // number of performance samples to keep for final report
+  int32_t performance_report_warmup_samples = 2;       // number of initial warmup samples to ignore for each configuration
 };
 
 // Structure with information about row/column communicator
@@ -126,6 +134,25 @@ struct cudecompCommInfo {
   nvshmem_team_t nvshmem_team = NVSHMEM_TEAM_INVALID;
 #endif
 };
+
+// Structure to contain data for transpose performance sample
+struct cudecompPerformanceSample {
+  cudaEvent_t transpose_start_event;
+  cudaEvent_t transpose_end_event;
+  std::vector<cudaEvent_t> alltoall_start_events;
+  std::vector<cudaEvent_t> alltoall_end_events;
+  int32_t alltoall_timing_count = 0;
+  size_t alltoall_bytes = 0;
+  bool valid = false;
+};
+
+// Collection of performance samples for a specific configuration
+struct cudecompPerformanceSampleCollection {
+  std::vector<cudecompPerformanceSample> samples;
+  int32_t sample_idx = 0;
+  int32_t warmup_count = 0;
+};
+
 
 // cuDecomp grid descriptor containing grid-specific information
 struct cudecompGridDesc {
@@ -153,6 +180,10 @@ struct cudecompGridDesc {
   int32_t alltoall_timing_count = 0;               // count of alltoall timing events pairs (for pipelined alltoall)
   cudaEvent_t transpose_start_event;               // event for transpose timing
   cudaEvent_t transpose_end_event;                 // event for transpose timing
+
+  std::unordered_map<std::tuple<int32_t, int32_t, std::array<int32_t, 3>, std::array<int32_t, 3>,
+                                std::array<int32_t, 3>, std::array<int32_t, 3>, bool, bool, cudecompDataType_t>,
+                     cudecompPerformanceSampleCollection> perf_samples_map;
 
   bool initialized = false;
 };

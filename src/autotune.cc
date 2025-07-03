@@ -45,6 +45,7 @@
 #include "internal/checks.h"
 #include "internal/common.h"
 #include "internal/halo.h"
+#include "internal/performance.h"
 #include "internal/transpose.h"
 
 namespace cudecomp {
@@ -316,6 +317,9 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
         }
       }
 
+      // Reset performance samples after warmup to ensure clean measurement
+      resetPerformanceSamples(handle, grid_desc);
+
       // Trials
       std::vector<float> trial_times(options->n_trials);
       std::vector<float> trial_times_w(options->n_trials);
@@ -391,6 +395,11 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
 
       // Clear CUDA graph cache between backend/process decomposition pairs
       grid_desc->graph_cache.clear();
+
+      // Print performance report for this configuration if enabled
+      if (handle->performance_report_enable > 0 && !skip_case) {
+        printFinalPerformanceReport(handle, grid_desc);
+      }
 
       auto times = processTimings(handle, trial_times);
       auto times_w = processTimings(handle, trial_times_w);
@@ -515,6 +524,9 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
   CHECK_MPI(MPI_Barrier(handle->mpi_comm));
   CHECK_CUDA(cudaFree(tmp1));
   CHECK_CUDA(cudaFree(tmp2));
+
+  // Reset performance samples after autotuning
+  resetPerformanceSamples(handle, grid_desc);
 }
 
 void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,

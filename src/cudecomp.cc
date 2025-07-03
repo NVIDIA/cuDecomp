@@ -332,7 +332,38 @@ static void getCudecompEnvVars(cudecompHandle_t& handle) {
 
   // Check CUDECOMP_ENABLE_PERFORMANCE_REPORTING (Performance reporting)
   const char* performance_report_str = std::getenv("CUDECOMP_ENABLE_PERFORMANCE_REPORTING");
-  if (performance_report_str) { handle->performance_report_enable = std::strtol(performance_report_str, nullptr, 10) == 1; }
+  if (performance_report_str) {
+    int32_t level = std::strtol(performance_report_str, nullptr, 10);
+    if (level >= 0 && level <= 2) {
+      handle->performance_report_enable = level;
+    } else if (handle->rank == 0) {
+      printf("CUDECOMP:WARN: Invalid CUDECOMP_ENABLE_PERFORMANCE_REPORTING value (%d). Using default (0).\n", level);
+    }
+  }
+
+  // Check CUDECOMP_PERFORMANCE_REPORT_SAMPLES (Number of performance samples to keep)
+  const char* performance_samples_str = std::getenv("CUDECOMP_PERFORMANCE_REPORT_SAMPLES");
+  if (performance_samples_str) {
+    int32_t samples = std::strtol(performance_samples_str, nullptr, 10);
+    if (samples > 0 && samples <= 1000) {  // Reasonable bounds
+      handle->performance_report_samples = samples;
+    } else if (handle->rank == 0) {
+      printf("CUDECOMP:WARN: Invalid CUDECOMP_PERFORMANCE_REPORT_SAMPLES value (%d). Using default (%d).\n",
+             samples, handle->performance_report_samples);
+    }
+  }
+
+  // Check CUDECOMP_PERFORMANCE_REPORT_WARMUP_SAMPLES (Number of initial samples to ignore)
+  const char* performance_warmup_str = std::getenv("CUDECOMP_PERFORMANCE_REPORT_WARMUP_SAMPLES");
+  if (performance_warmup_str) {
+    int32_t warmup_samples = std::strtol(performance_warmup_str, nullptr, 10);
+    if (warmup_samples >= 0 && warmup_samples <= 100) {  // Reasonable bounds
+      handle->performance_report_warmup_samples = warmup_samples;
+    } else if (handle->rank == 0) {
+      printf("CUDECOMP:WARN: Invalid CUDECOMP_PERFORMANCE_REPORT_WARMUP_SAMPLES value (%d). Using default (%d).\n",
+             warmup_samples, handle->performance_report_warmup_samples);
+    }
+  }
 }
 
 #ifdef ENABLE_NVSHMEM
@@ -604,18 +635,6 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
     CHECK_CUDA(cudaEventCreateWithFlags(&grid_desc->nvshmem_sync_event, cudaEventDisableTiming));
 #endif
 
-    // Create timing events for AlltoAll operations
-    if (handle->performance_report_enable) {
-      grid_desc->alltoall_start_events.resize(handle->nranks);
-      grid_desc->alltoall_end_events.resize(handle->nranks);
-      for (int i = 0; i < handle->nranks; ++i) {
-        CHECK_CUDA(cudaEventCreate(&grid_desc->alltoall_start_events[i]));
-        CHECK_CUDA(cudaEventCreate(&grid_desc->alltoall_end_events[i]));
-      }
-      CHECK_CUDA(cudaEventCreate(&grid_desc->transpose_start_event));
-      CHECK_CUDA(cudaEventCreate(&grid_desc->transpose_end_event));
-    }
-
     // Disable decompositions with empty pencils
     if (!autotune_pdims &&
         (grid_desc->config.pdims[0] > std::min(grid_desc->config.gdims_dist[0], grid_desc->config.gdims_dist[1]) ||
@@ -740,12 +759,20 @@ cudecompResult_t cudecompGridDescDestroy(cudecompHandle_t handle, cudecompGridDe
 #endif
 
     // Destroy timing events for AlltoAll operations
-    if (handle->performance_report_enable) {
-      for (auto& event : grid_desc->alltoall_start_events) { CHECK_CUDA(cudaEventDestroy(event)); }
-      for (auto& event : grid_desc->alltoall_end_events) { CHECK_CUDA(cudaEventDestroy(event)); }
+    if (handle->performance_report_enable > 0) {
+      // Print final performance report before destroying events
+      printFinalPerformanceReport(handle, grid_desc);
 
-      CHECK_CUDA(cudaEventDestroy(grid_desc->transpose_start_event));
-      CHECK_CUDA(cudaEventDestroy(grid_desc->transpose_end_event));
+      // Destroy all performance sample events in the map
+      for (auto& entry : grid_desc->perf_samples_map) {
+        auto& collection = entry.second;
+        for (auto& sample : collection.samples) {
+          CHECK_CUDA(cudaEventDestroy(sample.transpose_start_event));
+          CHECK_CUDA(cudaEventDestroy(sample.transpose_end_event));
+          for (auto& event : sample.alltoall_start_events) { CHECK_CUDA(cudaEventDestroy(event)); }
+          for (auto& event : sample.alltoall_end_events) { CHECK_CUDA(cudaEventDestroy(event)); }
+        }
+      }
     }
 
     if (transposeBackendRequiresNccl(grid_desc->config.transpose_comm_backend) ||

@@ -37,7 +37,28 @@ CUDECOMP_ENABLE_PERFORMANCE_REPORTING
 -------------------------------------
 (since v0.5.1)
 
-:code:`CUDECOMP_ENABLE_PERFORMANCE_REPORTING` controls whether cuDecomp prints performance reports to the console. With this option enabled, cuDecomp will print performance metrics for each transpose operation called.
-This option requires a device synchronization after each transpose operation to capture event timings which can impact performance.
+:code:`CUDECOMP_ENABLE_PERFORMANCE_REPORTING` controls the level of performance reporting cuDecomp prints to the console. This option requires a device synchronization after each transpose operation to capture event timings which can impact performance.
 
-Default setting is off (:code:`0`). Setting this variable to :code:`1` will enable this feature.
+The following values are supported:
+
+- :code:`0`: Performance reporting disabled
+- :code:`1`: Final performance summary only - prints a comprehensive table with averaged performance statistics for all transpose operation configurations when the grid descriptor is destroyed
+- :code:`2`: Verbose reporting - prints both per-operation performance reports and the final performance summary
+
+Default setting is off (:code:`0`).
+
+CUDECOMP_PERFORMANCE_REPORT_SAMPLES
+-----------------------------------
+(since v0.5.1)
+
+:code:`CUDECOMP_PERFORMANCE_REPORT_SAMPLES` controls the number of performance samples to keep for the final performance report. This setting determines the size of the circular buffer used to store timing measurements for each transpose configuration.
+
+Default setting is :code:`20` samples. Valid range is 1-1000 samples.
+
+CUDECOMP_PERFORMANCE_REPORT_WARMUP_SAMPLES
+------------------------------------------
+(since v0.5.1)
+
+:code:`CUDECOMP_PERFORMANCE_REPORT_WARMUP_SAMPLES` controls the number of initial samples to ignore for each transpose configuration. This helps exclude outliers from GPU warmup, memory allocation, and other initialization effects from the final performance statistics.
+
+Default setting is :code:`2` warmup samples. Valid range is 0-100 samples. Setting this to 0 disables warmup sample filtering.
