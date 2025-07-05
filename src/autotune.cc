@@ -289,6 +289,9 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
       if (transposeBackendRequiresNvshmem(comm)) { w = work_nvshmem; }
 #endif
 
+      // Reset performance samples
+      resetPerformanceSamples(handle, grid_desc);
+
       // Warmup
       for (int i = 0; i < options->n_warmup_trials; ++i) {
         if (options->transpose_op_weights[0] != 0.0) {
@@ -316,9 +319,6 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
                                                pinfo_y3.padding, pinfo_x3.padding, 0));
         }
       }
-
-      // Reset performance samples after warmup to ensure clean measurement
-      resetPerformanceSamples(handle, grid_desc);
 
       // Trials
       std::vector<float> trial_times(options->n_trials);
@@ -397,7 +397,7 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
       grid_desc->graph_cache.clear();
 
       // Print performance report for this configuration if enabled
-      if (handle->performance_report_enable > 0 && !skip_case) {
+      if (handle->performance_report_enable && !skip_case) {
         printFinalPerformanceReport(handle, grid_desc);
       }
 

@@ -167,7 +167,7 @@ cudecompAlltoall(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
                  cudecompCommAxis comm_axis, cudaStream_t stream, cudecompPerformanceSample* current_sample = nullptr) {
   nvtx::rangePush("cudecompAlltoall");
 
-  if (handle->performance_report_enable > 0) {
+  if (handle->performance_report_enable) {
     CHECK_CUDA(cudaEventRecord(current_sample->alltoall_start_events[current_sample->alltoall_timing_count], stream));
   }
 
@@ -283,7 +283,7 @@ cudecompAlltoall(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
   }
   }
 
-  if (handle->performance_report_enable > 0) {
+  if (handle->performance_report_enable) {
     CHECK_CUDA(cudaEventRecord(current_sample->alltoall_end_events[current_sample->alltoall_timing_count], stream));
     current_sample->alltoall_timing_count++;
   }
@@ -315,7 +315,7 @@ static void cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cude
   nvtx::rangePush(os.str());
 
   int self_rank = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info.rank : grid_desc->col_comm_info.rank;
-  if (handle->performance_report_enable > 0 && src_ranks[0] != self_rank) {
+  if (handle->performance_report_enable && src_ranks[0] != self_rank) {
     // Note: skipping self-copy for timing as it should be overlapped
     CHECK_CUDA(cudaStreamWaitEvent(handle->pl_stream, grid_desc->events[dst_ranks[0]], 0));
     CHECK_CUDA(cudaEventRecord(current_sample->alltoall_start_events[current_sample->alltoall_timing_count], handle->pl_stream));
@@ -492,7 +492,7 @@ static void cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cude
   }
   }
 
-  if (handle->performance_report_enable > 0 && src_ranks[0] != self_rank) {
+  if (handle->performance_report_enable && src_ranks[0] != self_rank) {
     CHECK_CUDA(cudaEventRecord(current_sample->alltoall_end_events[current_sample->alltoall_timing_count], handle->pl_stream));
     current_sample->alltoall_timing_count++;
   }

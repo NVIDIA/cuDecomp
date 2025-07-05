@@ -253,7 +253,7 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
   }
 
   cudecompPerformanceSample* current_sample = nullptr;
-  if (handle->performance_report_enable > 0) {
+  if (handle->performance_report_enable) {
     auto& samples = getOrCreatePerformanceSamples(handle, grid_desc, createTransposeConfig(ax, dir, input, output, input_halo_extents.data(), output_halo_extents.data(), input_padding.data(), output_padding.data(), getCudecompDataType<T>()));
     current_sample = &samples.samples[samples.sample_idx];
     current_sample->alltoall_timing_count = 0;
@@ -273,10 +273,9 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
       if (inplace) {
         if (halos_padding_equal) {
           // Single rank, in place, Pack -> Unpack: No transpose necessary.
-          if (handle->performance_report_enable > 0) {
-            // Print performance report
+          if (handle->performance_report_enable) {
+            // Record performance data
             CHECK_CUDA(cudaEventRecord(current_sample->transpose_end_event, stream));
-            printPerformanceReport(handle, grid_desc, ax, dir, pinfo_a.size * sizeof(T), current_sample);
             advancePerformanceSample(handle, grid_desc, createTransposeConfig(ax, dir, input, output, input_halo_extents.data(), output_halo_extents.data(), input_padding.data(), output_padding.data(), getCudecompDataType<T>()));
           }
           return;
@@ -544,9 +543,8 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
 
     if (o1 == output) {
       // o1 is output. Return.
-      if (handle->performance_report_enable > 0) {
+      if (handle->performance_report_enable) {
         CHECK_CUDA(cudaEventRecord(current_sample->transpose_end_event, stream));
-        printPerformanceReport(handle, grid_desc, ax, dir, pinfo_a.size * sizeof(T), current_sample);
         advancePerformanceSample(handle, grid_desc, createTransposeConfig(ax, dir, input, output, input_halo_extents.data(), output_halo_extents.data(), input_padding.data(), output_padding.data(), getCudecompDataType<T>()));
       }
       return;
@@ -821,10 +819,9 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
     }
   }
 
-  if (handle->performance_report_enable > 0) {
-    // Print performance report
+  if (handle->performance_report_enable) {
+    // Record performance data
     CHECK_CUDA(cudaEventRecord(current_sample->transpose_end_event, stream));
-    printPerformanceReport(handle, grid_desc, ax, dir, pinfo_a.size * sizeof(T), current_sample);
     advancePerformanceSample(handle, grid_desc, createTransposeConfig(ax, dir, input, output, input_halo_extents.data(), output_halo_extents.data(), input_padding.data(), output_padding.data(), getCudecompDataType<T>()));
   }
 
