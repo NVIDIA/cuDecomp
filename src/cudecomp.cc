@@ -332,12 +332,16 @@ static void getCudecompEnvVars(cudecompHandle_t& handle) {
 
   // Check CUDECOMP_ENABLE_PERFORMANCE_REPORTING (Performance reporting)
   const char* performance_report_str = std::getenv("CUDECOMP_ENABLE_PERFORMANCE_REPORTING");
-  if (performance_report_str) {
-    int32_t level = std::strtol(performance_report_str, nullptr, 10);
-    if (level >= 0 && level <= 2) {
-      handle->performance_report_enable = level;
+  if (performance_report_str) { handle->performance_report_enable = std::strtol(performance_report_str, nullptr, 10) == 1; }
+
+  // Check CUDECOMP_PERFORMANCE_REPORT_DETAIL (Performance report detail level)
+  const char* performance_detail_str = std::getenv("CUDECOMP_PERFORMANCE_REPORT_DETAIL");
+  if (performance_detail_str) {
+    int32_t detail = std::strtol(performance_detail_str, nullptr, 10);
+    if (detail >= 0 && detail <= 2) {
+      handle->performance_report_detail = detail;
     } else if (handle->rank == 0) {
-      printf("CUDECOMP:WARN: Invalid CUDECOMP_ENABLE_PERFORMANCE_REPORTING value (%d). Using default (0).\n", level);
+      printf("CUDECOMP:WARN: Invalid CUDECOMP_PERFORMANCE_REPORT_DETAIL value (%d). Using default (0).\n", detail);
     }
   }
 
@@ -759,7 +763,7 @@ cudecompResult_t cudecompGridDescDestroy(cudecompHandle_t handle, cudecompGridDe
 #endif
 
     // Destroy timing events for AlltoAll operations
-    if (handle->performance_report_enable > 0) {
+    if (handle->performance_report_enable) {
       // Print final performance report before destroying events
       printFinalPerformanceReport(handle, grid_desc);
 
