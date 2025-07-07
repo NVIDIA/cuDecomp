@@ -532,9 +532,33 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
         ((autotune_transpose_backend || autotune_halo_backend) && !autotune_disable_nccl_backends)) {
       if (!handle->nccl_comm) { handle->nccl_comm = ncclCommFromMPIComm(handle->mpi_comm); }
       if (!handle->nccl_local_comm) {
-        handle->nccl_local_comm = ncclCommFromMPIComm(
+        if (grid_desc->config.pdims[0] > 0 && grid_desc->config.pdims[1] > 0) {
+          // If pdims are set, temporarily set up comm info stuctures to determine if we need to create a local NCCL communicator
+          int color_row = grid_desc->pidx[0];
+          MPI_Comm row_comm;
+          CHECK_MPI(MPI_Comm_split(handle->mpi_comm, color_row, handle->rank, &row_comm));
+          setCommInfo(handle, grid_desc, row_comm, CUDECOMP_COMM_ROW);
+
+          int color_col = grid_desc->pidx[1];
+          MPI_Comm col_comm;
+          CHECK_MPI(MPI_Comm_split(handle->mpi_comm, color_col, handle->rank, &col_comm));
+          setCommInfo(handle, grid_desc, col_comm, CUDECOMP_COMM_COL);
+
+          // Create local NCCL communicator if row or column communicator uses it
+          if ((grid_desc->row_comm_info.ngroups == 1 && grid_desc->row_comm_info.nranks > 1) ||
+              (grid_desc->col_comm_info.ngroups == 1 && grid_desc->col_comm_info.nranks > 1)) {
+            handle->nccl_local_comm = ncclCommFromMPIComm(
+             handle->mpi_clique_comm != MPI_COMM_NULL ? handle->mpi_clique_comm : handle->mpi_local_comm);
+            nccl_local_comm_initialized = true;
+          }
+          CHECK_MPI(MPI_Comm_free(&row_comm));
+          CHECK_MPI(MPI_Comm_free(&col_comm));
+        } else {
+          // If pdims are not set, set up local NCCL communicator for use during autotuning
+          handle->nccl_local_comm = ncclCommFromMPIComm(
             handle->mpi_clique_comm != MPI_COMM_NULL ? handle->mpi_clique_comm : handle->mpi_local_comm);
-        nccl_local_comm_initialized = true;
+          nccl_local_comm_initialized = true;
+        }
       }
       if (!handle->pl_stream) {
         int greatest_priority;
