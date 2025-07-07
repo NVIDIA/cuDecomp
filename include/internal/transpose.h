@@ -246,6 +246,8 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
   if (transposeBackendRequiresNvshmem(grid_desc->config.transpose_comm_backend)) {
     auto max_pencil_size_a = getGlobalMaxPencilSize(handle, grid_desc, ax_a);
     o2 = work + max_pencil_size_a;
+    // Record event at start of transpose op for NVSHMEM team synchronization
+    CHECK_CUDA(cudaEventRecord(grid_desc->nvshmem_sync_event, stream));
   }
 
   // Adjust pointers to handle special cases

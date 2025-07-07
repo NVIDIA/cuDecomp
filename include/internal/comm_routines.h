@@ -60,15 +60,15 @@ static void
 nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_desc, T* send_buff,
                  const std::vector<comm_count_t>& send_counts, const std::vector<comm_count_t>& send_offsets,
                  T* recv_buff, const std::vector<comm_count_t>& recv_counts,
-                 const std::vector<comm_count_t>& recv_offsets, cudecompCommAxis comm_axis, cudaStream_t stream = 0) {
+                 const std::vector<comm_count_t>& recv_offsets, cudecompCommAxis comm_axis, cudaStream_t stream) {
   auto comm = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info.mpi_comm : grid_desc->col_comm_info.mpi_comm;
   // auto team =
   //    (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info.nvshmem_team :
   //    grid_desc->col_comm_info.nvshmem_team;
   int self_rank = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info.rank : grid_desc->col_comm_info.rank;
 
-  // Using cudaStreamSynchronize + barrier instead of nvshmemx_team_sync_on_stream for lower latency
-  CHECK_CUDA(cudaStreamSynchronize(stream));
+  // Using cudaEventSynchronize + barrier instead of nvshmemx_team_sync_on_stream for lower latency
+  CHECK_CUDA(cudaEventSynchronize(grid_desc->nvshmem_sync_event));
   CHECK_MPI(MPI_Barrier(comm));
   // nvshmemx_team_sync_on_stream(team, stream);
 
@@ -130,7 +130,7 @@ cudecompAlltoall(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
                  const std::vector<comm_count_t>& send_counts, const std::vector<comm_count_t>& send_offsets,
                  T* recv_buff, const std::vector<comm_count_t>& recv_counts,
                  const std::vector<comm_count_t>& recv_offsets, const std::vector<comm_count_t>& recv_offsets_nvshmem,
-                 cudecompCommAxis comm_axis, cudaStream_t stream = 0) {
+                 cudecompCommAxis comm_axis, cudaStream_t stream) {
   nvtx::rangePush("cudecompAlltoall");
 
 #ifdef ENABLE_NVSHMEM
@@ -292,8 +292,8 @@ static void cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cude
         } else {
           CHECK_CUDA(cudaStreamWaitEvent(pl_stream, grid_desc->events[dst_rank], 0));
           if (!synced) {
-            // Using cudaStreamSynchronize + barrier instead of nvshmemx_team_sync_on_stream for lower latency
-            CHECK_CUDA(cudaStreamSynchronize(pl_stream));
+            // Using cudaEventSynchronize + barrier instead of nvshmemx_team_sync_on_stream for lower latency
+            CHECK_CUDA(cudaEventSynchronize(grid_desc->nvshmem_sync_event));
             CHECK_MPI(MPI_Barrier(comm));
             // Only need to sync on the first remote operation of an alltoall sequence to ensure reads on other ranks
             // from previous communication have completed.

@@ -564,6 +564,9 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
     for (auto& event : grid_desc->events) {
       CHECK_CUDA(cudaEventCreateWithFlags(&event, cudaEventDisableTiming));
     }
+#ifdef ENABLE_NVSHMEM
+    CHECK_CUDA(cudaEventCreateWithFlags(&grid_desc->nvshmem_sync_event, cudaEventDisableTiming));
+#endif
 
     // Disable decompositions with empty pencils
     if (!autotune_pdims &&
@@ -673,6 +676,10 @@ cudecompResult_t cudecompGridDescDestroy(cudecompHandle_t handle, cudecompGridDe
     for (auto e : grid_desc->events) {
       if (e) { CHECK_CUDA(cudaEventDestroy(e)); }
     }
+
+#ifdef ENABLE_NVSHMEM
+    if (grid_desc->nvshmem_sync_event) { CHECK_CUDA(cudaEventDestroy(grid_desc->nvshmem_sync_event)); }
+#endif
 
     if (transposeBackendRequiresNccl(grid_desc->config.transpose_comm_backend) ||
         haloBackendRequiresNccl(grid_desc->config.halo_comm_backend)) {

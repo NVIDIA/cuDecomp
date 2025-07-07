@@ -130,6 +130,9 @@ struct cudecompGridDesc {
   cudecompCommInfo col_comm_info; // column communicator information
 
   std::vector<cudaEvent_t> events{nullptr}; // CUDA events used for scheduling
+#ifdef ENABLE_NVSHMEM
+  cudaEvent_t nvshmem_sync_event = nullptr; // NVSHMEM event used for synchronization
+#endif
 
   cudecomp::graphCache graph_cache; // CUDA graph cache
 
