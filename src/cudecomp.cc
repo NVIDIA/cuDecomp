@@ -527,12 +527,14 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
     }
 
     // Initialize NCCL communicator if needed
+    bool nccl_local_comm_initialized = false; // flag to track if this grid descriptor initialized the local NCCL communicator
     if (transposeBackendRequiresNccl(comm_backend) || haloBackendRequiresNccl(halo_comm_backend) ||
         ((autotune_transpose_backend || autotune_halo_backend) && !autotune_disable_nccl_backends)) {
       if (!handle->nccl_comm) { handle->nccl_comm = ncclCommFromMPIComm(handle->mpi_comm); }
       if (!handle->nccl_local_comm) {
         handle->nccl_local_comm = ncclCommFromMPIComm(
             handle->mpi_clique_comm != MPI_COMM_NULL ? handle->mpi_clique_comm : handle->mpi_local_comm);
+        nccl_local_comm_initialized = true;
       }
       if (!handle->pl_stream) {
         int greatest_priority;
@@ -621,6 +623,14 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
 #endif
     if (transposeBackendRequiresNccl(grid_desc->config.transpose_comm_backend) ||
         haloBackendRequiresNccl(grid_desc->config.halo_comm_backend)) {
+      // If this grid descriptor initialized the group local NCCL communicator but does not need it, destroy it to reclaim resources
+      if (nccl_local_comm_initialized) {
+        if ((grid_desc->row_comm_info.ngroups > 1 || grid_desc->row_comm_info.nranks == 1) &&
+            (grid_desc->col_comm_info.ngroups > 1 || grid_desc->col_comm_info.nranks == 1)) {
+          CHECK_NCCL(ncclCommDestroy(handle->nccl_local_comm));
+          handle->nccl_local_comm = nullptr;
+        }
+      }
       handle->n_grid_descs_using_nccl++;
     } else {
       // Destroy NCCL communicator to reclaim resources if not used
@@ -682,8 +692,10 @@ cudecompResult_t cudecompGridDescDestroy(cudecompHandle_t handle, cudecompGridDe
       if (handle->nccl_comm && handle->nccl_local_comm && handle->n_grid_descs_using_nccl == 0) {
         CHECK_NCCL(ncclCommDestroy(handle->nccl_comm));
         handle->nccl_comm = nullptr;
-        CHECK_NCCL(ncclCommDestroy(handle->nccl_local_comm));
-        handle->nccl_local_comm = nullptr;
+        if (handle->nccl_local_comm) {
+          CHECK_NCCL(ncclCommDestroy(handle->nccl_local_comm));
+          handle->nccl_local_comm = nullptr;
+        }
       }
     }
 
