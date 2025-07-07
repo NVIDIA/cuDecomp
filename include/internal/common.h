@@ -137,7 +137,7 @@ struct cudecompCommInfo {
 };
 
 // Structure to contain data for transpose performance sample
-struct cudecompPerformanceSample {
+struct cudecompTransposePerformanceSample {
   cudaEvent_t transpose_start_event;
   cudaEvent_t transpose_end_event;
   std::vector<cudaEvent_t> alltoall_start_events;
@@ -147,9 +147,26 @@ struct cudecompPerformanceSample {
   bool valid = false;
 };
 
-// Collection of performance samples for a specific configuration
-struct cudecompPerformanceSampleCollection {
-  std::vector<cudecompPerformanceSample> samples;
+// Collection of transpose performance samples for a specific configuration
+struct cudecompTransposePerformanceSampleCollection {
+  std::vector<cudecompTransposePerformanceSample> samples;
+  int32_t sample_idx = 0;
+  int32_t warmup_count = 0;
+};
+
+// Structure to contain data for halo performance sample
+struct cudecompHaloPerformanceSample {
+  cudaEvent_t halo_start_event;
+  cudaEvent_t halo_end_event;
+  cudaEvent_t sendrecv_start_event;
+  cudaEvent_t sendrecv_end_event;
+  size_t sendrecv_bytes = 0;
+  bool valid = false;
+};
+
+// Collection of halo performance samples for a specific configuration
+struct cudecompHaloPerformanceSampleCollection {
+  std::vector<cudecompHaloPerformanceSample> samples;
   int32_t sample_idx = 0;
   int32_t warmup_count = 0;
 };
@@ -184,7 +201,11 @@ struct cudecompGridDesc {
 
   std::unordered_map<std::tuple<int32_t, int32_t, std::array<int32_t, 3>, std::array<int32_t, 3>,
                                 std::array<int32_t, 3>, std::array<int32_t, 3>, bool, bool, cudecompDataType_t>,
-                     cudecompPerformanceSampleCollection> perf_samples_map;
+                     cudecompTransposePerformanceSampleCollection> transpose_perf_samples_map;
+
+  std::unordered_map<std::tuple<int32_t, int32_t, std::array<int32_t, 3>, std::array<bool, 3>,
+                                std::array<int32_t, 3>, bool, cudecompDataType_t>,
+                     cudecompHaloPerformanceSampleCollection> halo_perf_samples_map;
 
   bool initialized = false;
 };

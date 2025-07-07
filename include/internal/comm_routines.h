@@ -155,7 +155,7 @@ cudecompAlltoall(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
                  const std::vector<comm_count_t>& send_counts, const std::vector<comm_count_t>& send_offsets,
                  T* recv_buff, const std::vector<comm_count_t>& recv_counts,
                  const std::vector<comm_count_t>& recv_offsets, const std::vector<comm_count_t>& recv_offsets_nvshmem,
-                 cudecompCommAxis comm_axis, cudaStream_t stream, cudecompPerformanceSample* current_sample = nullptr) {
+                 cudecompCommAxis comm_axis, cudaStream_t stream, cudecompTransposePerformanceSample* current_sample = nullptr) {
   nvtx::rangePush("cudecompAlltoall");
 
   if (handle->performance_report_enable) {
@@ -290,7 +290,7 @@ static void cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cude
                                       const std::vector<comm_count_t>& recv_offsets,
                                       const std::vector<comm_count_t>& recv_offsets_nvshmem, cudecompCommAxis comm_axis,
                                       const std::vector<int>& src_ranks, const std::vector<int>& dst_ranks,
-                                      cudaStream_t stream, bool& synced, cudecompPerformanceSample* current_sample = nullptr) {
+                                      cudaStream_t stream, bool& synced, cudecompTransposePerformanceSample* current_sample = nullptr) {
 
   // If there are no transfers to complete, quick return
   if (send_counts.size() == 0 && recv_counts.size() == 0) {
@@ -496,8 +496,13 @@ static void cudecompSendRecvPair(const cudecompHandle_t& handle, const cudecompG
                                  const std::array<comm_count_t, 2>& send_counts,
                                  const std::array<size_t, 2>& send_offsets, T* recv_buff,
                                  const std::array<comm_count_t, 2>& recv_counts,
-                                 const std::array<size_t, 2>& recv_offsets, cudaStream_t stream = 0) {
+                                 const std::array<size_t, 2>& recv_offsets, cudaStream_t stream = 0,
+                                 cudecompHaloPerformanceSample* current_sample = nullptr) {
   nvtx::rangePush("cudecompSendRecvPair");
+
+  if (handle->performance_report_enable && current_sample) {
+    CHECK_CUDA(cudaEventRecord(current_sample->sendrecv_start_event, stream));
+  }
 
 #ifdef ENABLE_NVSHMEM
   if (handle->rank == 0 && handle->nvshmem_initialized && !handle->nvshmem_mixed_buffer_warning_issued &&
@@ -620,6 +625,11 @@ static void cudecompSendRecvPair(const cudecompHandle_t& handle, const cudecompG
     break;
   }
   }
+
+  if (handle->performance_report_enable && current_sample) {
+    CHECK_CUDA(cudaEventRecord(current_sample->sendrecv_end_event, stream));
+  }
+
   nvtx::rangePop();
 }
 
