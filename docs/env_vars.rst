@@ -33,11 +33,11 @@ and communication overlap of packing kernels in large scale cases.
 
 Default setting is off (:code:`0`). Setting this variable to :code:`1` will enable this feature.
 
-CUDECOMP_ENABLE_PERFORMANCE_REPORTING
--------------------------------------
+CUDECOMP_ENABLE_PERFORMANCE_REPORT
+------------------------------------
 (since v0.5.1)
 
-:code:`CUDECOMP_ENABLE_PERFORMANCE_REPORTING` controls whether cuDecomp performance reporting is enabled.
+:code:`CUDECOMP_ENABLE_PERFORMANCE_REPORT` controls whether cuDecomp performance reporting is enabled.
 
 Default setting is off (:code:`0`). Setting this variable to :code:`1` will enable this feature.
 
@@ -45,13 +45,13 @@ CUDECOMP_PERFORMANCE_REPORT_DETAIL
 ----------------------------------
 (since v0.5.1)
 
-:code:`CUDECOMP_PERFORMANCE_REPORT_DETAIL` controls the verbosity of performance reporting when :code:`CUDECOMP_ENABLE_PERFORMANCE_REPORTING` is enabled. This setting determines whether individual sample data is printed in addition to the aggregated performance summary.
+:code:`CUDECOMP_PERFORMANCE_REPORT_DETAIL` controls the verbosity of performance reporting when :code:`CUDECOMP_ENABLE_PERFORMANCE_REPORT` is enabled. This setting determines whether individual sample data is printed in addition to the aggregated performance summary.
 
 The following values are supported:
 
 - :code:`0`: Aggregated report only - prints only the summary table with averaged performance statistics (default)
-- :code:`1`: Per-sample reporting on rank 0 - prints individual sample data for each transpose configuration, but only from rank 0
-- :code:`2`: Per-sample reporting on all ranks - prints individual sample data for each transpose configuration from all ranks, gathered and sorted by rank on rank 0
+- :code:`1`: Per-sample reporting on rank 0 - prints individual sample data for each transpose/halo configuration, but only from rank 0
+- :code:`2`: Per-sample reporting on all ranks - prints individual sample data for each transpose/halo configuration from all ranks, gathered and sorted by rank on rank 0
 
 Default setting is :code:`0`.
 
@@ -59,14 +59,14 @@ CUDECOMP_PERFORMANCE_REPORT_SAMPLES
 -----------------------------------
 (since v0.5.1)
 
-:code:`CUDECOMP_PERFORMANCE_REPORT_SAMPLES` controls the number of performance samples to keep for the final performance report. This setting determines the size of the circular buffer used to store timing measurements for each transpose configuration.
+:code:`CUDECOMP_PERFORMANCE_REPORT_SAMPLES` controls the number of performance samples to keep for the final performance report. This setting determines the size of the circular buffer used to store timing measurements for each transpose/halo configuration.
 
-Default setting is :code:`20` samples. Valid range is 1-1000 samples.
+Default setting is :code:`20` samples.
 
 CUDECOMP_PERFORMANCE_REPORT_WARMUP_SAMPLES
 ------------------------------------------
 (since v0.5.1)
 
-:code:`CUDECOMP_PERFORMANCE_REPORT_WARMUP_SAMPLES` controls the number of initial samples to ignore for each transpose configuration. This helps exclude outliers from GPU warmup, memory allocation, and other initialization effects from the final performance statistics.
+:code:`CUDECOMP_PERFORMANCE_REPORT_WARMUP_SAMPLES` controls the number of initial samples to ignore for each transpose/halo configuration. This helps exclude outliers from GPU warmup, memory allocation, and other initialization effects from the final performance statistics.
 
-Default setting is :code:`3` warmup samples. Valid range is 0-100 samples. Setting this to 0 disables warmup sample filtering.
+Default setting is :code:`3` warmup samples. Setting this to 0 disables warmup sample filtering.

@@ -587,6 +587,21 @@ int main(int argc, char** argv) {
   }
 
   // Finalize
+  // Free grid descriptors
+  for (auto& entry : grid_desc_cache) {
+    auto& backend = entry.first;
+    auto& grid_desc = entry.second;
+    // If backend matches workspace, free workspace
+    if (std::get<0>(workspace) == static_cast<int>(backend)) {
+      CHECK_CUDECOMP(cudecompFree(handle, grid_desc, std::get<1>(workspace)));
+      std::get<0>(workspace) = -1;
+      std::get<1>(workspace) = nullptr;
+      std::get<2>(workspace) = 0;
+    }
+    CHECK_CUDECOMP(cudecompGridDescDestroy(handle, grid_desc));
+  }
+  grid_desc_cache.clear();
+
   CHECK_CUDECOMP_EXIT(cudecompFinalize(handle));
   CHECK_MPI_EXIT(MPI_Finalize());
 
