@@ -719,9 +719,11 @@ cudecompResult_t cudecompGridDescDestroy(cudecompHandle_t handle, cudecompGridDe
       handle->n_grid_descs_using_nccl--;
 
       // Destroy NCCL communicator to reclaim resources if not used
-      if (handle->nccl_comm && handle->nccl_local_comm && handle->n_grid_descs_using_nccl == 0) {
-        CHECK_NCCL(ncclCommDestroy(handle->nccl_comm));
-        handle->nccl_comm = nullptr;
+      if (handle->n_grid_descs_using_nccl == 0) {
+        if (handle->nccl_comm) {
+          CHECK_NCCL(ncclCommDestroy(handle->nccl_comm));
+          handle->nccl_comm = nullptr;
+        }
         if (handle->nccl_local_comm) {
           CHECK_NCCL(ncclCommDestroy(handle->nccl_local_comm));
           handle->nccl_local_comm = nullptr;
@@ -1054,8 +1056,10 @@ cudecompResult_t cudecompMalloc(cudecompHandle_t handle, cudecompGridDesc_t grid
           void* nccl_ubr_handle;
           CHECK_NCCL(ncclCommRegister(handle->nccl_comm, buffer, buffer_size_bytes, &nccl_ubr_handle));
           handle->nccl_ubr_handles[*buffer].push_back(std::make_pair(handle->nccl_comm, nccl_ubr_handle));
-          CHECK_NCCL(ncclCommRegister(handle->nccl_local_comm, buffer, buffer_size_bytes, &nccl_ubr_handle));
-          handle->nccl_ubr_handles[*buffer].push_back(std::make_pair(handle->nccl_local_comm, nccl_ubr_handle));
+          if (handle->nccl_local_comm) {
+            CHECK_NCCL(ncclCommRegister(handle->nccl_local_comm, buffer, buffer_size_bytes, &nccl_ubr_handle));
+            handle->nccl_ubr_handles[*buffer].push_back(std::make_pair(handle->nccl_local_comm, nccl_ubr_handle));
+          }
         }
       }
 #endif
