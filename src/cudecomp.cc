@@ -660,11 +660,15 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
       handle->n_grid_descs_using_nccl++;
     } else {
       // Destroy NCCL communicator to reclaim resources if not used
-      if (handle->nccl_comm && handle->nccl_local_comm && handle->n_grid_descs_using_nccl == 0) {
-        CHECK_NCCL(ncclCommDestroy(handle->nccl_comm));
-        handle->nccl_comm = nullptr;
-        CHECK_NCCL(ncclCommDestroy(handle->nccl_local_comm));
-        handle->nccl_local_comm = nullptr;
+      if (handle->n_grid_descs_using_nccl == 0) {
+        if (handle->nccl_comm) {
+          CHECK_NCCL(ncclCommDestroy(handle->nccl_comm));
+          handle->nccl_comm = nullptr;
+        }
+        if (handle->nccl_local_comm) {
+          CHECK_NCCL(ncclCommDestroy(handle->nccl_local_comm));
+          handle->nccl_local_comm = nullptr;
+        }
       }
     }
 
