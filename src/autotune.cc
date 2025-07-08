@@ -396,11 +396,6 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
       // Clear CUDA graph cache between backend/process decomposition pairs
       grid_desc->graph_cache.clear();
 
-      // Print performance report for this configuration if enabled
-      if (handle->performance_report_enable && !skip_case) {
-        printFinalPerformanceReport(handle, grid_desc);
-      }
-
       auto times = processTimings(handle, trial_times);
       auto times_w = processTimings(handle, trial_times_w);
       auto xy_times = processTimings(handle, trial_xy_times);
@@ -438,6 +433,11 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
                  t_skipped[1], zy_times[0], zy_times[1], zy_times[2], zy_times[3], t_skipped[2], yx_times[0],
                  yx_times[1], yx_times[2], yx_times[3], t_skipped[3]);
         }
+      }
+
+      // Print performance report for this configuration if enabled
+      if (handle->performance_report_enable && !skip_case) {
+        printPerformanceReport(handle, grid_desc);
       }
 
       if (skip_case) continue;
@@ -758,11 +758,6 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
         }
       }
 
-      // Print performance report for this configuration if enabled
-      if (handle->performance_report_enable && !skip_case) {
-        printFinalPerformanceReport(handle, grid_desc);
-      }
-
       auto times = processTimings(handle, trial_times, 1000.);
 
       if (handle->rank == 0) {
@@ -778,6 +773,11 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
                  cudecompHaloCommBackendToString(grid_desc->config.halo_comm_backend), times[0], times[1], times[2],
                  times[3]);
         }
+      }
+
+      // Print performance report for this configuration if enabled
+      if (handle->performance_report_enable && !skip_case) {
+        printPerformanceReport(handle, grid_desc);
       }
 
       if (skip_case) continue;

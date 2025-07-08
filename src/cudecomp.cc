@@ -764,8 +764,8 @@ cudecompResult_t cudecompGridDescDestroy(cudecompHandle_t handle, cudecompGridDe
 
     // Destroy timing events for AlltoAll operations
     if (handle->performance_report_enable) {
-      // Print final performance report before destroying events
-      printFinalPerformanceReport(handle, grid_desc);
+      // Print performance report before destroying events
+      printPerformanceReport(handle, grid_desc);
 
       // Destroy all transpose performance sample events in the map
       for (auto& entry : grid_desc->transpose_perf_samples_map) {

@@ -260,7 +260,7 @@ struct HaloConfigTimingData {
   std::vector<int> sample_indices;
 };
 
-void printFinalPerformanceReport(const cudecompHandle_t handle, const cudecompGridDesc_t grid_desc) {
+void printPerformanceReport(const cudecompHandle_t handle, const cudecompGridDesc_t grid_desc) {
   // Synchronize to ensure all events are recorded
   CHECK_CUDA(cudaDeviceSynchronize());
 
@@ -406,6 +406,7 @@ void printFinalPerformanceReport(const cudecompHandle_t handle, const cudecompGr
 
   // Print summary information on rank 0 only
   if (handle->rank == 0) {
+    printf("CUDECOMP:\n");
     printf("CUDECOMP: ===== Performance Summary =====\n");
 
     // Print grid descriptor configuration information
@@ -434,6 +435,7 @@ void printFinalPerformanceReport(const cudecompHandle_t handle, const cudecompGr
     if (all_transpose_config_data.empty() && all_halo_config_data.empty()) {
       printf("CUDECOMP: No performance data collected\n");
       printf("CUDECOMP: ================================\n");
+      printf("CUDECOMP:\n");
       return;
     }
 
@@ -715,6 +717,7 @@ void printFinalPerformanceReport(const cudecompHandle_t handle, const cudecompGr
 
   if (handle->rank == 0) {
     printf("CUDECOMP: ================================\n");
+    printf("CUDECOMP:\n");
   }
 }
 
