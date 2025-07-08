@@ -163,7 +163,7 @@ cudecompAlltoall(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
   case CUDECOMP_TRANSPOSE_COMM_NCCL: {
     auto comm_info = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info : grid_desc->col_comm_info;
     // For fully intra-group alltoall, use distinct NCCL local comm instead of global comm as it is faster.
-    auto comm = (comm_info.ngroups == 1) ? handle->nccl_local_comm : handle->nccl_comm;
+    auto comm = (comm_info.ngroups == 1) ? *grid_desc->nccl_local_comm : *grid_desc->nccl_comm;
 
     CHECK_NCCL(ncclGroupStart());
     for (int i = 0; i < send_counts.size(); ++i) {
@@ -343,7 +343,7 @@ static void cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cude
   case CUDECOMP_TRANSPOSE_COMM_NCCL_PL: {
     auto comm_info = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info : grid_desc->col_comm_info;
     // For fully intra-group alltoall, use distinct NCCL local comm instead of global comm as it is faster.
-    auto comm = (comm_info.ngroups == 1) ? handle->nccl_local_comm : handle->nccl_comm;
+    auto comm = (comm_info.ngroups == 1) ? *grid_desc->nccl_local_comm : *grid_desc->nccl_comm;
     auto pl_stream = handle->pl_stream;
     int self_rank = comm_info.rank;
 
@@ -488,7 +488,7 @@ static void cudecompSendRecvPair(const cudecompHandle_t& handle, const cudecompG
 #endif
   }
   case CUDECOMP_HALO_COMM_NCCL: {
-    auto comm = handle->nccl_comm;
+    auto comm = *grid_desc->nccl_comm;
     CHECK_NCCL(ncclGroupStart());
     for (int i = 0; i < send_counts.size(); ++i) {
       if (peer_ranks[i] == handle->rank) {

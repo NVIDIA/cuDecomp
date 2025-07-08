@@ -63,7 +63,7 @@ namespace {
 // Static flag to disable multiple handle creation
 static bool cudecomp_initialized = false;
 
-static ncclComm_t ncclCommFromMPIComm(MPI_Comm mpi_comm) {
+static cudecomp::ncclComm ncclCommFromMPIComm(MPI_Comm mpi_comm) {
   int rank, nranks;
   CHECK_MPI(MPI_Comm_rank(mpi_comm, &rank));
   CHECK_MPI(MPI_Comm_size(mpi_comm, &nranks));
@@ -75,7 +75,7 @@ static ncclComm_t ncclCommFromMPIComm(MPI_Comm mpi_comm) {
   ncclComm_t nccl_comm;
   CHECK_NCCL(ncclCommInitRank(&nccl_comm, nranks, id, rank));
 
-  return nccl_comm;
+  return cudecomp::createNcclComm(nccl_comm);
 }
 
 #ifdef ENABLE_NVSHMEM
@@ -427,8 +427,9 @@ cudecompResult_t cudecompFinalize(cudecompHandle_t handle) {
   try {
     checkHandle(handle);
 
-    if (handle->nccl_comm) { CHECK_NCCL(ncclCommDestroy(handle->nccl_comm)); }
-    if (handle->nccl_local_comm) { CHECK_NCCL(ncclCommDestroy(handle->nccl_local_comm)); }
+    handle->nccl_comm.reset();
+    handle->nccl_local_comm.reset();
+
     if (handle->pl_stream) { CHECK_CUDA(cudaStreamDestroy(handle->pl_stream)); }
 #ifdef ENABLE_NVSHMEM
     if (handle->nvshmem_initialized) {
@@ -531,14 +532,43 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
         ((autotune_transpose_backend || autotune_halo_backend) && !autotune_disable_nccl_backends)) {
       if (!handle->nccl_comm) { handle->nccl_comm = ncclCommFromMPIComm(handle->mpi_comm); }
       if (!handle->nccl_local_comm) {
-        handle->nccl_local_comm = ncclCommFromMPIComm(
+        if (grid_desc->config.pdims[0] > 0 && grid_desc->config.pdims[1] > 0) {
+          // If pdims are set, temporarily set up comm info stuctures to determine if we need to create a local NCCL communicator
+          grid_desc->pidx[0] = handle->rank / grid_desc->config.pdims[1];
+          grid_desc->pidx[1] = handle->rank % grid_desc->config.pdims[1];
+          int color_row = grid_desc->pidx[0];
+          MPI_Comm row_comm;
+          CHECK_MPI(MPI_Comm_split(handle->mpi_comm, color_row, handle->rank, &row_comm));
+          setCommInfo(handle, grid_desc, row_comm, CUDECOMP_COMM_ROW);
+
+          int color_col = grid_desc->pidx[1];
+          MPI_Comm col_comm;
+          CHECK_MPI(MPI_Comm_split(handle->mpi_comm, color_col, handle->rank, &col_comm));
+          setCommInfo(handle, grid_desc, col_comm, CUDECOMP_COMM_COL);
+
+          // Create local NCCL communicator if row or column communicator uses it
+          if ((grid_desc->row_comm_info.ngroups == 1 && grid_desc->row_comm_info.nranks > 1) ||
+              (grid_desc->col_comm_info.ngroups == 1 && grid_desc->col_comm_info.nranks > 1)) {
+            handle->nccl_local_comm = ncclCommFromMPIComm(
+              handle->mpi_clique_comm != MPI_COMM_NULL ? handle->mpi_clique_comm : handle->mpi_local_comm);
+          }
+          CHECK_MPI(MPI_Comm_free(&row_comm));
+          CHECK_MPI(MPI_Comm_free(&col_comm));
+        } else {
+          // If pdims are not set, set up local NCCL communicator for use during autotuning
+          handle->nccl_local_comm = ncclCommFromMPIComm(
             handle->mpi_clique_comm != MPI_COMM_NULL ? handle->mpi_clique_comm : handle->mpi_local_comm);
+        }
       }
       if (!handle->pl_stream) {
         int greatest_priority;
         CHECK_CUDA(cudaDeviceGetStreamPriorityRange(nullptr, &greatest_priority));
         CHECK_CUDA(cudaStreamCreateWithPriority(&handle->pl_stream, cudaStreamNonBlocking, greatest_priority));
       }
+
+      // Set grid descriptor references to NCCL communicators
+      grid_desc->nccl_comm = handle->nccl_comm;
+      grid_desc->nccl_local_comm = handle->nccl_local_comm;
     }
 
     // Initialize NVSHMEM if needed
@@ -624,14 +654,29 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
 #endif
     if (transposeBackendRequiresNccl(grid_desc->config.transpose_comm_backend) ||
         haloBackendRequiresNccl(grid_desc->config.halo_comm_backend)) {
-      handle->n_grid_descs_using_nccl++;
+      // If this grid descriptor initialized the group local NCCL communicator but does not need it, release reference to it
+      if (grid_desc->nccl_local_comm) {
+        if ((grid_desc->row_comm_info.ngroups > 1 || grid_desc->row_comm_info.nranks == 1) &&
+            (grid_desc->col_comm_info.ngroups > 1 || grid_desc->col_comm_info.nranks == 1)) {
+          grid_desc->nccl_local_comm.reset();
+
+          // If handle has the only remaining reference to the local NCCL communicator, destroy it to reclaim resources
+          if (handle->nccl_local_comm.use_count() == 1) {
+            handle->nccl_local_comm.reset();
+          }
+        }
+      }
     } else {
-      // Destroy NCCL communicator to reclaim resources if not used
-      if (handle->nccl_comm && handle->nccl_local_comm && handle->n_grid_descs_using_nccl == 0) {
-        CHECK_NCCL(ncclCommDestroy(handle->nccl_comm));
-        handle->nccl_comm = nullptr;
-        CHECK_NCCL(ncclCommDestroy(handle->nccl_local_comm));
-        handle->nccl_local_comm = nullptr;
+      // Release grid descriptor references to NCCL communicators
+      grid_desc->nccl_comm.reset();
+      grid_desc->nccl_local_comm.reset();
+
+      // Destroy NCCL communicators to reclaim resources if not used by other grid descriptors
+      if (handle->nccl_comm && handle->nccl_comm.use_count() == 1) {
+        handle->nccl_comm.reset();
+      }
+      if (handle->nccl_local_comm && handle->nccl_local_comm.use_count() == 1) {
+        handle->nccl_local_comm.reset();
       }
     }
 
@@ -683,14 +728,16 @@ cudecompResult_t cudecompGridDescDestroy(cudecompHandle_t handle, cudecompGridDe
 
     if (transposeBackendRequiresNccl(grid_desc->config.transpose_comm_backend) ||
         haloBackendRequiresNccl(grid_desc->config.halo_comm_backend)) {
-      handle->n_grid_descs_using_nccl--;
+      // Release grid descriptor references to NCCL communicators
+      grid_desc->nccl_comm.reset();
+      grid_desc->nccl_local_comm.reset();
 
-      // Destroy NCCL communicator to reclaim resources if not used
-      if (handle->nccl_comm && handle->nccl_local_comm && handle->n_grid_descs_using_nccl == 0) {
-        CHECK_NCCL(ncclCommDestroy(handle->nccl_comm));
-        handle->nccl_comm = nullptr;
-        CHECK_NCCL(ncclCommDestroy(handle->nccl_local_comm));
-        handle->nccl_local_comm = nullptr;
+      // Destroy NCCL communicators to reclaim resources if not used by other grid descriptors
+      if (handle->nccl_comm && handle->nccl_comm.use_count() == 1) {
+        handle->nccl_comm.reset();
+      }
+      if (handle->nccl_local_comm && handle->nccl_local_comm.use_count() == 1) {
+        handle->nccl_local_comm.reset();
       }
     }
 
@@ -1017,10 +1064,14 @@ cudecompResult_t cudecompMalloc(cudecompHandle_t handle, cudecompGridDesc_t grid
 
         if (handle->nccl_enable_ubr) {
           void* nccl_ubr_handle;
-          CHECK_NCCL(ncclCommRegister(handle->nccl_comm, buffer, buffer_size_bytes, &nccl_ubr_handle));
-          handle->nccl_ubr_handles[*buffer].push_back(std::make_pair(handle->nccl_comm, nccl_ubr_handle));
-          CHECK_NCCL(ncclCommRegister(handle->nccl_local_comm, buffer, buffer_size_bytes, &nccl_ubr_handle));
-          handle->nccl_ubr_handles[*buffer].push_back(std::make_pair(handle->nccl_local_comm, nccl_ubr_handle));
+          if (grid_desc->nccl_comm) {
+            CHECK_NCCL(ncclCommRegister(*grid_desc->nccl_comm, buffer, buffer_size_bytes, &nccl_ubr_handle));
+            handle->nccl_ubr_handles[*buffer].push_back(std::make_pair(*grid_desc->nccl_comm, nccl_ubr_handle));
+          }
+          if (grid_desc->nccl_local_comm) {
+            CHECK_NCCL(ncclCommRegister(*grid_desc->nccl_local_comm, buffer, buffer_size_bytes, &nccl_ubr_handle));
+            handle->nccl_ubr_handles[*buffer].push_back(std::make_pair(*grid_desc->nccl_local_comm, nccl_ubr_handle));
+          }
         }
       }
 #endif
