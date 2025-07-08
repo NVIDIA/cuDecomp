@@ -63,7 +63,7 @@ using cudecompHaloConfigKey = std::tuple<
   cudecompDataType_t               // datatype
 >;
 
-void printFinalPerformanceReport(const cudecompHandle_t handle, const cudecompGridDesc_t grid_desc);
+void printPerformanceReport(const cudecompHandle_t handle, const cudecompGridDesc_t grid_desc);
 
 void resetPerformanceSamples(const cudecompHandle_t handle, cudecompGridDesc_t grid_desc);
 
