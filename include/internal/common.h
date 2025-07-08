@@ -34,6 +34,7 @@
 #include <array>
 #include <complex>
 #include <map>
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -41,6 +42,7 @@
 
 #include <cuda_runtime.h>
 #include <mpi.h>
+#include <nccl.h>
 
 #include "cudecomp.h"
 #include "internal/checks.h"
@@ -48,6 +50,7 @@
 
 namespace cudecomp {
 typedef std::pair<std::array<unsigned char, NVML_GPU_FABRIC_UUID_LEN>, unsigned int> mnnvl_info;
+typedef std::shared_ptr<ncclComm_t> ncclComm;
 }
 
 // cuDecomp handle containing general information
@@ -66,9 +69,8 @@ struct cudecompHandle {
   int32_t clique_nranks;                    // MPI size
 
   // Entries for NCCL management
-  int n_grid_descs_using_nccl = 0;      // Count of grid descriptors using NCCL
-  ncclComm_t nccl_comm = nullptr;       // NCCL communicator (global)
-  ncclComm_t nccl_local_comm = nullptr; // NCCL communicator (intra-node, or intra-clique on MNNVL systems)
+  cudecomp::ncclComm nccl_comm;       // NCCL communicator (global)
+  cudecomp::ncclComm nccl_local_comm; // NCCL communicator (intra-node, or intra-clique on MNNVL systems)
   bool nccl_enable_ubr = false;         // Flag to control NCCL user buffer registration usage
   std::unordered_map<void*, std::vector<std::pair<ncclComm_t, void*>>>
       nccl_ubr_handles; // map of allocated buffer address to NCCL registration handle(s)
@@ -132,6 +134,9 @@ struct cudecompGridDesc {
   std::vector<cudaEvent_t> events{nullptr}; // CUDA events used for scheduling
 
   cudecomp::graphCache graph_cache; // CUDA graph cache
+
+  cudecomp::ncclComm nccl_comm;       // NCCL communicator (global), shared from handle
+  cudecomp::ncclComm nccl_local_comm; // NCCL communicator (intra-node, or intra-clique on MNNVL systems), shared from handle
 
   bool initialized = false;
 };
@@ -346,6 +351,21 @@ template <typename T> std::unordered_map<T, unsigned int> getUniqueIds(const std
     if (ids.count(e) == 0) { ids[e] = static_cast<unsigned int>(ids.size()); }
   }
   return ids;
+}
+
+// Custom deleter for NCCL communicators
+struct ncclCommDeleter {
+  void operator()(ncclComm_t* comm) {
+    if (comm && *comm) {
+      CHECK_NCCL(ncclCommDestroy(*comm));
+      delete comm;
+    }
+  }
+};
+
+// Helper function to create a shared_ptr NCCL communicator
+static inline ncclComm createNcclComm(ncclComm_t comm) {
+  return std::shared_ptr<ncclComm_t>(new ncclComm_t(comm), ncclCommDeleter());
 }
 
 } // namespace cudecomp
