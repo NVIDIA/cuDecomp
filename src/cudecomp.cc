@@ -534,6 +534,8 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
       if (!handle->nccl_local_comm) {
         if (grid_desc->config.pdims[0] > 0 && grid_desc->config.pdims[1] > 0) {
           // If pdims are set, temporarily set up comm info stuctures to determine if we need to create a local NCCL communicator
+          grid_desc->pidx[0] = handle->rank / grid_desc->config.pdims[1];
+          grid_desc->pidx[1] = handle->rank % grid_desc->config.pdims[1];
           int color_row = grid_desc->pidx[0];
           MPI_Comm row_comm;
           CHECK_MPI(MPI_Comm_split(handle->mpi_comm, color_row, handle->rank, &row_comm));
@@ -548,7 +550,7 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
           if ((grid_desc->row_comm_info.ngroups == 1 && grid_desc->row_comm_info.nranks > 1) ||
               (grid_desc->col_comm_info.ngroups == 1 && grid_desc->col_comm_info.nranks > 1)) {
             handle->nccl_local_comm = ncclCommFromMPIComm(
-             handle->mpi_clique_comm != MPI_COMM_NULL ? handle->mpi_clique_comm : handle->mpi_local_comm);
+              handle->mpi_clique_comm != MPI_COMM_NULL ? handle->mpi_clique_comm : handle->mpi_local_comm);
             nccl_local_comm_initialized = true;
           }
           CHECK_MPI(MPI_Comm_free(&row_comm));
