@@ -287,6 +287,8 @@ bool compareHaloConfigData(const HaloConfigTimingData& a,
 
 // Function to compute average across ranks
 float computeGlobalAverage(const std::vector<float>& values, const cudecompHandle_t handle) {
+  if (values.size() == 0) { return 0.0f; }
+
   float value = std::accumulate(values.begin(), values.end(), 0.0f);
   value /= values.size();
   CHECK_MPI(MPI_Allreduce(MPI_IN_PLACE, &value, 1, MPI_FLOAT, MPI_SUM, handle->mpi_comm));
@@ -338,10 +340,6 @@ TransposeConfigTimingData processTransposeConfig(const cudecompTransposeConfigKe
 
     float alltoall_bw = (alltoall_timing_ms > 0) ? sample.alltoall_bytes * 1e-6 / alltoall_timing_ms : 0;
     config_data.alltoall_bws.push_back(alltoall_bw);
-  }
-
-  if (config_data.total_times.empty()) {
-    return config_data;
   }
 
   // Prepare aggregated statistics
@@ -400,10 +398,6 @@ HaloConfigTimingData processHaloConfig(const cudecompHaloConfigKey& config,
 
     float sendrecv_bw = (sendrecv_timing_ms > 0) ? sample.sendrecv_bytes * 1e-6 / sendrecv_timing_ms : 0;
     config_data.sendrecv_bws.push_back(sendrecv_bw);
-  }
-
-  if (config_data.total_times.empty()) {
-    return config_data;
   }
 
   // Prepare aggregated statistics
