@@ -31,6 +31,7 @@
 #include <algorithm>
 #include <iomanip>
 #include <iostream>
+#include <map>
 #include <numeric>
 #include <sstream>
 #include <string>
@@ -260,6 +261,71 @@ struct HaloConfigTimingData {
   std::vector<int> sample_indices;
 };
 
+// Custom comparison functions for consistent ordering
+bool compareTransposeConfigData(const TransposeConfigTimingData& a,
+                                const TransposeConfigTimingData& b) {
+  static const std::map<std::string, int> op_priority = {
+    {"TransposeXY", 0},
+    {"TransposeYZ", 1},
+    {"TransposeZY", 2},
+    {"TransposeYX", 3}
+  };
+
+  static const std::map<std::string, int> dtype_priority = {
+    {"S", 0}, {"D", 1}, {"C", 2}, {"Z", 3}
+  };
+
+  if (a.stats.operation != b.stats.operation) {
+    return op_priority.at(a.stats.operation) < op_priority.at(b.stats.operation);
+  }
+  if (a.stats.datatype != b.stats.datatype) {
+    return dtype_priority.at(a.stats.datatype) < dtype_priority.at(b.stats.datatype);
+  }
+  if (a.stats.halos != b.stats.halos) {
+    return a.stats.halos < b.stats.halos;
+  }
+  if (a.stats.padding != b.stats.padding) {
+    return a.stats.padding < b.stats.padding;
+  }
+  if (a.stats.inplace != b.stats.inplace) {
+    return a.stats.inplace < b.stats.inplace;
+  }
+  return a.stats.managed < b.stats.managed;
+}
+
+bool compareHaloConfigData(const HaloConfigTimingData& a,
+                           const HaloConfigTimingData& b) {
+  static const std::map<std::string, int> op_priority = {
+    {"HaloX", 0},
+    {"HaloY", 1},
+    {"HaloZ", 2}
+  };
+
+  static const std::map<std::string, int> dtype_priority = {
+    {"S", 0}, {"D", 1}, {"C", 2}, {"Z", 3}
+  };
+
+  if (a.stats.operation != b.stats.operation) {
+    return op_priority.at(a.stats.operation) < op_priority.at(b.stats.operation);
+  }
+  if (a.stats.dim != b.stats.dim) {
+    return a.stats.dim < b.stats.dim;
+  }
+  if (a.stats.datatype != b.stats.datatype) {
+    return dtype_priority.at(a.stats.datatype) < dtype_priority.at(b.stats.datatype);
+  }
+  if (a.stats.halos != b.stats.halos) {
+    return a.stats.halos < b.stats.halos;
+  }
+  if (a.stats.periods != b.stats.periods) {
+    return a.stats.periods < b.stats.periods;
+  }
+  if (a.stats.padding != b.stats.padding) {
+    return a.stats.padding < b.stats.padding;
+  }
+  return a.stats.managed < b.stats.managed;
+}
+
 void printPerformanceReport(const cudecompHandle_t handle, const cudecompGridDesc_t grid_desc) {
   // Synchronize to ensure all events are recorded
   CHECK_CUDA(cudaDeviceSynchronize());
@@ -335,6 +401,9 @@ void printPerformanceReport(const cudecompHandle_t handle, const cudecompGridDes
     all_transpose_config_data.push_back(std::move(config_data));
   }
 
+  // Sort transpose configuration data for consistent ordering
+  std::sort(all_transpose_config_data.begin(), all_transpose_config_data.end(), compareTransposeConfigData);
+
   // Collect all halo statistics and timing data
   std::vector<HaloConfigTimingData> all_halo_config_data;
 
@@ -403,6 +472,9 @@ void printPerformanceReport(const cudecompHandle_t handle, const cudecompGridDes
 
     all_halo_config_data.push_back(std::move(config_data));
   }
+
+  // Sort halo configuration data for consistent ordering
+  std::sort(all_halo_config_data.begin(), all_halo_config_data.end(), compareHaloConfigData);
 
   // Print summary information on rank 0 only
   if (handle->rank == 0) {
