@@ -66,7 +66,7 @@ std::filesystem::path createPerformanceReportFileName(const std::string& write_d
   return std::filesystem::path(write_dir) / filename.str();
 }
 
-// Helper function to write CSV header with grid configuration information
+// Helper function to write CSV header comment with grid configuration information
 void writeCSVHeader(std::ofstream& file, const cudecompGridDesc_t grid_desc) {
   file << "# Transpose backend: " << cudecompTransposeCommBackendToString(grid_desc->config.transpose_comm_backend) << "\n";
   file << "# Halo backend: " << cudecompHaloCommBackendToString(grid_desc->config.halo_comm_backend) << "\n";
@@ -88,7 +88,7 @@ void writeTransposePerformanceTableCSV(const std::vector<TransposeConfigTimingDa
                                        const std::string& write_dir) {
   if (all_transpose_config_data.empty()) return;
 
-  std::filesystem::path filename = createPerformanceReportFileName(write_dir, "transpose", grid_desc);
+  std::filesystem::path filename = createPerformanceReportFileName(write_dir, "transpose-aggregated", grid_desc);
   std::ofstream file(filename);
   if (!file.is_open()) {
     printf("CUDECOMP:WARN: Could not open file %s for writing\n", filename.string().c_str());
@@ -98,7 +98,7 @@ void writeTransposePerformanceTableCSV(const std::vector<TransposeConfigTimingDa
   writeCSVHeader(file, grid_desc);
 
   // Write table header
-  file << "operation,dtype,halo_extents,padding,inplace,managed,samples,total_ms,A2A_ms,local_ms,A2A_BW_GBps\n";
+  file << "operation,dtype,input_halo_extents,output_halo_extents,input_padding,output_padding,inplace,managed,samples,total_ms,A2A_ms,local_ms,A2A_BW_GBps\n";
 
   // Write table data rows
   for (const auto& config_data : all_transpose_config_data) {
@@ -106,8 +106,10 @@ void writeTransposePerformanceTableCSV(const std::vector<TransposeConfigTimingDa
     if (stats.samples > 0) {
       file << stats.operation << ","
            << stats.datatype << ","
-           << "\"" << stats.halos << "\","
-           << "\"" << stats.padding << "\","
+           << "\"" << stats.input_halos << "\","
+           << "\"" << stats.output_halos << "\","
+           << "\"" << stats.input_padding << "\","
+           << "\"" << stats.output_padding << "\","
            << stats.inplace << ","
            << stats.managed << ","
            << stats.samples << ","
@@ -119,16 +121,17 @@ void writeTransposePerformanceTableCSV(const std::vector<TransposeConfigTimingDa
   }
 
   file.close();
+  printf("CUDECOMP:\n");
   printf("CUDECOMP: Wrote transpose performance data to %s\n", filename.string().c_str());
 }
 
 // Write halo performance table to CSV
 void writeHaloPerformanceTableCSV(const std::vector<HaloConfigTimingData>& all_halo_config_data,
-                                 const cudecompGridDesc_t grid_desc,
-                                 const std::string& write_dir) {
+                                  const cudecompGridDesc_t grid_desc,
+                                  const std::string& write_dir) {
   if (all_halo_config_data.empty()) return;
 
-  std::filesystem::path filename = createPerformanceReportFileName(write_dir, "halo", grid_desc);
+  std::filesystem::path filename = createPerformanceReportFileName(write_dir, "halo-aggregated", grid_desc);
   std::ofstream file(filename);
   if (!file.is_open()) {
     printf("CUDECOMP:WARN: Could not open file %s for writing\n", filename.string().c_str());
@@ -160,16 +163,17 @@ void writeHaloPerformanceTableCSV(const std::vector<HaloConfigTimingData>& all_h
   }
 
   file.close();
+  printf("CUDECOMP:\n");
   printf("CUDECOMP: Wrote halo performance data to %s\n", filename.string().c_str());
 }
 
 // Helper function to create transpose configuration key
 cudecompTransposeConfigKey createTransposeConfig(int ax, int dir, void* input, void* output,
-                                                const int32_t input_halo_extents_ptr[],
-                                                const int32_t output_halo_extents_ptr[],
-                                                const int32_t input_padding_ptr[],
-                                                const int32_t output_padding_ptr[],
-                                                cudecompDataType_t datatype) {
+                                                 const int32_t input_halo_extents_ptr[],
+                                                 const int32_t output_halo_extents_ptr[],
+                                                 const int32_t input_padding_ptr[],
+                                                 const int32_t output_padding_ptr[],
+                                                 cudecompDataType_t datatype) {
   std::array<int32_t, 3> input_halo_extents{0, 0, 0};
   std::array<int32_t, 3> output_halo_extents{0, 0, 0};
   std::array<int32_t, 3> input_padding{0, 0, 0};
@@ -197,10 +201,10 @@ cudecompTransposeConfigKey createTransposeConfig(int ax, int dir, void* input, v
 
 // Helper function to create halo configuration key
 cudecompHaloConfigKey createHaloConfig(int ax, int dim, void* input,
-                                      const int32_t halo_extents_ptr[],
-                                      const bool halo_periods_ptr[],
-                                      const int32_t padding_ptr[],
-                                      cudecompDataType_t datatype) {
+                                       const int32_t halo_extents_ptr[],
+                                       const bool halo_periods_ptr[],
+                                       const int32_t padding_ptr[],
+                                       cudecompDataType_t datatype) {
   std::array<int32_t, 3> halo_extents{0, 0, 0};
   std::array<bool, 3> halo_periods{false, false, false};
   std::array<int32_t, 3> padding{0, 0, 0};
@@ -357,11 +361,17 @@ bool compareTransposeConfigData(const TransposeConfigTimingData& a,
   if (a.stats.datatype != b.stats.datatype) {
     return dtype_priority.at(a.stats.datatype) < dtype_priority.at(b.stats.datatype);
   }
-  if (a.stats.halos != b.stats.halos) {
-    return a.stats.halos < b.stats.halos;
+  if (a.stats.input_halos != b.stats.input_halos) {
+    return a.stats.input_halos < b.stats.input_halos;
   }
-  if (a.stats.padding != b.stats.padding) {
-    return a.stats.padding < b.stats.padding;
+  if (a.stats.output_halos != b.stats.output_halos) {
+    return a.stats.output_halos < b.stats.output_halos;
+  }
+  if (a.stats.input_padding != b.stats.input_padding) {
+    return a.stats.input_padding < b.stats.input_padding;
+  }
+  if (a.stats.output_padding != b.stats.output_padding) {
+    return a.stats.output_padding < b.stats.output_padding;
   }
   if (a.stats.inplace != b.stats.inplace) {
     return a.stats.inplace < b.stats.inplace;
@@ -466,16 +476,18 @@ TransposeConfigTimingData processTransposeConfig(const cudecompTransposeConfigKe
   stats.operation = getTransposeOperationName(config);
   stats.datatype = getDatatypeString(std::get<8>(config));
 
-  // Format combined halos and padding
+  // Format separate halos and padding
   auto input_halos = std::get<2>(config);
   auto output_halos = std::get<3>(config);
   auto input_padding = std::get<4>(config);
   auto output_padding = std::get<5>(config);
 
-  stats.halos = formatArray(input_halos) + "/" + formatArray(output_halos);
-  stats.padding = formatArray(input_padding) + "/" + formatArray(output_padding);
-  stats.inplace = std::get<6>(config) ? "Y" : "N";
-  stats.managed = std::get<7>(config) ? "Y" : "N";
+  stats.input_halos = formatArray(input_halos);
+  stats.output_halos = formatArray(output_halos);
+  stats.input_padding = formatArray(input_padding);
+  stats.output_padding = formatArray(output_padding);
+  stats.inplace = std::get<6>(config) ? "T" : "F";
+  stats.managed = std::get<7>(config) ? "T" : "F";
   stats.samples = config_data.total_times.size();
 
   // Compute average statistics and reduce across all ranks
@@ -533,7 +545,7 @@ HaloConfigTimingData processHaloConfig(const cudecompHaloConfigKey& config,
   stats.halos = formatArray(halo_extents);
   stats.periods = formatArray(halo_periods);
   stats.padding = formatArray(padding);
-  stats.managed = std::get<5>(config) ? "Y" : "N";
+  stats.managed = std::get<5>(config) ? "T" : "F";
   stats.samples = config_data.total_times.size();
 
   // Compute average statistics across all ranks
@@ -579,25 +591,27 @@ void printTransposePerformanceTable(const std::vector<TransposeConfigTimingData>
   printf("CUDECOMP:\n");
 
   // Print compact table header
-  printf("CUDECOMP: %-12s %-6s %-16s %-16s %-8s %-8s %-8s %-9s %-9s %-9s %-9s\n",
-         "operation", "dtype", "halo extents", "padding", "inplace", "managed", "samples",
+  printf("CUDECOMP: %-12s %-6s %-16s %-16s %-16s %-16s %-8s %-8s %-8s %-9s %-9s %-9s %-9s\n",
+         "operation", "dtype", "input halos", "output halos", "input padding", "output padding", "inplace", "managed", "samples",
          "total", "A2A", "local", "A2A BW");
-  printf("CUDECOMP: %-12s %-6s %-16s %-16s %-8s %-8s %-8s %-9s %-9s %-9s %-9s\n",
-         "", "", "", "", "", "", "",
+  printf("CUDECOMP: %-12s %-6s %-16s %-16s %-16s %-16s %-8s %-8s %-8s %-9s %-9s %-9s %-9s\n",
+         "", "", "", "", "", "", "", "", "",
          "[ms]", "[ms]", "[ms]", "[GB/s]");
   printf("CUDECOMP: ");
-  for (int i = 0; i < 120; ++i) printf("-");
+  for (int i = 0; i < 152; ++i) printf("-");
   printf("\n");
 
   // Print table rows
   for (const auto& config_data : all_transpose_config_data) {
     const auto& stats = config_data.stats;
     if (stats.samples > 0) {
-      printf("CUDECOMP: %-12s %-6s %-16s %-16s %-8s %-8s %-8d %-9.3f %-9.3f %-9.3f %-9.3f\n",
+      printf("CUDECOMP: %-12s %-6s %-16s %-16s %-16s %-16s %-8s %-8s %-8d %-9.3f %-9.3f %-9.3f %-9.3f\n",
              stats.operation.c_str(),
              stats.datatype.c_str(),
-             stats.halos.c_str(),
-             stats.padding.c_str(),
+             stats.input_halos.c_str(),
+             stats.output_halos.c_str(),
+             stats.input_padding.c_str(),
+             stats.output_padding.c_str(),
              stats.inplace.c_str(),
              stats.managed.c_str(),
              stats.samples,
@@ -681,11 +695,13 @@ void printTransposePerSampleDetailsForConfig(const TransposeConfigTimingData& co
     if (handle->rank != 0) return;
   }
 
-  printf("CUDECOMP: %s (dtype=%s, halos=%s, padding=%s, inplace=%s, managed=%s) samples:\n",
+  printf("CUDECOMP: %s (dtype=%s, input_halos=%s, output_halos=%s, input_padding=%s, output_padding=%s, inplace=%s, managed=%s) samples:\n",
          stats.operation.c_str(),
          stats.datatype.c_str(),
-         stats.halos.c_str(),
-         stats.padding.c_str(),
+         stats.input_halos.c_str(),
+         stats.output_halos.c_str(),
+         stats.input_padding.c_str(),
+         stats.output_padding.c_str(),
          stats.inplace.c_str(),
          stats.managed.c_str());
 
@@ -706,8 +722,10 @@ void printTransposePerSampleDetailsForConfig(const TransposeConfigTimingData& co
       if (csv_file && csv_file->is_open()) {
         *csv_file << stats.operation << ","
                   << stats.datatype << ","
-                  << "\"" << stats.halos << "\","
-                  << "\"" << stats.padding << "\","
+                  << "\"" << stats.input_halos << "\","
+                  << "\"" << stats.output_halos << "\","
+                  << "\"" << stats.input_padding << "\","
+                  << "\"" << stats.output_padding << "\","
                   << stats.inplace << ","
                   << stats.managed << ","
                   << r << ","
@@ -820,7 +838,7 @@ void printTransposePerSampleDetails(const std::vector<TransposeConfigTimingData>
     csv_file.open(filename);
     if (csv_file.is_open()) {
       writeCSVHeader(csv_file, grid_desc);
-      csv_file << "operation,dtype,halo_extents,padding,inplace,managed,rank,sample,total_ms,A2A_ms,local_ms,A2A_BW_GBps\n";
+      csv_file << "operation,dtype,input_halo_extents,output_halo_extents,input_padding,output_padding,inplace,managed,rank,sample,total_ms,A2A_ms,local_ms,A2A_BW_GBps\n";
     } else {
       printf("CUDECOMP: Warning: Could not open file %s for writing\n", filename.string().c_str());
     }
@@ -835,14 +853,15 @@ void printTransposePerSampleDetails(const std::vector<TransposeConfigTimingData>
   
   if (csv_file.is_open()) {
     csv_file.close();
-    printf("CUDECOMP: Wrote transpose per-sample data to %s\n", createPerformanceReportFileName(write_dir, "transpose-samples", grid_desc).string().c_str());
+    printf("CUDECOMP:\n");
+    printf("CUDECOMP: Wrote per-sample transpose data to %s\n", createPerformanceReportFileName(write_dir, "transpose-samples", grid_desc).string().c_str());
   }
 }
 
 // Print per-sample details for halo configurations
 void printHaloPerSampleDetails(const std::vector<HaloConfigTimingData>& all_halo_config_data,
-                              const cudecompHandle_t handle, const cudecompGridDesc_t grid_desc,
-                              const std::string& write_dir = "") {
+                               const cudecompHandle_t handle, const cudecompGridDesc_t grid_desc,
+                               const std::string& write_dir = "") {
   std::ofstream csv_file;
   bool csv_enabled = !write_dir.empty();
   
@@ -875,7 +894,8 @@ void printHaloPerSampleDetails(const std::vector<HaloConfigTimingData>& all_halo
   
   if (csv_file.is_open()) {
     csv_file.close();
-    printf("CUDECOMP: Wrote halo per-sample data to %s\n", createPerformanceReportFileName(write_dir, "halo-samples", grid_desc).string().c_str());
+    printf("CUDECOMP:\n");
+    printf("CUDECOMP: Wrote per-sample halo data to %s\n", createPerformanceReportFileName(write_dir, "halo-samples", grid_desc).string().c_str());
   }
 }
 
@@ -1007,7 +1027,7 @@ void resetPerformanceSamples(const cudecompHandle_t handle, cudecompGridDesc_t g
 
 // Helper function to advance transpose sample index with warmup handling
 void advanceTransposePerformanceSample(const cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
-                                      const cudecompTransposeConfigKey& config) {
+                                       const cudecompTransposeConfigKey& config) {
   if (!handle->performance_report_enable) return;
 
   auto& collection = getOrCreateTransposePerformanceSamples(handle, grid_desc, config);
@@ -1025,7 +1045,7 @@ void advanceTransposePerformanceSample(const cudecompHandle_t handle, cudecompGr
 
 // Helper function to advance halo sample index with warmup handling
 void advanceHaloPerformanceSample(const cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
-                                 const cudecompHaloConfigKey& config) {
+                                  const cudecompHaloConfigKey& config) {
   if (!handle->performance_report_enable) return;
 
   auto& collection = getOrCreateHaloPerformanceSamples(handle, grid_desc, config);

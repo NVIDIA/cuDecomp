@@ -67,8 +67,10 @@ using cudecompHaloConfigKey = std::tuple<
 struct TransposePerformanceStats {
   std::string operation;
   std::string datatype;
-  std::string halos;
-  std::string padding;
+  std::string input_halos;
+  std::string output_halos;
+  std::string input_padding;
+  std::string output_padding;
   std::string inplace;
   std::string managed;
   int samples;
