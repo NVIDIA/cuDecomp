@@ -476,7 +476,6 @@ TransposeConfigTimingData processTransposeConfig(const cudecompTransposeConfigKe
   stats.operation = getTransposeOperationName(config);
   stats.datatype = getDatatypeString(std::get<8>(config));
 
-  // Format separate halos and padding
   auto input_halos = std::get<2>(config);
   auto output_halos = std::get<3>(config);
   auto input_padding = std::get<4>(config);
@@ -591,21 +590,21 @@ void printTransposePerformanceTable(const std::vector<TransposeConfigTimingData>
   printf("CUDECOMP:\n");
 
   // Print compact table header
-  printf("CUDECOMP: %-12s %-6s %-16s %-16s %-16s %-16s %-8s %-8s %-8s %-9s %-9s %-9s %-9s\n",
-         "operation", "dtype", "input halos", "output halos", "input padding", "output padding", "inplace", "managed", "samples",
+  printf("CUDECOMP: %-12s %-6s %-15s %-15s %-8s %-8s %-8s %-9s %-9s %-9s %-9s\n",
+    "operation", "dtype", "halo extents", "padding", "inplace", "managed", "samples",
          "total", "A2A", "local", "A2A BW");
-  printf("CUDECOMP: %-12s %-6s %-16s %-16s %-16s %-16s %-8s %-8s %-8s %-9s %-9s %-9s %-9s\n",
-         "", "", "", "", "", "", "", "", "",
+  printf("CUDECOMP: %-12s %-6s %-15s %-15s %-8s %-8s %-8s %-9s %-9s %-9s %-9s\n",
+         "", "", "", "", "", "", "",
          "[ms]", "[ms]", "[ms]", "[GB/s]");
   printf("CUDECOMP: ");
-  for (int i = 0; i < 152; ++i) printf("-");
+  for (int i = 0; i < 120; ++i) printf("-");
   printf("\n");
 
   // Print table rows
   for (const auto& config_data : all_transpose_config_data) {
     const auto& stats = config_data.stats;
     if (stats.samples > 0) {
-      printf("CUDECOMP: %-12s %-6s %-16s %-16s %-16s %-16s %-8s %-8s %-8d %-9.3f %-9.3f %-9.3f %-9.3f\n",
+      printf("CUDECOMP: %-12s %-6s %-7s/%-7s %-7s/%-7s %-8s %-8s %-8d %-9.3f %-9.3f %-9.3f %-9.3f\n",
              stats.operation.c_str(),
              stats.datatype.c_str(),
              stats.input_halos.c_str(),
@@ -695,7 +694,7 @@ void printTransposePerSampleDetailsForConfig(const TransposeConfigTimingData& co
     if (handle->rank != 0) return;
   }
 
-  printf("CUDECOMP: %s (dtype=%s, input_halos=%s, output_halos=%s, input_padding=%s, output_padding=%s, inplace=%s, managed=%s) samples:\n",
+  printf("CUDECOMP: %s (dtype=%s, halo extents=%s/%s, padding=%s/%s, inplace=%s, managed=%s) samples:\n",
          stats.operation.c_str(),
          stats.datatype.c_str(),
          stats.input_halos.c_str(),
