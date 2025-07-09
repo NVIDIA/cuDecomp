@@ -78,7 +78,7 @@ CUDECOMP_PERFORMANCE_REPORT_WRITE_DIR
 :code:`CUDECOMP_PERFORMANCE_REPORT_WRITE_DIR` controls the directory where CSV performance reports are written when :code:`CUDECOMP_ENABLE_PERFORMANCE_REPORT` is enabled. When this variable is set, cuDecomp will write performance data to CSV files in the specified directory.
 
 CSV files are created with descriptive names encoding the grid configuration, for example:
-:code:`cudecomp-perf-report-transpose-tcomm_1-hcomm_1-pdims_2x2-gdims_256x256x256-memorder_012012012.csv`
+:code:`cudecomp-perf-report-transpose-aggregated-tcomm_1-hcomm_1-pdims_2x2-gdims_256x256x256-memorder_012012012.csv`
 
 The following CSV files are generated:
 
