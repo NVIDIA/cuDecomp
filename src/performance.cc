@@ -35,6 +35,8 @@
 #include <numeric>
 #include <sstream>
 #include <string>
+#include <fstream>
+#include <cstdlib>
 
 #include <mpi.h>
 
@@ -43,6 +45,135 @@
 #include "internal/performance.h"
 
 namespace cudecomp {
+
+// Helper function to get CSV write directory from environment variable
+std::string getPerformanceReportWriteDir() {
+  const char* write_dir = std::getenv("CUDECOMP_PERFORMANCE_REPORT_WRITE_DIR");
+  return write_dir ? std::string(write_dir) : std::string();
+}
+
+// Helper function to create file name with grid descriptor information
+std::string createPerformanceReportFileName(const std::string& write_dir,
+                                           const std::string& table_type,
+                                           const cudecompGridDesc_t grid_desc) {
+  std::ostringstream filename;
+  filename << write_dir;
+  if (!write_dir.empty() && write_dir.back() != '/') {
+    filename << "/";
+  }
+  
+  filename << "cudecomp-perf-report-" << table_type << "-";
+  filename << "tcomm_" << grid_desc->config.transpose_comm_backend << "-";
+  filename << "hcomm_" << grid_desc->config.halo_comm_backend << "-";
+  filename << "pdims_" << grid_desc->config.pdims[0] << "x" << grid_desc->config.pdims[1] << "-";
+  filename << "gdims_" << grid_desc->config.gdims[0] << "x" << grid_desc->config.gdims[1] << "x" << grid_desc->config.gdims[2] << "-";
+  filename << "memorder_";
+  for (int axis = 0; axis < 3; ++axis) {
+    filename << grid_desc->config.transpose_mem_order[axis][0] << grid_desc->config.transpose_mem_order[axis][1] << grid_desc->config.transpose_mem_order[axis][2];
+  }
+  filename << ".csv";
+  
+  return filename.str();
+}
+
+// Helper function to write CSV header with grid configuration information
+void writeCSVHeader(std::ofstream& file, const cudecompGridDesc_t grid_desc) {
+  file << "# CUDECOMP Performance Report\n";
+  file << "# Grid Configuration:\n";
+  file << "# Transpose backend: " << cudecompTransposeCommBackendToString(grid_desc->config.transpose_comm_backend) << "\n";
+  file << "# Halo backend: " << cudecompHaloCommBackendToString(grid_desc->config.halo_comm_backend) << "\n";
+  file << "# Process grid: [" << grid_desc->config.pdims[0] << ", " << grid_desc->config.pdims[1] << "]\n";
+  file << "# Global dimensions: [" << grid_desc->config.gdims[0] << ", " << grid_desc->config.gdims[1] << ", " << grid_desc->config.gdims[2] << "]\n";
+  file << "# Memory order: ";
+  for (int axis = 0; axis < 3; ++axis) {
+    file << "[" << grid_desc->config.transpose_mem_order[axis][0] << ","
+         << grid_desc->config.transpose_mem_order[axis][1] << ","
+         << grid_desc->config.transpose_mem_order[axis][2] << "]";
+    if (axis < 2) file << "; ";
+  }
+  file << "\n#\n";
+}
+
+// Write transpose performance table to CSV
+void writeTransposePerformanceTableCSV(const std::vector<TransposeConfigTimingData>& all_transpose_config_data,
+                                      const cudecompGridDesc_t grid_desc,
+                                      const std::string& write_dir) {
+  if (all_transpose_config_data.empty()) return;
+
+  std::string filename = createPerformanceReportFileName(write_dir, "transpose", grid_desc);
+  std::ofstream file(filename);
+  if (!file.is_open()) {
+    printf("CUDECOMP: Warning: Could not open file %s for writing\n", filename.c_str());
+    return;
+  }
+
+  writeCSVHeader(file, grid_desc);
+
+  // Write CSV header
+  file << "operation,dtype,halo_extents,padding,inplace,managed,samples,total_ms,A2A_ms,local_ms,A2A_BW_GBps\n";
+
+  // Write CSV data rows
+  for (const auto& config_data : all_transpose_config_data) {
+    const auto& stats = config_data.stats;
+    if (stats.samples > 0) {
+      file << stats.operation << ","
+           << stats.datatype << ","
+           << "\"" << stats.halos << "\","
+           << "\"" << stats.padding << "\","
+           << stats.inplace << ","
+           << stats.managed << ","
+           << stats.samples << ","
+           << std::fixed << std::setprecision(3) << stats.total_time_avg << ","
+           << std::fixed << std::setprecision(3) << stats.alltoall_time_avg << ","
+           << std::fixed << std::setprecision(3) << stats.local_time_avg << ","
+           << std::fixed << std::setprecision(3) << stats.alltoall_bw_avg << "\n";
+    }
+  }
+
+  file.close();
+  printf("CUDECOMP: Wrote transpose performance data to %s\n", filename.c_str());
+}
+
+// Write halo performance table to CSV
+void writeHaloPerformanceTableCSV(const std::vector<HaloConfigTimingData>& all_halo_config_data,
+                                 const cudecompGridDesc_t grid_desc,
+                                 const std::string& write_dir) {
+  if (all_halo_config_data.empty()) return;
+
+  std::string filename = createPerformanceReportFileName(write_dir, "halo", grid_desc);
+  std::ofstream file(filename);
+  if (!file.is_open()) {
+    printf("CUDECOMP: Warning: Could not open file %s for writing\n", filename.c_str());
+    return;
+  }
+
+  writeCSVHeader(file, grid_desc);
+
+  // Write CSV header
+  file << "operation,dtype,dim,halo_extent,periods,padding,managed,samples,total_ms,SR_ms,local_ms,SR_BW_GBps\n";
+
+  // Write CSV data rows
+  for (const auto& config_data : all_halo_config_data) {
+    const auto& stats = config_data.stats;
+    if (stats.samples > 0) {
+      file << stats.operation << ","
+           << stats.datatype << ","
+           << stats.dim << ","
+           << "\"" << stats.halos << "\","
+           << "\"" << stats.periods << "\","
+           << "\"" << stats.padding << "\","
+           << stats.managed << ","
+           << stats.samples << ","
+           << std::fixed << std::setprecision(3) << stats.total_time_avg << ","
+           << std::fixed << std::setprecision(3) << stats.sendrecv_time_avg << ","
+           << std::fixed << std::setprecision(3) << stats.local_time_avg << ","
+           << std::fixed << std::setprecision(3) << stats.sendrecv_bw_avg << "\n";
+    }
+  }
+
+  file.close();
+  printf("CUDECOMP: Wrote halo performance data to %s\n", filename.c_str());
+}
 
 // Helper function to create transpose configuration key
 cudecompTransposeConfigKey createTransposeConfig(int ax, int dir, void* input, void* output,
@@ -530,7 +661,8 @@ void printHaloPerformanceTable(const std::vector<HaloConfigTimingData>& all_halo
 
 // Print per-sample transpose data for a single configuration
 void printTransposePerSampleDetailsForConfig(const TransposeConfigTimingData& config_data,
-                                            const cudecompHandle_t handle, int detail_level) {
+                                            const cudecompHandle_t handle, int detail_level,
+                                            std::ofstream* csv_file = nullptr) {
   const auto& stats = config_data.stats;
   const auto& total_times = config_data.total_times;
   const auto& alltoall_times = config_data.alltoall_times;
@@ -581,6 +713,22 @@ void printTransposePerSampleDetailsForConfig(const TransposeConfigTimingData& co
              r, s, all_total_times[idx],
              all_alltoall_times[idx], all_local_times[idx],
              all_alltoall_bws[idx]);
+      
+      // Write to CSV if file is provided
+      if (csv_file && csv_file->is_open()) {
+        *csv_file << stats.operation << ","
+                  << stats.datatype << ","
+                  << "\"" << stats.halos << "\","
+                  << "\"" << stats.padding << "\","
+                  << stats.inplace << ","
+                  << stats.managed << ","
+                  << r << ","
+                  << s << ","
+                  << std::fixed << std::setprecision(3) << all_total_times[idx] << ","
+                  << std::fixed << std::setprecision(3) << all_alltoall_times[idx] << ","
+                  << std::fixed << std::setprecision(3) << all_local_times[idx] << ","
+                  << std::fixed << std::setprecision(3) << all_alltoall_bws[idx] << "\n";
+      }
     }
   }
   printf("CUDECOMP:\n");
@@ -588,7 +736,8 @@ void printTransposePerSampleDetailsForConfig(const TransposeConfigTimingData& co
 
 // Print per-sample halo data for a single configuration
 void printHaloPerSampleDetailsForConfig(const HaloConfigTimingData& config_data,
-                                        const cudecompHandle_t handle, int detail_level) {
+                                        const cudecompHandle_t handle, int detail_level,
+                                        std::ofstream* csv_file = nullptr) {
   const auto& stats = config_data.stats;
   const auto& total_times = config_data.total_times;
   const auto& sendrecv_times = config_data.sendrecv_times;
@@ -640,6 +789,23 @@ void printHaloPerSampleDetailsForConfig(const HaloConfigTimingData& config_data,
              r, s, all_total_times[idx],
              all_sendrecv_times[idx], all_local_times[idx],
              all_sendrecv_bws[idx]);
+      
+      // Write to CSV if file is provided
+      if (csv_file && csv_file->is_open()) {
+        *csv_file << stats.operation << ","
+                  << stats.datatype << ","
+                  << stats.dim << ","
+                  << "\"" << stats.halos << "\","
+                  << "\"" << stats.periods << "\","
+                  << "\"" << stats.padding << "\","
+                  << stats.managed << ","
+                  << r << ","
+                  << s << ","
+                  << std::fixed << std::setprecision(3) << all_total_times[idx] << ","
+                  << std::fixed << std::setprecision(3) << all_sendrecv_times[idx] << ","
+                  << std::fixed << std::setprecision(3) << all_local_times[idx] << ","
+                  << std::fixed << std::setprecision(3) << all_sendrecv_bws[idx] << "\n";
+      }
     }
   }
   printf("CUDECOMP:\n");
@@ -647,21 +813,63 @@ void printHaloPerSampleDetailsForConfig(const HaloConfigTimingData& config_data,
 
 // Print per-sample details for transpose configurations
 void printTransposePerSampleDetails(const std::vector<TransposeConfigTimingData>& all_transpose_config_data,
-                                   const cudecompHandle_t handle) {
+                                   const cudecompHandle_t handle, const cudecompGridDesc_t grid_desc,
+                                   const std::string& write_dir = "") {
+  std::ofstream csv_file;
+  bool csv_enabled = !write_dir.empty();
+  
+  if (csv_enabled && handle->rank == 0) {
+    std::string filename = createPerformanceReportFileName(write_dir, "transpose-samples", grid_desc);
+    csv_file.open(filename);
+    if (csv_file.is_open()) {
+      writeCSVHeader(csv_file, grid_desc);
+      csv_file << "operation,dtype,halo_extents,padding,inplace,managed,rank,sample,total_ms,A2A_ms,local_ms,A2A_BW_GBps\n";
+    } else {
+      printf("CUDECOMP: Warning: Could not open file %s for writing\n", filename.c_str());
+    }
+  }
+
   for (const auto& config_data : all_transpose_config_data) {
     if (config_data.stats.samples == 0) continue;
 
-    printTransposePerSampleDetailsForConfig(config_data, handle, handle->performance_report_detail);
+    printTransposePerSampleDetailsForConfig(config_data, handle, handle->performance_report_detail,
+                                           csv_enabled ? &csv_file : nullptr);
+  }
+  
+  if (csv_file.is_open()) {
+    csv_file.close();
+    printf("CUDECOMP: Wrote transpose per-sample data to %s\n", createPerformanceReportFileName(write_dir, "transpose-samples", grid_desc).c_str());
   }
 }
 
 // Print per-sample details for halo configurations
 void printHaloPerSampleDetails(const std::vector<HaloConfigTimingData>& all_halo_config_data,
-                              const cudecompHandle_t handle) {
+                              const cudecompHandle_t handle, const cudecompGridDesc_t grid_desc,
+                              const std::string& write_dir = "") {
+  std::ofstream csv_file;
+  bool csv_enabled = !write_dir.empty();
+  
+  if (csv_enabled && handle->rank == 0) {
+    std::string filename = createPerformanceReportFileName(write_dir, "halo-samples", grid_desc);
+    csv_file.open(filename);
+    if (csv_file.is_open()) {
+      writeCSVHeader(csv_file, grid_desc);
+      csv_file << "operation,dtype,dim,halo_extent,periods,padding,managed,rank,sample,total_ms,SR_ms,local_ms,SR_BW_GBps\n";
+    } else {
+      printf("CUDECOMP: Warning: Could not open file %s for writing\n", filename.c_str());
+    }
+  }
+
   for (const auto& config_data : all_halo_config_data) {
     if (config_data.stats.samples == 0) continue;
 
-    printHaloPerSampleDetailsForConfig(config_data, handle, handle->performance_report_detail);
+    printHaloPerSampleDetailsForConfig(config_data, handle, handle->performance_report_detail,
+                                      csv_enabled ? &csv_file : nullptr);
+  }
+  
+  if (csv_file.is_open()) {
+    csv_file.close();
+    printf("CUDECOMP: Wrote halo per-sample data to %s\n", createPerformanceReportFileName(write_dir, "halo-samples", grid_desc).c_str());
   }
 }
 
@@ -703,6 +911,10 @@ void printPerformanceReport(const cudecompHandle_t handle, const cudecompGridDes
   // Sort halo configuration data for consistent ordering
   std::sort(all_halo_config_data.begin(), all_halo_config_data.end(), compareHaloConfigData);
 
+  // Check if CSV writing is enabled
+  std::string write_dir = getPerformanceReportWriteDir();
+  bool csv_enabled = !write_dir.empty();
+
   // Print grid configuration information
   printGridConfiguration(handle, grid_desc);
 
@@ -717,11 +929,21 @@ void printPerformanceReport(const cudecompHandle_t handle, const cudecompGridDes
     // Print transpose performance data
     if (!all_transpose_config_data.empty()) {
       printTransposePerformanceTable(all_transpose_config_data);
+      
+      // Write transpose performance data to CSV if enabled
+      if (csv_enabled) {
+        writeTransposePerformanceTableCSV(all_transpose_config_data, grid_desc, write_dir);
+      }
     }
 
     // Print halo performance data
     if (!all_halo_config_data.empty()) {
       printHaloPerformanceTable(all_halo_config_data);
+      
+      // Write halo performance data to CSV if enabled
+      if (csv_enabled) {
+        writeHaloPerformanceTableCSV(all_halo_config_data, grid_desc, write_dir);
+      }
     }
   }
 
@@ -733,11 +955,11 @@ void printPerformanceReport(const cudecompHandle_t handle, const cudecompGridDes
       printf("CUDECOMP:\n");
     }
 
-    // Print transpose per-sample details
-    printTransposePerSampleDetails(all_transpose_config_data, handle);
+    // Print transpose per-sample details (and write CSV if enabled)
+    printTransposePerSampleDetails(all_transpose_config_data, handle, grid_desc, csv_enabled ? write_dir : "");
 
-    // Print halo per-sample details
-    printHaloPerSampleDetails(all_halo_config_data, handle);
+    // Print halo per-sample details (and write CSV if enabled)
+    printHaloPerSampleDetails(all_halo_config_data, handle, grid_desc, csv_enabled ? write_dir : "");
   }
 
   if (handle->rank == 0) {
