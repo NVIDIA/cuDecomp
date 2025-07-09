@@ -70,3 +70,23 @@ CUDECOMP_PERFORMANCE_REPORT_WARMUP_SAMPLES
 :code:`CUDECOMP_PERFORMANCE_REPORT_WARMUP_SAMPLES` controls the number of initial samples to ignore for each transpose/halo configuration. This helps exclude outliers from GPU warmup, memory allocation, and other initialization effects from the final performance statistics.
 
 Default setting is :code:`3` warmup samples. Setting this to 0 disables warmup sample filtering.
+
+CUDECOMP_PERFORMANCE_REPORT_WRITE_DIR
+-------------------------------------
+(since v0.5.1)
+
+:code:`CUDECOMP_PERFORMANCE_REPORT_WRITE_DIR` controls the directory where CSV performance reports are written when :code:`CUDECOMP_ENABLE_PERFORMANCE_REPORT` is enabled. When this variable is set, cuDecomp will write performance data to CSV files in the specified directory.
+
+CSV files are created with descriptive names encoding the grid configuration, for example:
+:code:`cudecomp-perf-report-transpose-tcomm_1-hcomm_1-pdims_2x2-gdims_256x256x256-memorder_012012012.csv`
+
+The following CSV files are generated:
+
+- Aggregated transpose performance data
+- Aggregated halo performance data
+- Per-sample transpose data (when :code:`CUDECOMP_PERFORMANCE_REPORT_DETAIL` > 0)
+- Per-sample halo data (when :code:`CUDECOMP_PERFORMANCE_REPORT_DETAIL` > 0)
+
+Each CSV file includes grid configuration information as comments at the top, followed by performance data in comma-separated format.
+
+Default setting is unset (no CSV files written). Setting this variable to a directory path will enable CSV file output.

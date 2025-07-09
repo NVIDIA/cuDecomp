@@ -368,6 +368,12 @@ static void getCudecompEnvVars(cudecompHandle_t& handle) {
              warmup_samples, handle->performance_report_warmup_samples);
     }
   }
+
+  // Check CUDECOMP_PERFORMANCE_REPORT_WRITE_DIR (Directory for CSV performance reports)
+  const char* performance_write_dir_str = std::getenv("CUDECOMP_PERFORMANCE_REPORT_WRITE_DIR");
+  if (performance_write_dir_str) {
+    handle->performance_report_write_dir = std::string(performance_write_dir_str);
+  }
 }
 
 #ifdef ENABLE_NVSHMEM

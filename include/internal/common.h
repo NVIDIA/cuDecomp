@@ -120,6 +120,7 @@ struct cudecompHandle {
   int32_t performance_report_detail = 0;               // performance report detail level: 0=aggregated, 1=per-sample rank 0, 2=per-sample all ranks
   int32_t performance_report_samples = 20;             // number of performance samples to keep for final report
   int32_t performance_report_warmup_samples = 3;       // number of initial warmup samples to ignore for each configuration
+  std::string performance_report_write_dir = "";       // directory to write CSV performance reports, empty means no file writing
 };
 
 // Structure with information about row/column communicator
