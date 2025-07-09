@@ -63,16 +63,67 @@ using cudecompHaloConfigKey = std::tuple<
   cudecompDataType_t               // datatype
 >;
 
+// Helper structure for transpose statistics
+struct TransposePerformanceStats {
+  std::string operation;
+  std::string datatype;
+  std::string halos;
+  std::string padding;
+  std::string inplace;
+  std::string managed;
+  int samples;
+  float total_time_avg;
+  float alltoall_time_avg;
+  float local_time_avg;
+  float alltoall_bw_avg;
+};
+
+// Helper structure for halo statistics
+struct HaloPerformanceStats {
+  std::string operation;
+  std::string datatype;
+  int dim;
+  std::string halos;
+  std::string periods;
+  std::string padding;
+  std::string managed;
+  int samples;
+  float total_time_avg;
+  float sendrecv_time_avg;
+  float local_time_avg;
+  float sendrecv_bw_avg;
+};
+
+// Helper structure to hold pre-computed transpose timing data
+struct TransposeConfigTimingData {
+  TransposePerformanceStats stats;
+  std::vector<float> total_times;
+  std::vector<float> alltoall_times;
+  std::vector<float> local_times;
+  std::vector<float> alltoall_bws;
+  std::vector<int> sample_indices;
+};
+
+// Helper structure to hold pre-computed halo timing data
+struct HaloConfigTimingData {
+  HaloPerformanceStats stats;
+  std::vector<float> total_times;
+  std::vector<float> sendrecv_times;
+  std::vector<float> local_times;
+  std::vector<float> sendrecv_bws;
+  std::vector<int> sample_indices;
+};
+
 void printPerformanceReport(const cudecompHandle_t handle, const cudecompGridDesc_t grid_desc);
 
 void resetPerformanceSamples(const cudecompHandle_t handle, cudecompGridDesc_t grid_desc);
 
 void advanceTransposePerformanceSample(const cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
-                                      const cudecompTransposeConfigKey& config);
+                                       const cudecompTransposeConfigKey& config);
 
 cudecompTransposePerformanceSampleCollection& getOrCreateTransposePerformanceSamples(const cudecompHandle_t handle,
-                                                                                    cudecompGridDesc_t grid_desc,
-                                                                                    const cudecompTransposeConfigKey& config);
+                                                                                     cudecompGridDesc_t grid_desc,
+                                                                                     const cudecompTransposeConfigKey& config);
 
 void advanceHaloPerformanceSample(const cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
                                  const cudecompHaloConfigKey& config);
@@ -83,18 +134,18 @@ cudecompHaloPerformanceSampleCollection& getOrCreateHaloPerformanceSamples(const
 
 // Helper function to create transpose configuration key
 cudecompTransposeConfigKey createTransposeConfig(int ax, int dir, void* input, void* output,
-                                                const int32_t input_halo_extents_ptr[],
-                                                const int32_t output_halo_extents_ptr[],
-                                                const int32_t input_padding_ptr[],
-                                                const int32_t output_padding_ptr[],
-                                                cudecompDataType_t datatype);
+                                                 const int32_t input_halo_extents_ptr[],
+                                                 const int32_t output_halo_extents_ptr[],
+                                                 const int32_t input_padding_ptr[],
+                                                 const int32_t output_padding_ptr[],
+                                                 cudecompDataType_t datatype);
 
 // Helper function to create halo configuration key
 cudecompHaloConfigKey createHaloConfig(int ax, int dim, void* input,
-                                      const int32_t halo_extents_ptr[],
-                                      const bool halo_periods_ptr[],
-                                      const int32_t padding_ptr[],
-                                      cudecompDataType_t datatype);
+                                       const int32_t halo_extents_ptr[],
+                                       const bool halo_periods_ptr[],
+                                       const int32_t padding_ptr[],
+                                       cudecompDataType_t datatype);
 
 } // namespace cudecomp
 

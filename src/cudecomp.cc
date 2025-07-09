@@ -762,7 +762,6 @@ cudecompResult_t cudecompGridDescDestroy(cudecompHandle_t handle, cudecompGridDe
     if (grid_desc->nvshmem_sync_event) { CHECK_CUDA(cudaEventDestroy(grid_desc->nvshmem_sync_event)); }
 #endif
 
-    // Destroy timing events for AlltoAll operations
     if (handle->performance_report_enable) {
       // Print performance report before destroying events
       printPerformanceReport(handle, grid_desc);

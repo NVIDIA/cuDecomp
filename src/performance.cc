@@ -44,7 +44,7 @@
 
 namespace cudecomp {
 
-// Helper function to create transpose configuration key (no longer template)
+// Helper function to create transpose configuration key
 cudecompTransposeConfigKey createTransposeConfig(int ax, int dir, void* input, void* output,
                                                 const int32_t input_halo_extents_ptr[],
                                                 const int32_t output_halo_extents_ptr[],
@@ -103,8 +103,8 @@ cudecompHaloConfigKey createHaloConfig(int ax, int dim, void* input,
 
 // Helper function to get or create transpose performance sample collection for a configuration
 cudecompTransposePerformanceSampleCollection& getOrCreateTransposePerformanceSamples(const cudecompHandle_t handle,
-                                                                                    cudecompGridDesc_t grid_desc,
-                                                                                    const cudecompTransposeConfigKey& config) {
+                                                                                     cudecompGridDesc_t grid_desc,
+                                                                                     const cudecompTransposeConfigKey& config) {
   auto& samples_map = grid_desc->transpose_perf_samples_map;
 
   if (samples_map.find(config) == samples_map.end()) {
@@ -161,10 +161,17 @@ cudecompHaloPerformanceSampleCollection& getOrCreateHaloPerformanceSamples(const
   return samples_map[config];
 }
 
-// Helper function to format array as compact string
+// Helper function to format integer array as compact string
 std::string formatArray(const std::array<int32_t, 3>& arr) {
   std::ostringstream oss;
   oss << "[" << arr[0] << "," << arr[1] << "," << arr[2] << "]";
+  return oss.str();
+}
+
+// Helper function to format boolean array as compact string
+std::string formatArray(const std::array<bool, 3>& arr) {
+  std::ostringstream oss;
+  oss << "[" << (arr[0] ? "1" : "0") << "," << (arr[1] ? "1" : "0") << "," << (arr[2] ? "1" : "0") << "]";
   return oss.str();
 }
 
@@ -210,58 +217,8 @@ std::string getDatatypeString(cudecompDataType_t datatype) {
   }
 }
 
-// Helper structure for transpose statistics
-struct TransposePerformanceStats {
-  std::string operation;
-  std::string datatype;
-  std::string halos;        // Combined input/output halos
-  std::string padding;      // Combined input/output padding
-  std::string inplace;
-  std::string managed;
-  int samples;
-  float total_time_avg;
-  float alltoall_time_avg;
-  float local_time_avg;
-  float alltoall_bw_avg;
-};
-
-// Helper structure for halo statistics
-struct HaloPerformanceStats {
-  std::string operation;
-  std::string datatype;
-  int dim;
-  std::string halos;
-  std::string periods;
-  std::string padding;
-  std::string managed;
-  int samples;
-  float total_time_avg;
-  float sendrecv_time_avg;
-  float local_time_avg;
-  float sendrecv_bw_avg;
-};
-
-// Helper structure to hold pre-computed transpose timing data
-struct TransposeConfigTimingData {
-  TransposePerformanceStats stats;
-  std::vector<float> total_times;
-  std::vector<float> alltoall_times;
-  std::vector<float> local_times;
-  std::vector<float> alltoall_bws;
-  std::vector<int> sample_indices;
-};
-
-// Helper structure to hold pre-computed halo timing data
-struct HaloConfigTimingData {
-  HaloPerformanceStats stats;
-  std::vector<float> total_times;
-  std::vector<float> sendrecv_times;
-  std::vector<float> local_times;
-  std::vector<float> sendrecv_bws;
-  std::vector<int> sample_indices;
-};
-
-// Custom comparison functions for consistent ordering
+// Comparison function to order transpose configurations.
+// Ordering is (operation, datatype, halos, padding, inplace, managed).
 bool compareTransposeConfigData(const TransposeConfigTimingData& a,
                                 const TransposeConfigTimingData& b) {
   static const std::map<std::string, int> op_priority = {
@@ -293,6 +250,8 @@ bool compareTransposeConfigData(const TransposeConfigTimingData& a,
   return a.stats.managed < b.stats.managed;
 }
 
+// Comparison function to order halo configurations.
+// Ordering is (operation, datatype, dim, halos, periods, padding, managed).
 bool compareHaloConfigData(const HaloConfigTimingData& a,
                            const HaloConfigTimingData& b) {
   static const std::map<std::string, int> op_priority = {
@@ -326,184 +285,434 @@ bool compareHaloConfigData(const HaloConfigTimingData& a,
   return a.stats.managed < b.stats.managed;
 }
 
+// Function to compute average across ranks
+float computeGlobalAverage(const std::vector<float>& values, const cudecompHandle_t handle) {
+  float value = std::accumulate(values.begin(), values.end(), 0.0f);
+  value /= values.size();
+  CHECK_MPI(MPI_Allreduce(MPI_IN_PLACE, &value, 1, MPI_FLOAT, MPI_SUM, handle->mpi_comm));
+  value /= handle->nranks;
+  return value;
+}
+
+// Function to gather data from all ranks
+void gatherSampleData(const std::vector<float>& local_data, std::vector<float>& all_data,
+                      const cudecompHandle_t handle) {
+  int num_samples = local_data.size();
+  if (handle->rank == 0) {
+    all_data.resize(num_samples * handle->nranks);
+  }
+
+  CHECK_MPI(MPI_Gather(local_data.data(), num_samples, MPI_FLOAT,
+                       all_data.data(), num_samples, MPI_FLOAT, 0, handle->mpi_comm));
+}
+
+// Process transpose timing data from sample collections
+TransposeConfigTimingData processTransposeConfig(const cudecompTransposeConfigKey& config,
+                                                 const cudecompTransposePerformanceSampleCollection& collection,
+                                                 const cudecompHandle_t handle) {
+  TransposeConfigTimingData config_data;
+
+  config_data.total_times.reserve(collection.samples.size());
+  config_data.alltoall_times.reserve(collection.samples.size());
+  config_data.local_times.reserve(collection.samples.size());
+  config_data.alltoall_bws.reserve(collection.samples.size());
+
+  // Collect valid samples and compute elapsed times
+  for (int i = 0; i < collection.samples.size(); ++i) {
+    const auto& sample = collection.samples[i];
+    if (!sample.valid) continue;
+
+    float alltoall_timing_ms = 0.0f;
+    for (int j = 0; j < sample.alltoall_timing_count; ++j) {
+      float elapsed_time;
+      CHECK_CUDA(cudaEventElapsedTime(&elapsed_time, sample.alltoall_start_events[j], sample.alltoall_end_events[j]));
+      alltoall_timing_ms += elapsed_time;
+    }
+
+    float transpose_timing_ms;
+    CHECK_CUDA(cudaEventElapsedTime(&transpose_timing_ms, sample.transpose_start_event, sample.transpose_end_event));
+
+    config_data.total_times.push_back(transpose_timing_ms);
+    config_data.alltoall_times.push_back(alltoall_timing_ms);
+    config_data.local_times.push_back(transpose_timing_ms - alltoall_timing_ms);
+
+    float alltoall_bw = (alltoall_timing_ms > 0) ? sample.alltoall_bytes * 1e-6 / alltoall_timing_ms : 0;
+    config_data.alltoall_bws.push_back(alltoall_bw);
+  }
+
+  if (config_data.total_times.empty()) {
+    return config_data;
+  }
+
+  // Prepare aggregated statistics
+  TransposePerformanceStats& stats = config_data.stats;
+  stats.operation = getTransposeOperationName(config);
+  stats.datatype = getDatatypeString(std::get<8>(config));
+
+  // Format combined halos and padding
+  auto input_halos = std::get<2>(config);
+  auto output_halos = std::get<3>(config);
+  auto input_padding = std::get<4>(config);
+  auto output_padding = std::get<5>(config);
+
+  stats.halos = formatArray(input_halos) + "/" + formatArray(output_halos);
+  stats.padding = formatArray(input_padding) + "/" + formatArray(output_padding);
+  stats.inplace = std::get<6>(config) ? "Y" : "N";
+  stats.managed = std::get<7>(config) ? "Y" : "N";
+  stats.samples = config_data.total_times.size();
+
+  // Compute average statistics and reduce across all ranks
+  stats.total_time_avg = computeGlobalAverage(config_data.total_times, handle);
+  stats.alltoall_time_avg = computeGlobalAverage(config_data.alltoall_times, handle);
+  stats.local_time_avg = computeGlobalAverage(config_data.local_times, handle);
+  stats.alltoall_bw_avg = computeGlobalAverage(config_data.alltoall_bws, handle);
+
+  return config_data;
+}
+
+// Process halo timing data from sample collections
+HaloConfigTimingData processHaloConfig(const cudecompHaloConfigKey& config,
+                                       const cudecompHaloPerformanceSampleCollection& collection,
+                                       const cudecompHandle_t handle) {
+  HaloConfigTimingData config_data;
+
+  config_data.total_times.reserve(collection.samples.size());
+  config_data.sendrecv_times.reserve(collection.samples.size());
+  config_data.local_times.reserve(collection.samples.size());
+  config_data.sendrecv_bws.reserve(collection.samples.size());
+
+  // Collect valid samples and compute elapsed times
+  for (int i = 0; i < collection.samples.size(); ++i) {
+    const auto& sample = collection.samples[i];
+    if (!sample.valid) continue;
+
+    float sendrecv_timing_ms = 0.0f;
+    if (sample.sendrecv_bytes > 0) {
+      CHECK_CUDA(cudaEventElapsedTime(&sendrecv_timing_ms, sample.sendrecv_start_event, sample.sendrecv_end_event));
+    }
+
+    float halo_timing_ms;
+    CHECK_CUDA(cudaEventElapsedTime(&halo_timing_ms, sample.halo_start_event, sample.halo_end_event));
+
+    config_data.total_times.push_back(halo_timing_ms);
+    config_data.sendrecv_times.push_back(sendrecv_timing_ms);
+    config_data.local_times.push_back(halo_timing_ms - sendrecv_timing_ms);
+
+    float sendrecv_bw = (sendrecv_timing_ms > 0) ? sample.sendrecv_bytes * 1e-6 / sendrecv_timing_ms : 0;
+    config_data.sendrecv_bws.push_back(sendrecv_bw);
+  }
+
+  if (config_data.total_times.empty()) {
+    return config_data;
+  }
+
+  // Prepare aggregated statistics
+  HaloPerformanceStats& stats = config_data.stats;
+  stats.operation = getHaloOperationName(config);
+  stats.datatype = getDatatypeString(std::get<6>(config));
+  stats.dim = std::get<1>(config);
+
+  // Format halo extents, periods, and padding
+  auto halo_extents = std::get<2>(config);
+  auto halo_periods = std::get<3>(config);
+  auto padding = std::get<4>(config);
+
+  stats.halos = formatArray(halo_extents);
+  stats.periods = formatArray(halo_periods);
+  stats.padding = formatArray(padding);
+  stats.managed = std::get<5>(config) ? "Y" : "N";
+  stats.samples = config_data.total_times.size();
+
+  // Compute average statistics across all ranks
+  stats.total_time_avg = computeGlobalAverage(config_data.total_times, handle);
+  stats.sendrecv_time_avg = computeGlobalAverage(config_data.sendrecv_times, handle);
+  stats.local_time_avg = computeGlobalAverage(config_data.local_times, handle);
+  stats.sendrecv_bw_avg = computeGlobalAverage(config_data.sendrecv_bws, handle);
+
+  return config_data;
+}
+
+// Print grid configuration information
+void printGridConfiguration(const cudecompHandle_t handle, const cudecompGridDesc_t grid_desc) {
+  if (handle->rank != 0) return;
+
+  printf("CUDECOMP:\n");
+  printf("CUDECOMP: ===== Performance Summary =====\n");
+  printf("CUDECOMP: Grid Configuration:\n");
+  printf("CUDECOMP:\tTranspose backend: %s\n",
+         cudecompTransposeCommBackendToString(grid_desc->config.transpose_comm_backend));
+  printf("CUDECOMP:\tHalo backend: %s\n",
+         cudecompHaloCommBackendToString(grid_desc->config.halo_comm_backend));
+  printf("CUDECOMP:\tProcess grid: [%d, %d]\n",
+         grid_desc->config.pdims[0], grid_desc->config.pdims[1]);
+  printf("CUDECOMP:\tGlobal dimensions: [%d, %d, %d]\n",
+         grid_desc->config.gdims[0], grid_desc->config.gdims[1], grid_desc->config.gdims[2]);
+
+  // Print memory ordering information
+  printf("CUDECOMP:\tMemory order: ");
+  for (int axis = 0; axis < 3; ++axis) {
+    printf("[%d,%d,%d]", grid_desc->config.transpose_mem_order[axis][0],
+                        grid_desc->config.transpose_mem_order[axis][1],
+                        grid_desc->config.transpose_mem_order[axis][2]);
+    if (axis < 2) printf("; ");
+  }
+  printf("\n");
+  printf("CUDECOMP:\n");
+}
+
+// Print transpose performance table
+void printTransposePerformanceTable(const std::vector<TransposeConfigTimingData>& all_transpose_config_data) {
+  printf("CUDECOMP: Transpose Performance Data:\n");
+  printf("CUDECOMP:\n");
+
+  // Print compact table header
+  printf("CUDECOMP: %-12s %-6s %-16s %-16s %-8s %-8s %-8s %-9s %-9s %-9s %-9s\n",
+         "operation", "dtype", "halo extents", "padding", "inplace", "managed", "samples",
+         "total", "A2A", "local", "A2A BW");
+  printf("CUDECOMP: %-12s %-6s %-16s %-16s %-8s %-8s %-8s %-9s %-9s %-9s %-9s\n",
+         "", "", "", "", "", "", "",
+         "[ms]", "[ms]", "[ms]", "[GB/s]");
+  printf("CUDECOMP: ");
+  for (int i = 0; i < 120; ++i) printf("-");
+  printf("\n");
+
+  // Print table rows
+  for (const auto& config_data : all_transpose_config_data) {
+    const auto& stats = config_data.stats;
+    if (stats.samples > 0) {
+      printf("CUDECOMP: %-12s %-6s %-16s %-16s %-8s %-8s %-8d %-9.3f %-9.3f %-9.3f %-9.3f\n",
+             stats.operation.c_str(),
+             stats.datatype.c_str(),
+             stats.halos.c_str(),
+             stats.padding.c_str(),
+             stats.inplace.c_str(),
+             stats.managed.c_str(),
+             stats.samples,
+             stats.total_time_avg,
+             stats.alltoall_time_avg,
+             stats.local_time_avg,
+             stats.alltoall_bw_avg);
+    }
+  }
+}
+
+// Print halo performance table
+void printHaloPerformanceTable(const std::vector<HaloConfigTimingData>& all_halo_config_data) {
+  printf("CUDECOMP:\n");
+  printf("CUDECOMP: Halo Performance Data:\n");
+  printf("CUDECOMP:\n");
+
+  // Print compact table header
+  printf("CUDECOMP: %-12s %-6s %-5s %-12s %-12s %-12s %-8s %-8s %-9s %-9s %-9s %-9s\n",
+         "operation", "dtype", "dim", "halo extent", "periods", "padding", "managed", "samples",
+         "total", "SR", "local", "SR BW");
+  printf("CUDECOMP: %-12s %-6s %-5s %-12s %-12s %-12s %-8s %-8s %-9s %-9s %-9s %-9s\n",
+         "", "", "", "", "", "", "", "",
+         "[ms]", "[ms]", "[ms]", "[GB/s]");
+  printf("CUDECOMP: ");
+  for (int i = 0; i < 125; ++i) printf("-");
+  printf("\n");
+
+  // Print table rows
+  for (const auto& config_data : all_halo_config_data) {
+    const auto& stats = config_data.stats;
+    if (stats.samples > 0) {
+      printf("CUDECOMP: %-12s %-6s %-5d %-12s %-12s %-12s %-8s %-8d %-9.3f %-9.3f %-9.3f %-9.3f\n",
+             stats.operation.c_str(),
+             stats.datatype.c_str(),
+             stats.dim,
+             stats.halos.c_str(),
+             stats.periods.c_str(),
+             stats.padding.c_str(),
+             stats.managed.c_str(),
+             stats.samples,
+             stats.total_time_avg,
+             stats.sendrecv_time_avg,
+             stats.local_time_avg,
+             stats.sendrecv_bw_avg);
+    }
+  }
+}
+
+// Print per-sample transpose data for a single configuration
+void printTransposePerSampleDetailsForConfig(const TransposeConfigTimingData& config_data,
+                                            const cudecompHandle_t handle, int detail_level) {
+  const auto& stats = config_data.stats;
+  const auto& total_times = config_data.total_times;
+  const auto& alltoall_times = config_data.alltoall_times;
+  const auto& local_times = config_data.local_times;
+  const auto& alltoall_bws = config_data.alltoall_bws;
+
+  if (total_times.empty()) return;
+
+  int num_samples = total_times.size();
+  std::vector<float> all_total_times, all_alltoall_times, all_local_times, all_alltoall_bws;
+
+  if (detail_level == 1) {
+    // Detail level 1: Only rank 0 prints its own data
+    if (handle->rank != 0) return;
+
+    all_total_times = total_times;
+    all_alltoall_times = alltoall_times;
+    all_local_times = local_times;
+    all_alltoall_bws = alltoall_bws;
+
+  } else if (detail_level == 2) {
+    // Detail level 2: Gather data from all ranks
+    gatherSampleData(total_times, all_total_times, handle);
+    gatherSampleData(alltoall_times, all_alltoall_times, handle);
+    gatherSampleData(local_times, all_local_times, handle);
+    gatherSampleData(alltoall_bws, all_alltoall_bws, handle);
+
+    if (handle->rank != 0) return;
+  }
+
+  printf("CUDECOMP: %s (dtype=%s, halos=%s, padding=%s, inplace=%s, managed=%s) samples:\n",
+         stats.operation.c_str(),
+         stats.datatype.c_str(),
+         stats.halos.c_str(),
+         stats.padding.c_str(),
+         stats.inplace.c_str(),
+         stats.managed.c_str());
+
+  printf("CUDECOMP: %-6s %-12s %-9s %-9s %-9s %-9s\n",
+         "rank", "sample", "total", "A2A", "local", "A2A BW");
+  printf("CUDECOMP: %-6s %-12s %-9s %-9s %-9s %-9s\n",
+         "", "", "[ms]", "[ms]", "[ms]", "[GB/s]");
+
+  for (int r = 0; r < (detail_level == 1 ? 1 : handle->nranks); ++r) {
+    for (int s = 0; s < num_samples; ++s) {
+      int idx = r * num_samples + s;
+      printf("CUDECOMP: %-6d %-12d %-9.3f %-9.3f %-9.3f %-9.3f\n",
+             r, s, all_total_times[idx],
+             all_alltoall_times[idx], all_local_times[idx],
+             all_alltoall_bws[idx]);
+    }
+  }
+  printf("CUDECOMP:\n");
+}
+
+// Print per-sample halo data for a single configuration
+void printHaloPerSampleDetailsForConfig(const HaloConfigTimingData& config_data,
+                                        const cudecompHandle_t handle, int detail_level) {
+  const auto& stats = config_data.stats;
+  const auto& total_times = config_data.total_times;
+  const auto& sendrecv_times = config_data.sendrecv_times;
+  const auto& local_times = config_data.local_times;
+  const auto& sendrecv_bws = config_data.sendrecv_bws;
+
+  if (total_times.empty()) return;
+
+  int num_samples = total_times.size();
+  std::vector<float> all_total_times, all_sendrecv_times, all_local_times, all_sendrecv_bws;
+
+  if (detail_level == 1) {
+    // Detail level 1: Only rank 0 prints its own data
+    if (handle->rank != 0) return;
+
+    all_total_times = total_times;
+    all_sendrecv_times = sendrecv_times;
+    all_local_times = local_times;
+    all_sendrecv_bws = sendrecv_bws;
+
+  } else if (detail_level == 2) {
+    // Detail level 2: Gather data from all ranks
+    gatherSampleData(total_times, all_total_times, handle);
+    gatherSampleData(sendrecv_times, all_sendrecv_times, handle);
+    gatherSampleData(local_times, all_local_times, handle);
+    gatherSampleData(sendrecv_bws, all_sendrecv_bws, handle);
+
+    if (handle->rank != 0) return;
+  }
+
+  printf("CUDECOMP: %s (dtype=%s, dim=%d, halos=%s, periods=%s, padding=%s, managed=%s) samples:\n",
+         stats.operation.c_str(),
+         stats.datatype.c_str(),
+         stats.dim,
+         stats.halos.c_str(),
+         stats.periods.c_str(),
+         stats.padding.c_str(),
+         stats.managed.c_str());
+
+  printf("CUDECOMP: %-6s %-12s %-9s %-9s %-9s %-9s\n",
+         "rank", "sample", "total", "SR", "local", "SR BW");
+  printf("CUDECOMP: %-6s %-12s %-9s %-9s %-9s %-9s\n",
+         "", "", "[ms]", "[ms]", "[ms]", "[GB/s]");
+
+  for (int r = 0; r < (detail_level == 1 ? 1 : handle->nranks); ++r) {
+    for (int s = 0; s < num_samples; ++s) {
+      int idx = r * num_samples + s;
+      printf("CUDECOMP: %-6d %-12d %-9.3f %-9.3f %-9.3f %-9.3f\n",
+             r, s, all_total_times[idx],
+             all_sendrecv_times[idx], all_local_times[idx],
+             all_sendrecv_bws[idx]);
+    }
+  }
+  printf("CUDECOMP:\n");
+}
+
+// Print per-sample details for transpose configurations
+void printTransposePerSampleDetails(const std::vector<TransposeConfigTimingData>& all_transpose_config_data,
+                                   const cudecompHandle_t handle) {
+  for (const auto& config_data : all_transpose_config_data) {
+    if (config_data.stats.samples == 0) continue;
+
+    printTransposePerSampleDetailsForConfig(config_data, handle, handle->performance_report_detail);
+  }
+}
+
+// Print per-sample details for halo configurations
+void printHaloPerSampleDetails(const std::vector<HaloConfigTimingData>& all_halo_config_data,
+                              const cudecompHandle_t handle) {
+  for (const auto& config_data : all_halo_config_data) {
+    if (config_data.stats.samples == 0) continue;
+
+    printHaloPerSampleDetailsForConfig(config_data, handle, handle->performance_report_detail);
+  }
+}
+
 void printPerformanceReport(const cudecompHandle_t handle, const cudecompGridDesc_t grid_desc) {
   // Synchronize to ensure all events are recorded
   CHECK_CUDA(cudaDeviceSynchronize());
 
   // Collect all transpose statistics and timing data
   std::vector<TransposeConfigTimingData> all_transpose_config_data;
+  all_transpose_config_data.reserve(grid_desc->transpose_perf_samples_map.size());
 
   for (const auto& entry : grid_desc->transpose_perf_samples_map) {
     const auto& config = entry.first;
     const auto& collection = entry.second;
 
-    TransposeConfigTimingData config_data;
-
-    // Collect valid samples and compute elapsed times once
-    for (int i = 0; i < collection.samples.size(); ++i) {
-      const auto& sample = collection.samples[i];
-      if (!sample.valid) continue;
-
-      float alltoall_timing_ms = 0.0f;
-      for (int j = 0; j < sample.alltoall_timing_count; ++j) {
-        float elapsed_time;
-        CHECK_CUDA(cudaEventElapsedTime(&elapsed_time, sample.alltoall_start_events[j], sample.alltoall_end_events[j]));
-        alltoall_timing_ms += elapsed_time;
-      }
-
-      float transpose_timing_ms;
-      CHECK_CUDA(cudaEventElapsedTime(&transpose_timing_ms, sample.transpose_start_event, sample.transpose_end_event));
-
-      config_data.total_times.push_back(transpose_timing_ms);
-      config_data.alltoall_times.push_back(alltoall_timing_ms);
-      config_data.local_times.push_back(transpose_timing_ms - alltoall_timing_ms);
-
-      float alltoall_bw = (alltoall_timing_ms > 0) ? sample.alltoall_bytes * 1e-6 / alltoall_timing_ms : 0;
-      config_data.alltoall_bws.push_back(alltoall_bw);
-      config_data.sample_indices.push_back(i);
+    TransposeConfigTimingData config_data = processTransposeConfig(config, collection, handle);
+    if (config_data.stats.samples > 0) {
+      all_transpose_config_data.emplace_back(std::move(config_data));
     }
-
-    if (config_data.total_times.empty()) continue;
-
-    // Prepare aggregated statistics
-    TransposePerformanceStats& stats = config_data.stats;
-    stats.operation = getTransposeOperationName(config);
-    stats.datatype = getDatatypeString(std::get<8>(config));
-
-    // Format combined halos and padding
-    auto input_halos = std::get<2>(config);
-    auto output_halos = std::get<3>(config);
-    auto input_padding = std::get<4>(config);
-    auto output_padding = std::get<5>(config);
-
-    stats.halos = formatArray(input_halos) + "/" + formatArray(output_halos);
-    stats.padding = formatArray(input_padding) + "/" + formatArray(output_padding);
-    stats.inplace = std::get<6>(config) ? "Y" : "N";
-    stats.managed = std::get<7>(config) ? "Y" : "N";
-    stats.samples = config_data.total_times.size();
-
-    // Compute average statistics across all ranks
-    stats.total_time_avg = std::accumulate(config_data.total_times.begin(), config_data.total_times.end(), 0.0f) / config_data.total_times.size();
-    stats.alltoall_time_avg = std::accumulate(config_data.alltoall_times.begin(), config_data.alltoall_times.end(), 0.0f) / config_data.alltoall_times.size();
-    stats.local_time_avg = std::accumulate(config_data.local_times.begin(), config_data.local_times.end(), 0.0f) / config_data.local_times.size();
-    stats.alltoall_bw_avg = std::accumulate(config_data.alltoall_bws.begin(), config_data.alltoall_bws.end(), 0.0f) / config_data.alltoall_bws.size();
-
-    CHECK_MPI(MPI_Allreduce(MPI_IN_PLACE, &stats.total_time_avg, 1, MPI_FLOAT, MPI_SUM, handle->mpi_comm));
-    CHECK_MPI(MPI_Allreduce(MPI_IN_PLACE, &stats.alltoall_time_avg, 1, MPI_FLOAT, MPI_SUM, handle->mpi_comm));
-    CHECK_MPI(MPI_Allreduce(MPI_IN_PLACE, &stats.local_time_avg, 1, MPI_FLOAT, MPI_SUM, handle->mpi_comm));
-    CHECK_MPI(MPI_Allreduce(MPI_IN_PLACE, &stats.alltoall_bw_avg, 1, MPI_FLOAT, MPI_SUM, handle->mpi_comm));
-
-    stats.total_time_avg /= handle->nranks;
-    stats.alltoall_time_avg /= handle->nranks;
-    stats.local_time_avg /= handle->nranks;
-    stats.alltoall_bw_avg /= handle->nranks;
-
-    all_transpose_config_data.push_back(std::move(config_data));
   }
 
   // Sort transpose configuration data for consistent ordering
   std::sort(all_transpose_config_data.begin(), all_transpose_config_data.end(), compareTransposeConfigData);
 
-  // Collect all halo statistics and timing data
+  // Collect all halo statistics and timing data with performance optimizations
   std::vector<HaloConfigTimingData> all_halo_config_data;
+  all_halo_config_data.reserve(grid_desc->halo_perf_samples_map.size());
 
   for (const auto& entry : grid_desc->halo_perf_samples_map) {
     const auto& config = entry.first;
     const auto& collection = entry.second;
 
-    HaloConfigTimingData config_data;
-
-    // Collect valid samples and compute elapsed times once
-    for (int i = 0; i < collection.samples.size(); ++i) {
-      const auto& sample = collection.samples[i];
-      if (!sample.valid) continue;
-
-      float sendrecv_timing_ms = 0.0f;
-      if (sample.sendrecv_bytes > 0) {
-        CHECK_CUDA(cudaEventElapsedTime(&sendrecv_timing_ms, sample.sendrecv_start_event, sample.sendrecv_end_event));
-      }
-
-      float halo_timing_ms;
-      CHECK_CUDA(cudaEventElapsedTime(&halo_timing_ms, sample.halo_start_event, sample.halo_end_event));
-
-      config_data.total_times.push_back(halo_timing_ms);
-      config_data.sendrecv_times.push_back(sendrecv_timing_ms);
-      config_data.local_times.push_back(halo_timing_ms - sendrecv_timing_ms);
-
-      float sendrecv_bw = (sendrecv_timing_ms > 0) ? sample.sendrecv_bytes * 1e-6 / sendrecv_timing_ms : 0;
-      config_data.sendrecv_bws.push_back(sendrecv_bw);
-      config_data.sample_indices.push_back(i);
+    HaloConfigTimingData config_data = processHaloConfig(config, collection, handle);
+    if (config_data.stats.samples > 0) {
+      all_halo_config_data.emplace_back(std::move(config_data));
     }
-
-    if (config_data.total_times.empty()) continue;
-
-    // Prepare aggregated statistics
-    HaloPerformanceStats& stats = config_data.stats;
-    stats.operation = getHaloOperationName(config);
-    stats.datatype = getDatatypeString(std::get<6>(config));
-    stats.dim = std::get<1>(config);
-
-    // Format halo extents, periods, and padding
-    auto halo_extents = std::get<2>(config);
-    auto halo_periods = std::get<3>(config);
-    auto padding = std::get<4>(config);
-
-    stats.halos = formatArray(halo_extents);
-    stats.periods = "[" + std::to_string(halo_periods[0]) + "," + std::to_string(halo_periods[1]) + "," + std::to_string(halo_periods[2]) + "]";
-    stats.padding = formatArray(padding);
-    stats.managed = std::get<5>(config) ? "Y" : "N";
-    stats.samples = config_data.total_times.size();
-
-    // Compute average statistics across all ranks
-    stats.total_time_avg = std::accumulate(config_data.total_times.begin(), config_data.total_times.end(), 0.0f) / config_data.total_times.size();
-    stats.sendrecv_time_avg = std::accumulate(config_data.sendrecv_times.begin(), config_data.sendrecv_times.end(), 0.0f) / config_data.sendrecv_times.size();
-    stats.local_time_avg = std::accumulate(config_data.local_times.begin(), config_data.local_times.end(), 0.0f) / config_data.local_times.size();
-    stats.sendrecv_bw_avg = std::accumulate(config_data.sendrecv_bws.begin(), config_data.sendrecv_bws.end(), 0.0f) / config_data.sendrecv_bws.size();
-
-    CHECK_MPI(MPI_Allreduce(MPI_IN_PLACE, &stats.total_time_avg, 1, MPI_FLOAT, MPI_SUM, handle->mpi_comm));
-    CHECK_MPI(MPI_Allreduce(MPI_IN_PLACE, &stats.sendrecv_time_avg, 1, MPI_FLOAT, MPI_SUM, handle->mpi_comm));
-    CHECK_MPI(MPI_Allreduce(MPI_IN_PLACE, &stats.local_time_avg, 1, MPI_FLOAT, MPI_SUM, handle->mpi_comm));
-    CHECK_MPI(MPI_Allreduce(MPI_IN_PLACE, &stats.sendrecv_bw_avg, 1, MPI_FLOAT, MPI_SUM, handle->mpi_comm));
-
-    stats.total_time_avg /= handle->nranks;
-    stats.sendrecv_time_avg /= handle->nranks;
-    stats.local_time_avg /= handle->nranks;
-    stats.sendrecv_bw_avg /= handle->nranks;
-
-    all_halo_config_data.push_back(std::move(config_data));
   }
 
   // Sort halo configuration data for consistent ordering
   std::sort(all_halo_config_data.begin(), all_halo_config_data.end(), compareHaloConfigData);
 
-  // Print summary information on rank 0 only
+  // Print grid configuration information
+  printGridConfiguration(handle, grid_desc);
+
   if (handle->rank == 0) {
-    printf("CUDECOMP:\n");
-    printf("CUDECOMP: ===== Performance Summary =====\n");
-
-    // Print grid descriptor configuration information
-    printf("CUDECOMP: Grid Configuration:\n");
-    printf("CUDECOMP:\tTranspose backend: %s\n",
-           cudecompTransposeCommBackendToString(grid_desc->config.transpose_comm_backend));
-    printf("CUDECOMP:\tHalo backend: %s\n",
-           cudecompHaloCommBackendToString(grid_desc->config.halo_comm_backend));
-    printf("CUDECOMP:\tProcess grid: [%d, %d]\n",
-           grid_desc->config.pdims[0], grid_desc->config.pdims[1]);
-    printf("CUDECOMP:\tGlobal dimensions: [%d, %d, %d]\n",
-           grid_desc->config.gdims[0], grid_desc->config.gdims[1], grid_desc->config.gdims[2]);
-
-    // Print memory ordering information
-    printf("CUDECOMP:\tMemory order: ");
-    for (int axis = 0; axis < 3; ++axis) {
-      printf("[%d,%d,%d]", grid_desc->config.transpose_mem_order[axis][0],
-                          grid_desc->config.transpose_mem_order[axis][1],
-                          grid_desc->config.transpose_mem_order[axis][2]);
-      if (axis < 2) printf("; ");
-    }
-    printf("\n");
-
-    printf("CUDECOMP:\n");
-
     if (all_transpose_config_data.empty() && all_halo_config_data.empty()) {
       printf("CUDECOMP: No performance data collected\n");
       printf("CUDECOMP: ================================\n");
@@ -513,74 +722,12 @@ void printPerformanceReport(const cudecompHandle_t handle, const cudecompGridDes
 
     // Print transpose performance data
     if (!all_transpose_config_data.empty()) {
-      printf("CUDECOMP: Transpose Performance Data:\n");
-      printf("CUDECOMP:\n");
-
-      // Print compact table header
-      printf("CUDECOMP: %-12s %-6s %-16s %-16s %-8s %-8s %-8s %-9s %-9s %-9s %-9s\n",
-             "operation", "dtype", "halo extents", "padding", "inplace", "managed", "samples",
-             "total", "A2A", "local", "A2A BW");
-      printf("CUDECOMP: %-12s %-6s %-16s %-16s %-8s %-8s %-8s %-9s %-9s %-9s %-9s\n",
-             "", "", "", "", "", "", "",
-             "[ms]", "[ms]", "[ms]", "[GB/s]");
-      printf("CUDECOMP: ");
-      for (int i = 0; i < 120; ++i) printf("-");
-      printf("\n");
-
-      // Print table rows
-      for (const auto& config_data : all_transpose_config_data) {
-        const auto& stats = config_data.stats;
-        printf("CUDECOMP: %-12s %-6s %-16s %-16s %-8s %-8s %-8d %-9.3f %-9.3f %-9.3f %-9.3f\n",
-               stats.operation.c_str(),
-               stats.datatype.c_str(),
-               stats.halos.c_str(),
-               stats.padding.c_str(),
-               stats.inplace.c_str(),
-               stats.managed.c_str(),
-               stats.samples,
-               stats.total_time_avg,
-               stats.alltoall_time_avg,
-               stats.local_time_avg,
-               stats.alltoall_bw_avg
-               );
-      }
+      printTransposePerformanceTable(all_transpose_config_data);
     }
 
     // Print halo performance data
     if (!all_halo_config_data.empty()) {
-      printf("CUDECOMP:\n");
-      printf("CUDECOMP: Halo Performance Data:\n");
-      printf("CUDECOMP:\n");
-
-      // Print compact table header
-      printf("CUDECOMP: %-12s %-6s %-5s %-12s %-12s %-12s %-8s %-8s %-9s %-9s %-9s %-9s\n",
-             "operation", "dtype", "dim", "halo extent", "periods", "padding", "managed", "samples",
-             "total", "SR", "local", "SR BW");
-      printf("CUDECOMP: %-12s %-6s %-5s %-12s %-12s %-12s %-8s %-8s %-9s %-9s %-9s %-9s\n",
-             "", "", "", "", "", "", "", "",
-             "[ms]", "[ms]", "[ms]", "[GB/s]");
-      printf("CUDECOMP: ");
-      for (int i = 0; i < 125; ++i) printf("-");
-      printf("\n");
-
-      // Print table rows
-      for (const auto& config_data : all_halo_config_data) {
-        const auto& stats = config_data.stats;
-        printf("CUDECOMP: %-12s %-6s %-5d %-12s %-12s %-12s %-8s %-8d %-9.3f %-9.3f %-9.3f %-9.3f\n",
-               stats.operation.c_str(),
-               stats.datatype.c_str(),
-               stats.dim,
-               stats.halos.c_str(),
-               stats.periods.c_str(),
-               stats.padding.c_str(),
-               stats.managed.c_str(),
-               stats.samples,
-               stats.total_time_avg,
-               stats.sendrecv_time_avg,
-               stats.local_time_avg,
-               stats.sendrecv_bw_avg
-               );
-      }
+      printHaloPerformanceTable(all_halo_config_data);
     }
   }
 
@@ -592,199 +739,11 @@ void printPerformanceReport(const cudecompHandle_t handle, const cudecompGridDes
       printf("CUDECOMP:\n");
     }
 
-    for (const auto& config_data : all_transpose_config_data) {
-      const auto& stats = config_data.stats;
-
-      // Print configuration header on rank 0
-      if (handle->rank == 0) {
-        printf("CUDECOMP: %s (dtype=%s, halos=%s, padding=%s, inplace=%s, managed=%s) samples:\n",
-               stats.operation.c_str(),
-               stats.datatype.c_str(),
-               stats.halos.c_str(),
-               stats.padding.c_str(),
-               stats.inplace.c_str(),
-               stats.managed.c_str());
-      }
-
-      const auto& total_times = config_data.total_times;
-      const auto& alltoall_times = config_data.alltoall_times;
-      const auto& local_times = config_data.local_times;
-      const auto& alltoall_bws = config_data.alltoall_bws;
-      const auto& sample_indices = config_data.sample_indices;
-
-      if (total_times.empty()) continue;
-
-      if (handle->performance_report_detail == 1) {
-        // Print per-sample data for rank 0 only
-        if (handle->rank == 0) {
-          printf("CUDECOMP: %-6s %-12s %-9s %-9s %-9s %-9s\n",
-                 "rank", "sample", "total", "A2A", "local", "A2A BW");
-          printf("CUDECOMP: %-6s %-12s %-9s %-9s %-9s %-9s\n",
-                 "", "", "[ms]", "[ms]", "[ms]", "[GB/s]");
-
-          for (int i = 0; i < total_times.size(); ++i) {
-            printf("CUDECOMP: %-6d %-12d %-9.3f %-9.3f %-9.3f %-9.3f\n",
-                   handle->rank, sample_indices[i], total_times[i], alltoall_times[i],
-                   local_times[i], alltoall_bws[i]);
-          }
-        }
-      } else if (handle->performance_report_detail == 2) {
-        // Gather data from all ranks to rank 0
-        // Note: We assume all entries have the same number of samples per rank
-        int num_samples = total_times.size();
-
-        if (handle->rank == 0) {
-          // Use MPI_Gather instead of MPI_Gatherv since all ranks have the same number of samples
-          std::vector<float> all_total_times(num_samples * handle->nranks);
-          std::vector<float> all_alltoall_times(num_samples * handle->nranks);
-          std::vector<float> all_local_times(num_samples * handle->nranks);
-          std::vector<float> all_alltoall_bws(num_samples * handle->nranks);
-          std::vector<int> all_sample_indices(num_samples * handle->nranks);
-
-          CHECK_MPI(MPI_Gather(total_times.data(), num_samples, MPI_FLOAT,
-                               all_total_times.data(), num_samples, MPI_FLOAT, 0, handle->mpi_comm));
-          CHECK_MPI(MPI_Gather(alltoall_times.data(), num_samples, MPI_FLOAT,
-                               all_alltoall_times.data(), num_samples, MPI_FLOAT, 0, handle->mpi_comm));
-          CHECK_MPI(MPI_Gather(local_times.data(), num_samples, MPI_FLOAT,
-                               all_local_times.data(), num_samples, MPI_FLOAT, 0, handle->mpi_comm));
-          CHECK_MPI(MPI_Gather(alltoall_bws.data(), num_samples, MPI_FLOAT,
-                               all_alltoall_bws.data(), num_samples, MPI_FLOAT, 0, handle->mpi_comm));
-          CHECK_MPI(MPI_Gather(sample_indices.data(), num_samples, MPI_INT,
-                               all_sample_indices.data(), num_samples, MPI_INT, 0, handle->mpi_comm));
-
-          // Print header
-          printf("CUDECOMP: %-6s %-12s %-9s %-9s %-9s %-9s\n",
-                 "rank", "sample", "total", "A2A", "local", "A2A BW");
-          printf("CUDECOMP: %-6s %-12s %-9s %-9s %-9s %-9s\n",
-                 "", "", "[ms]", "[ms]", "[ms]", "[GB/s]");
-
-          // Print data sorted by rank
-          for (int r = 0; r < handle->nranks; ++r) {
-            for (int s = 0; s < num_samples; ++s) {
-              int idx = r * num_samples + s;
-              printf("CUDECOMP: %-6d %-12d %-9.3f %-9.3f %-9.3f %-9.3f\n",
-                     r, all_sample_indices[idx], all_total_times[idx],
-                     all_alltoall_times[idx], all_local_times[idx],
-                     all_alltoall_bws[idx]);
-            }
-          }
-        } else {
-          // Non-rank-0 processes just send their data
-          CHECK_MPI(MPI_Gather(total_times.data(), num_samples, MPI_FLOAT,
-                               nullptr, num_samples, MPI_FLOAT, 0, handle->mpi_comm));
-          CHECK_MPI(MPI_Gather(alltoall_times.data(), num_samples, MPI_FLOAT,
-                               nullptr, num_samples, MPI_FLOAT, 0, handle->mpi_comm));
-          CHECK_MPI(MPI_Gather(local_times.data(), num_samples, MPI_FLOAT,
-                               nullptr, num_samples, MPI_FLOAT, 0, handle->mpi_comm));
-          CHECK_MPI(MPI_Gather(alltoall_bws.data(), num_samples, MPI_FLOAT,
-                               nullptr, num_samples, MPI_FLOAT, 0, handle->mpi_comm));
-          CHECK_MPI(MPI_Gather(sample_indices.data(), num_samples, MPI_INT,
-                               nullptr, num_samples, MPI_INT, 0, handle->mpi_comm));
-        }
-      }
-
-      if (handle->rank == 0) {
-        printf("CUDECOMP:\n");
-      }
-    }
+    // Print transpose per-sample details
+    printTransposePerSampleDetails(all_transpose_config_data, handle);
 
     // Print halo per-sample details
-    for (const auto& config_data : all_halo_config_data) {
-      const auto& stats = config_data.stats;
-
-      // Print configuration header on rank 0
-      if (handle->rank == 0) {
-        printf("CUDECOMP: %s (dtype=%s, dim=%d, halos=%s, periods=%s, padding=%s, managed=%s) samples:\n",
-               stats.operation.c_str(),
-               stats.datatype.c_str(),
-               stats.dim,
-               stats.halos.c_str(),
-               stats.periods.c_str(),
-               stats.padding.c_str(),
-               stats.managed.c_str());
-      }
-
-      const auto& total_times = config_data.total_times;
-      const auto& sendrecv_times = config_data.sendrecv_times;
-      const auto& local_times = config_data.local_times;
-      const auto& sendrecv_bws = config_data.sendrecv_bws;
-      const auto& sample_indices = config_data.sample_indices;
-
-      if (total_times.empty()) continue;
-
-      if (handle->performance_report_detail == 1) {
-        // Print per-sample data for rank 0 only
-        if (handle->rank == 0) {
-          printf("CUDECOMP: %-6s %-12s %-9s %-9s %-9s %-9s\n",
-                 "rank", "sample", "total", "SR", "local", "SR BW");
-          printf("CUDECOMP: %-6s %-12s %-9s %-9s %-9s %-9s\n",
-                 "", "", "[ms]", "[ms]", "[ms]", "[GB/s]");
-
-          for (int i = 0; i < total_times.size(); ++i) {
-            printf("CUDECOMP: %-6d %-12d %-9.3f %-9.3f %-9.3f %-9.3f\n",
-                   handle->rank, sample_indices[i], total_times[i], sendrecv_times[i],
-                   local_times[i], sendrecv_bws[i]);
-          }
-        }
-      } else if (handle->performance_report_detail == 2) {
-        // Gather data from all ranks to rank 0
-        // Note: We assume all entries have the same number of samples per rank
-        int num_samples = total_times.size();
-
-        if (handle->rank == 0) {
-          // Use MPI_Gather instead of MPI_Gatherv since all ranks have the same number of samples
-          std::vector<float> all_total_times(num_samples * handle->nranks);
-          std::vector<float> all_sendrecv_times(num_samples * handle->nranks);
-          std::vector<float> all_local_times(num_samples * handle->nranks);
-          std::vector<float> all_sendrecv_bws(num_samples * handle->nranks);
-          std::vector<int> all_sample_indices(num_samples * handle->nranks);
-
-          CHECK_MPI(MPI_Gather(total_times.data(), num_samples, MPI_FLOAT,
-                               all_total_times.data(), num_samples, MPI_FLOAT, 0, handle->mpi_comm));
-          CHECK_MPI(MPI_Gather(sendrecv_times.data(), num_samples, MPI_FLOAT,
-                               all_sendrecv_times.data(), num_samples, MPI_FLOAT, 0, handle->mpi_comm));
-          CHECK_MPI(MPI_Gather(local_times.data(), num_samples, MPI_FLOAT,
-                               all_local_times.data(), num_samples, MPI_FLOAT, 0, handle->mpi_comm));
-          CHECK_MPI(MPI_Gather(sendrecv_bws.data(), num_samples, MPI_FLOAT,
-                               all_sendrecv_bws.data(), num_samples, MPI_FLOAT, 0, handle->mpi_comm));
-          CHECK_MPI(MPI_Gather(sample_indices.data(), num_samples, MPI_INT,
-                               all_sample_indices.data(), num_samples, MPI_INT, 0, handle->mpi_comm));
-
-          // Print header
-          printf("CUDECOMP: %-6s %-12s %-9s %-9s %-9s %-9s\n",
-                 "rank", "sample", "total", "SR", "local", "SR BW");
-          printf("CUDECOMP: %-6s %-12s %-9s %-9s %-9s %-9s\n",
-                 "", "", "[ms]", "[ms]", "[ms]", "[GB/s]");
-
-          // Print data sorted by rank
-          for (int r = 0; r < handle->nranks; ++r) {
-            for (int s = 0; s < num_samples; ++s) {
-              int idx = r * num_samples + s;
-              printf("CUDECOMP: %-6d %-12d %-9.3f %-9.3f %-9.3f %-9.3f\n",
-                     r, all_sample_indices[idx], all_total_times[idx],
-                     all_sendrecv_times[idx], all_local_times[idx],
-                     all_sendrecv_bws[idx]);
-            }
-          }
-        } else {
-          // Non-rank-0 processes just send their data
-          CHECK_MPI(MPI_Gather(total_times.data(), num_samples, MPI_FLOAT,
-                               nullptr, num_samples, MPI_FLOAT, 0, handle->mpi_comm));
-          CHECK_MPI(MPI_Gather(sendrecv_times.data(), num_samples, MPI_FLOAT,
-                               nullptr, num_samples, MPI_FLOAT, 0, handle->mpi_comm));
-          CHECK_MPI(MPI_Gather(local_times.data(), num_samples, MPI_FLOAT,
-                               nullptr, num_samples, MPI_FLOAT, 0, handle->mpi_comm));
-          CHECK_MPI(MPI_Gather(sendrecv_bws.data(), num_samples, MPI_FLOAT,
-                               nullptr, num_samples, MPI_FLOAT, 0, handle->mpi_comm));
-          CHECK_MPI(MPI_Gather(sample_indices.data(), num_samples, MPI_INT,
-                               nullptr, num_samples, MPI_INT, 0, handle->mpi_comm));
-        }
-      }
-
-      if (handle->rank == 0) {
-        printf("CUDECOMP:\n");
-      }
-    }
+    printHaloPerSampleDetails(all_halo_config_data, handle);
   }
 
   if (handle->rank == 0) {
