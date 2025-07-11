@@ -163,6 +163,7 @@ target_sources(cudecomp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/cudecomp.cc
   ${CMAKE_CURRENT_SOURCE_DIR}/src/graph.cc
   ${CMAKE_CURRENT_SOURCE_DIR}/src/nvml_wrap.cc
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/performance.cc
 )
 
 set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/src/cudecomp_kernels_rdc.cu PROPERTIES COMPILE_FLAGS -rdc=true)

@@ -654,6 +654,17 @@ program main
     if (nfailed /= 0) retcode = 1;
   endif
 
+  ! Free grid descriptors
+  do i = 1, 7
+    if (grid_desc_cache_set(i)) then
+      ! Free workspace with correct grid descriptor
+      if (work_backend == i) then
+        CHECK_CUDECOMP_EXIT(cudecompFree(handle, grid_desc_cache(i), work_d))
+      endif
+      CHECK_CUDECOMP_EXIT(cudecompGridDescDestroy(handle, grid_desc_cache(i)))
+    endif
+  end do
+
   CHECK_CUDECOMP_EXIT(cudecompFinalize(handle))
   call MPI_Finalize(ierr)
 

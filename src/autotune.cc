@@ -45,6 +45,7 @@
 #include "internal/checks.h"
 #include "internal/common.h"
 #include "internal/halo.h"
+#include "internal/performance.h"
 #include "internal/transpose.h"
 
 namespace cudecomp {
@@ -288,6 +289,9 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
       if (transposeBackendRequiresNvshmem(comm)) { w = work_nvshmem; }
 #endif
 
+      // Reset performance samples
+      resetPerformanceSamples(handle, grid_desc);
+
       // Warmup
       for (int i = 0; i < options->n_warmup_trials; ++i) {
         if (options->transpose_op_weights[0] != 0.0) {
@@ -431,6 +435,11 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
         }
       }
 
+      // Print performance report for this configuration if enabled
+      if (handle->performance_report_enable && !skip_case) {
+        printPerformanceReport(handle, grid_desc);
+      }
+
       if (skip_case) continue;
 
       if (times_w[2] < t_best) {
@@ -516,6 +525,9 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
   CHECK_MPI(MPI_Barrier(handle->mpi_comm));
   CHECK_CUDA(cudaFree(tmp1));
   CHECK_CUDA(cudaFree(tmp2));
+
+  // Reset performance samples after autotuning
+  resetPerformanceSamples(handle, grid_desc);
 }
 
 void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
@@ -683,6 +695,9 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
       if (haloBackendRequiresNvshmem(comm)) { w = work_nvshmem; }
 #endif
 
+      // Reset performance samples
+      resetPerformanceSamples(handle, grid_desc);
+
       // Warmup
       for (int i = 0; i < options->n_warmup_trials; ++i) {
         for (int dim = 0; dim < 3; ++dim) {
@@ -743,6 +758,7 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
           }
         }
       }
+
       auto times = processTimings(handle, trial_times, 1000.);
 
       if (handle->rank == 0) {
@@ -758,6 +774,11 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
                  cudecompHaloCommBackendToString(grid_desc->config.halo_comm_backend), times[0], times[1], times[2],
                  times[3]);
         }
+      }
+
+      // Print performance report for this configuration if enabled
+      if (handle->performance_report_enable && !skip_case) {
+        printPerformanceReport(handle, grid_desc);
       }
 
       if (skip_case) continue;
@@ -823,6 +844,9 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
   CHECK_MPI(MPI_Barrier(handle->mpi_comm));
   double t_end = MPI_Wtime();
   if (handle->rank == 0) printf("CUDECOMP: halo autotuning time [s]: %f\n", t_end - t_start);
+
+  // Reset performance samples after autotuning
+  resetPerformanceSamples(handle, grid_desc);
 }
 
 } // namespace cudecomp
