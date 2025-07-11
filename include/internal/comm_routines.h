@@ -251,8 +251,6 @@ cudecompAlltoall(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
   }
   case CUDECOMP_TRANSPOSE_COMM_MPI_A2A: {
     CHECK_CUDA(cudaStreamSynchronize(stream));
-    auto send_counts_mod = send_counts;
-    auto recv_counts_mod = recv_counts;
     auto comm =
         (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info.mpi_comm : grid_desc->col_comm_info.mpi_comm;
     int self_rank = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info.rank : grid_desc->col_comm_info.rank;
@@ -267,6 +265,8 @@ cudecompAlltoall(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
       CHECK_CUDA(cudaMemcpyAsync(recv_buff + recv_offsets[self_rank], send_buff + send_offsets[self_rank],
                                  send_counts[self_rank] * sizeof(T), cudaMemcpyDeviceToDevice, stream));
 
+      auto send_counts_mod = send_counts;
+      auto recv_counts_mod = recv_counts;
       send_counts_mod[self_rank] = 0;
       recv_counts_mod[self_rank] = 0;
       CHECK_MPI(MPI_Alltoallv(send_buff, send_counts_mod.data(), send_offsets.data(), getMpiDataType<T>(), recv_buff,
