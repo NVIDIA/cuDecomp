@@ -1,0 +1,47 @@
+name: "Code Format"
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  clang-format:
+    runs-on: ubuntu-latest
+    name: "clang-format check"
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Run clang-format check
+      run: |
+         # Install clang-format
+         sudo apt-get update && sudo apt-get install -y clang-format
+        
+         # Collect names of files that are not properly formatted
+         filelist=`find src include examples -name "*.cc" -o -name "*.cu" -o -name "*.h" -o -name "*.cuh"`
+         files_to_fix=()
+         for file in $filelist; do
+           if ! clang-format --dry-run --Werror "$file" 2>/dev/null; then
+             files_to_fix+=("$file")
+           fi
+         done
+         
+         # If any file is not properly formatted, print diff and exit with error
+         if [ ${#files_to_fix[@]} -gt 0 ]; then
+           # Print the list of files that are not properly formatted
+           echo "ERROR: Some files are not properly formatted. To resolve issues, run:"
+           for file in "${files_to_fix[@]}"; do
+             echo "clang-format -i $file"
+           done
+           echo
+         
+           for file in "${files_to_fix[@]}"; do
+             echo "Diff for $file:"
+             bash -c "clang-format $file | diff $file -; exit 0"
+             echo
+           done
+         
+           exit 1
+         fi
