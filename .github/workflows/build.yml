@@ -20,7 +20,7 @@ jobs:
     name: ${{ matrix.name }}
     runs-on: ubuntu-latest
     container:
-      image: ${matrix.image}
+      image: ${{ matrix.image }}
     
     steps:
     - name: "Checkout code"
