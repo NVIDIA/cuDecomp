@@ -31,7 +31,7 @@ jobs:
          # If any file is not properly formatted, print diff and exit with error
          if [ ${#files_to_fix[@]} -gt 0 ]; then
            # Print the list of files that are not properly formatted
-           echo "ERROR: Some files are not properly formatted. To resolve issues, run:"
+           echo "FAIL: Some files are not properly formatted. To resolve issues, run:"
            for file in "${files_to_fix[@]}"; do
              echo "clang-format -i $file"
            done
@@ -42,6 +42,8 @@ jobs:
              bash -c "clang-format $file | diff $file -; exit 0"
              echo
            done
-         
+
            exit 1
          fi
+
+         echo "PASS: All files are properly formatted."
