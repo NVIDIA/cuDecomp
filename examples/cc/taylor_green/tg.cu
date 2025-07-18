@@ -332,7 +332,7 @@ public:
   enum TimeScheme { RK1, RK4 };
 
   TGSolver(int64_t N, real_t nu, real_t dt, real_t cfl, TimeScheme tscheme = RK1)
-      : N(N), nu(nu), dt_(dt), cfl(cfl), tscheme(tscheme) {};
+      : N(N), nu(nu), dt_(dt), cfl(cfl), tscheme(tscheme){};
   void finalize() {
     // Free memory
     for (int i = 0; i < 3; ++i) {

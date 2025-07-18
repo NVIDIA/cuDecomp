@@ -1,0 +1,39 @@
+name: "Build"
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - name: "NVHPC SDK 25.5, CUDA 12.9"
+            image: "nvcr.io/nvidia/nvhpc:25.5-devel-cuda12.9-ubuntu22.04"
+            cmake_options: "-DCUDECOMP_ENABLE_NVSHMEM=1 -DCUDECOMP_BUILD_EXTRAS=1"
+          - name: "NVHPC SDK 25.5, CUDA 12.9, no NVSHMEM"
+            image: "nvcr.io/nvidia/nvhpc:25.5-devel-cuda12.9-ubuntu22.04"
+            cmake_options: "-DCUDECOMP_BUILD_EXTRAS=1"
+          - name: "NVHPC SDK 22.11, CUDA 11.8"
+            image: "nvcr.io/nvidia/nvhpc:22.11-devel-cuda11.8-ubuntu20.04"
+            cmake_options: "-DCUDECOMP_ENABLE_NVSHMEM=1 -DCUDECOMP_BUILD_EXTRAS=1"
+          - name: "NVHPC SDK 22.11, CUDA 11.8, no NVSHMEM"
+            image: "nvcr.io/nvidia/nvhpc:22.11-devel-cuda11.8-ubuntu20.04"
+            cmake_options: "-DCUDECOMP_BUILD_EXTRAS=1"
+    
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    container:
+      image: ${{ matrix.image }}
+    
+    steps:
+    - name: "Checkout code"
+      uses: actions/checkout@v4
+      
+    - name: "Compile"
+      run: |
+        mkdir -p build
+        cd build
+        cmake ${{ matrix.cmake_options }} ..
+        make -j$(nproc)

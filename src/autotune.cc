@@ -452,7 +452,6 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
       grid_desc->col_comm_info.nvshmem_team = NVSHMEM_TEAM_INVALID;
 #endif
     }
-
   }
 
   // Free test data and workspace
