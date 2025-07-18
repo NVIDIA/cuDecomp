@@ -1,9 +1,8 @@
 name: "Code Format"
 
 on:
-  push:
   pull_request:
-  workflow_dispatch:
+    branches: [ main ]
 
 jobs:
   clang-format:
