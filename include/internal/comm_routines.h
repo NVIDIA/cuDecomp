@@ -57,35 +57,26 @@ static inline bool canUseMpiAlltoall(const std::vector<comm_count_t>& send_count
                                      const std::vector<comm_count_t>& send_offsets,
                                      const std::vector<comm_count_t>& recv_counts,
                                      const std::vector<comm_count_t>& recv_offsets) {
-    auto scount = send_counts[0];
-    auto rcount = recv_counts[0];
-    // Check that send and recv counts are constants
-    for (int i = 1; i < send_counts.size(); ++i) {
-      if (send_counts[i] != scount) {
-        return false;
-      }
-    }
-    for (int i = 1; i < recv_counts.size(); ++i) {
-      if (recv_counts[i] != rcount) {
-        return false;
-      }
-    }
+  auto scount = send_counts[0];
+  auto rcount = recv_counts[0];
+  // Check that send and recv counts are constants
+  for (int i = 1; i < send_counts.size(); ++i) {
+    if (send_counts[i] != scount) { return false; }
+  }
+  for (int i = 1; i < recv_counts.size(); ++i) {
+    if (recv_counts[i] != rcount) { return false; }
+  }
 
-    // Check that offsets are contiguous and equal to counts
-    for (int i = 0; i < send_offsets.size(); ++i) {
-      if (send_offsets[i] != i * scount) {
-        return false;
-      }
-    }
-    for (int i = 0; i < recv_offsets.size(); ++i) {
-      if (recv_offsets[i] != i * rcount) {
-        return false;
-      }
-    }
+  // Check that offsets are contiguous and equal to counts
+  for (int i = 0; i < send_offsets.size(); ++i) {
+    if (send_offsets[i] != i * scount) { return false; }
+  }
+  for (int i = 0; i < recv_offsets.size(); ++i) {
+    if (recv_offsets[i] != i * rcount) { return false; }
+  }
 
-    return true;
+  return true;
 }
-
 
 #ifdef ENABLE_NVSHMEM
 #define CUDECOMP_NVSHMEM_CHUNK_SZ (static_cast<size_t>(1024 * 1024 * 1024))

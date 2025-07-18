@@ -55,7 +55,7 @@ typedef std::pair<std::array<unsigned char, NVML_GPU_FABRIC_UUID_LEN>, unsigned 
 typedef std::pair<std::array<unsigned char, 1>, unsigned int> mnnvl_info;
 #endif
 typedef std::shared_ptr<ncclComm_t> ncclComm;
-}
+} // namespace cudecomp
 
 // cuDecomp handle containing general information
 struct cudecompHandle {
@@ -75,7 +75,7 @@ struct cudecompHandle {
   // Entries for NCCL management
   cudecomp::ncclComm nccl_comm;       // NCCL communicator (global)
   cudecomp::ncclComm nccl_local_comm; // NCCL communicator (intra-node, or intra-clique on MNNVL systems)
-  bool nccl_enable_ubr = false;         // Flag to control NCCL user buffer registration usage
+  bool nccl_enable_ubr = false;       // Flag to control NCCL user buffer registration usage
   std::unordered_map<void*, std::vector<std::pair<ncclComm_t, void*>>>
       nccl_ubr_handles; // map of allocated buffer address to NCCL registration handle(s)
 
@@ -140,8 +140,9 @@ struct cudecompGridDesc {
 
   cudecomp::graphCache graph_cache; // CUDA graph cache
 
-  cudecomp::ncclComm nccl_comm;       // NCCL communicator (global), shared from handle
-  cudecomp::ncclComm nccl_local_comm; // NCCL communicator (intra-node, or intra-clique on MNNVL systems), shared from handle
+  cudecomp::ncclComm nccl_comm; // NCCL communicator (global), shared from handle
+  cudecomp::ncclComm
+      nccl_local_comm; // NCCL communicator (intra-node, or intra-clique on MNNVL systems), shared from handle
 
   bool initialized = false;
 };

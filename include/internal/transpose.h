@@ -35,8 +35,8 @@
 #include <cstdint>
 #include <vector>
 
-#include <cuda_runtime.h>
 #include <cuda/std/complex>
+#include <cuda_runtime.h>
 #include <cutensor.h>
 #include <mpi.h>
 
