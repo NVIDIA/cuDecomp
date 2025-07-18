@@ -6,6 +6,9 @@ on:
 
 jobs:
   clang-format:
+    env:
+      CLANG_FORMAT_VERSION: "15"
+
     runs-on: ubuntu-latest
     name: "clang-format check"
     
@@ -16,13 +19,16 @@ jobs:
     - name: Run clang-format check
       run: |
          # Install clang-format
-         sudo apt-get update && sudo apt-get install -y clang-format
+         sudo apt-get update && sudo apt-get install -y clang-format-${CLANG_FORMAT_VERSION}
+
+         # Print clang-format version information
+         clang-format-${CLANG_FORMAT_VERSION} --version
         
          # Collect names of files that are not properly formatted
          filelist=`find src include examples -name "*.cc" -o -name "*.cu" -o -name "*.h" -o -name "*.cuh"`
          files_to_fix=()
          for file in $filelist; do
-           if ! clang-format --dry-run --Werror "$file" 2>/dev/null; then
+           if ! clang-format-${CLANG_FORMAT_VERSION} --dry-run --Werror "$file" 2>/dev/null; then
              files_to_fix+=("$file")
            fi
          done
@@ -32,13 +38,13 @@ jobs:
            # Print the list of files that are not properly formatted
            echo "FAIL: Some files are not properly formatted. To resolve issues, run:"
            for file in "${files_to_fix[@]}"; do
-             echo "clang-format -i $file"
+             echo "clang-format-${CLANG_FORMAT_VERSION} -i $file"
            done
            echo
          
            for file in "${files_to_fix[@]}"; do
              echo "Diff for $file:"
-             bash -c "clang-format $file | diff $file -; exit 0"
+             bash -c "clang-format-${CLANG_FORMAT_VERSION} $file | diff $file -; exit 0"
              echo
            done
 
