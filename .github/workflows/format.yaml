@@ -20,6 +20,9 @@ jobs:
       run: |
          # Install clang-format
          sudo apt-get update && sudo apt-get install -y clang-format-${CLANG_FORMAT_VERSION}
+
+         # Print clang-format version information
+         clang-format-${CLANG_FORMAT_VERSION} --version
         
          # Collect names of files that are not properly formatted
          filelist=`find src include examples -name "*.cc" -o -name "*.cu" -o -name "*.h" -o -name "*.cuh"`
