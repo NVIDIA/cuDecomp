@@ -332,7 +332,9 @@ static void getCudecompEnvVars(cudecompHandle_t& handle) {
 
   // Check CUDECOMP_ENABLE_PERFORMANCE_REPORT (Performance reporting)
   const char* performance_report_str = std::getenv("CUDECOMP_ENABLE_PERFORMANCE_REPORT");
-  if (performance_report_str) { handle->performance_report_enable = std::strtol(performance_report_str, nullptr, 10) == 1; }
+  if (performance_report_str) {
+    handle->performance_report_enable = std::strtol(performance_report_str, nullptr, 10) == 1;
+  }
 
   // Check CUDECOMP_PERFORMANCE_REPORT_DETAIL (Performance report detail level)
   const char* performance_detail_str = std::getenv("CUDECOMP_PERFORMANCE_REPORT_DETAIL");
@@ -349,11 +351,11 @@ static void getCudecompEnvVars(cudecompHandle_t& handle) {
   const char* performance_samples_str = std::getenv("CUDECOMP_PERFORMANCE_REPORT_SAMPLES");
   if (performance_samples_str) {
     int32_t samples = std::strtol(performance_samples_str, nullptr, 10);
-    if (samples > 0) {  // Only require positive values
+    if (samples > 0) { // Only require positive values
       handle->performance_report_samples = samples;
     } else if (handle->rank == 0) {
-      printf("CUDECOMP:WARN: Invalid CUDECOMP_PERFORMANCE_REPORT_SAMPLES value (%d). Using default (%d).\n",
-             samples, handle->performance_report_samples);
+      printf("CUDECOMP:WARN: Invalid CUDECOMP_PERFORMANCE_REPORT_SAMPLES value (%d). Using default (%d).\n", samples,
+             handle->performance_report_samples);
     }
   }
 
@@ -361,7 +363,7 @@ static void getCudecompEnvVars(cudecompHandle_t& handle) {
   const char* performance_warmup_str = std::getenv("CUDECOMP_PERFORMANCE_REPORT_WARMUP_SAMPLES");
   if (performance_warmup_str) {
     int32_t warmup_samples = std::strtol(performance_warmup_str, nullptr, 10);
-    if (warmup_samples >= 0) {  // Only require non-negative values
+    if (warmup_samples >= 0) { // Only require non-negative values
       handle->performance_report_warmup_samples = warmup_samples;
     } else if (handle->rank == 0) {
       printf("CUDECOMP:WARN: Invalid CUDECOMP_PERFORMANCE_REPORT_WARMUP_SAMPLES value (%d). Using default (%d).\n",
@@ -371,9 +373,7 @@ static void getCudecompEnvVars(cudecompHandle_t& handle) {
 
   // Check CUDECOMP_PERFORMANCE_REPORT_WRITE_DIR (Directory for CSV performance reports)
   const char* performance_write_dir_str = std::getenv("CUDECOMP_PERFORMANCE_REPORT_WRITE_DIR");
-  if (performance_write_dir_str) {
-    handle->performance_report_write_dir = std::string(performance_write_dir_str);
-  }
+  if (performance_write_dir_str) { handle->performance_report_write_dir = std::string(performance_write_dir_str); }
 }
 
 #ifdef ENABLE_NVSHMEM
@@ -778,8 +778,12 @@ cudecompResult_t cudecompGridDescDestroy(cudecompHandle_t handle, cudecompGridDe
         for (auto& sample : collection.samples) {
           CHECK_CUDA(cudaEventDestroy(sample.transpose_start_event));
           CHECK_CUDA(cudaEventDestroy(sample.transpose_end_event));
-          for (auto& event : sample.alltoall_start_events) { CHECK_CUDA(cudaEventDestroy(event)); }
-          for (auto& event : sample.alltoall_end_events) { CHECK_CUDA(cudaEventDestroy(event)); }
+          for (auto& event : sample.alltoall_start_events) {
+            CHECK_CUDA(cudaEventDestroy(event));
+          }
+          for (auto& event : sample.alltoall_end_events) {
+            CHECK_CUDA(cudaEventDestroy(event));
+          }
         }
       }
 

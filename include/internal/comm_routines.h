@@ -150,12 +150,13 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
 #endif
 
 template <typename T>
-static void
-cudecompAlltoall(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_desc, T* send_buff,
-                 const std::vector<comm_count_t>& send_counts, const std::vector<comm_count_t>& send_offsets,
-                 T* recv_buff, const std::vector<comm_count_t>& recv_counts,
-                 const std::vector<comm_count_t>& recv_offsets, const std::vector<comm_count_t>& recv_offsets_nvshmem,
-                 cudecompCommAxis comm_axis, cudaStream_t stream, cudecompTransposePerformanceSample* current_sample = nullptr) {
+static void cudecompAlltoall(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_desc, T* send_buff,
+                             const std::vector<comm_count_t>& send_counts,
+                             const std::vector<comm_count_t>& send_offsets, T* recv_buff,
+                             const std::vector<comm_count_t>& recv_counts,
+                             const std::vector<comm_count_t>& recv_offsets,
+                             const std::vector<comm_count_t>& recv_offsets_nvshmem, cudecompCommAxis comm_axis,
+                             cudaStream_t stream, cudecompTransposePerformanceSample* current_sample = nullptr) {
   nvtx::rangePush("cudecompAlltoall");
 
   if (handle->performance_report_enable) {
@@ -283,19 +284,17 @@ cudecompAlltoall(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
 }
 
 template <typename T>
-static void cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_desc, T* send_buff,
-                                      const std::vector<comm_count_t>& send_counts,
-                                      const std::vector<comm_count_t>& send_offsets, T* recv_buff,
-                                      const std::vector<comm_count_t>& recv_counts,
-                                      const std::vector<comm_count_t>& recv_offsets,
-                                      const std::vector<comm_count_t>& recv_offsets_nvshmem, cudecompCommAxis comm_axis,
-                                      const std::vector<int>& src_ranks, const std::vector<int>& dst_ranks,
-                                      cudaStream_t stream, bool& synced, cudecompTransposePerformanceSample* current_sample = nullptr) {
+static void
+cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_desc, T* send_buff,
+                          const std::vector<comm_count_t>& send_counts, const std::vector<comm_count_t>& send_offsets,
+                          T* recv_buff, const std::vector<comm_count_t>& recv_counts,
+                          const std::vector<comm_count_t>& recv_offsets,
+                          const std::vector<comm_count_t>& recv_offsets_nvshmem, cudecompCommAxis comm_axis,
+                          const std::vector<int>& src_ranks, const std::vector<int>& dst_ranks, cudaStream_t stream,
+                          bool& synced, cudecompTransposePerformanceSample* current_sample = nullptr) {
 
   // If there are no transfers to complete, quick return
-  if (send_counts.size() == 0 && recv_counts.size() == 0) {
-    return;
-  }
+  if (send_counts.size() == 0 && recv_counts.size() == 0) { return; }
 
   std::ostringstream os;
   os << "cudecompAlltoallPipelined_";
@@ -309,7 +308,8 @@ static void cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cude
   if (handle->performance_report_enable && src_ranks[0] != self_rank) {
     // Note: skipping self-copy for timing as it should be overlapped
     CHECK_CUDA(cudaStreamWaitEvent(handle->pl_stream, grid_desc->events[dst_ranks[0]], 0));
-    CHECK_CUDA(cudaEventRecord(current_sample->alltoall_start_events[current_sample->alltoall_timing_count], handle->pl_stream));
+    CHECK_CUDA(cudaEventRecord(current_sample->alltoall_start_events[current_sample->alltoall_timing_count],
+                               handle->pl_stream));
   }
 
 #ifdef ENABLE_NVSHMEM
@@ -484,7 +484,8 @@ static void cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cude
   }
 
   if (handle->performance_report_enable && src_ranks[0] != self_rank) {
-    CHECK_CUDA(cudaEventRecord(current_sample->alltoall_end_events[current_sample->alltoall_timing_count], handle->pl_stream));
+    CHECK_CUDA(
+        cudaEventRecord(current_sample->alltoall_end_events[current_sample->alltoall_timing_count], handle->pl_stream));
     current_sample->alltoall_timing_count++;
   }
   nvtx::rangePop();

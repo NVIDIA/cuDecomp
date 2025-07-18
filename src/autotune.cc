@@ -436,9 +436,7 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
       }
 
       // Print performance report for this configuration if enabled
-      if (handle->performance_report_enable && !skip_case) {
-        printPerformanceReport(handle, grid_desc);
-      }
+      if (handle->performance_report_enable && !skip_case) { printPerformanceReport(handle, grid_desc); }
 
       if (skip_case) continue;
 
@@ -776,9 +774,7 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
       }
 
       // Print performance report for this configuration if enabled
-      if (handle->performance_report_enable && !skip_case) {
-        printPerformanceReport(handle, grid_desc);
-      }
+      if (handle->performance_report_enable && !skip_case) { printPerformanceReport(handle, grid_desc); }
 
       if (skip_case) continue;
 
