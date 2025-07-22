@@ -1,0 +1,25 @@
+name: "Documentation"
+
+on:
+  push:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-documentation:
+    runs-on: ubuntu-latest
+    name: "Build Documentation"
+    
+    steps:
+    - name: "Checkout code"
+      uses: actions/checkout@v4
+
+    - name: "Install dependencies"
+      run: |
+        sudo apt-get update && sudo apt-get install -y doxygen
+        pip install -r docs/requirements.txt
+
+    - name: "Build documentation"
+      run: |
+        cd docs
+        make html
