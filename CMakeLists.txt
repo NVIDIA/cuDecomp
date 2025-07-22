@@ -182,7 +182,6 @@ target_link_libraries(cudecomp PUBLIC NVHPC::CUDART)
 target_link_libraries(cudecomp PUBLIC MPI::MPI_CXX)
 target_link_libraries(cudecomp PRIVATE NVHPC::CUTENSOR)
 target_link_libraries(cudecomp PRIVATE ${NCCL_LIBRARY})
-target_link_libraries(cudecomp PRIVATE -lstdc++fs)
 if (CRAY_CC_BIN)
   # In Cray environments, add links to GTL and GDRCopy libs for CUDA-aware support
   target_link_libraries(cudecomp PRIVATE ${CRAY_MPI_GTL_CUDA_LIBRARY})
