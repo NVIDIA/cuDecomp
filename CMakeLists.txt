@@ -188,6 +188,17 @@ if (CRAY_CC_BIN)
   target_link_libraries(cudecomp PRIVATE ${GDRCOPY_LIBRARY})
 endif()
 
+# Test for std::filesystem linking
+try_compile(
+  TEST_STD_FS_RESULT
+  ${CMAKE_BINARY_DIR}
+  ${CMAKE_CURRENT_SOURCE_DIR}/cmake/test_std_fs.cc
+)
+if (NOT TEST_STD_FS_RESULT)
+  message(STATUS "GCC toolchain version does not link std::filesystem symbols by default. Adding explicit -lstdc++fs link.")
+  target_link_libraries(cudecomp PRIVATE -lstdc++fs)
+endif()
+
 if (CUDECOMP_ENABLE_NVTX)
   target_compile_definitions(cudecomp PRIVATE ENABLE_NVTX)
 endif()
