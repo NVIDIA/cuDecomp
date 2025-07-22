@@ -2,6 +2,7 @@ name: "Documentation"
 
 on:
   push:
+    branches: [ main ]
   pull_request:
     branches: [ main ]
 
@@ -33,6 +34,7 @@ jobs:
 
   deploy-documentation:
     runs-on: ubuntu-latest
+    if: github.event_name == 'push'
     needs: build-documentation
     permissions:
       contents: read
