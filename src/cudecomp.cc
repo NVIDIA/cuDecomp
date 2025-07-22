@@ -329,6 +329,51 @@ static void getCudecompEnvVars(cudecompHandle_t& handle) {
     handle->cuda_graphs_enable = false;
 #endif
   }
+
+  // Check CUDECOMP_ENABLE_PERFORMANCE_REPORT (Performance reporting)
+  const char* performance_report_str = std::getenv("CUDECOMP_ENABLE_PERFORMANCE_REPORT");
+  if (performance_report_str) {
+    handle->performance_report_enable = std::strtol(performance_report_str, nullptr, 10) == 1;
+  }
+
+  // Check CUDECOMP_PERFORMANCE_REPORT_DETAIL (Performance report detail level)
+  const char* performance_detail_str = std::getenv("CUDECOMP_PERFORMANCE_REPORT_DETAIL");
+  if (performance_detail_str) {
+    int32_t detail = std::strtol(performance_detail_str, nullptr, 10);
+    if (detail >= 0 && detail <= 2) {
+      handle->performance_report_detail = detail;
+    } else if (handle->rank == 0) {
+      printf("CUDECOMP:WARN: Invalid CUDECOMP_PERFORMANCE_REPORT_DETAIL value (%d). Using default (0).\n", detail);
+    }
+  }
+
+  // Check CUDECOMP_PERFORMANCE_REPORT_SAMPLES (Number of performance samples to keep)
+  const char* performance_samples_str = std::getenv("CUDECOMP_PERFORMANCE_REPORT_SAMPLES");
+  if (performance_samples_str) {
+    int32_t samples = std::strtol(performance_samples_str, nullptr, 10);
+    if (samples > 0) { // Only require positive values
+      handle->performance_report_samples = samples;
+    } else if (handle->rank == 0) {
+      printf("CUDECOMP:WARN: Invalid CUDECOMP_PERFORMANCE_REPORT_SAMPLES value (%d). Using default (%d).\n", samples,
+             handle->performance_report_samples);
+    }
+  }
+
+  // Check CUDECOMP_PERFORMANCE_REPORT_WARMUP_SAMPLES (Number of initial samples to ignore)
+  const char* performance_warmup_str = std::getenv("CUDECOMP_PERFORMANCE_REPORT_WARMUP_SAMPLES");
+  if (performance_warmup_str) {
+    int32_t warmup_samples = std::strtol(performance_warmup_str, nullptr, 10);
+    if (warmup_samples >= 0) { // Only require non-negative values
+      handle->performance_report_warmup_samples = warmup_samples;
+    } else if (handle->rank == 0) {
+      printf("CUDECOMP:WARN: Invalid CUDECOMP_PERFORMANCE_REPORT_WARMUP_SAMPLES value (%d). Using default (%d).\n",
+             warmup_samples, handle->performance_report_warmup_samples);
+    }
+  }
+
+  // Check CUDECOMP_PERFORMANCE_REPORT_WRITE_DIR (Directory for CSV performance reports)
+  const char* performance_write_dir_str = std::getenv("CUDECOMP_PERFORMANCE_REPORT_WRITE_DIR");
+  if (performance_write_dir_str) { handle->performance_report_write_dir = std::string(performance_write_dir_str); }
 }
 
 #ifdef ENABLE_NVSHMEM
@@ -582,12 +627,13 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
         handle->nvshmem_initialized = true;
         handle->nvshmem_allocation_size = 0;
       }
-      if (!handle->pl_stream) {
-        int greatest_priority;
-        CHECK_CUDA(cudaDeviceGetStreamPriorityRange(nullptr, &greatest_priority));
-        CHECK_CUDA(cudaStreamCreateWithPriority(&handle->pl_stream, cudaStreamNonBlocking, greatest_priority));
-      }
 #endif
+    }
+
+    if (!handle->pl_stream) {
+      int greatest_priority;
+      CHECK_CUDA(cudaDeviceGetStreamPriorityRange(nullptr, &greatest_priority));
+      CHECK_CUDA(cudaStreamCreateWithPriority(&handle->pl_stream, cudaStreamNonBlocking, greatest_priority));
     }
 
     // Create CUDA events for scheduling
@@ -721,6 +767,37 @@ cudecompResult_t cudecompGridDescDestroy(cudecompHandle_t handle, cudecompGridDe
 #ifdef ENABLE_NVSHMEM
     if (grid_desc->nvshmem_sync_event) { CHECK_CUDA(cudaEventDestroy(grid_desc->nvshmem_sync_event)); }
 #endif
+
+    if (handle->performance_report_enable) {
+      // Print performance report before destroying events
+      printPerformanceReport(handle, grid_desc);
+
+      // Destroy all transpose performance sample events in the map
+      for (auto& entry : grid_desc->transpose_perf_samples_map) {
+        auto& collection = entry.second;
+        for (auto& sample : collection.samples) {
+          CHECK_CUDA(cudaEventDestroy(sample.transpose_start_event));
+          CHECK_CUDA(cudaEventDestroy(sample.transpose_end_event));
+          for (auto& event : sample.alltoall_start_events) {
+            CHECK_CUDA(cudaEventDestroy(event));
+          }
+          for (auto& event : sample.alltoall_end_events) {
+            CHECK_CUDA(cudaEventDestroy(event));
+          }
+        }
+      }
+
+      // Destroy all halo performance sample events in the map
+      for (auto& entry : grid_desc->halo_perf_samples_map) {
+        auto& collection = entry.second;
+        for (auto& sample : collection.samples) {
+          CHECK_CUDA(cudaEventDestroy(sample.halo_start_event));
+          CHECK_CUDA(cudaEventDestroy(sample.halo_end_event));
+          CHECK_CUDA(cudaEventDestroy(sample.sendrecv_start_event));
+          CHECK_CUDA(cudaEventDestroy(sample.sendrecv_end_event));
+        }
+      }
+    }
 
     if (transposeBackendRequiresNccl(grid_desc->config.transpose_comm_backend) ||
         haloBackendRequiresNccl(grid_desc->config.halo_comm_backend)) {
