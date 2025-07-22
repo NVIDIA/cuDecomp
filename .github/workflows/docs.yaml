@@ -25,13 +25,9 @@ jobs:
         export CUDECOMP_GIT_SHA=`git rev-parse HEAD`
         make html
 
-    - name: "Setup pages"
-      uses: actions/configure-pages@v5
-
     - name: "Upload documentation"
       uses: actions/upload-artifact@v4
       with:
-        name: cudecomp_docs
         path: docs/_build/html
 
 
