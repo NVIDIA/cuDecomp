@@ -23,7 +23,7 @@ jobs:
     - name: "Build documentation"
       run: |
         cd docs
-        export CUDECOMP_GIT_SHA=`git rev-parse HEAD`
+        export CUDECOMP_GIT_SHA=${{ github.event.pull_request.head.sha || github.sha }}
         make html
 
     - name: "Upload documentation"
