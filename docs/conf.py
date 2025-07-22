@@ -12,7 +12,7 @@ import sphinx_rtd_theme
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 #
-# import os
+import os
 # import sys
 # sys.path.insert(0, os.path.abspath('.'))
 
@@ -20,12 +20,11 @@ import sphinx_rtd_theme
 # -- Project information -----------------------------------------------------
 
 project = 'cuDecomp'
-copyright = '2022, NVIDIA Corporation'
+copyright = '2022-2025, NVIDIA Corporation'
 author = 'NVIDIA Corporation'
 
-# The full version, including alpha/beta/rc tags
-version = '0.5.0'
-release = version
+version = os.getenv("CUDECOMP_GIT_SHA", default="N/A")
+#release = version
 
 
 # -- General configuration ---------------------------------------------------
@@ -62,10 +61,11 @@ def setup(app):
 # a list of builtin themes.
 #
 html_theme = 'sphinx_rtd_theme'
-html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
+#html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
 
 html_theme_options = {
     "collapse_navigation" : False,
+    "navigation_depth" : 4,
 }
 
 # Add any paths that contain custom static files (such as style sheets) here,
