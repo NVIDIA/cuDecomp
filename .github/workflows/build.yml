@@ -9,16 +9,19 @@ jobs:
     strategy:
       matrix:
         include:
-          - name: "NVHPC SDK 25.5, CUDA 12.9"
+          - name: "NVHPC SDK 25.5, CUDA 12.9, Ubuntu 22.04"
             image: "nvcr.io/nvidia/nvhpc:25.5-devel-cuda12.9-ubuntu22.04"
             cmake_options: "-DCUDECOMP_ENABLE_NVSHMEM=1 -DCUDECOMP_BUILD_EXTRAS=1"
-          - name: "NVHPC SDK 25.5, CUDA 12.9, no NVSHMEM"
+          - name: "NVHPC SDK 25.5, CUDA 12.9, Rocky Linux 8"
+            image: "nvcr.io/nvidia/nvhpc:25.5-devel-cuda12.9-rockylinux8"
+            cmake_options: "-DCUDECOMP_ENABLE_NVSHMEM=1 -DCUDECOMP_BUILD_EXTRAS=1"
+          - name: "NVHPC SDK 25.5, CUDA 12.9, Ubuntu 22.04, no NVSHMEM"
             image: "nvcr.io/nvidia/nvhpc:25.5-devel-cuda12.9-ubuntu22.04"
             cmake_options: "-DCUDECOMP_BUILD_EXTRAS=1"
-          - name: "NVHPC SDK 22.11, CUDA 11.8"
+          - name: "NVHPC SDK 22.11, CUDA 11.8, Ubuntu 20.04"
             image: "nvcr.io/nvidia/nvhpc:22.11-devel-cuda11.8-ubuntu20.04"
             cmake_options: "-DCUDECOMP_ENABLE_NVSHMEM=1 -DCUDECOMP_BUILD_EXTRAS=1"
-          - name: "NVHPC SDK 22.11, CUDA 11.8, no NVSHMEM"
+          - name: "NVHPC SDK 22.11, CUDA 11.8, Ubuntu 20.04, no NVSHMEM"
             image: "nvcr.io/nvidia/nvhpc:22.11-devel-cuda11.8-ubuntu20.04"
             cmake_options: "-DCUDECOMP_BUILD_EXTRAS=1"
     
