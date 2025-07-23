@@ -92,6 +92,10 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
   //    grid_desc->col_comm_info.nvshmem_team;
   int self_rank = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info.rank : grid_desc->col_comm_info.rank;
 
+  // Event dependency to schedule async self-copy on pl_stream
+  CHECK_CUDA(cudaEventRecord(grid_desc->events[0], stream));
+  CHECK_CUDA(cudaStreamWaitEvent(handle->pl_stream, grid_desc->events[0], 0));
+
   // Using cudaEventSynchronize + barrier instead of nvshmemx_team_sync_on_stream for lower latency
   CHECK_CUDA(cudaEventSynchronize(grid_desc->nvshmem_sync_event));
   CHECK_MPI(MPI_Barrier(comm));
@@ -158,7 +162,9 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
 
   // Self-copy with cudaMemcpy
   CHECK_CUDA(cudaMemcpyAsync(recv_buff + recv_offsets[self_rank], send_buff + send_offsets[self_rank],
-                             send_counts[self_rank] * sizeof(T), cudaMemcpyDeviceToDevice, stream));
+                             send_counts[self_rank] * sizeof(T), cudaMemcpyDeviceToDevice, handle->pl_stream));
+  CHECK_CUDA(cudaEventRecord(grid_desc->events[0], handle->pl_stream));
+  CHECK_CUDA(cudaStreamWaitEvent(stream, grid_desc->events[0], 0));
 
   nvshmemx_quiet_on_stream(stream);
 

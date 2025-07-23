@@ -613,11 +613,6 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
               handle->mpi_clique_comm != MPI_COMM_NULL ? handle->mpi_clique_comm : handle->mpi_local_comm);
         }
       }
-      if (!handle->pl_stream) {
-        int greatest_priority;
-        CHECK_CUDA(cudaDeviceGetStreamPriorityRange(nullptr, &greatest_priority));
-        CHECK_CUDA(cudaStreamCreateWithPriority(&handle->pl_stream, cudaStreamNonBlocking, greatest_priority));
-      }
 
       // Set grid descriptor references to NCCL communicators
       grid_desc->nccl_comm = handle->nccl_comm;
