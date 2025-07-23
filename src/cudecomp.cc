@@ -454,6 +454,13 @@ cudecompResult_t cudecompInit(cudecompHandle_t* handle_in, MPI_Comm mpi_comm) {
     // Gather cuDecomp environment variable settings
     getCudecompEnvVars(handle);
 
+    // Get P2P CE count
+    int device;
+    cudaDeviceProp prop;
+    CHECK_CUDA(cudaGetDevice(&device));
+    CHECK_CUDA(cudaGetDeviceProperties(&prop, device));
+    handle->device_p2p_ce_count = prop.asyncEngineCount - 2;
+
     handle->initialized = true;
     cudecomp_initialized = true;
 

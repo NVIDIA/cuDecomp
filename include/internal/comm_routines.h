@@ -98,6 +98,8 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
   // nvshmemx_team_sync_on_stream(team, stream);
 
   cudecompNvshmemA2AParams<T> params;
+
+  // Inter-group transfers (non-blocking)
   params.send_buff = send_buff;
   params.recv_buff = recv_buff;
   int count = 0;
@@ -106,16 +108,6 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
     getAlltoallPeerRanks(grid_desc, comm_axis, i, src_rank, dst_rank);
     int dst_rank_global = getGlobalRank(grid_desc, comm_axis, dst_rank);
     if (nvshmem_ptr(recv_buff, dst_rank_global)) {
-      // Use host call for direct P2P accessible entries
-      // Need to chunk host API calls due to 2 GiB limitation in API
-      size_t send_bytes = send_counts[dst_rank] * sizeof(T);
-      size_t nchunks = (send_bytes + CUDECOMP_NVSHMEM_CHUNK_SZ - 1) / CUDECOMP_NVSHMEM_CHUNK_SZ;
-      for (size_t j = 0; j < nchunks; ++j) {
-        nvshmemx_putmem_nbi_on_stream(recv_buff + recv_offsets[dst_rank] + j * (CUDECOMP_NVSHMEM_CHUNK_SZ / sizeof(T)),
-                                      send_buff + send_offsets[dst_rank] + j * (CUDECOMP_NVSHMEM_CHUNK_SZ / sizeof(T)),
-                                      std::min(CUDECOMP_NVSHMEM_CHUNK_SZ, send_bytes - j * CUDECOMP_NVSHMEM_CHUNK_SZ),
-                                      dst_rank_global, stream);
-      }
       continue;
     }
 
@@ -134,6 +126,34 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
   if (count != 0) {
     params.ntransfers = count;
     cudecomp_nvshmem_alltoallv(params, stream);
+  }
+
+  // Intra-group transfers (can be blocking or non-blocking so schedule after inter-group transfers for concurrency)
+  for (int i = 1; i < send_counts.size(); ++i) {
+    int src_rank, dst_rank;
+    getAlltoallPeerRanks(grid_desc, comm_axis, i, src_rank, dst_rank);
+    int dst_rank_global = getGlobalRank(grid_desc, comm_axis, dst_rank);
+    if (nvshmem_ptr(recv_buff, dst_rank_global)) {
+      // Use host call for direct P2P accessible entries
+      // Need to chunk host API calls due to 2 GiB limitation in API
+      size_t send_bytes = send_counts[dst_rank] * sizeof(T);
+      size_t nchunks = (send_bytes + CUDECOMP_NVSHMEM_CHUNK_SZ - 1) / CUDECOMP_NVSHMEM_CHUNK_SZ;
+      for (size_t j = 0; j < nchunks; ++j) {
+        if (handle->device_p2p_ce_count > 1) {
+          // Use non-blocking call on systems with multiple P2P CEs to allow for concurrent transfers
+          nvshmemx_putmem_nbi_on_stream(recv_buff + recv_offsets[dst_rank] + j * (CUDECOMP_NVSHMEM_CHUNK_SZ / sizeof(T)),
+                                        send_buff + send_offsets[dst_rank] + j * (CUDECOMP_NVSHMEM_CHUNK_SZ / sizeof(T)),
+                                        std::min(CUDECOMP_NVSHMEM_CHUNK_SZ, send_bytes - j * CUDECOMP_NVSHMEM_CHUNK_SZ),
+                                        dst_rank_global, stream);
+        } else {
+          // Use blocking call on systems with single P2P CE to enforce ordering of sequential transfers
+          nvshmemx_putmem_on_stream(recv_buff + recv_offsets[dst_rank] + j * (CUDECOMP_NVSHMEM_CHUNK_SZ / sizeof(T)),
+                                    send_buff + send_offsets[dst_rank] + j * (CUDECOMP_NVSHMEM_CHUNK_SZ / sizeof(T)),
+                                    std::min(CUDECOMP_NVSHMEM_CHUNK_SZ, send_bytes - j * CUDECOMP_NVSHMEM_CHUNK_SZ),
+                                    dst_rank_global, stream);
+        }
+      }
+    }
   }
 
   // Self-copy with cudaMemcpy

@@ -123,6 +123,9 @@ struct cudecompHandle {
   int32_t performance_report_warmup_samples = 3; // number of initial warmup samples to ignore for each configuration
   std::string performance_report_write_dir =
       ""; // directory to write CSV performance reports, empty means no file writing
+
+  // Miscellaneous
+  int32_t device_p2p_ce_count = 0; // number of P2P CEs available
 };
 
 // Structure with information about row/column communicator
