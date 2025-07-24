@@ -87,10 +87,10 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
                  const std::vector<comm_count_t>& send_counts, const std::vector<comm_count_t>& send_offsets,
                  T* recv_buff, const std::vector<comm_count_t>& recv_counts,
                  const std::vector<comm_count_t>& recv_offsets, cudecompCommAxis comm_axis, cudaStream_t stream) {
-  auto comm = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info.mpi_comm : grid_desc->col_comm_info.mpi_comm;
-  auto team = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info.nvshmem_team
-                                               : grid_desc->col_comm_info.nvshmem_team;
-  int self_rank = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info.rank : grid_desc->col_comm_info.rank;
+  auto comm_info = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info : grid_desc->col_comm_info;
+  auto comm = comm_info.mpi_comm;
+  auto team = comm_info.nvshmem_team;
+  int self_rank = comm_info.rank;
 
   // Event dependency on external stream for intra-group transfers
   CHECK_CUDA(cudaEventRecord(grid_desc->events[0], stream));
@@ -145,9 +145,9 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
     int dst_rank_global = getGlobalRank(grid_desc, comm_axis, dst_rank);
     if (nvshmem_ptr(recv_buff, dst_rank_global)) {
 
-      if (handle->device_p2p_ce_count == 1 && count %  CUDECOMP_NVSHMEM_INTRAGROUP_SYNC_FREQ == 0) {
-        // For systems with single P2P CE (e.g. NVSwitch), synchronize NVSHMEM team every CUDECOMP_NVSHMEM_INTRAGROUP_SYNC_FREQ transfers
-	// This helps reduce contention due to accumulation of jitter.
+      if (comm_info.ngroups == 1 && handle->device_p2p_ce_count == 1 && count %  CUDECOMP_NVSHMEM_INTRAGROUP_SYNC_FREQ == 0) {
+        // For single group, single P2P CE (e.g. NVSwitch), synchronize NVSHMEM team every CUDECOMP_NVSHMEM_INTRAGROUP_SYNC_FREQ transfers
+        // This helps reduce CE contention due to accumulation of jitter.
         for (int i = 0; i < handle->device_p2p_ce_count; ++i) {
           CHECK_CUDA(cudaEventRecord(grid_desc->events[0], handle->streams[i]));
           CHECK_CUDA(cudaStreamWaitEvent(handle->streams[handle->device_p2p_ce_count], grid_desc->events[0], 0));
