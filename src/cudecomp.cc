@@ -459,7 +459,7 @@ cudecompResult_t cudecompInit(cudecompHandle_t* handle_in, MPI_Comm mpi_comm) {
     cudaDeviceProp prop;
     CHECK_CUDA(cudaGetDevice(&device));
     CHECK_CUDA(cudaGetDeviceProperties(&prop, device));
-    handle->device_p2p_ce_count = prop.asyncEngineCount - 2;
+    handle->device_p2p_ce_count = std::max(1, prop.asyncEngineCount - 2);
 
     handle->initialized = true;
     cudecomp_initialized = true;
@@ -482,7 +482,7 @@ cudecompResult_t cudecompFinalize(cudecompHandle_t handle) {
     handle->nccl_comm.reset();
     handle->nccl_local_comm.reset();
 
-    if (handle->pl_stream) { CHECK_CUDA(cudaStreamDestroy(handle->pl_stream)); }
+    for (auto& stream : handle->streams) { CHECK_CUDA(cudaStreamDestroy(stream)); }
 #ifdef ENABLE_NVSHMEM
     if (handle->nvshmem_initialized) {
       nvshmem_finalize();
@@ -632,10 +632,13 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
 #endif
     }
 
-    if (!handle->pl_stream) {
+    if (handle->streams.empty()) {
+      handle->streams.resize(handle->device_p2p_ce_count);
       int greatest_priority;
       CHECK_CUDA(cudaDeviceGetStreamPriorityRange(nullptr, &greatest_priority));
-      CHECK_CUDA(cudaStreamCreateWithPriority(&handle->pl_stream, cudaStreamNonBlocking, greatest_priority));
+      for (auto& stream : handle->streams) {
+        CHECK_CUDA(cudaStreamCreateWithPriority(&stream, cudaStreamNonBlocking, greatest_priority));
+      }
     }
 
     // Create CUDA events for scheduling

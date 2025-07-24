@@ -85,7 +85,7 @@ struct cudecompHandle {
   std::unordered_map<void*, std::vector<std::pair<ncclComm_t, void*>>>
       nccl_ubr_handles; // map of allocated buffer address to NCCL registration handle(s)
 
-  cudaStream_t pl_stream = nullptr; // stream used for pipelined backends
+  std::vector<cudaStream_t> streams; // internal streams for concurrent scheduling
 
   cutensorHandle_t cutensor_handle; // cuTENSOR handle;
 #if CUTENSOR_MAJOR >= 2
