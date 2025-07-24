@@ -135,6 +135,7 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
   }
 
   // Intra-group transfers (scheduled after non-blocking inter-group transfers for concurrency)
+  count = 0;
   for (int i = 1; i < send_counts.size(); ++i) {
     int src_rank, dst_rank;
     getAlltoallPeerRanks(grid_desc, comm_axis, i, src_rank, dst_rank);
@@ -148,8 +149,9 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
         nvshmemx_putmem_on_stream(recv_buff + recv_offsets[dst_rank] + j * (CUDECOMP_NVSHMEM_CHUNK_SZ / sizeof(T)),
                                   send_buff + send_offsets[dst_rank] + j * (CUDECOMP_NVSHMEM_CHUNK_SZ / sizeof(T)),
                                   std::min(CUDECOMP_NVSHMEM_CHUNK_SZ, send_bytes - j * CUDECOMP_NVSHMEM_CHUNK_SZ),
-                                  dst_rank_global, handle->streams[i % handle->device_p2p_ce_count]);
+                                  dst_rank_global, handle->streams[count % handle->device_p2p_ce_count]);
       }
+      count++;
     }
   }
 
