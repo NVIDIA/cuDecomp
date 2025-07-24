@@ -633,7 +633,7 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
     }
 
     if (handle->streams.empty()) {
-      handle->streams.resize(handle->device_p2p_ce_count);
+      handle->streams.resize(handle->device_p2p_ce_count + 1);
       int greatest_priority;
       CHECK_CUDA(cudaDeviceGetStreamPriorityRange(nullptr, &greatest_priority));
       for (auto& stream : handle->streams) {

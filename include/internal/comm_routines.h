@@ -80,6 +80,7 @@ static inline bool canUseMpiAlltoall(const std::vector<comm_count_t>& send_count
 
 #ifdef ENABLE_NVSHMEM
 #define CUDECOMP_NVSHMEM_CHUNK_SZ (static_cast<size_t>(1024 * 1024 * 1024))
+#define CUDECOMP_NVSHMEM_INTRAGROUP_LIMIT 8 // max number of intra-group transfers to schedule concurrently
 template <typename T>
 static void
 nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_desc, T* send_buff,
@@ -87,9 +88,8 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
                  T* recv_buff, const std::vector<comm_count_t>& recv_counts,
                  const std::vector<comm_count_t>& recv_offsets, cudecompCommAxis comm_axis, cudaStream_t stream) {
   auto comm = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info.mpi_comm : grid_desc->col_comm_info.mpi_comm;
-  // auto team =
-  //    (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info.nvshmem_team :
-  //    grid_desc->col_comm_info.nvshmem_team;
+  auto team = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info.nvshmem_team
+                                               : grid_desc->col_comm_info.nvshmem_team;
   int self_rank = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info.rank : grid_desc->col_comm_info.rank;
 
   // Event dependency on external stream for intra-group transfers
@@ -152,6 +152,21 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
                                   dst_rank_global, handle->streams[count % handle->device_p2p_ce_count]);
       }
       count++;
+
+      // Synchronize NVSHMEM team every CUDECOMP_NVSHMEM_INTRAGROUP_LIMIT transfers
+      if (count %  CUDECOMP_NVSHMEM_INTRAGROUP_LIMIT == 0) {
+        for (int i = 0; i < handle->device_p2p_ce_count; ++i) {
+          CHECK_CUDA(cudaEventRecord(grid_desc->events[0], handle->streams[i]));
+          CHECK_CUDA(cudaStreamWaitEvent(handle->streams[handle->device_p2p_ce_count], grid_desc->events[0], 0));
+        }
+
+        nvshmemx_team_sync_on_stream(team, handle->streams[handle->device_p2p_ce_count]);
+
+        CHECK_CUDA(cudaEventRecord(grid_desc->events[0], handle->streams[handle->device_p2p_ce_count]));
+        for (int i = 0; i < handle->device_p2p_ce_count; ++i) {
+          CHECK_CUDA(cudaStreamWaitEvent(handle->streams[i], grid_desc->events[0], 0));
+        }
+      }
     }
   }
 
