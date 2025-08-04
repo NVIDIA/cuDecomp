@@ -471,7 +471,7 @@ cudecompResult_t cudecompInit(cudecompHandle_t* handle_in, MPI_Comm mpi_comm) {
     // If NVSwitch is not present, determine number of NVLink connected peers
     int num_nvlink_peers = 0;
     if (!has_nvswitch) {
-      std::set<unsigned int> remote_bus_ids;
+      std::set<std::string> remote_bus_ids;
       for (int i = 0; i < NVML_NVLINK_MAX_LINKS; ++i) {
         unsigned int p2p_supported = 0;
         nvmlReturn_t ret = nvmlFnTable.pfn_nvmlDeviceGetNvLinkCapability(nvml_dev, i, NVML_NVLINK_CAP_P2P_SUPPORTED, &p2p_supported);
@@ -483,7 +483,12 @@ cudecompResult_t cudecompInit(cudecompHandle_t* handle_in, MPI_Comm mpi_comm) {
 
         nvmlPciInfo_t pciInfo;
         CHECK_NVML(nvmlDeviceGetNvLinkRemotePciInfo(nvml_dev, i, &pciInfo));
-        remote_bus_ids.insert(pciInfo.bus);
+        std::string busId = std::string(pciInfo.busId);
+        if (busId.empty()) {
+          // Fall back to legacy bus ID
+          busId = std::string(pciInfo.busIdLegacy);
+        }
+        remote_bus_ids.insert(busId);
       }
       num_nvlink_peers = static_cast<int>(remote_bus_ids.size());
     }
