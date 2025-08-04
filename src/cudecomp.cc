@@ -466,7 +466,9 @@ cudecompResult_t cudecompInit(cudecompHandle_t* handle_in, MPI_Comm mpi_comm) {
 
     // Check if NVSwitch is present (using multicast support as a proxy)
     int has_nvswitch = 0;
+#if CUDART_VERSION >= 12010
     CHECK_CUDA_DRV(cuDeviceGetAttribute(&has_nvswitch, CU_DEVICE_ATTRIBUTE_MULTICAST_SUPPORTED, cu_dev));
+#endif
 
     // If NVSwitch is not present, determine number of NVLink connected peers
     int num_nvlink_peers = 0;
