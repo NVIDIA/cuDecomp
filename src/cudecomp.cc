@@ -502,8 +502,6 @@ cudecompResult_t cudecompInit(cudecompHandle_t* handle_in, MPI_Comm mpi_comm) {
       handle->device_p2p_ce_count = 2;
     }
 
-    printf("CUDECOMP:INFO: P2P CE count: %d\n", handle->device_p2p_ce_count);
-
     handle->initialized = true;
     cudecomp_initialized = true;
 
