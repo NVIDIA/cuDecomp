@@ -114,9 +114,7 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
     int src_rank, dst_rank;
     getAlltoallPeerRanks(grid_desc, comm_axis, i, src_rank, dst_rank);
     int dst_rank_global = getGlobalRank(grid_desc, comm_axis, dst_rank);
-    if (nvshmem_ptr(recv_buff, dst_rank_global)) {
-      continue;
-    }
+    if (nvshmem_ptr(recv_buff, dst_rank_global)) { continue; }
 
     params.send_offsets[count] = send_offsets[dst_rank];
     params.recv_offsets[count] = recv_offsets[dst_rank];
@@ -145,9 +143,11 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
     int dst_rank_global = getGlobalRank(grid_desc, comm_axis, dst_rank);
     if (nvshmem_ptr(recv_buff, dst_rank_global)) {
 
-      if (comm_info.ngroups == 1 && handle->device_p2p_ce_count == 1 && count %  CUDECOMP_NVSHMEM_INTRAGROUP_SYNC_FREQ == 0) {
-        // For single group, single P2P CE (e.g. NVSwitch), synchronize NVSHMEM team every CUDECOMP_NVSHMEM_INTRAGROUP_SYNC_FREQ transfers
-        // This helps reduce CE contention due to accumulation of jitter.
+      if (comm_info.ngroups == 1 && handle->device_p2p_ce_count == 1 &&
+          count % CUDECOMP_NVSHMEM_INTRAGROUP_SYNC_FREQ == 0) {
+        // For single group, single P2P CE (e.g. NVSwitch), synchronize NVSHMEM team every
+        // CUDECOMP_NVSHMEM_INTRAGROUP_SYNC_FREQ transfers This helps reduce CE contention due to accumulation of
+        // jitter.
         for (int i = 0; i < handle->device_p2p_ce_count; ++i) {
           CHECK_CUDA(cudaEventRecord(grid_desc->events[0], handle->streams[i]));
           CHECK_CUDA(cudaStreamWaitEvent(handle->streams[handle->device_p2p_ce_count], grid_desc->events[0], 0));
@@ -172,7 +172,6 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
                                   dst_rank_global, handle->streams[count % handle->device_p2p_ce_count]);
       }
       count++;
-
     }
   }
 
@@ -186,9 +185,7 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
     CHECK_CUDA(cudaStreamWaitEvent(stream, grid_desc->events[0], 0));
   }
 
-  if (need_quiet) {
-    nvshmemx_quiet_on_stream(stream);
-  }
+  if (need_quiet) { nvshmemx_quiet_on_stream(stream); }
 
   // Using cudaStreamSynchronize + barrier instead of nvshmemx_team_sync_on_stream for lower latency
   CHECK_CUDA(cudaStreamSynchronize(stream));
@@ -532,8 +529,8 @@ cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cudecompGridDesc
   }
 
   if (handle->performance_report_enable && src_ranks[0] != self_rank) {
-    CHECK_CUDA(
-        cudaEventRecord(current_sample->alltoall_end_events[current_sample->alltoall_timing_count], handle->streams[0]));
+    CHECK_CUDA(cudaEventRecord(current_sample->alltoall_end_events[current_sample->alltoall_timing_count],
+                               handle->streams[0]));
     current_sample->alltoall_timing_count++;
   }
   nvtx::rangePop();

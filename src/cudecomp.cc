@@ -474,7 +474,8 @@ cudecompResult_t cudecompInit(cudecompHandle_t* handle_in, MPI_Comm mpi_comm) {
       std::set<std::string> remote_bus_ids;
       for (int i = 0; i < NVML_NVLINK_MAX_LINKS; ++i) {
         unsigned int p2p_supported = 0;
-        nvmlReturn_t ret = nvmlFnTable.pfn_nvmlDeviceGetNvLinkCapability(nvml_dev, i, NVML_NVLINK_CAP_P2P_SUPPORTED, &p2p_supported);
+        nvmlReturn_t ret =
+            nvmlFnTable.pfn_nvmlDeviceGetNvLinkCapability(nvml_dev, i, NVML_NVLINK_CAP_P2P_SUPPORTED, &p2p_supported);
         if (ret != NVML_SUCCESS || !p2p_supported) continue;
 
         nvmlEnableState_t isActive;
@@ -523,7 +524,9 @@ cudecompResult_t cudecompFinalize(cudecompHandle_t handle) {
     handle->nccl_comm.reset();
     handle->nccl_local_comm.reset();
 
-    for (auto& stream : handle->streams) { CHECK_CUDA(cudaStreamDestroy(stream)); }
+    for (auto& stream : handle->streams) {
+      CHECK_CUDA(cudaStreamDestroy(stream));
+    }
 #ifdef ENABLE_NVSHMEM
     if (handle->nvshmem_initialized) {
       nvshmem_finalize();
