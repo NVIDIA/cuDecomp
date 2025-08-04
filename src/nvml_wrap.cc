@@ -56,6 +56,9 @@ void initNvmlFunctionTable() {
 #if NVML_API_VERSION >= 12 && CUDART_VERSION >= 12040
   LOAD_SYM(nvmlDeviceGetGpuFabricInfoV);
 #endif
+  LOAD_SYM(nvmlDeviceGetNvLinkCapability);
+  LOAD_SYM(nvmlDeviceGetNvLinkState);
+  LOAD_SYM(nvmlDeviceGetNvLinkRemotePciInfo);
 }
 
 bool nvmlHasFabricSupport() {

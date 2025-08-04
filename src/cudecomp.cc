@@ -454,12 +454,50 @@ cudecompResult_t cudecompInit(cudecompHandle_t* handle_in, MPI_Comm mpi_comm) {
     // Gather cuDecomp environment variable settings
     getCudecompEnvVars(handle);
 
-    // Get P2P CE count
-    int device;
-    cudaDeviceProp prop;
-    CHECK_CUDA(cudaGetDevice(&device));
-    CHECK_CUDA(cudaGetDeviceProperties(&prop, device));
-    handle->device_p2p_ce_count = std::max(1, prop.asyncEngineCount - 2);
+    // Determine P2P CE count
+    int dev;
+    CUdevice cu_dev;
+    CHECK_CUDA(cudaGetDevice(&dev));
+    CHECK_CUDA_DRV(cuDeviceGet(&cu_dev, dev));
+    char pciBusId[] = "00000000:00:00.0";
+    CHECK_CUDA(cudaDeviceGetPCIBusId(pciBusId, sizeof(pciBusId), dev));
+    nvmlDevice_t nvml_dev;
+    CHECK_NVML(nvmlDeviceGetHandleByPciBusId(pciBusId, &nvml_dev));
+
+    // Check if NVSwitch is present (using multicast support as a proxy)
+    int has_nvswitch = 0;
+    CHECK_CUDA_DRV(cuDeviceGetAttribute(&has_nvswitch, CU_DEVICE_ATTRIBUTE_MULTICAST_SUPPORTED, cu_dev));
+
+    // If NVSwitch is not present, determine number of NVLink connected peers
+    int num_nvlink_peers = 0;
+    if (!has_nvswitch) {
+      std::set<unsigned int> remote_bus_ids;
+      for (int i = 0; i < NVML_NVLINK_MAX_LINKS; ++i) {
+        unsigned int p2p_supported = 0;
+        nvmlReturn_t ret = nvmlFnTable.pfn_nvmlDeviceGetNvLinkCapability(nvml_dev, i, NVML_NVLINK_CAP_P2P_SUPPORTED, &p2p_supported);
+        if (ret != NVML_SUCCESS || !p2p_supported) continue;
+
+        nvmlEnableState_t isActive;
+        ret = nvmlFnTable.pfn_nvmlDeviceGetNvLinkState(nvml_dev, i, &isActive);
+        if (ret != NVML_SUCCESS || isActive != NVML_FEATURE_ENABLED) continue;
+
+        nvmlPciInfo_t pciInfo;
+        CHECK_NVML(nvmlDeviceGetNvLinkRemotePciInfo(nvml_dev, i, &pciInfo));
+        remote_bus_ids.insert(pciInfo.bus);
+      }
+      num_nvlink_peers = static_cast<int>(remote_bus_ids.size());
+    }
+
+    // Set P2P CE count
+    if (has_nvswitch) {
+      handle->device_p2p_ce_count = 1;
+    } else if (num_nvlink_peers > 0) {
+      handle->device_p2p_ce_count = num_nvlink_peers;
+    } else {
+      handle->device_p2p_ce_count = 2;
+    }
+
+    printf("CUDECOMP:INFO: P2P CE count: %d\n", handle->device_p2p_ce_count);
 
     handle->initialized = true;
     cudecomp_initialized = true;

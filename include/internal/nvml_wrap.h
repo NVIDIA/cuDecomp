@@ -44,6 +44,9 @@ struct nvmlFunctionTable {
 #if NVML_API_VERSION >= 12 && CUDART_VERSION >= 12040
   nvmlReturn_t (*pfn_nvmlDeviceGetGpuFabricInfoV)(nvmlDevice_t device, nvmlGpuFabricInfoV_t* gpuFabricInfo) = nullptr;
 #endif
+  nvmlReturn_t (*pfn_nvmlDeviceGetNvLinkCapability)(nvmlDevice_t device, unsigned int linkIndex, nvmlNvLinkCapability_t capability, unsigned int* value) = nullptr;
+  nvmlReturn_t (*pfn_nvmlDeviceGetNvLinkState)(nvmlDevice_t device, unsigned int linkIndex, nvmlEnableState_t* state) = nullptr;
+  nvmlReturn_t (*pfn_nvmlDeviceGetNvLinkRemotePciInfo)(nvmlDevice_t device, unsigned int linkIndex, nvmlPciInfo_t* pciInfo) = nullptr;
 };
 
 extern nvmlFunctionTable nvmlFnTable;
