@@ -454,6 +454,58 @@ cudecompResult_t cudecompInit(cudecompHandle_t* handle_in, MPI_Comm mpi_comm) {
     // Gather cuDecomp environment variable settings
     getCudecompEnvVars(handle);
 
+    // Determine P2P CE count
+    int dev;
+    CUdevice cu_dev;
+    CHECK_CUDA(cudaGetDevice(&dev));
+    CHECK_CUDA_DRV(cuDeviceGet(&cu_dev, dev));
+    char pciBusId[] = "00000000:00:00.0";
+    CHECK_CUDA(cudaDeviceGetPCIBusId(pciBusId, sizeof(pciBusId), dev));
+    nvmlDevice_t nvml_dev;
+    CHECK_NVML(nvmlDeviceGetHandleByPciBusId(pciBusId, &nvml_dev));
+
+    // Check if NVSwitch is present
+    bool has_nvswitch = false;
+    nvmlFieldValue_t fv;
+    fv.fieldId = NVML_FI_DEV_NVSWITCH_CONNECTED_LINK_COUNT;
+    CHECK_NVML(nvmlDeviceGetFieldValues(nvml_dev, 1, &fv));
+    if (fv.nvmlReturn == NVML_SUCCESS) { has_nvswitch = fv.value.uiVal > 0; }
+
+    // If NVSwitch is not present, determine number of NVLink connected peers
+    int num_nvlink_peers = 0;
+    if (!has_nvswitch) {
+      std::set<std::string> remote_bus_ids;
+      for (int i = 0; i < NVML_NVLINK_MAX_LINKS; ++i) {
+        unsigned int p2p_supported = 0;
+        nvmlReturn_t ret =
+            nvmlFnTable.pfn_nvmlDeviceGetNvLinkCapability(nvml_dev, i, NVML_NVLINK_CAP_P2P_SUPPORTED, &p2p_supported);
+        if (ret != NVML_SUCCESS || !p2p_supported) continue;
+
+        nvmlEnableState_t isActive;
+        ret = nvmlFnTable.pfn_nvmlDeviceGetNvLinkState(nvml_dev, i, &isActive);
+        if (ret != NVML_SUCCESS || isActive != NVML_FEATURE_ENABLED) continue;
+
+        nvmlPciInfo_t pciInfo = {};
+        CHECK_NVML(nvmlDeviceGetNvLinkRemotePciInfo(nvml_dev, i, &pciInfo));
+        std::string busId = std::string(pciInfo.busId);
+        if (busId.empty()) {
+          // Fall back to legacy bus ID
+          busId = std::string(pciInfo.busIdLegacy);
+        }
+        remote_bus_ids.insert(busId);
+      }
+      num_nvlink_peers = static_cast<int>(remote_bus_ids.size());
+    }
+
+    // Set P2P CE count
+    if (has_nvswitch) {
+      handle->device_p2p_ce_count = 1; // 1 P2P CE for NVSwitch
+    } else if (num_nvlink_peers > 0) {
+      handle->device_p2p_ce_count = num_nvlink_peers; // Assume each NVLink peer has a P2P CE available
+    } else {
+      handle->device_p2p_ce_count = 2; // Assume 2 P2P CE otherwise (shared D2H/H2D CE)
+    }
+
     handle->initialized = true;
     cudecomp_initialized = true;
 
@@ -475,7 +527,9 @@ cudecompResult_t cudecompFinalize(cudecompHandle_t handle) {
     handle->nccl_comm.reset();
     handle->nccl_local_comm.reset();
 
-    if (handle->pl_stream) { CHECK_CUDA(cudaStreamDestroy(handle->pl_stream)); }
+    for (auto& stream : handle->streams) {
+      CHECK_CUDA(cudaStreamDestroy(stream));
+    }
 #ifdef ENABLE_NVSHMEM
     if (handle->nvshmem_initialized) {
       nvshmem_finalize();
@@ -606,11 +660,6 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
               handle->mpi_clique_comm != MPI_COMM_NULL ? handle->mpi_clique_comm : handle->mpi_local_comm);
         }
       }
-      if (!handle->pl_stream) {
-        int greatest_priority;
-        CHECK_CUDA(cudaDeviceGetStreamPriorityRange(nullptr, &greatest_priority));
-        CHECK_CUDA(cudaStreamCreateWithPriority(&handle->pl_stream, cudaStreamNonBlocking, greatest_priority));
-      }
 
       // Set grid descriptor references to NCCL communicators
       grid_desc->nccl_comm = handle->nccl_comm;
@@ -630,10 +679,13 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
 #endif
     }
 
-    if (!handle->pl_stream) {
+    if (handle->streams.empty()) {
+      handle->streams.resize(handle->device_p2p_ce_count + 1);
       int greatest_priority;
       CHECK_CUDA(cudaDeviceGetStreamPriorityRange(nullptr, &greatest_priority));
-      CHECK_CUDA(cudaStreamCreateWithPriority(&handle->pl_stream, cudaStreamNonBlocking, greatest_priority));
+      for (auto& stream : handle->streams) {
+        CHECK_CUDA(cudaStreamCreateWithPriority(&stream, cudaStreamNonBlocking, greatest_priority));
+      }
     }
 
     // Create CUDA events for scheduling
