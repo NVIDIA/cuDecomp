@@ -469,9 +469,7 @@ cudecompResult_t cudecompInit(cudecompHandle_t* handle_in, MPI_Comm mpi_comm) {
     nvmlFieldValue_t fv;
     fv.fieldId = NVML_FI_DEV_NVSWITCH_CONNECTED_LINK_COUNT;
     CHECK_NVML(nvmlDeviceGetFieldValues(nvml_dev, 1, &fv));
-    if (fv.nvmlReturn == NVML_SUCCESS) {
-      has_nvswitch = fv.value.uiVal > 0;
-    }
+    if (fv.nvmlReturn == NVML_SUCCESS) { has_nvswitch = fv.value.uiVal > 0; }
 
     // If NVSwitch is not present, determine number of NVLink connected peers
     int num_nvlink_peers = 0;
