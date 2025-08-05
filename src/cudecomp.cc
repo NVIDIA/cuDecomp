@@ -464,11 +464,14 @@ cudecompResult_t cudecompInit(cudecompHandle_t* handle_in, MPI_Comm mpi_comm) {
     nvmlDevice_t nvml_dev;
     CHECK_NVML(nvmlDeviceGetHandleByPciBusId(pciBusId, &nvml_dev));
 
-    // Check if NVSwitch is present (using multicast support as a proxy)
-    int has_nvswitch = 0;
-#if CUDART_VERSION >= 12010
-    CHECK_CUDA_DRV(cuDeviceGetAttribute(&has_nvswitch, CU_DEVICE_ATTRIBUTE_MULTICAST_SUPPORTED, cu_dev));
-#endif
+    // Check if NVSwitch is present
+    bool has_nvswitch = false;
+    nvmlFieldValue_t fv;
+    fv.fieldId = NVML_FI_DEV_NVSWITCH_CONNECTED_LINK_COUNT;
+    CHECK_NVML(nvmlDeviceGetFieldValues(nvml_dev, 1, &fv));
+    if (fv.nvmlReturn == NVML_SUCCESS) {
+      has_nvswitch = fv.value.uiVal > 0;
+    }
 
     // If NVSwitch is not present, determine number of NVLink connected peers
     int num_nvlink_peers = 0;
@@ -498,11 +501,11 @@ cudecompResult_t cudecompInit(cudecompHandle_t* handle_in, MPI_Comm mpi_comm) {
 
     // Set P2P CE count
     if (has_nvswitch) {
-      handle->device_p2p_ce_count = 1;
+      handle->device_p2p_ce_count = 1; // 1 P2P CE for NVSwitch
     } else if (num_nvlink_peers > 0) {
-      handle->device_p2p_ce_count = num_nvlink_peers;
+      handle->device_p2p_ce_count = num_nvlink_peers; // Assume each NVLink peer has a P2P CE available
     } else {
-      handle->device_p2p_ce_count = 2;
+      handle->device_p2p_ce_count = 2; // Assume 2 P2P CE otherwise (shared D2H/H2D CE)
     }
 
     handle->initialized = true;
