@@ -487,7 +487,7 @@ cudecompResult_t cudecompInit(cudecompHandle_t* handle_in, MPI_Comm mpi_comm) {
         ret = nvmlFnTable.pfn_nvmlDeviceGetNvLinkState(nvml_dev, i, &isActive);
         if (ret != NVML_SUCCESS || isActive != NVML_FEATURE_ENABLED) continue;
 
-        nvmlPciInfo_t pciInfo;
+        nvmlPciInfo_t pciInfo = {};
         CHECK_NVML(nvmlDeviceGetNvLinkRemotePciInfo(nvml_dev, i, &pciInfo));
         std::string busId = std::string(pciInfo.busId);
         if (busId.empty()) {
