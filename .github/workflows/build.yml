@@ -9,18 +9,12 @@ jobs:
     strategy:
       matrix:
         include:
+          - name: "NVHPC SDK 25.7, CUDA 12.9, Ubuntu 24.04"
+            image: "nvcr.io/nvidia/nvhpc:25.7-devel-cuda12.9-ubuntu24.04"
           - name: "NVHPC SDK 25.5, CUDA 12.9, Ubuntu 22.04"
             image: "nvcr.io/nvidia/nvhpc:25.5-devel-cuda12.9-ubuntu22.04"
-            cmake_options: "-DCUDECOMP_ENABLE_NVSHMEM=1 -DCUDECOMP_BUILD_EXTRAS=1"
-          - name: "NVHPC SDK 25.5, CUDA 12.9, Ubuntu 22.04, no NVSHMEM"
-            image: "nvcr.io/nvidia/nvhpc:25.5-devel-cuda12.9-ubuntu22.04"
-            cmake_options: "-DCUDECOMP_BUILD_EXTRAS=1"
           - name: "NVHPC SDK 22.11, CUDA 11.8, Ubuntu 20.04"
             image: "nvcr.io/nvidia/nvhpc:22.11-devel-cuda11.8-ubuntu20.04"
-            cmake_options: "-DCUDECOMP_ENABLE_NVSHMEM=1 -DCUDECOMP_BUILD_EXTRAS=1"
-          - name: "NVHPC SDK 22.11, CUDA 11.8, Ubuntu 20.04, no NVSHMEM"
-            image: "nvcr.io/nvidia/nvhpc:22.11-devel-cuda11.8-ubuntu20.04"
-            cmake_options: "-DCUDECOMP_BUILD_EXTRAS=1"
     
     name: ${{ matrix.name }}
     runs-on: ubuntu-latest
@@ -30,10 +24,17 @@ jobs:
     steps:
     - name: "Checkout code"
       uses: actions/checkout@v4
-      
-    - name: "Compile"
+
+    - name: "Full build with NVSHMEM"
       run: |
-        mkdir -p build
-        cd build
-        cmake ${{ matrix.cmake_options }} ..
+        mkdir -p build-nvshmem
+        cd build-nvshmem
+        cmake -DCUDECOMP_ENABLE_NVSHMEM=1 -DCUDECOMP_BUILD_EXTRAS=1 ..
+        make -j$(nproc)
+
+    - name: "Library only build without NVSHMEM"
+      run: |
+        mkdir -p build-no-nvshmem
+        cd build-no-nvshmem
+        cmake ..
         make -j$(nproc)
