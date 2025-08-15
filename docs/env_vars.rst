@@ -90,3 +90,11 @@ The following CSV files are generated:
 Each CSV file includes grid configuration information as comments at the top, followed by performance data in comma-separated format.
 
 Default setting is unset (no CSV files written). Setting this variable to a directory path will enable CSV file output.
+
+CUDECOMP_USE_COL_MAJOR_RANK_ORDER
+--------------------------------------
+(since v0.6.0)
+
+:code:`CUDECOMP_USE_COL_MAJOR_RANK_ORDER` controls the rank assignment order in the process grid. By default, ranks are assigned in row-major order for consistency with :code:`MPI_Cart_*` routines. When enabled, ranks are assigned in column-major order.
+
+Default setting is off (:code:`0`). Setting this variable to :code:`1` will enable column-major rank assignment.

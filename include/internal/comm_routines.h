@@ -113,7 +113,7 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
   for (int i = 1; i < send_counts.size(); ++i) {
     int src_rank, dst_rank;
     getAlltoallPeerRanks(grid_desc, comm_axis, i, src_rank, dst_rank);
-    int dst_rank_global = getGlobalRank(grid_desc, comm_axis, dst_rank);
+    int dst_rank_global = getGlobalRank(handle, grid_desc, comm_axis, dst_rank);
     if (nvshmem_ptr(recv_buff, dst_rank_global)) { continue; }
 
     params.send_offsets[count] = send_offsets[dst_rank];
@@ -140,7 +140,7 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
   for (int i = 1; i < send_counts.size(); ++i) {
     int src_rank, dst_rank;
     getAlltoallPeerRanks(grid_desc, comm_axis, i, src_rank, dst_rank);
-    int dst_rank_global = getGlobalRank(grid_desc, comm_axis, dst_rank);
+    int dst_rank_global = getGlobalRank(handle, grid_desc, comm_axis, dst_rank);
     if (nvshmem_ptr(recv_buff, dst_rank_global)) {
 
       if (comm_info.ngroups == 1 && handle->device_p2p_ce_count == 1 &&
@@ -242,7 +242,7 @@ static void cudecompAlltoall(const cudecompHandle_t& handle, const cudecompGridD
 
     CHECK_NCCL(ncclGroupStart());
     for (int i = 0; i < send_counts.size(); ++i) {
-      int peer_rank_global = getGlobalRank(grid_desc, comm_axis, i);
+      int peer_rank_global = getGlobalRank(handle, grid_desc, comm_axis, i);
       if (comm_info.ngroups == 1) { peer_rank_global = handle->rank_to_clique_rank[peer_rank_global]; }
       if (send_counts[i] != 0) {
         CHECK_NCCL(ncclSend(send_buff + send_offsets[i], send_counts[i] * sizeof(T), ncclChar, peer_rank_global, comm,
@@ -400,7 +400,7 @@ cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cudecompGridDesc
             synced = true;
           }
 
-          int dst_rank_global = getGlobalRank(grid_desc, comm_axis, dst_rank);
+          int dst_rank_global = getGlobalRank(handle, grid_desc, comm_axis, dst_rank);
           // Need to chunk host API calls due to 2 GiB limitation in API
           size_t send_bytes = send_counts[dst_rank] * sizeof(T);
           int nchunks = (send_bytes + CUDECOMP_NVSHMEM_CHUNK_SZ - 1) / CUDECOMP_NVSHMEM_CHUNK_SZ;
@@ -463,8 +463,8 @@ cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cudecompGridDesc
           CHECK_NCCL(ncclGroupStart());
           group_started = true;
         }
-        int src_rank_global = getGlobalRank(grid_desc, comm_axis, src_rank);
-        int dst_rank_global = getGlobalRank(grid_desc, comm_axis, dst_rank);
+        int src_rank_global = getGlobalRank(handle, grid_desc, comm_axis, src_rank);
+        int dst_rank_global = getGlobalRank(handle, grid_desc, comm_axis, dst_rank);
         if (comm_info.ngroups == 1) {
           src_rank_global = handle->rank_to_clique_rank[src_rank_global];
           dst_rank_global = handle->rank_to_clique_rank[dst_rank_global];

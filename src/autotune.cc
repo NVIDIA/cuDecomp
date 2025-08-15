@@ -155,8 +155,13 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
   for (auto& pdim1 : pdim1_list) {
     grid_desc->config.pdims[0] = handle->nranks / pdim1;
     grid_desc->config.pdims[1] = pdim1;
-    grid_desc->pidx[0] = handle->rank / grid_desc->config.pdims[1];
-    grid_desc->pidx[1] = handle->rank % grid_desc->config.pdims[1];
+    if (handle->use_col_major_rank_order) {
+      grid_desc->pidx[0] = handle->rank % grid_desc->config.pdims[0];
+      grid_desc->pidx[1] = handle->rank / grid_desc->config.pdims[0];
+    } else {
+      grid_desc->pidx[0] = handle->rank / grid_desc->config.pdims[1];
+      grid_desc->pidx[1] = handle->rank % grid_desc->config.pdims[1];
+    }
 
     cudecompPencilInfo_t pinfo_x0, pinfo_x3;
     cudecompPencilInfo_t pinfo_y0, pinfo_y1, pinfo_y2, pinfo_y3;
@@ -583,8 +588,13 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
   for (auto& pdim1 : pdim1_list) {
     grid_desc->config.pdims[0] = handle->nranks / pdim1;
     grid_desc->config.pdims[1] = pdim1;
-    grid_desc->pidx[0] = handle->rank / grid_desc->config.pdims[1];
-    grid_desc->pidx[1] = handle->rank % grid_desc->config.pdims[1];
+    if (handle->use_col_major_rank_order) {
+      grid_desc->pidx[0] = handle->rank % grid_desc->config.pdims[0];
+      grid_desc->pidx[1] = handle->rank / grid_desc->config.pdims[0];
+    } else {
+      grid_desc->pidx[0] = handle->rank / grid_desc->config.pdims[1];
+      grid_desc->pidx[1] = handle->rank % grid_desc->config.pdims[1];
+    }
 
     cudecompPencilInfo_t pinfo;
     CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo, options->halo_axis, options->halo_extents,
