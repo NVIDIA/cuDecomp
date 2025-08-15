@@ -125,9 +125,8 @@ struct cudecompHandle {
       ""; // directory to write CSV performance reports, empty means no file writing
 
   // Miscellaneous
-  int32_t device_p2p_ce_count = 0; // number of P2P CEs available
+  int32_t device_p2p_ce_count = 0;       // number of P2P CEs available
   bool use_col_major_rank_order = false; // Flag to control whether to use column-major rank order
-
 };
 
 // Structure with information about row/column communicator
@@ -226,7 +225,8 @@ using comm_count_t = int32_t;
 enum cudecompCommAxis { CUDECOMP_COMM_COL = 0, CUDECOMP_COMM_ROW = 1 };
 
 // Helper function to convert row or column rank to global rank
-static inline int getGlobalRank(const cudecompHandle_t handle, const cudecompGridDesc_t grid_desc, cudecompCommAxis axis, int axis_rank) {
+static inline int getGlobalRank(const cudecompHandle_t handle, const cudecompGridDesc_t grid_desc,
+                                cudecompCommAxis axis, int axis_rank) {
   if (handle->use_col_major_rank_order) {
     // Column-major rank order
     return (axis == CUDECOMP_COMM_ROW) ? grid_desc->pidx[0] + axis_rank * grid_desc->config.pdims[0]
