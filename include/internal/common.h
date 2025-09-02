@@ -125,7 +125,8 @@ struct cudecompHandle {
       ""; // directory to write CSV performance reports, empty means no file writing
 
   // Miscellaneous
-  int32_t device_p2p_ce_count = 0; // number of P2P CEs available
+  int32_t device_p2p_ce_count = 0;       // number of P2P CEs available
+  bool use_col_major_rank_order = false; // Flag to control whether to use column-major rank order
 };
 
 // Structure with information about row/column communicator
@@ -224,9 +225,17 @@ using comm_count_t = int32_t;
 enum cudecompCommAxis { CUDECOMP_COMM_COL = 0, CUDECOMP_COMM_ROW = 1 };
 
 // Helper function to convert row or column rank to global rank
-static inline int getGlobalRank(const cudecompGridDesc_t grid_desc, cudecompCommAxis axis, int axis_rank) {
-  return (axis == CUDECOMP_COMM_ROW) ? grid_desc->config.pdims[1] * grid_desc->pidx[0] + axis_rank
-                                     : grid_desc->pidx[1] + axis_rank * grid_desc->config.pdims[1];
+static inline int getGlobalRank(const cudecompHandle_t handle, const cudecompGridDesc_t grid_desc,
+                                cudecompCommAxis axis, int axis_rank) {
+  if (handle->use_col_major_rank_order) {
+    // Column-major rank order
+    return (axis == CUDECOMP_COMM_ROW) ? grid_desc->pidx[0] + axis_rank * grid_desc->config.pdims[0]
+                                       : grid_desc->config.pdims[0] * grid_desc->pidx[1] + axis_rank;
+  } else {
+    // Row-major rank order (default)
+    return (axis == CUDECOMP_COMM_ROW) ? grid_desc->config.pdims[1] * grid_desc->pidx[0] + axis_rank
+                                       : grid_desc->pidx[1] + axis_rank * grid_desc->config.pdims[1];
+  }
 }
 
 // Helper function to return maximum pencil size across all processes for a given axis
@@ -320,7 +329,7 @@ static void setCommInfo(cudecompHandle_t& handle, cudecompGridDesc_t& grid_desc,
     // Count occurences of hostname in row/col communicator
     std::map<std::string, int> host_counts;
     for (int i = 0; i < info.nranks; ++i) {
-      int peer_rank_global = getGlobalRank(grid_desc, comm_axis, i);
+      int peer_rank_global = getGlobalRank(handle, grid_desc, comm_axis, i);
       std::string hostname = std::string(handle->hostnames[peer_rank_global].data());
       host_counts[hostname]++;
     }
@@ -338,7 +347,7 @@ static void setCommInfo(cudecompHandle_t& handle, cudecompGridDesc_t& grid_desc,
     // For MNNVL configurations, count occurences of clique in row/col communicator
     std::map<unsigned int, int> clique_counts;
     for (int i = 0; i < info.nranks; ++i) {
-      int peer_rank_global = getGlobalRank(grid_desc, comm_axis, i);
+      int peer_rank_global = getGlobalRank(handle, grid_desc, comm_axis, i);
       unsigned int clique = handle->rank_to_clique[peer_rank_global];
       clique_counts[clique]++;
     }
