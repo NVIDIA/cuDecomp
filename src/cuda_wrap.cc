@@ -26,7 +26,7 @@
   do {                                                                                                                 \
     cudaDriverEntryPointQueryResult driverStatus = cudaDriverEntryPointSymbolNotFound;                                 \
     CHECK_CUDA(cudaGetDriverEntryPointByVersion(#symbol, (void**)(&cuFnTable.pfn_##symbol), version,                   \
-                                                cudaEnableDefault,&driverStatus));                                     \
+                                                cudaEnableDefault, &driverStatus));                                    \
     if (driverStatus != cudaDriverEntryPointSuccess) { THROW_CUDA_ERROR("cudaGetDriverEntryPointByVersion failed."); } \
   } while (false)
 #elif CUDART_VERSION >= 12000
