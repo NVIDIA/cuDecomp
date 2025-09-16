@@ -55,7 +55,7 @@ jobs:
           const pr = await github.rest.pulls.get({
             owner: context.repo.owner,
             repo: context.repo.repo,
-            pull_number: context.issue.number
+            pull_number: github.event.number #context.issue.number
           });
           core.setOutput('sha', pr.data.head.sha);
 
@@ -80,7 +80,7 @@ jobs:
           cd build-no-nvshmem
           cmake ..
           make -j$(nproc)
-       '
+        '
 
   #result-comment:
   #  needs: build
