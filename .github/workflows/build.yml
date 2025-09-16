@@ -47,22 +47,22 @@ jobs:
         sudo rm -rf /usr/local/lib/android || true
         sudo rm -rf /usr/share/dotnet || true
 
-    - name: "Retrieve PR info"
-      uses: actions/github-script@v7
-      id: pr-info
-      with:
-        script: |
-          const pr = await github.rest.pulls.get({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            pull_number: github.event.number #context.issue.number
-          });
-          core.setOutput('sha', pr.data.head.sha);
+    #- name: "Retrieve PR info"
+    #  uses: actions/github-script@v7
+    #  id: pr-info
+    #  with:
+    #    script: |
+    #      const pr = await github.rest.pulls.get({
+    #        owner: context.repo.owner,
+    #        repo: context.repo.repo,
+    #        pull_number: context.issue.number
+    #      });
+    #      core.setOutput('sha', pr.data.head.sha);
 
     - name: "Checkout PR code"
       uses: actions/checkout@v4
-      with:
-        ref: ${{ steps.pr-info.outputs.sha }}
+      #with:
+      #  ref: ${{ steps.pr-info.outputs.sha }}
 
     - name: "Full build with NVSHMEM"
       run: |
