@@ -2,7 +2,7 @@ name: "Build"
 
 on:
   issue_comment:
-    types: [created]
+    types: [ created ]
 
 jobs:
   trigger-comment:
@@ -36,8 +36,6 @@ jobs:
     
     name: ${{ matrix.name }}
     runs-on: ubuntu-latest
-    container:
-      image: ${{ matrix.image }}
     
     steps:
     - name: "Free disk space"
@@ -64,17 +62,21 @@ jobs:
 
     - name: "Full build with NVSHMEM"
       run: |
-        mkdir -p build-nvshmem
-        cd build-nvshmem
-        cmake -DCUDECOMP_ENABLE_NVSHMEM=1 -DCUDECOMP_BUILD_EXTRAS=1 ..
-        make -j$(nproc)
+        docker run --rm -v $PWD:/workspace -w /workspace ${{ matrix.image }} bash -c '
+          mkdir -p build-nvshmem
+          cd build-nvshmem
+          cmake -DCUDECOMP_ENABLE_NVSHMEM=1 -DCUDECOMP_BUILD_EXTRAS=1 ..
+          make -j$(nproc)
+        '
 
     - name: "Library only build without NVSHMEM"
       run: |
-        mkdir -p build-no-nvshmem
-        cd build-no-nvshmem
-        cmake ..
-        make -j$(nproc)
+        docker run --rm -v $PWD:/workspace -w /workspace ${{ matrix.image }} bash -c '
+          mkdir -p build-no-nvshmem
+          cd build-no-nvshmem
+          cmake ..
+          make -j$(nproc)
+        '
 
   result-comment:
     needs: build
