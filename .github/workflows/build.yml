@@ -66,21 +66,21 @@ jobs:
 
     - name: "Full build with NVSHMEM"
       run: |
-        docker run --rm -v $PWD:/workspace -w /workspace ${{ matrix.image }} bash -c "
+        docker run --rm -v $PWD:/workspace -w /workspace ${{ matrix.image }} bash -c '
           mkdir -p build-nvshmem
           cd build-nvshmem
           cmake -DCUDECOMP_ENABLE_NVSHMEM=1 -DCUDECOMP_BUILD_EXTRAS=1 ..
-          make -j\$(nproc)
-        "
+          make -j$(nproc)
+        '
 
     - name: "Library only build without NVSHMEM"
       run: |
-        docker run --rm -v $PWD:/workspace -w /workspace ${{ matrix.image }} bash -c "
+        docker run --rm -v $PWD:/workspace -w /workspace ${{ matrix.image }} bash -c '
           mkdir -p build-no-nvshmem
           cd build-no-nvshmem
           cmake ..
           make -j$(nproc)
-       "
+       '
 
   #result-comment:
   #  needs: build
