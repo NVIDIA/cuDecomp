@@ -58,6 +58,7 @@ jobs:
     - name: "Checkout PR code"
       uses: actions/checkout@v4
       with:
+        persist-credentials: false
         ref: ${{ steps.pr-info.outputs.sha }}
 
     - name: "Full build with NVSHMEM"
