@@ -1,5 +1,5 @@
 ## cuDecomp Contribution Guide
-We welcome and appreciate external contributions to cuDecomp! File a [pull request] (https://github.com/NVIDIA/cuDecomp/compare)
+We welcome and appreciate external contributions to cuDecomp! File a [pull request](https://github.com/NVIDIA/cuDecomp/compare)
 to get the process started.
 
 ### Signing Your Work
