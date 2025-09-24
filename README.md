@@ -38,5 +38,5 @@ For cuDecomp builds using NVSHMEM v3.0+, this additional MPI boostrapping layer 
 Additionally, this library utilizes CUDA-aware MPI and is only compatible with MPI libraries with these features enabled.
 
 ## License
-This library is released under an Apache 2.0 license, which can be found in [LICENSE](license).
+This library is released under an Apache 2.0 license, which can be found in [LICENSE](LICENSE).
 
