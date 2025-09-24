@@ -550,6 +550,18 @@ cudecompResult_t cudecompFinalize(cudecompHandle_t handle) {
   return CUDECOMP_RESULT_SUCCESS;
 }
 
+cudecompResult_t cudecompInit_F(cudecompHandle_t* handle_in, MPI_Fint mpi_comm_f) {
+  using namespace cudecomp;
+  try {
+    MPI_Comm mpi_comm = MPI_Comm_f2c(mpi_comm_f);
+    cudecompInit(handle_in, mpi_comm);
+  } catch (const cudecomp::BaseException& e) {
+    std::cerr << e.what();
+    return e.getResult();
+  }
+  return CUDECOMP_RESULT_SUCCESS;
+}
+
 cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDesc_t* grid_desc_in,
                                         cudecompGridDescConfig_t* config,
                                         const cudecompGridDescAutotuneOptions_t* options) {

@@ -71,21 +71,6 @@ module cudecomp
 
   ! types
 
-  ! MPI-related types
-#ifndef MPICH
-  type, bind(c) :: MPI_C_Comm
-    integer(c_int64_t) :: comm
-  end type MPI_C_Comm
-#else
-  type, bind(c) :: MPI_C_Comm
-    integer(c_int) :: comm
-  end type MPI_C_Comm
-#endif
-
-  type, bind(c) :: MPI_F_Comm
-    integer(c_int) :: comm
-  end type MPI_F_Comm
-
   ! Opaque handle to cuDecomp handle
   type, bind(c) :: cudecompHandle
     type(c_ptr) :: member
@@ -155,37 +140,20 @@ module cudecomp
 
   ! interfaces
 
-  ! MPI_Comm conversion functions
-#ifndef MPICH
-  interface
-    function MPI_Comm_f2c(fcomm) bind(C,name='MPI_Comm_f2c') result(res)
-      import
-      type(MPI_F_comm), value :: fcomm
-      type(MPI_C_comm) :: res
-    end function MPI_Comm_f2c
-
-    function MPI_Comm_c2f(ccomm) bind(C,name='MPI_Comm_c2f') result(res)
-      import
-      type(MPI_C_Comm), value :: ccomm
-      type(MPI_F_Comm) :: res
-    end function MPI_Comm_c2f
-  end interface
-#endif
-
   ! cuDecomp initialization/finalization functions
-  ! generic interface that takes either integer or type(MPI_F_Comm) communicator arguments
+  ! generic interface that takes either integer or type(MPI_Comm) communicator arguments
 
   interface cudecompInit
-    module procedure cudecompInit_MPI_F, cudecompInit_MPI_F08, cudecompInitType
+    module procedure cudecompInit_MPI_F, cudecompInit_MPI_F08
   end interface cudecompInit
 
   interface
-    function cudecompInitC(handle, mpi_comm) bind(C, name="cudecompInit") result(res)
+    function cudecompInit_FC(handle, mpi_comm) bind(C, name="cudecompInit_F") result(res)
       import
       type(cudecompHandle) :: handle
-      type(MPI_C_Comm), value :: mpi_comm  ! conversion to MPI_C_Comm done in module procedures cudecompInit*()
+      integer, value :: mpi_comm
       integer(c_int) :: res
-    end function cudecompInitC
+    end function cudecompInit_FC
   end interface
 
   interface
@@ -523,10 +491,7 @@ contains
     integer :: comm
     integer(c_int) :: res
 
-    type(MPI_F_Comm) :: fComm
-
-    fComm%comm = comm
-    res = cudecompInitType(handle, fComm)
+    res = cudecompInit_FC(handle, comm)
   end function cudecompInit_MPI_F
 
   function cudecompInit_MPI_F08(handle, comm) result(res)
@@ -538,27 +503,8 @@ contains
     type(MPI_Comm) :: comm
     integer(c_int) :: res
 
-    type(MPI_F_Comm) :: fComm
-
-    fComm%comm = comm%MPI_VAL
-    res = cudecompInitType(handle, fComm)
+    res = cudecompInit_FC(handle, comm%MPI_VAL)
   end function cudecompInit_MPI_F08
-
-  function cudecompInitType(handle, fComm) result(res)
-    implicit none
-    type(cudecompHandle) :: handle
-    type(MPI_F_Comm) :: fComm
-    integer(c_int) :: res
-
-    type(MPI_C_Comm) :: cComm
-#ifndef MPICH
-    cComm = MPI_Comm_f2c(fComm)
-#else
-    cComm= fComm
-#endif
-
-    res = cudecompInitC(handle, cComm)
-  end function cudecompInitType
 
   ! cudecompGridDesc creation/manipulation functions
   function cudecompGridDescAutotuneOptionsSetDefaults(options) result(res)
