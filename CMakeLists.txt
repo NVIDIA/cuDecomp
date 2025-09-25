@@ -274,18 +274,6 @@ if (CUDECOMP_BUILD_FORTRAN)
 
   target_link_libraries(cudecomp_fort PUBLIC MPI::MPI_Fortran)
 
-  # Test for MPI_Comm_f2c/c2f
-  try_compile(
-    TEST_F2C_RESULT
-    ${CMAKE_BINARY_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/cmake/test_mpi_f2c.f90
-    LINK_LIBRARIES MPI::MPI_Fortran
-  )
-  if (NOT TEST_F2C_RESULT)
-    message(STATUS "Could not link MPI_Comm_f2c in Fortran module. Setting -DMPICH flag during module compilation.")
-    target_compile_definitions(cudecomp_fort PRIVATE MPICH)
-  endif()
-
   install(
     TARGETS cudecomp_fort
     LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/lib

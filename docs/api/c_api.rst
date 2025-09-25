@@ -118,6 +118,14 @@ ____________
 
 ------
 
+.. _cudecompInit_F-ref:
+
+cudecompInit_F
+______________
+.. doxygenfunction:: cudecompInit_F
+
+------
+
 .. _cudecompFinalize-ref:
 
 cudecompFinalize

@@ -213,6 +213,16 @@ typedef struct {
 cudecompResult_t cudecompInit(cudecompHandle_t* handle, MPI_Comm mpi_comm);
 
 /**
+ * @brief Initializes the cuDecomp library from an existing MPI communicator
+ *
+ * @param[out] handle A pointer to an uninitialized cudecompHandle_t
+ * @param[in] mpi_comm_f MPI communicator, in Fortran integer format, containing ranks to use with cuDecomp
+ *
+ * @return CUDECOMP_RESULT_SUCCESS on success or error code on failure.
+ */
+cudecompResult_t cudecompInit_F(cudecompHandle_t* handle, MPI_Fint mpi_comm_f);
+
+/**
  * @brief Finalizes the cuDecomp library and frees associated resources
  *
  * @param[in] handle The initialized cuDecomp library handle
