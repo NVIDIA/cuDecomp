@@ -21,15 +21,23 @@
 #include "internal/cuda_wrap.h"
 #include "internal/exceptions.h"
 
-#if CUDART_VERSION >= 12000
-#define LOAD_SYM(symbol)                                                                                               \
+#if CUDART_VERSION >= 13000
+#define LOAD_SYM(symbol, version)                                                                                      \
+  do {                                                                                                                 \
+    cudaDriverEntryPointQueryResult driverStatus = cudaDriverEntryPointSymbolNotFound;                                 \
+    CHECK_CUDA(cudaGetDriverEntryPointByVersion(#symbol, (void**)(&cuFnTable.pfn_##symbol), version,                   \
+                                                cudaEnableDefault, &driverStatus));                                    \
+    if (driverStatus != cudaDriverEntryPointSuccess) { THROW_CUDA_ERROR("cudaGetDriverEntryPointByVersion failed."); } \
+  } while (false)
+#elif CUDART_VERSION >= 12000
+#define LOAD_SYM(symbol, version)                                                                                      \
   do {                                                                                                                 \
     cudaDriverEntryPointQueryResult driverStatus = cudaDriverEntryPointSymbolNotFound;                                 \
     CHECK_CUDA(cudaGetDriverEntryPoint(#symbol, (void**)(&cuFnTable.pfn_##symbol), cudaEnableDefault, &driverStatus)); \
     if (driverStatus != cudaDriverEntryPointSuccess) { THROW_CUDA_ERROR("cudaGetDriverEntryPoint failed."); }          \
   } while (false)
 #else
-#define LOAD_SYM(symbol)                                                                                               \
+#define LOAD_SYM(symbol, version)                                                                                      \
   do {                                                                                                                 \
     CHECK_CUDA(cudaGetDriverEntryPoint(#symbol, (void**)(&cuFnTable.pfn_##symbol), cudaEnableDefault));                \
   } while (false)
@@ -41,19 +49,19 @@ cuFunctionTable cuFnTable; // global table of required CUDA driver functions
 
 void initCuFunctionTable() {
 #if CUDART_VERSION >= 11030
-  LOAD_SYM(cuDeviceGet);
-  LOAD_SYM(cuDeviceGetAttribute);
-  LOAD_SYM(cuGetErrorString);
-  LOAD_SYM(cuMemAddressFree);
-  LOAD_SYM(cuMemAddressReserve);
-  LOAD_SYM(cuMemCreate);
-  LOAD_SYM(cuMemGetAddressRange);
-  LOAD_SYM(cuMemGetAllocationGranularity);
-  LOAD_SYM(cuMemMap);
-  LOAD_SYM(cuMemRetainAllocationHandle);
-  LOAD_SYM(cuMemRelease);
-  LOAD_SYM(cuMemSetAccess);
-  LOAD_SYM(cuMemUnmap);
+  LOAD_SYM(cuDeviceGet, 2000);
+  LOAD_SYM(cuDeviceGetAttribute, 2000);
+  LOAD_SYM(cuGetErrorString, 6000);
+  LOAD_SYM(cuMemAddressFree, 10020);
+  LOAD_SYM(cuMemAddressReserve, 10020);
+  LOAD_SYM(cuMemCreate, 10020);
+  LOAD_SYM(cuMemGetAddressRange, 3020);
+  LOAD_SYM(cuMemGetAllocationGranularity, 10020);
+  LOAD_SYM(cuMemMap, 10020);
+  LOAD_SYM(cuMemRetainAllocationHandle, 11000);
+  LOAD_SYM(cuMemRelease, 10020);
+  LOAD_SYM(cuMemSetAccess, 10020);
+  LOAD_SYM(cuMemUnmap, 10020);
 #endif
 }
 
