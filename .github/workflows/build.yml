@@ -30,10 +30,10 @@ jobs:
     strategy:
       matrix:
         include:
-          - name: "NVHPC SDK 25.7, CUDA 12.9, Ubuntu 24.04"
-            image: "nvcr.io/nvidia/nvhpc:25.7-devel-cuda12.9-ubuntu24.04"
-          - name: "NVHPC SDK 25.5, CUDA 12.9, Ubuntu 22.04"
-            image: "nvcr.io/nvidia/nvhpc:25.5-devel-cuda12.9-ubuntu22.04"
+          - name: "NVHPC SDK 25.9, CUDA 13.0, Ubuntu 24.04"
+            image: "nvcr.io/nvidia/nvhpc:25.9-devel-cuda13.0-ubuntu24.04"
+          - name: "NVHPC SDK 25.7, CUDA 12.9, Ubuntu 22.04"
+            image: "nvcr.io/nvidia/nvhpc:25.7-devel-cuda12.9-ubuntu22.04"
           - name: "NVHPC SDK 22.11, CUDA 11.8, Ubuntu 20.04"
             image: "nvcr.io/nvidia/nvhpc:22.11-devel-cuda11.8-ubuntu20.04"
     
