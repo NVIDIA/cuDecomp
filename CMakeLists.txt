@@ -176,7 +176,6 @@ target_include_directories(cudecomp
   ${CMAKE_CURRENT_SOURCE_DIR}/include
   ${MPI_CXX_INCLUDE_DIRS}
   ${NVHPC_CUDA_INCLUDE_DIR}
-  ${NVHPC_CUDA_INCLUDE_DIR}/cccl
   ${NVHPC_CUTENSOR_INCLUDE_DIR}
   ${NCCL_INCLUDE_DIR}
 )
