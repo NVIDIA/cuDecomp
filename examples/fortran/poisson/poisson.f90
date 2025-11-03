@@ -143,7 +143,7 @@ program main
   end do
 
   ! check for valid Mx/My/Mz
-  if (Mx==0 .or. Mx==0 .or. My==0) then
+  if (Mx==0 .or. My==0 .or. Mz==0) then
      if (rank == 0) write(*,*) 'Mx/My/Mz is 0 thus solution is u=0'
      call MPI_Finalize(ierr)
      stop
