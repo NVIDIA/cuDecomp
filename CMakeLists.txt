@@ -1,5 +1,11 @@
-cmake_minimum_required(VERSION 3.18)
+cmake_minimum_required(VERSION 3.16)
 set(CMAKE_CXX_STANDARD 17)
+
+if (CMAKE_VERSION VERSION_LESS "3.18")
+  # Workaround with older CMake versions to propagate C++17 standard flags
+  set(CMAKE_CUDA_FLAGS "-std=c++17")
+endif()
+
 set(CMAKE_DISABLE_SOURCE_CHANGES ON)
 set(CMAKE_DISABLE_IN_SOURCE_BUILD ON)
 if (NOT CMAKE_BUILD_TYPE)
