@@ -659,7 +659,8 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
                                                       (grid_desc->col_comm_info.ngroups == 1 && grid_desc->col_comm_info.nranks > 1));
 
           // Local comm can include ranks in other rows/columns, need additional check for those cases.
-          CHECK_MPI(MPI_Allreduce(MPI_IN_PLACE, &need_local_nccl_comm, 1, MPI_INT, MPI_LOR, handle->mpi_local_comm));
+          CHECK_MPI(MPI_Allreduce(MPI_IN_PLACE, &need_local_nccl_comm, 1, MPI_INT, MPI_LOR,
+                                  handle->mpi_clique_comm != MPI_COMM_NULL ? handle->mpi_clique_comm : handle->mpi_local_comm));
 
           if (need_local_nccl_comm) {
             handle->nccl_local_comm = ncclCommFromMPIComm(
