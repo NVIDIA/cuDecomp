@@ -368,7 +368,6 @@ static void getCudecompEnvVars(cudecompHandle_t& handle) {
 
   // Check CUDECOMP_USE_COL_MAJOR_RANK_ORDER (Column-major rank assignment)
   handle->use_col_major_rank_order = checkEnvVar("CUDECOMP_USE_COL_MAJOR_RANK_ORDER");
-
 }
 
 #ifdef ENABLE_NVSHMEM
