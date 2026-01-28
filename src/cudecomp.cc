@@ -211,6 +211,7 @@ static void gatherGlobalMPIInfo(cudecompHandle_t& handle) {
   bool disable_mnnvl = checkEnvVar("CUDECOMP_DISABLE_MNNVL");
 
   if (nvmlHasFabricSupport() && !disable_mnnvl) {
+    handle->rank_to_mnnvl_info.resize(handle->nranks);
 
     // Gather MNNVL information (clusterUuid, cliqueId) by rank
     CHECK_NVML(nvmlDeviceGetGpuFabricInfoV(nvml_dev, &fabricInfo));
