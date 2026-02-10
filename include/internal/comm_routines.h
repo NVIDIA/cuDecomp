@@ -211,7 +211,9 @@ static void cudecompAlltoall(const cudecompHandle_t& handle, const cudecompGridD
   switch (grid_desc->config.transpose_comm_backend) {
   case CUDECOMP_TRANSPOSE_COMM_NVSHMEM: {
 #ifdef ENABLE_NVSHMEM
-    if (nvshmem_ptr(send_buff, handle->rank) && nvshmem_ptr(recv_buff, handle->rank)) {
+    // Note: For ranks with empty pencils, send_buff or recv_buff can be nullptr.
+    if ((!send_buff || nvshmem_ptr(send_buff, handle->rank)) && (
+         !recv_buff || nvshmem_ptr(recv_buff, handle->rank))) {
       nvshmemAlltoallV(handle, grid_desc, send_buff, send_counts, send_offsets, recv_buff, recv_counts,
                        recv_offsets_nvshmem, comm_axis, stream);
       break;
@@ -359,7 +361,8 @@ cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cudecompGridDesc
   switch (grid_desc->config.transpose_comm_backend) {
   case CUDECOMP_TRANSPOSE_COMM_NVSHMEM_PL: {
 #ifdef ENABLE_NVSHMEM
-    if (nvshmem_ptr(send_buff, handle->rank) && nvshmem_ptr(recv_buff, handle->rank)) {
+    if ((!send_buff || nvshmem_ptr(send_buff, handle->rank)) &&
+        (!recv_buff || nvshmem_ptr(recv_buff, handle->rank))) {
       auto comm =
           (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info.mpi_comm : grid_desc->col_comm_info.mpi_comm;
       // auto team = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info.nvshmem_team

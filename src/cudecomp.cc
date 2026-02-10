@@ -717,13 +717,6 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
     CHECK_CUDA(cudaEventCreateWithFlags(&grid_desc->nvshmem_sync_event, cudaEventDisableTiming));
 #endif
 
-    // Disable decompositions with empty pencils
-    if (!autotune_pdims &&
-        (grid_desc->config.pdims[0] > std::min(grid_desc->config.gdims_dist[0], grid_desc->config.gdims_dist[1]) ||
-         grid_desc->config.pdims[1] > std::min(grid_desc->config.gdims_dist[1], grid_desc->config.gdims_dist[2]))) {
-      THROW_NOT_SUPPORTED("grid descriptor settings yields a distribution with empty pencils");
-    }
-
     // Run autotuning if requested
     if (options) {
       if (options->grid_mode == CUDECOMP_AUTOTUNE_GRID_TRANSPOSE) {
@@ -962,6 +955,7 @@ cudecompResult_t cudecompGridDescAutotuneOptionsSetDefaults(cudecompGridDescAuto
     options->grid_mode = CUDECOMP_AUTOTUNE_GRID_TRANSPOSE;
     options->dtype = CUDECOMP_DOUBLE;
     options->allow_uneven_decompositions = true;
+    options->allow_empty_pencils = false;
     options->disable_nccl_backends = false;
     options->disable_nvshmem_backends = false;
     options->skip_threshold = 0.0;
@@ -1386,9 +1380,6 @@ cudecompResult_t cudecompTransposeXToY(cudecompHandle_t handle, cudecompGridDesc
     checkHandle(handle);
     checkGridDesc(grid_desc);
     checkDataType(dtype);
-    if (!input) { THROW_INVALID_USAGE("input argument cannot be null"); }
-    if (!output) { THROW_INVALID_USAGE("output argument cannot be null"); }
-    if (!work) { THROW_INVALID_USAGE("work argument cannot be null"); }
     switch (dtype) {
     case CUDECOMP_FLOAT:
       cudecompTransposeXToY(handle, grid_desc, reinterpret_cast<float*>(input), reinterpret_cast<float*>(output),
@@ -1429,9 +1420,6 @@ cudecompResult_t cudecompTransposeYToZ(cudecompHandle_t handle, cudecompGridDesc
     checkHandle(handle);
     checkGridDesc(grid_desc);
     checkDataType(dtype);
-    if (!input) { THROW_INVALID_USAGE("input argument cannot be null"); }
-    if (!output) { THROW_INVALID_USAGE("output argument cannot be null"); }
-    if (!work) { THROW_INVALID_USAGE("work argument cannot be null"); }
     switch (dtype) {
     case CUDECOMP_FLOAT:
       cudecompTransposeYToZ(handle, grid_desc, reinterpret_cast<float*>(input), reinterpret_cast<float*>(output),
@@ -1472,9 +1460,6 @@ cudecompResult_t cudecompTransposeZToY(cudecompHandle_t handle, cudecompGridDesc
     checkHandle(handle);
     checkGridDesc(grid_desc);
     checkDataType(dtype);
-    if (!input) { THROW_INVALID_USAGE("input argument cannot be null"); }
-    if (!output) { THROW_INVALID_USAGE("output argument cannot be null"); }
-    if (!work) { THROW_INVALID_USAGE("work argument cannot be null"); }
     switch (dtype) {
     case CUDECOMP_FLOAT:
       cudecompTransposeZToY(handle, grid_desc, reinterpret_cast<float*>(input), reinterpret_cast<float*>(output),
@@ -1515,9 +1500,6 @@ cudecompResult_t cudecompTransposeYToX(cudecompHandle_t handle, cudecompGridDesc
     checkHandle(handle);
     checkGridDesc(grid_desc);
     checkDataType(dtype);
-    if (!input) { THROW_INVALID_USAGE("input argument cannot be null"); }
-    if (!output) { THROW_INVALID_USAGE("output argument cannot be null"); }
-    if (!work) { THROW_INVALID_USAGE("work argument cannot be null"); }
     switch (dtype) {
     case CUDECOMP_FLOAT:
       cudecompTransposeYToX(handle, grid_desc, reinterpret_cast<float*>(input), reinterpret_cast<float*>(output),

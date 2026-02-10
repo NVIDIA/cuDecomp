@@ -145,12 +145,14 @@ typedef struct {
   cudecompDataType_t dtype;             ///< datatype to use during autotuning (default: CUDECOMP_DOUBLE)
   bool allow_uneven_decompositions; ///< flag to control whether autotuning allows process grids that result in uneven
                                     ///< distributions of elements across processes (default: true)
+  bool allow_empty_pencils;         ///< flag to control whether autotuning allows process grids that result in
+                                    ///< some processes having pencils with no elements (default: false)
   bool disable_nccl_backends;       ///< flag to disable NCCL backend options during autotuning (default: false)
   bool disable_nvshmem_backends;    ///< flag to disable NVSHMEM backend options during autotuning (default: false)
   double skip_threshold;            ///< threshold used to skip testing slow configurations; skip configuration
-                         ///< if `skip_threshold * t > t_best`, where `t` is the duration of the first timed trial
-                         ///< for the configuration and `t_best` is the average trial time of the current best
-                         ///< configuration (default: 0.0)
+                                    ///< if `skip_threshold * t > t_best`, where `t` is the duration of the first timed trial
+                                    ///< for the configuration and `t_best` is the average trial time of the current best
+                                    ///< configuration (default: 0.0)
 
   // Transpose-specific options
   bool autotune_transpose_backend;       ///< flag to enable transpose backend autotuning (default: false)

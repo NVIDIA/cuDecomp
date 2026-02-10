@@ -106,6 +106,7 @@ module cudecomp
     integer(c_int32_t) :: grid_mode ! which communication (transpose/halo) to use to autotune process grid
     integer(c_int32_t) :: dtype ! datatype to use during autotuning
     logical(c_bool) :: allow_uneven_decompositions ! flag to control whether autotuning allows uneven decompositions (based on gdims_dist if provided, gdims otherwise)
+    logical(c_bool) :: allow_empty_pencils ! flag to control whether autotuning allows process grids that result in some processes having pencils with no elements (default: false)
     logical(c_bool) :: disable_nccl_backends ! flag to disable NCCL backend options during autotuning
     logical(c_bool) :: disable_nvshmem_backends ! flag to disable NVSHMEM backend options during autotuning
     real(c_double) :: skip_threshold ! threshold used to skip testing slow configurations

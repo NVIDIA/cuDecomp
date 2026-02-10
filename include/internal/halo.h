@@ -45,10 +45,17 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
   if (padding_ptr) std::copy(padding_ptr, padding_ptr + 3, padding.begin());
 
   // Get pencil info
+  cudecompPencilInfo_t pinfo;
+  CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo, ax, nullptr, nullptr));
   cudecompPencilInfo_t pinfo_h;
   CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_h, ax, halo_extents.data(), nullptr));
   cudecompPencilInfo_t pinfo_h_p; // with padding
   CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_h_p, ax, halo_extents.data(), padding.data()));
+
+  if (pinfo.size == 0) {
+    THROW_NOT_SUPPORTED("updating halos across axis with empty pencils is not supported");
+  }
+
 
   // Get global ordered shapes
   auto shape_g_h = getShapeG(pinfo_h);
@@ -76,39 +83,6 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
     CHECK_CUDA(cudaEventRecord(current_sample->halo_start_event, stream));
   }
 
-  // Check if halos include more than one process (unsupported currently).
-  int count = 0;
-  for (int i = 0; i < 3; ++i) {
-    if (i == ax) continue;
-    if (i == dim) break;
-    count++;
-  }
-
-  auto comm_axis = (count == 0) ? CUDECOMP_COMM_COL : CUDECOMP_COMM_ROW;
-  int comm_rank = (comm_axis == CUDECOMP_COMM_COL) ? grid_desc->col_comm_info.rank : grid_desc->row_comm_info.rank;
-
-  auto splits =
-      getSplits(grid_desc->config.gdims_dist[dim], grid_desc->config.pdims[comm_axis == CUDECOMP_COMM_COL ? 0 : 1],
-                grid_desc->config.gdims[dim] - grid_desc->config.gdims_dist[dim]);
-
-  int comm_rank_l = comm_rank - 1;
-  int comm_rank_r = comm_rank + 1;
-  if (halo_periods[dim]) {
-    comm_rank_l = (comm_rank_l + grid_desc->config.pdims[comm_axis]) % grid_desc->config.pdims[comm_axis];
-    comm_rank_r = (comm_rank_r + grid_desc->config.pdims[comm_axis]) % grid_desc->config.pdims[comm_axis];
-  }
-
-  if (comm_rank_l >= 0) {
-    if (halo_extents[dim] > splits[comm_rank_l] || halo_extents[dim] > splits[comm_rank]) {
-      THROW_INVALID_USAGE("halo spans multiple processes, this is not currently supported.");
-    }
-  }
-
-  if (comm_rank_r < splits.size()) {
-    if (halo_extents[dim] > splits[comm_rank_r] || halo_extents[dim] > splits[comm_rank]) {
-      THROW_INVALID_USAGE("halo spans multiple processes, this is not currently supported.");
-    }
-  }
 
   // Select correct case based on pencil memory order and transfer dim
   int c;
@@ -131,6 +105,40 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
                                                     padding.data(), getCudecompDataType<T>()));
     }
     return;
+  } else {
+    // For multi-rank cases, check if halos include ranks other than nearest neighbor process (unsupported currently).
+    int count = 0;
+    for (int i = 0; i < 3; ++i) {
+      if (i == ax) continue;
+      if (i == dim) break;
+      count++;
+    }
+
+    auto comm_axis = (count == 0) ? CUDECOMP_COMM_COL : CUDECOMP_COMM_ROW;
+    int comm_rank = (comm_axis == CUDECOMP_COMM_COL) ? grid_desc->col_comm_info.rank : grid_desc->row_comm_info.rank;
+
+    auto splits =
+        getSplits(grid_desc->config.gdims_dist[dim], grid_desc->config.pdims[comm_axis == CUDECOMP_COMM_COL ? 0 : 1],
+                  grid_desc->config.gdims[dim] - grid_desc->config.gdims_dist[dim]);
+
+    int comm_rank_l = comm_rank - 1;
+    int comm_rank_r = comm_rank + 1;
+    if (halo_periods[dim]) {
+      comm_rank_l = (comm_rank_l + grid_desc->config.pdims[comm_axis]) % grid_desc->config.pdims[comm_axis];
+      comm_rank_r = (comm_rank_r + grid_desc->config.pdims[comm_axis]) % grid_desc->config.pdims[comm_axis];
+    }
+
+    if (comm_rank_l >= 0) {
+      if (halo_extents[dim] > splits[comm_rank_l] || halo_extents[dim] > splits[comm_rank]) {
+        THROW_INVALID_USAGE("halo includes ranks other than nearest neighbor processes, this is not currently supported.");
+      }
+    }
+
+    if (comm_rank_r < splits.size()) {
+      if (halo_extents[dim] > splits[comm_rank_r] || halo_extents[dim] > splits[comm_rank]) {
+        THROW_INVALID_USAGE("halo includes ranks other than nearest neighbor processes, this is not currently supported.");
+      }
+    }
   }
 
   bool managed = isManagedPointer(input);
