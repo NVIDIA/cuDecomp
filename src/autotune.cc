@@ -173,8 +173,9 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
                                          options->transpose_input_padding[2]));
 
     // Skip any decompositions with empty pencils, if disabled
-    if (!options->allow_empty_pencils && (grid_desc->config.pdims[0] > std::min(grid_desc->config.gdims_dist[0], grid_desc->config.gdims_dist[1]) ||
-                                          grid_desc->config.pdims[1] > std::min(grid_desc->config.gdims_dist[1], grid_desc->config.gdims_dist[2]))) {
+    if (!options->allow_empty_pencils &&
+        (grid_desc->config.pdims[0] > std::min(grid_desc->config.gdims_dist[0], grid_desc->config.gdims_dist[1]) ||
+         grid_desc->config.pdims[1] > std::min(grid_desc->config.gdims_dist[1], grid_desc->config.gdims_dist[2]))) {
       continue;
     }
 
@@ -588,9 +589,12 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
                                          options->halo_padding));
 
     // Skip any decompositions with empty pencils
-    if ((options->halo_axis == 0 && (grid_desc->config.pdims[0] > grid_desc->config.gdims_dist[1] || grid_desc->config.pdims[1] > grid_desc->config.gdims_dist[2])) ||
-        (options->halo_axis == 1 && (grid_desc->config.pdims[0] > grid_desc->config.gdims_dist[0] || grid_desc->config.pdims[1] > grid_desc->config.gdims_dist[2])) ||
-        (options->halo_axis == 2 && (grid_desc->config.pdims[0] > grid_desc->config.gdims_dist[0] || grid_desc->config.pdims[1] > grid_desc->config.gdims_dist[1])) ) {
+    if ((options->halo_axis == 0 && (grid_desc->config.pdims[0] > grid_desc->config.gdims_dist[1] ||
+                                     grid_desc->config.pdims[1] > grid_desc->config.gdims_dist[2])) ||
+        (options->halo_axis == 1 && (grid_desc->config.pdims[0] > grid_desc->config.gdims_dist[0] ||
+                                     grid_desc->config.pdims[1] > grid_desc->config.gdims_dist[2])) ||
+        (options->halo_axis == 2 && (grid_desc->config.pdims[0] > grid_desc->config.gdims_dist[0] ||
+                                     grid_desc->config.pdims[1] > grid_desc->config.gdims_dist[1]))) {
       if (options->allow_empty_pencils) {
         THROW_NOT_SUPPORTED("cannot perform halo autotuning on distributions with empty pencils");
       }

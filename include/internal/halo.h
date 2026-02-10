@@ -52,10 +52,7 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
   cudecompPencilInfo_t pinfo_h_p; // with padding
   CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_h_p, ax, halo_extents.data(), padding.data()));
 
-  if (pinfo.size == 0) {
-    THROW_NOT_SUPPORTED("updating halos across axis with empty pencils is not supported");
-  }
-
+  if (pinfo.size == 0) { THROW_NOT_SUPPORTED("updating halos across axis with empty pencils is not supported"); }
 
   // Get global ordered shapes
   auto shape_g_h = getShapeG(pinfo_h);
@@ -82,7 +79,6 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
     // Record start event
     CHECK_CUDA(cudaEventRecord(current_sample->halo_start_event, stream));
   }
-
 
   // Select correct case based on pencil memory order and transfer dim
   int c;
@@ -130,13 +126,15 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
 
     if (comm_rank_l >= 0) {
       if (halo_extents[dim] > splits[comm_rank_l] || halo_extents[dim] > splits[comm_rank]) {
-        THROW_INVALID_USAGE("halo includes ranks other than nearest neighbor processes, this is not currently supported.");
+        THROW_INVALID_USAGE(
+            "halo includes ranks other than nearest neighbor processes, this is not currently supported.");
       }
     }
 
     if (comm_rank_r < splits.size()) {
       if (halo_extents[dim] > splits[comm_rank_r] || halo_extents[dim] > splits[comm_rank]) {
-        THROW_INVALID_USAGE("halo includes ranks other than nearest neighbor processes, this is not currently supported.");
+        THROW_INVALID_USAGE(
+            "halo includes ranks other than nearest neighbor processes, this is not currently supported.");
       }
     }
   }

@@ -207,15 +207,9 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
   CHECK_CUDECOMP(
       cudecompGetPencilInfo(handle, grid_desc, &pinfo_b_h, ax_b, output_halo_extents.data(), output_padding.data()));
 
-  if (pinfo_a_h.size != 0 and !input) {
-    THROW_INVALID_USAGE("input argument cannot be null");
-  }
-  if (pinfo_b_h.size != 0 and !output) {
-    THROW_INVALID_USAGE("output argument cannot be null");
-  }
-  if ((pinfo_a_h.size != 0 || pinfo_b_h.size != 0) and !work) {
-    THROW_INVALID_USAGE("work argument cannot be null");
-  }
+  if (pinfo_a_h.size != 0 and !input) { THROW_INVALID_USAGE("input argument cannot be null"); }
+  if (pinfo_b_h.size != 0 and !output) { THROW_INVALID_USAGE("output argument cannot be null"); }
+  if ((pinfo_a_h.size != 0 || pinfo_b_h.size != 0) and !work) { THROW_INVALID_USAGE("work argument cannot be null"); }
 
   // Check if input and output orders are the same
   bool orders_equal = true;
