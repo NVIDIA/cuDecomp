@@ -45,14 +45,12 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
   if (padding_ptr) std::copy(padding_ptr, padding_ptr + 3, padding.begin());
 
   // Get pencil info
-  cudecompPencilInfo_t pinfo;
-  CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo, ax, nullptr, nullptr));
   cudecompPencilInfo_t pinfo_h;
   CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_h, ax, halo_extents.data(), nullptr));
   cudecompPencilInfo_t pinfo_h_p; // with padding
   CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_h_p, ax, halo_extents.data(), padding.data()));
 
-  if (pinfo.size == 0) { THROW_NOT_SUPPORTED("updating halos across axis with empty pencils is not supported"); }
+  if (checkForEmptyPencils(grid_desc, ax)) { THROW_NOT_SUPPORTED("halo operations on configurations with empty pencils not supported"); }
 
   // Get global ordered shapes
   auto shape_g_h = getShapeG(pinfo_h);

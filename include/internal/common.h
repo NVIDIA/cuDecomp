@@ -440,6 +440,21 @@ static inline ncclComm createNcclComm(ncclComm_t comm) {
   return std::shared_ptr<ncclComm_t>(new ncclComm_t(comm), ncclCommDeleter());
 }
 
+// Helper to check if pencil axis has empty pencils
+static inline bool checkForEmptyPencils(const cudecompGridDesc_t grid_desc, int axis) {
+  int j = 0;
+  for (int i = 0; i < 3; ++i) {
+    if (i != axis) {
+      int64_t d = grid_desc->config.gdims_dist[i] / grid_desc->config.pdims[j];
+      if (d == 0) {
+        return true;
+      }
+      j++;
+    }
+  }
+  return false;
+}
+
 } // namespace cudecomp
 
 #endif // CUDECOMP_COMMON_H

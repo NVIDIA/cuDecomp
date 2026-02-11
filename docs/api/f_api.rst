@@ -69,7 +69,6 @@ _________________________________
   :f cudecompAutotuneGridMode grid_mode: which communication (transpose/halo) to use to autotune process grid (default: CUDECOMP_AUTOTUNE_GRID_TRANSPOSE)
   :f cudecompDataType dtype: datatype to use during autotuning (default: CUDECOMP_DOUBLE)
   :f logical allow_uneven_distributions: flag to control whether autotuning allows process grids that result in uneven distributions of elements across processes (default: true)
-  :f logical allow_empty_pencils: flag to control whether autotuning allows process grids that result in some processes having pencils with no elements (default: false)
   :f logical disable_nccl_backends: flag to disable NCCL backend options during autotuning (default: false)
   :f logical disable_nvshmem_backends: flag to disable NVSHMEM backend options during autotuning (default: false)
   :f real(c_double) skip_threshold: threshold used to skip testing slow configurations; skip configuration if :code:`skip_threshold * t > t_best`, where :code:`t` is the duration of the first timed trial for the configuration and :code:`t_best` is the average trial time of the current best configuration (default: 0.0)

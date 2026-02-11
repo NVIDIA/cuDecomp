@@ -139,6 +139,8 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
 
   int64_t data_sz = 0;
   int64_t work_sz = 0;
+
+  bool valid = false;
   for (auto& pdim1 : pdim1_list) {
     grid_desc->config.pdims[0] = handle->nranks / pdim1;
     grid_desc->config.pdims[1] = pdim1;
@@ -172,10 +174,9 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
     CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_z2, 2, options->transpose_input_halo_extents[2],
                                          options->transpose_input_padding[2]));
 
-    // Skip any decompositions with empty pencils, if disabled
-    if (!options->allow_empty_pencils &&
-        (grid_desc->config.pdims[0] > std::min(grid_desc->config.gdims_dist[0], grid_desc->config.gdims_dist[1]) ||
-         grid_desc->config.pdims[1] > std::min(grid_desc->config.gdims_dist[1], grid_desc->config.gdims_dist[2]))) {
+    // Skip any decompositions with empty pencils
+    if (grid_desc->config.pdims[0] > std::min(grid_desc->config.gdims_dist[0], grid_desc->config.gdims_dist[1]) ||
+        grid_desc->config.pdims[1] > std::min(grid_desc->config.gdims_dist[1], grid_desc->config.gdims_dist[2])) {
       continue;
     }
 
@@ -186,6 +187,8 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
                                                   grid_desc->config.gdims_dist[2] % grid_desc->config.pdims[1] != 0)) {
       continue;
     }
+
+    valid = true;
 
     // Allocate test data
     int64_t num_elements_work;
@@ -494,6 +497,10 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
   grid_desc->config.pdims[0] = pdims_best[0];
   grid_desc->config.pdims[1] = pdims_best[1];
 
+  if (!valid) {
+    THROW_NOT_SUPPORTED("No valid decomposition found during autotuning with provided arguments.");
+  }
+
   if (handle->rank == 0) {
     printf("CUDECOMP: SELECTED: grid: %d x %d, backend: %s, Avg. time (weighted) [ms]: %f\n",
            grid_desc->config.pdims[0], grid_desc->config.pdims[1],
@@ -573,6 +580,8 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
 
   int64_t data_sz = 0;
   int64_t work_sz = 0;
+
+  bool valid = false;
   for (auto& pdim1 : pdim1_list) {
     grid_desc->config.pdims[0] = handle->nranks / pdim1;
     grid_desc->config.pdims[1] = pdim1;
@@ -595,9 +604,6 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
                                      grid_desc->config.pdims[1] > grid_desc->config.gdims_dist[2])) ||
         (options->halo_axis == 2 && (grid_desc->config.pdims[0] > grid_desc->config.gdims_dist[0] ||
                                      grid_desc->config.pdims[1] > grid_desc->config.gdims_dist[1]))) {
-      if (options->allow_empty_pencils) {
-        THROW_NOT_SUPPORTED("cannot perform halo autotuning on distributions with empty pencils");
-      }
       continue;
     }
 
@@ -608,6 +614,8 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
                                                   grid_desc->config.gdims_dist[2] % grid_desc->config.pdims[1] != 0)) {
       continue;
     }
+
+    valid = true;
 
     // Allocate test data
     int64_t num_elements_work;
@@ -835,6 +843,10 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
   grid_desc->config.halo_comm_backend = comm_backend_best;
   grid_desc->config.pdims[0] = pdims_best[0];
   grid_desc->config.pdims[1] = pdims_best[1];
+
+  if (!valid) {
+    THROW_NOT_SUPPORTED("No valid decomposition found during autotuning with provided arguments.");
+  }
 
   if (handle->rank == 0) {
     printf("CUDECOMP: SELECTED: grid: %d x %d, halo backend: %s, Avg. time [ms]: %f\n", grid_desc->config.pdims[0],

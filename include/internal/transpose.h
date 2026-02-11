@@ -207,9 +207,7 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
   CHECK_CUDECOMP(
       cudecompGetPencilInfo(handle, grid_desc, &pinfo_b_h, ax_b, output_halo_extents.data(), output_padding.data()));
 
-  if (pinfo_a_h.size != 0 and !input) { THROW_INVALID_USAGE("input argument cannot be null"); }
-  if (pinfo_b_h.size != 0 and !output) { THROW_INVALID_USAGE("output argument cannot be null"); }
-  if ((pinfo_a_h.size != 0 || pinfo_b_h.size != 0) and !work) { THROW_INVALID_USAGE("work argument cannot be null"); }
+  if (checkForEmptyPencils(grid_desc, ax_a) || checkForEmptyPencils(grid_desc, ax_b)) { THROW_NOT_SUPPORTED("transposes on configurations with empty pencils not supported"); }
 
   // Check if input and output orders are the same
   bool orders_equal = true;
@@ -235,18 +233,6 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
   T* o1 = work;
   T* o2 = work + pinfo_a.size;
   T* o3 = output;
-
-  // Handle empty pencil cases
-  if (pinfo_a.size == 0) {
-    o1 = nullptr;
-    o2 = work;
-  } else if (pinfo_b.size == 0) {
-    o1 = work;
-    o2 = nullptr;
-  } else if (pinfo_a.size == 0 && pinfo_b.size == 0) {
-    o1 = nullptr;
-    o2 = nullptr;
-  }
 
   if (transposeBackendRequiresNvshmem(grid_desc->config.transpose_comm_backend)) {
     auto max_pencil_size_a = getGlobalMaxPencilSize(handle, grid_desc, ax_a);

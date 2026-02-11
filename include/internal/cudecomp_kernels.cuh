@@ -115,10 +115,7 @@ void cudecomp_batched_d2d_memcpy_3d_nd_dispatch(const cudecompBatchedD2DMemcpy3D
   int src_nd = 1;
   int dest_nd = 1;
   for (int i = 0; i < params.ncopies; ++i) {
-    size_t N2 = params.extents[0][i] * params.extents[1][i] * params.extents[2][i];
-    if (N2 == 0) continue;
-
-    N = std::max(N, N2);
+    N = std::max(N, params.extents[0][i] * params.extents[1][i] * params.extents[2][i]);
     if (params.src_strides[1][i] == params.extents[2][i] &&
         params.src_strides[0][i] / params.src_strides[1][i] == params.extents[1][i]) {
       src_nd = std::max(1, src_nd);
@@ -147,8 +144,6 @@ void cudecomp_batched_d2d_memcpy_3d_nd_dispatch(const cudecompBatchedD2DMemcpy3D
   CHECK_CUDA(cudaDeviceGetAttribute(&num_sms, cudaDevAttrMultiProcessorCount, dev));
 
   if (total_blocks_unroll > CUDECOMP_MIN_BLOCKS_PER_SM * num_sms) { blocks_per_copy = blocks_per_copy_unroll; }
-
-  if (params.ncopies * blocks_per_copy == 0) return;
 
   switch (src_nd) {
   case 1:
