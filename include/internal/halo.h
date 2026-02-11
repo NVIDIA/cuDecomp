@@ -50,7 +50,9 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
   cudecompPencilInfo_t pinfo_h_p; // with padding
   CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_h_p, ax, halo_extents.data(), padding.data()));
 
-  if (checkForEmptyPencils(grid_desc, ax)) { THROW_NOT_SUPPORTED("halo operations on configurations with empty pencils not supported"); }
+  if (checkForEmptyPencils(grid_desc, ax)) {
+    THROW_NOT_SUPPORTED("halo operations on configurations with empty pencils not supported");
+  }
 
   // Get global ordered shapes
   auto shape_g_h = getShapeG(pinfo_h);

@@ -207,7 +207,9 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
   CHECK_CUDECOMP(
       cudecompGetPencilInfo(handle, grid_desc, &pinfo_b_h, ax_b, output_halo_extents.data(), output_padding.data()));
 
-  if (checkForEmptyPencils(grid_desc, ax_a) || checkForEmptyPencils(grid_desc, ax_b)) { THROW_NOT_SUPPORTED("transposes on configurations with empty pencils not supported"); }
+  if (checkForEmptyPencils(grid_desc, ax_a) || checkForEmptyPencils(grid_desc, ax_b)) {
+    THROW_NOT_SUPPORTED("transposes on configurations with empty pencils not supported");
+  }
 
   // Check if input and output orders are the same
   bool orders_equal = true;

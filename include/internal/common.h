@@ -446,9 +446,7 @@ static inline bool checkForEmptyPencils(const cudecompGridDesc_t grid_desc, int 
   for (int i = 0; i < 3; ++i) {
     if (i != axis) {
       int64_t d = grid_desc->config.gdims_dist[i] / grid_desc->config.pdims[j];
-      if (d == 0) {
-        return true;
-      }
+      if (d == 0) { return true; }
       j++;
     }
   }

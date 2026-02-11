@@ -497,9 +497,7 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
   grid_desc->config.pdims[0] = pdims_best[0];
   grid_desc->config.pdims[1] = pdims_best[1];
 
-  if (!valid) {
-    THROW_NOT_SUPPORTED("No valid decomposition found during autotuning with provided arguments.");
-  }
+  if (!valid) { THROW_NOT_SUPPORTED("No valid decomposition found during autotuning with provided arguments."); }
 
   if (handle->rank == 0) {
     printf("CUDECOMP: SELECTED: grid: %d x %d, backend: %s, Avg. time (weighted) [ms]: %f\n",
@@ -844,9 +842,7 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
   grid_desc->config.pdims[0] = pdims_best[0];
   grid_desc->config.pdims[1] = pdims_best[1];
 
-  if (!valid) {
-    THROW_NOT_SUPPORTED("No valid decomposition found during autotuning with provided arguments.");
-  }
+  if (!valid) { THROW_NOT_SUPPORTED("No valid decomposition found during autotuning with provided arguments."); }
 
   if (handle->rank == 0) {
     printf("CUDECOMP: SELECTED: grid: %d x %d, halo backend: %s, Avg. time [ms]: %f\n", grid_desc->config.pdims[0],
