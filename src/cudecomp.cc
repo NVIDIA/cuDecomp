@@ -717,13 +717,6 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
     CHECK_CUDA(cudaEventCreateWithFlags(&grid_desc->nvshmem_sync_event, cudaEventDisableTiming));
 #endif
 
-    // Disable decompositions with empty pencils
-    if (!autotune_pdims &&
-        (grid_desc->config.pdims[0] > std::min(grid_desc->config.gdims_dist[0], grid_desc->config.gdims_dist[1]) ||
-         grid_desc->config.pdims[1] > std::min(grid_desc->config.gdims_dist[1], grid_desc->config.gdims_dist[2]))) {
-      THROW_NOT_SUPPORTED("grid descriptor settings yields a distribution with empty pencils");
-    }
-
     // Run autotuning if requested
     if (options) {
       if (options->grid_mode == CUDECOMP_AUTOTUNE_GRID_TRANSPOSE) {
@@ -735,10 +728,6 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
       } else {
         THROW_INVALID_USAGE("unknown value of autotune_grid_mode encountered.");
       }
-    }
-
-    if (grid_desc->config.pdims[0] == 0 || grid_desc->config.pdims[1] == 0) {
-      THROW_NOT_SUPPORTED("No valid decomposition found during autotuning with provided arguments.");
     }
 
     if (handle->use_col_major_rank_order) {
