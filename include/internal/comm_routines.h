@@ -283,8 +283,8 @@ static void cudecompAlltoall(const cudecompHandle_t& handle, const cudecompGridD
       if (recv_counts[src_rank] != 0) {
         checkMpiInt32Limit(recv_counts[src_rank], grid_desc->config.transpose_comm_backend);
         int32_t rc = static_cast<int32_t>(recv_counts[src_rank]);
-        CHECK_MPI(MPI_Irecv(recv_buff + recv_offsets[src_rank], rc, getMpiDataType<T>(), src_rank, 0,
-                            comm, &reqs[src_rank]));
+        CHECK_MPI(
+            MPI_Irecv(recv_buff + recv_offsets[src_rank], rc, getMpiDataType<T>(), src_rank, 0, comm, &reqs[src_rank]));
       }
     }
 
@@ -294,8 +294,8 @@ static void cudecompAlltoall(const cudecompHandle_t& handle, const cudecompGridD
       if (send_counts[dst_rank] != 0) {
         checkMpiInt32Limit(send_counts[dst_rank], grid_desc->config.transpose_comm_backend);
         int32_t sc = static_cast<int32_t>(send_counts[dst_rank]);
-        CHECK_MPI(MPI_Isend(send_buff + send_offsets[dst_rank], sc, getMpiDataType<T>(), dst_rank, 0,
-                            comm, &reqs[dst_rank + send_counts.size()]));
+        CHECK_MPI(MPI_Isend(send_buff + send_offsets[dst_rank], sc, getMpiDataType<T>(), dst_rank, 0, comm,
+                            &reqs[dst_rank + send_counts.size()]));
       }
     }
 
@@ -316,8 +316,7 @@ static void cudecompAlltoall(const cudecompHandle_t& handle, const cudecompGridD
       checkMpiInt32Limit(recv_counts[0], grid_desc->config.transpose_comm_backend);
       int32_t sc = static_cast<int32_t>(send_counts[0]);
       int32_t rc = static_cast<int32_t>(recv_counts[0]);
-      CHECK_MPI(MPI_Alltoall(send_buff, sc, getMpiDataType<T>(), recv_buff, rc,
-                             getMpiDataType<T>(), comm));
+      CHECK_MPI(MPI_Alltoall(send_buff, sc, getMpiDataType<T>(), recv_buff, rc, getMpiDataType<T>(), comm));
     } else {
       // Self-copy with cudaMemcpy
       CHECK_CUDA(cudaMemcpyAsync(recv_buff + recv_offsets[self_rank], send_buff + send_offsets[self_rank],
@@ -350,8 +349,8 @@ static void cudecompAlltoall(const cudecompHandle_t& handle, const cudecompGridD
       send_counts_i32[self_rank] = 0;
       recv_counts_i32[self_rank] = 0;
 
-      CHECK_MPI(MPI_Alltoallv(send_buff, send_counts_i32.data(), send_offsets_i32.data(), getMpiDataType<T>(), recv_buff,
-                              recv_counts_i32.data(), recv_offsets_i32.data(), getMpiDataType<T>(), comm));
+      CHECK_MPI(MPI_Alltoallv(send_buff, send_counts_i32.data(), send_offsets_i32.data(), getMpiDataType<T>(),
+                              recv_buff, recv_counts_i32.data(), recv_offsets_i32.data(), getMpiDataType<T>(), comm));
     }
     break;
   }
@@ -551,14 +550,14 @@ cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cudecompGridDesc
         if (send_counts[dst_rank] != 0) {
           checkMpiInt32Limit(send_counts[dst_rank], grid_desc->config.transpose_comm_backend);
           int32_t sc = send_counts[dst_rank];
-          CHECK_MPI(MPI_Isend(send_buff + send_offsets[dst_rank], sc, getMpiDataType<T>(), dst_rank,
-                              0, comm, &reqs[i]));
+          CHECK_MPI(
+              MPI_Isend(send_buff + send_offsets[dst_rank], sc, getMpiDataType<T>(), dst_rank, 0, comm, &reqs[i]));
         }
         if (recv_counts[src_rank] != 0) {
           checkMpiInt32Limit(recv_counts[src_rank], grid_desc->config.transpose_comm_backend);
           int32_t rc = recv_counts[src_rank];
-          CHECK_MPI(MPI_Irecv(recv_buff + recv_offsets[src_rank], rc, getMpiDataType<T>(), src_rank,
-                              0, comm, &reqs[i + src_ranks.size()]));
+          CHECK_MPI(MPI_Irecv(recv_buff + recv_offsets[src_rank], rc, getMpiDataType<T>(), src_rank, 0, comm,
+                              &reqs[i + src_ranks.size()]));
         }
       }
     }
@@ -677,8 +676,8 @@ static void cudecompSendRecvPair(const cudecompHandle_t& handle, const cudecompG
         if (recv_counts[(i + 1) % 2] != 0 && peer_ranks[(i + 1) % 2] != -1) {
           checkMpiInt32Limit(recv_counts[(i + 1) % 2], grid_desc->config.transpose_comm_backend);
           int32_t rc = recv_counts[(i + 1) % 2];
-          CHECK_MPI(MPI_Irecv(recv_buff + recv_offsets[(i + 1) % 2], rc, getMpiDataType<T>(),
-                              peer_ranks[(i + 1) % 2], 0, comm, &reqs[(i + 1) % 2]));
+          CHECK_MPI(MPI_Irecv(recv_buff + recv_offsets[(i + 1) % 2], rc, getMpiDataType<T>(), peer_ranks[(i + 1) % 2],
+                              0, comm, &reqs[(i + 1) % 2]));
         }
         if (send_counts[i] != 0 && peer_ranks[i] != -1) {
           checkMpiInt32Limit(send_counts[i], grid_desc->config.transpose_comm_backend);
@@ -705,8 +704,8 @@ static void cudecompSendRecvPair(const cudecompHandle_t& handle, const cudecompG
         if (recv_counts[(i + 1) % 2] != 0 && peer_ranks[(i + 1) % 2] != -1) {
           checkMpiInt32Limit(recv_counts[(i + 1) % 2], grid_desc->config.transpose_comm_backend);
           int32_t rc = recv_counts[(i + 1) % 2];
-          CHECK_MPI(MPI_Irecv(recv_buff + recv_offsets[(i + 1) % 2], rc, getMpiDataType<T>(),
-                              peer_ranks[(i + 1) % 2], 0, comm, &r));
+          CHECK_MPI(MPI_Irecv(recv_buff + recv_offsets[(i + 1) % 2], rc, getMpiDataType<T>(), peer_ranks[(i + 1) % 2],
+                              0, comm, &r));
         }
         if (send_counts[i] != 0 && peer_ranks[i] != -1) {
           checkMpiInt32Limit(send_counts[i], grid_desc->config.transpose_comm_backend);
