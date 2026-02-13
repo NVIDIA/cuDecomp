@@ -44,7 +44,6 @@ static inline bool isTransposeCommPipelined(cudecompTransposeCommBackend_t commT
           commType == CUDECOMP_TRANSPOSE_COMM_MPI_P2P_PL);
 }
 
-#if CUTENSOR_MAJOR >= 2
 static inline hiptensorDataType_t getCutensorDataType(float) { return HIPTENSOR_R_32F; }
 static inline hiptensorDataType_t getCutensorDataType(double) { return HIPTENSOR_R_64F; }
 static inline hiptensorDataType_t getCutensorDataType(std::complex<float>) { return HIPTENSOR_C_32F; }
@@ -108,43 +107,6 @@ static void localPermute(const cudecompHandle_t handle, const std::array<int64_t
   CHECK_CUTENSOR(hiptensorDestroyOperationDescriptor(desc_op));
   CHECK_CUTENSOR(hiptensorDestroyPlan(plan));
 }
-
-#else
-
-static inline hipDataType getCudaDataType(float) { return HIP_R_32F; }
-static inline hipDataType getCudaDataType(double) { return HIP_R_64F; }
-static inline hipDataType getCudaDataType(std::complex<float>) { return HIP_C_32F; }
-static inline hipDataType getCudaDataType(std::complex<double>) { return HIP_C_64F; }
-template <typename T> static inline hipDataType getCudaDataType() { return getCudaDataType(T(0)); }
-
-template <typename T>
-static void localPermute(const cudecompHandle_t handle, const std::array<int64_t, 3>& extent_in,
-                         const std::array<int32_t, 3>& order_out, const std::array<int64_t, 3>& strides_in,
-                         const std::array<int64_t, 3>& strides_out, T* input, T* output, hipStream_t stream) {
-  hipDataType cuda_type = getCudaDataType<T>();
-
-  std::array<int32_t, 3> order_in{0, 1, 2};
-  std::array<int64_t, 3> extent_out;
-  for (int i = 0; i < 3; ++i) {
-    extent_out[i] = extent_in[order_out[i]];
-    if (extent_out[i] == 0) return;
-  }
-
-  auto strides_in_ptr = anyNonzeros(strides_in) ? strides_in.data() : nullptr;
-  auto strides_out_ptr = anyNonzeros(strides_out) ? strides_out.data() : nullptr;
-
-  hiptensorTensorDescriptor_t desc_in;
-  CHECK_CUTENSOR(hiptensorInitTensorDescriptor(&handle->cutensor_handle, &desc_in, 3, extent_in.data(), strides_in_ptr,
-                                               cuda_type, HIPTENSOR_OP_IDENTITY));
-  hiptensorTensorDescriptor_t desc_out;
-  CHECK_CUTENSOR(hiptensorInitTensorDescriptor(&handle->cutensor_handle, &desc_out, 3, extent_out.data(),
-                                               strides_out_ptr, cuda_type, HIPTENSOR_OP_IDENTITY));
-
-  T one(1);
-  CHECK_CUTENSOR(hiptensorPermutation(&handle->cutensor_handle, &one, input, &desc_in, order_in.data(), output,
-                                      &desc_out, order_out.data(), cuda_type, stream));
-}
-#endif
 
 template <typename T>
 static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, const cudecompGridDesc_t grid_desc,
