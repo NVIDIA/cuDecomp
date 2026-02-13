@@ -216,13 +216,6 @@ static void getCudecompEnvVars(cudecompHandle_t& handle) {
   // Check CUDECOMP_ENABLE_CUDA_GRAPHS (CUDA Graphs usage in pipelined backends)
   handle->cuda_graphs_enable = checkEnvVar("CUDECOMP_ENABLE_CUDA_GRAPHS");
   if (handle->cuda_graphs_enable) {
-#if CUDART_VERSION < 11010
-    if (handle->rank == 0) {
-      printf("CUDECOMP:WARN: CUDECOMP_ENABLE_CUDA_GRAPHS is set but CUDA version used for compilation does not "
-             "support hipEventRecordWithFlags which is required. Disabling this feature.\n");
-    }
-    handle->cuda_graphs_enable = false;
-#endif
   }
 
   // Check CUDECOMP_ENABLE_PERFORMANCE_REPORT (Performance reporting)
@@ -1000,42 +993,6 @@ cudecompResult_t cudecompMalloc(cudecompHandle_t handle, cudecompGridDesc_t grid
 #endif
     } else {
       if (handle->cuda_cumem_enable) {
-#if CUDART_VERSION >= 12030
-        int dev;
-        hipDevice_t cu_dev;
-        CHECK_CUDA(hipGetDevice(&dev));
-        CHECK_CUDA_DRV(hipDeviceGet(&cu_dev, dev));
-
-        hipMemAllocationProp prop = {};
-        prop.type = hipMemAllocationTypePinned;
-        prop.location.type = hipMemLocationTypeDevice;
-        prop.requestedHandleTypes = CU_MEM_HANDLE_TYPE_FABRIC;
-        prop.location.id = cu_dev;
-
-        // Check for RDMA support
-        int flag;
-        CHECK_CUDA_DRV(
-            hipDeviceGetAttribute(&flag, CU_DEVICE_ATTRIBUTE_GPU_DIRECT_RDMA_WITH_CUDA_VMM_SUPPORTED, cu_dev));
-        if (flag) prop.allocFlags.gpuDirectRDMACapable = 1;
-
-        // Align allocation size to required granularity
-        size_t granularity;
-        CHECK_CUDA_DRV(hipMemGetAllocationGranularity(&granularity, &prop, hipMemAllocationGranularityMinimum));
-        buffer_size_bytes = (buffer_size_bytes + granularity - 1) / granularity * granularity;
-
-        // Allocate memory
-        hipMemGenericAllocationHandle_t cumem_handle;
-        CHECK_CUDA_DRV(hipMemCreate(&cumem_handle, buffer_size_bytes, &prop, 0));
-        CHECK_CUDA_DRV(hipMemAddressReserve((hipDeviceptr_t*)buffer, buffer_size_bytes, granularity, 0, 0));
-        CHECK_CUDA_DRV(hipMemMap((hipDeviceptr_t)*buffer, buffer_size_bytes, 0, cumem_handle, 0));
-
-        // Set read/write access
-        hipMemAccessDesc accessDesc = {};
-        accessDesc.location.type = hipMemLocationTypeDevice;
-        accessDesc.location.id = cu_dev;
-        accessDesc.flags = hipMemAccessFlagsProtReadWrite;
-        CHECK_CUDA_DRV(hipMemSetAccess((hipDeviceptr_t)*buffer, buffer_size_bytes, &accessDesc, 1));
-#endif
       } else {
         CHECK_CUDA(hipMalloc(buffer, buffer_size_bytes));
       }
@@ -1101,18 +1058,6 @@ cudecompResult_t cudecompFree(cudecompHandle_t handle, cudecompGridDesc_t grid_d
 
     } else {
       if (handle->cuda_cumem_enable) {
-#if CUDART_VERSION >= 12030
-        if (buffer) {
-          hipMemGenericAllocationHandle_t cumem_handle;
-          CHECK_CUDA_DRV(hipMemRetainAllocationHandle(&cumem_handle, buffer));
-          CHECK_CUDA_DRV(hipMemRelease(cumem_handle));
-          size_t size = 0;
-          CHECK_CUDA_DRV(hipMemGetAddressRange(NULL, &size, (hipDeviceptr_t)buffer));
-          CHECK_CUDA_DRV(hipMemUnmap((hipDeviceptr_t)buffer, size));
-          CHECK_CUDA_DRV(hipMemRelease(cumem_handle));
-          CHECK_CUDA_DRV(hipMemAddressFree((hipDeviceptr_t)buffer, size));
-        }
-#endif
       } else {
         if (buffer) { CHECK_CUDA(hipFree(buffer)); }
       }

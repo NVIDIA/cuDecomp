@@ -42,11 +42,7 @@
 #include "internal/graph.h"
 
 namespace cudecomp {
-#if NVML_API_VERSION >= 12 && CUDART_VERSION >= 12040
-typedef std::pair<std::array<unsigned char, NVML_GPU_FABRIC_UUID_LEN>, unsigned int> mnnvl_info;
-#else
 typedef std::pair<std::array<unsigned char, 1>, unsigned int> mnnvl_info;
-#endif
 typedef std::shared_ptr<ncclComm_t> ncclComm;
 } // namespace cudecomp
 
