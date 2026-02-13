@@ -24,7 +24,7 @@
 
 #include <cuda/std/complex>
 #include <hip/hip_runtime.h>
-#include <hiptensor.h>
+#include <hiptensor/hiptensor.h>
 #include <mpi.h>
 
 #include "internal/checks.h"

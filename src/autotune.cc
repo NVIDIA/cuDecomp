@@ -22,7 +22,7 @@
 
 #include <hip/hip_runtime.h>
 #include <mpi.h>
-#include <nccl.h>
+#include <rccl/rccl.h>
 #ifdef ENABLE_NVSHMEM
 #include <nvshmem.h>
 #include <nvshmemx.h>

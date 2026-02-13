@@ -24,9 +24,9 @@
 
 #include <hip/hip_runtime.h>
 #include <hipfft/hipfft.h>
-#include <hiptensor.h>
+#include <hiptensor/hiptensor.h>
 #include <mpi.h>
-#include <nccl.h>
+#include <rccl/rccl.h>
 #include <nvml.h>
 
 #include "internal/exceptions.h"
