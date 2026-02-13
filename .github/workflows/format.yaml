@@ -7,7 +7,7 @@ on:
 jobs:
   clang-format:
     env:
-      CLANG_FORMAT_VERSION: "15"
+      CLANG_FORMAT_VERSION: "20"
 
     runs-on: ubuntu-latest
     name: "clang-format check"

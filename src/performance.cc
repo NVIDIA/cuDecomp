@@ -204,15 +204,15 @@ getOrCreateTransposePerformanceSamples(const cudecompHandle_t handle, cudecompGr
 
     // Create events for each sample
     for (auto& sample : collection.samples) {
-      CHECK_CUDA(cudaEventCreate(&sample.transpose_start_event));
-      CHECK_CUDA(cudaEventCreate(&sample.transpose_end_event));
+      CHECK_CUDA(hipEventCreate(&sample.transpose_start_event));
+      CHECK_CUDA(hipEventCreate(&sample.transpose_end_event));
       sample.alltoall_start_events.resize(handle->nranks);
       sample.alltoall_end_events.resize(handle->nranks);
       for (auto& event : sample.alltoall_start_events) {
-        CHECK_CUDA(cudaEventCreate(&event));
+        CHECK_CUDA(hipEventCreate(&event));
       }
       for (auto& event : sample.alltoall_end_events) {
-        CHECK_CUDA(cudaEventCreate(&event));
+        CHECK_CUDA(hipEventCreate(&event));
       }
       sample.valid = false;
     }
@@ -237,10 +237,10 @@ cudecompHaloPerformanceSampleCollection& getOrCreateHaloPerformanceSamples(const
 
     // Create events for each sample
     for (auto& sample : collection.samples) {
-      CHECK_CUDA(cudaEventCreate(&sample.halo_start_event));
-      CHECK_CUDA(cudaEventCreate(&sample.halo_end_event));
-      CHECK_CUDA(cudaEventCreate(&sample.sendrecv_start_event));
-      CHECK_CUDA(cudaEventCreate(&sample.sendrecv_end_event));
+      CHECK_CUDA(hipEventCreate(&sample.halo_start_event));
+      CHECK_CUDA(hipEventCreate(&sample.halo_end_event));
+      CHECK_CUDA(hipEventCreate(&sample.sendrecv_start_event));
+      CHECK_CUDA(hipEventCreate(&sample.sendrecv_end_event));
       sample.valid = false;
     }
 
@@ -390,12 +390,12 @@ TransposeConfigTimingData processTransposeConfig(const cudecompTransposeConfigKe
     float alltoall_timing_ms = 0.0f;
     for (int j = 0; j < sample.alltoall_timing_count; ++j) {
       float elapsed_time;
-      CHECK_CUDA(cudaEventElapsedTime(&elapsed_time, sample.alltoall_start_events[j], sample.alltoall_end_events[j]));
+      CHECK_CUDA(hipEventElapsedTime(&elapsed_time, sample.alltoall_start_events[j], sample.alltoall_end_events[j]));
       alltoall_timing_ms += elapsed_time;
     }
 
     float transpose_timing_ms;
-    CHECK_CUDA(cudaEventElapsedTime(&transpose_timing_ms, sample.transpose_start_event, sample.transpose_end_event));
+    CHECK_CUDA(hipEventElapsedTime(&transpose_timing_ms, sample.transpose_start_event, sample.transpose_end_event));
 
     config_data.total_times.push_back(transpose_timing_ms);
     config_data.alltoall_times.push_back(alltoall_timing_ms);
@@ -450,11 +450,11 @@ HaloConfigTimingData processHaloConfig(const cudecompHaloConfigKey& config,
 
     float sendrecv_timing_ms = 0.0f;
     if (sample.sendrecv_bytes > 0) {
-      CHECK_CUDA(cudaEventElapsedTime(&sendrecv_timing_ms, sample.sendrecv_start_event, sample.sendrecv_end_event));
+      CHECK_CUDA(hipEventElapsedTime(&sendrecv_timing_ms, sample.sendrecv_start_event, sample.sendrecv_end_event));
     }
 
     float halo_timing_ms;
-    CHECK_CUDA(cudaEventElapsedTime(&halo_timing_ms, sample.halo_start_event, sample.halo_end_event));
+    CHECK_CUDA(hipEventElapsedTime(&halo_timing_ms, sample.halo_start_event, sample.halo_end_event));
 
     config_data.total_times.push_back(halo_timing_ms);
     config_data.sendrecv_times.push_back(sendrecv_timing_ms);
@@ -782,7 +782,7 @@ void printHaloPerSampleDetails(const std::vector<HaloConfigTimingData>& all_halo
 
 void printPerformanceReport(const cudecompHandle_t handle, const cudecompGridDesc_t grid_desc) {
   // Synchronize to ensure all events are recorded
-  CHECK_CUDA(cudaDeviceSynchronize());
+  CHECK_CUDA(hipDeviceSynchronize());
 
   // Collect all transpose statistics and timing data
   std::vector<TransposeConfigTimingData> all_transpose_config_data;

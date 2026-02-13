@@ -28,19 +28,19 @@ namespace cudecomp {
 
 struct cuFunctionTable {
 #if CUDART_VERSION >= 11030
-  DECLARE_CUDA_PFN(cuDeviceGet, 2000);
-  DECLARE_CUDA_PFN(cuDeviceGetAttribute, 2000);
-  DECLARE_CUDA_PFN(cuGetErrorString, 6000);
-  DECLARE_CUDA_PFN(cuMemAddressFree, 10020);
-  DECLARE_CUDA_PFN(cuMemAddressReserve, 10020);
-  DECLARE_CUDA_PFN(cuMemCreate, 10020);
-  DECLARE_CUDA_PFN(cuMemGetAddressRange, 3020);
-  DECLARE_CUDA_PFN(cuMemGetAllocationGranularity, 10020);
-  DECLARE_CUDA_PFN(cuMemMap, 10020);
-  DECLARE_CUDA_PFN(cuMemRetainAllocationHandle, 11000);
-  DECLARE_CUDA_PFN(cuMemRelease, 10020);
-  DECLARE_CUDA_PFN(cuMemSetAccess, 10020);
-  DECLARE_CUDA_PFN(cuMemUnmap, 10020);
+  DECLARE_CUDA_PFN(hipDeviceGet, 2000);
+  DECLARE_CUDA_PFN(hipDeviceGetAttribute, 2000);
+  DECLARE_CUDA_PFN(hipDrvGetErrorString, 6000);
+  DECLARE_CUDA_PFN(hipMemAddressFree, 10020);
+  DECLARE_CUDA_PFN(hipMemAddressReserve, 10020);
+  DECLARE_CUDA_PFN(hipMemCreate, 10020);
+  DECLARE_CUDA_PFN(hipMemGetAddressRange, 3020);
+  DECLARE_CUDA_PFN(hipMemGetAllocationGranularity, 10020);
+  DECLARE_CUDA_PFN(hipMemMap, 10020);
+  DECLARE_CUDA_PFN(hipMemRetainAllocationHandle, 11000);
+  DECLARE_CUDA_PFN(hipMemRelease, 10020);
+  DECLARE_CUDA_PFN(hipMemSetAccess, 10020);
+  DECLARE_CUDA_PFN(hipMemUnmap, 10020);
 #endif
 };
 

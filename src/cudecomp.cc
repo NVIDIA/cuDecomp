@@ -24,10 +24,9 @@
 #include <unordered_map>
 #include <vector>
 
-#include <cuda.h>
-#include <cuda_runtime.h>
+#include <hip/hip_runtime.h>
 #include <mpi.h>
-#include <nccl.h>
+#include <rccl/rccl.h>
 #ifdef ENABLE_NVSHMEM
 #include <nvshmem.h>
 #include <nvshmemx.h>
@@ -41,7 +40,6 @@
 #include "internal/exceptions.h"
 #include "internal/halo.h"
 #include "internal/hashes.h"
-#include "internal/nvml_wrap.h"
 #include "internal/transpose.h"
 
 namespace cudecomp {
@@ -197,77 +195,6 @@ static void gatherGlobalMPIInfo(cudecompHandle_t& handle) {
   CHECK_MPI(MPI_Allgather(MPI_IN_PLACE, 0, MPI_DATATYPE_NULL, handle->rank_to_local_rank.data(), 1, MPI_INT,
                           handle->mpi_comm));
 
-  // Gather MNNVL clique related structures (if supported)
-  int dev;
-  CHECK_CUDA(cudaGetDevice(&dev));
-  char pciBusId[] = "00000000:00:00.0";
-  CHECK_CUDA(cudaDeviceGetPCIBusId(pciBusId, sizeof(pciBusId), dev));
-  nvmlDevice_t nvml_dev;
-  CHECK_NVML(nvmlDeviceGetHandleByPciBusId(pciBusId, &nvml_dev));
-#if NVML_API_VERSION >= 12 && CUDART_VERSION >= 12040
-  nvmlGpuFabricInfoV_t fabricInfo = {.version = nvmlGpuFabricInfo_v2};
-
-  // Check CUDECOMP_DISABLE_MNNVL (debug setting to disable MNNVL topology detection)
-  bool disable_mnnvl = checkEnvVar("CUDECOMP_DISABLE_MNNVL");
-
-  if (nvmlHasFabricSupport() && !disable_mnnvl) {
-    handle->rank_to_mnnvl_info.resize(handle->nranks);
-
-    // Gather MNNVL information (clusterUuid, cliqueId) by rank
-    CHECK_NVML(nvmlDeviceGetGpuFabricInfoV(nvml_dev, &fabricInfo));
-    unsigned char zeros[NVML_GPU_FABRIC_UUID_LEN]{};
-    std::vector<std::array<unsigned char, NVML_GPU_FABRIC_UUID_LEN>> clusterUuids(handle->nranks);
-    std::vector<unsigned int> cliqueIds(handle->nranks);
-
-    if (std::memcmp(fabricInfo.clusterUuid, zeros, NVML_GPU_FABRIC_UUID_LEN) != 0) {
-      std::memcpy(clusterUuids[handle->rank].data(), fabricInfo.clusterUuid, NVML_GPU_FABRIC_UUID_LEN);
-      cliqueIds[handle->rank] = fabricInfo.cliqueId;
-    } else {
-      std::memcpy(clusterUuids[handle->rank].data(), zeros, NVML_GPU_FABRIC_UUID_LEN);
-      cliqueIds[handle->rank] = 0;
-    }
-
-    CHECK_MPI(MPI_Allgather(MPI_IN_PLACE, 0, MPI_DATATYPE_NULL, clusterUuids.data(), NVML_GPU_FABRIC_UUID_LEN, MPI_CHAR,
-                            handle->mpi_comm));
-    CHECK_MPI(MPI_Allgather(MPI_IN_PLACE, 0, MPI_DATATYPE_NULL, cliqueIds.data(), 1, MPI_INT, handle->mpi_comm));
-
-    for (int i = 0; i < handle->nranks; ++i) {
-      if (std::memcmp(clusterUuids[i].data(), zeros, NVML_GPU_FABRIC_UUID_LEN) == 0) {
-        // If any rank has a zero cluster UUID, disable MNNVL.
-        handle->rank_to_mnnvl_info.resize(0);
-        break;
-      }
-      handle->rank_to_mnnvl_info[i].first = clusterUuids[i];
-      handle->rank_to_mnnvl_info[i].second = cliqueIds[i];
-    }
-  }
-
-  if (handle->rank_to_mnnvl_info.size() != 0) {
-    // cliqueIds returned in fabricInfo are not unique across MNNVL domains (defined by clusterUuid).
-    // Define a modified clique id that assigns a unique index to each (clusterUuid, cliqueId) pair.
-    std::unordered_map<mnnvl_info, unsigned int> clique_ids;
-    clique_ids = getUniqueIds(handle->rank_to_mnnvl_info);
-
-    // Populate rank to MNNVL clique mappings
-    handle->rank_to_clique.resize(handle->nranks);
-    for (int i = 0; i < handle->nranks; ++i) {
-      handle->rank_to_clique[i] = clique_ids[handle->rank_to_mnnvl_info[i]];
-    }
-
-    // Create clique local MPI communicator
-    CHECK_MPI(MPI_Comm_split(handle->mpi_comm, static_cast<int>(handle->rank_to_clique[handle->rank]), handle->rank,
-                             &handle->mpi_clique_comm));
-    CHECK_MPI(MPI_Comm_rank(handle->mpi_clique_comm, &handle->clique_rank));
-    CHECK_MPI(MPI_Comm_size(handle->mpi_clique_comm, &handle->clique_nranks));
-
-    // Gather rank to clique rank mappings
-    handle->rank_to_clique_rank.resize(handle->nranks);
-    handle->rank_to_clique_rank[handle->rank] = handle->clique_rank;
-    CHECK_MPI(MPI_Allgather(MPI_IN_PLACE, 0, MPI_DATATYPE_NULL, handle->rank_to_clique_rank.data(), 1, MPI_INT,
-                            handle->mpi_comm));
-  }
-#endif
-
   // Copy local rank mapping to clique rank mapping in general case
   if (handle->rank_to_clique_rank.size() == 0) { handle->rank_to_clique_rank = handle->rank_to_local_rank; }
 }
@@ -279,51 +206,16 @@ static void getCudecompEnvVars(cudecompHandle_t& handle) {
   // Check CUDECOMP_ENABLE_CUMEM (CUDA VMM allocations for work buffers)
   handle->cuda_cumem_enable = checkEnvVar("CUDECOMP_ENABLE_CUMEM");
   if (handle->cuda_cumem_enable) {
-#if CUDART_VERSION < 12030
     if (handle->rank == 0) {
       printf("CUDECOMP:WARN: CUDECOMP_ENABLE_CUMEM is set but CUDA version used for compilation does not "
              "support fabric allocations. Disabling this feature.\n");
     }
     handle->cuda_cumem_enable = false;
-#else
-    int driverVersion;
-    CHECK_CUDA(cudaDriverGetVersion(&driverVersion));
-    if (driverVersion < 12030) {
-      if (handle->rank == 0) {
-        printf("CUDECOMP:WARN: CUDECOMP_ENABLE_CUMEM is set but installed driver does not "
-               "support fabric allocations. Disabling this feature.\n");
-      }
-      handle->cuda_cumem_enable = false;
-    } else {
-      // Check if fabric allocation type is supported
-      int dev;
-      CUdevice cu_dev;
-      CHECK_CUDA(cudaGetDevice(&dev));
-      CHECK_CUDA_DRV(cuDeviceGet(&cu_dev, dev));
-      int flag = 0;
-      CHECK_CUDA_DRV(cuDeviceGetAttribute(&flag, CU_DEVICE_ATTRIBUTE_HANDLE_TYPE_FABRIC_SUPPORTED, cu_dev));
-      if (!flag) {
-        if (handle->rank == 0) {
-          printf("CUDECOMP:WARN: CUDECOMP_ENABLE_CUMEM is set but device does not "
-                 "support fabric allocations. Disabling this feature.\n");
-        }
-        handle->cuda_cumem_enable = false;
-      }
-    }
-#endif
   }
 
   // Check CUDECOMP_ENABLE_CUDA_GRAPHS (CUDA Graphs usage in pipelined backends)
   handle->cuda_graphs_enable = checkEnvVar("CUDECOMP_ENABLE_CUDA_GRAPHS");
-  if (handle->cuda_graphs_enable) {
-#if CUDART_VERSION < 11010
-    if (handle->rank == 0) {
-      printf("CUDECOMP:WARN: CUDECOMP_ENABLE_CUDA_GRAPHS is set but CUDA version used for compilation does not "
-             "support cudaEventRecordWithFlags which is required. Disabling this feature.\n");
-    }
-    handle->cuda_graphs_enable = false;
-#endif
-  }
+  if (handle->cuda_graphs_enable) {}
 
   // Check CUDECOMP_ENABLE_PERFORMANCE_REPORT (Performance reporting)
   handle->performance_report_enable = checkEnvVar("CUDECOMP_ENABLE_PERFORMANCE_REPORT");
@@ -429,77 +321,16 @@ cudecompResult_t cudecompInit(cudecompHandle_t* handle_in, MPI_Comm mpi_comm) {
     // Load CUDA driver symbols into table
     initCuFunctionTable();
 
-    // Load NVML symbols into table and initialize NVML
-    initNvmlFunctionTable();
-
-    CHECK_NVML(nvmlInit());
-
     // Initialize cuTENSOR library
-#if CUTENSOR_MAJOR >= 2
-    CHECK_CUTENSOR(cutensorCreate(&handle->cutensor_handle));
-    CHECK_CUTENSOR(cutensorCreatePlanPreference(handle->cutensor_handle, &handle->cutensor_plan_pref,
-                                                CUTENSOR_ALGO_DEFAULT, CUTENSOR_JIT_MODE_NONE));
-#else
-    CHECK_CUTENSOR(cutensorInit(&handle->cutensor_handle));
-#endif
+    CHECK_CUTENSOR(hiptensorCreate(&handle->cutensor_handle));
+    CHECK_CUTENSOR(hiptensorCreatePlanPreference(handle->cutensor_handle, &handle->cutensor_plan_pref,
+                                                 HIPTENSOR_ALGO_DEFAULT, HIPTENSOR_JIT_MODE_NONE));
 
     // Gather cuDecomp environment variable settings
     getCudecompEnvVars(handle);
 
     // Gather extra MPI info from all communicator ranks
     gatherGlobalMPIInfo(handle);
-
-    // Determine P2P CE count
-    int dev;
-    CUdevice cu_dev;
-    CHECK_CUDA(cudaGetDevice(&dev));
-    CHECK_CUDA_DRV(cuDeviceGet(&cu_dev, dev));
-    char pciBusId[] = "00000000:00:00.0";
-    CHECK_CUDA(cudaDeviceGetPCIBusId(pciBusId, sizeof(pciBusId), dev));
-    nvmlDevice_t nvml_dev;
-    CHECK_NVML(nvmlDeviceGetHandleByPciBusId(pciBusId, &nvml_dev));
-
-    // Check if NVSwitch is present
-    bool has_nvswitch = false;
-    nvmlFieldValue_t fv;
-    fv.fieldId = NVML_FI_DEV_NVSWITCH_CONNECTED_LINK_COUNT;
-    CHECK_NVML(nvmlDeviceGetFieldValues(nvml_dev, 1, &fv));
-    if (fv.nvmlReturn == NVML_SUCCESS) { has_nvswitch = fv.value.uiVal > 0; }
-
-    // If NVSwitch is not present, determine number of NVLink connected peers
-    int num_nvlink_peers = 0;
-    if (!has_nvswitch) {
-      std::set<std::string> remote_bus_ids;
-      for (int i = 0; i < NVML_NVLINK_MAX_LINKS; ++i) {
-        unsigned int p2p_supported = 0;
-        nvmlReturn_t ret =
-            nvmlFnTable.pfn_nvmlDeviceGetNvLinkCapability(nvml_dev, i, NVML_NVLINK_CAP_P2P_SUPPORTED, &p2p_supported);
-        if (ret != NVML_SUCCESS || !p2p_supported) continue;
-
-        nvmlEnableState_t isActive;
-        ret = nvmlFnTable.pfn_nvmlDeviceGetNvLinkState(nvml_dev, i, &isActive);
-        if (ret != NVML_SUCCESS || isActive != NVML_FEATURE_ENABLED) continue;
-
-        nvmlPciInfo_t pciInfo = {};
-        CHECK_NVML(nvmlDeviceGetNvLinkRemotePciInfo(nvml_dev, i, &pciInfo));
-        std::string busId = std::string(pciInfo.busId);
-        if (busId.empty()) {
-          // Fall back to legacy bus ID
-          busId = std::string(pciInfo.busIdLegacy);
-        }
-        remote_bus_ids.insert(busId);
-      }
-      num_nvlink_peers = static_cast<int>(remote_bus_ids.size());
-    }
-
-    // Set P2P CE count
-    if (has_nvswitch) {
-      handle->device_p2p_ce_count = 1; // 1 P2P CE for NVSwitch
-    } else if (num_nvlink_peers > 0) {
-      handle->device_p2p_ce_count = num_nvlink_peers; // Assume each NVLink peer has a P2P CE available
-    } else {
-      handle->device_p2p_ce_count = 2; // Assume 2 P2P CE otherwise (shared D2H/H2D CE)
-    }
 
     handle->initialized = true;
     cudecomp_initialized = true;
@@ -523,7 +354,7 @@ cudecompResult_t cudecompFinalize(cudecompHandle_t handle) {
     handle->nccl_local_comm.reset();
 
     for (auto& stream : handle->streams) {
-      CHECK_CUDA(cudaStreamDestroy(stream));
+      CHECK_CUDA(hipStreamDestroy(stream));
     }
 #ifdef ENABLE_NVSHMEM
     if (handle->nvshmem_initialized) {
@@ -535,12 +366,8 @@ cudecompResult_t cudecompFinalize(cudecompHandle_t handle) {
 #endif
     CHECK_MPI(MPI_Comm_free(&handle->mpi_local_comm));
 
-#if CUTENSOR_MAJOR >= 2
-    CHECK_CUTENSOR(cutensorDestroy(handle->cutensor_handle));
-    CHECK_CUTENSOR(cutensorDestroyPlanPreference(handle->cutensor_plan_pref));
-#endif
-
-    CHECK_NVML(nvmlShutdown());
+    CHECK_CUTENSOR(hiptensorDestroy(handle->cutensor_handle));
+    CHECK_CUTENSOR(hiptensorDestroyPlanPreference(handle->cutensor_plan_pref));
 
     handle = nullptr;
     delete handle;
@@ -702,19 +529,19 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
     if (handle->streams.empty()) {
       handle->streams.resize(handle->device_p2p_ce_count + 1);
       int greatest_priority;
-      CHECK_CUDA(cudaDeviceGetStreamPriorityRange(nullptr, &greatest_priority));
+      CHECK_CUDA(hipDeviceGetStreamPriorityRange(nullptr, &greatest_priority));
       for (auto& stream : handle->streams) {
-        CHECK_CUDA(cudaStreamCreateWithPriority(&stream, cudaStreamNonBlocking, greatest_priority));
+        CHECK_CUDA(hipStreamCreateWithPriority(&stream, hipStreamNonBlocking, greatest_priority));
       }
     }
 
     // Create CUDA events for scheduling
     grid_desc->events.resize(handle->nranks);
     for (auto& event : grid_desc->events) {
-      CHECK_CUDA(cudaEventCreateWithFlags(&event, cudaEventDisableTiming));
+      CHECK_CUDA(hipEventCreateWithFlags(&event, hipEventDisableTiming));
     }
 #ifdef ENABLE_NVSHMEM
-    CHECK_CUDA(cudaEventCreateWithFlags(&grid_desc->nvshmem_sync_event, cudaEventDisableTiming));
+    CHECK_CUDA(hipEventCreateWithFlags(&grid_desc->nvshmem_sync_event, hipEventDisableTiming));
 #endif
 
     // Disable decompositions with empty pencils
@@ -838,11 +665,11 @@ cudecompResult_t cudecompGridDescDestroy(cudecompHandle_t handle, cudecompGridDe
     }
 
     for (auto e : grid_desc->events) {
-      if (e) { CHECK_CUDA(cudaEventDestroy(e)); }
+      if (e) { CHECK_CUDA(hipEventDestroy(e)); }
     }
 
 #ifdef ENABLE_NVSHMEM
-    if (grid_desc->nvshmem_sync_event) { CHECK_CUDA(cudaEventDestroy(grid_desc->nvshmem_sync_event)); }
+    if (grid_desc->nvshmem_sync_event) { CHECK_CUDA(hipEventDestroy(grid_desc->nvshmem_sync_event)); }
 #endif
 
     if (handle->performance_report_enable) {
@@ -853,13 +680,13 @@ cudecompResult_t cudecompGridDescDestroy(cudecompHandle_t handle, cudecompGridDe
       for (auto& entry : grid_desc->transpose_perf_samples_map) {
         auto& collection = entry.second;
         for (auto& sample : collection.samples) {
-          CHECK_CUDA(cudaEventDestroy(sample.transpose_start_event));
-          CHECK_CUDA(cudaEventDestroy(sample.transpose_end_event));
+          CHECK_CUDA(hipEventDestroy(sample.transpose_start_event));
+          CHECK_CUDA(hipEventDestroy(sample.transpose_end_event));
           for (auto& event : sample.alltoall_start_events) {
-            CHECK_CUDA(cudaEventDestroy(event));
+            CHECK_CUDA(hipEventDestroy(event));
           }
           for (auto& event : sample.alltoall_end_events) {
-            CHECK_CUDA(cudaEventDestroy(event));
+            CHECK_CUDA(hipEventDestroy(event));
           }
         }
       }
@@ -868,10 +695,10 @@ cudecompResult_t cudecompGridDescDestroy(cudecompHandle_t handle, cudecompGridDe
       for (auto& entry : grid_desc->halo_perf_samples_map) {
         auto& collection = entry.second;
         for (auto& sample : collection.samples) {
-          CHECK_CUDA(cudaEventDestroy(sample.halo_start_event));
-          CHECK_CUDA(cudaEventDestroy(sample.halo_end_event));
-          CHECK_CUDA(cudaEventDestroy(sample.sendrecv_start_event));
-          CHECK_CUDA(cudaEventDestroy(sample.sendrecv_end_event));
+          CHECK_CUDA(hipEventDestroy(sample.halo_start_event));
+          CHECK_CUDA(hipEventDestroy(sample.halo_end_event));
+          CHECK_CUDA(hipEventDestroy(sample.sendrecv_start_event));
+          CHECK_CUDA(hipEventDestroy(sample.sendrecv_end_event));
         }
       }
     }
@@ -1165,44 +992,8 @@ cudecompResult_t cudecompMalloc(cudecompHandle_t handle, cudecompGridDesc_t grid
 #endif
     } else {
       if (handle->cuda_cumem_enable) {
-#if CUDART_VERSION >= 12030
-        int dev;
-        CUdevice cu_dev;
-        CHECK_CUDA(cudaGetDevice(&dev));
-        CHECK_CUDA_DRV(cuDeviceGet(&cu_dev, dev));
-
-        CUmemAllocationProp prop = {};
-        prop.type = CU_MEM_ALLOCATION_TYPE_PINNED;
-        prop.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
-        prop.requestedHandleTypes = CU_MEM_HANDLE_TYPE_FABRIC;
-        prop.location.id = cu_dev;
-
-        // Check for RDMA support
-        int flag;
-        CHECK_CUDA_DRV(
-            cuDeviceGetAttribute(&flag, CU_DEVICE_ATTRIBUTE_GPU_DIRECT_RDMA_WITH_CUDA_VMM_SUPPORTED, cu_dev));
-        if (flag) prop.allocFlags.gpuDirectRDMACapable = 1;
-
-        // Align allocation size to required granularity
-        size_t granularity;
-        CHECK_CUDA_DRV(cuMemGetAllocationGranularity(&granularity, &prop, CU_MEM_ALLOC_GRANULARITY_MINIMUM));
-        buffer_size_bytes = (buffer_size_bytes + granularity - 1) / granularity * granularity;
-
-        // Allocate memory
-        CUmemGenericAllocationHandle cumem_handle;
-        CHECK_CUDA_DRV(cuMemCreate(&cumem_handle, buffer_size_bytes, &prop, 0));
-        CHECK_CUDA_DRV(cuMemAddressReserve((CUdeviceptr*)buffer, buffer_size_bytes, granularity, 0, 0));
-        CHECK_CUDA_DRV(cuMemMap((CUdeviceptr)*buffer, buffer_size_bytes, 0, cumem_handle, 0));
-
-        // Set read/write access
-        CUmemAccessDesc accessDesc = {};
-        accessDesc.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
-        accessDesc.location.id = cu_dev;
-        accessDesc.flags = CU_MEM_ACCESS_FLAGS_PROT_READWRITE;
-        CHECK_CUDA_DRV(cuMemSetAccess((CUdeviceptr)*buffer, buffer_size_bytes, &accessDesc, 1));
-#endif
       } else {
-        CHECK_CUDA(cudaMalloc(buffer, buffer_size_bytes));
+        CHECK_CUDA(hipMalloc(buffer, buffer_size_bytes));
       }
 #if NCCL_VERSION_CODE >= NCCL_VERSION(2, 19, 0)
       if (transposeBackendRequiresNccl(grid_desc->config.transpose_comm_backend) ||
@@ -1266,20 +1057,8 @@ cudecompResult_t cudecompFree(cudecompHandle_t handle, cudecompGridDesc_t grid_d
 
     } else {
       if (handle->cuda_cumem_enable) {
-#if CUDART_VERSION >= 12030
-        if (buffer) {
-          CUmemGenericAllocationHandle cumem_handle;
-          CHECK_CUDA_DRV(cuMemRetainAllocationHandle(&cumem_handle, buffer));
-          CHECK_CUDA_DRV(cuMemRelease(cumem_handle));
-          size_t size = 0;
-          CHECK_CUDA_DRV(cuMemGetAddressRange(NULL, &size, (CUdeviceptr)buffer));
-          CHECK_CUDA_DRV(cuMemUnmap((CUdeviceptr)buffer, size));
-          CHECK_CUDA_DRV(cuMemRelease(cumem_handle));
-          CHECK_CUDA_DRV(cuMemAddressFree((CUdeviceptr)buffer, size));
-        }
-#endif
       } else {
-        if (buffer) { CHECK_CUDA(cudaFree(buffer)); }
+        if (buffer) { CHECK_CUDA(hipFree(buffer)); }
       }
     }
   } catch (const cudecomp::BaseException& e) {
@@ -1380,7 +1159,7 @@ cudecompResult_t cudecompGetShiftedRank(cudecompHandle_t handle, cudecompGridDes
 cudecompResult_t cudecompTransposeXToY(cudecompHandle_t handle, cudecompGridDesc_t grid_desc, void* input, void* output,
                                        void* work, cudecompDataType_t dtype, const int32_t input_halo_extents[],
                                        const int32_t output_halo_extents[], const int32_t input_padding[],
-                                       const int32_t output_padding[], cudaStream_t stream) {
+                                       const int32_t output_padding[], hipStream_t stream) {
   using namespace cudecomp;
   try {
     checkHandle(handle);
@@ -1401,16 +1180,16 @@ cudecompResult_t cudecompTransposeXToY(cudecompHandle_t handle, cudecompGridDesc
                             output_padding, stream);
       break;
     case CUDECOMP_FLOAT_COMPLEX:
-      cudecompTransposeXToY(handle, grid_desc, reinterpret_cast<cuda::std::complex<float>*>(input),
-                            reinterpret_cast<cuda::std::complex<float>*>(output),
-                            reinterpret_cast<cuda::std::complex<float>*>(work), input_halo_extents, output_halo_extents,
+      cudecompTransposeXToY(handle, grid_desc, reinterpret_cast<std::complex<float>*>(input),
+                            reinterpret_cast<std::complex<float>*>(output),
+                            reinterpret_cast<std::complex<float>*>(work), input_halo_extents, output_halo_extents,
                             input_padding, output_padding, stream);
       break;
     case CUDECOMP_DOUBLE_COMPLEX:
-      cudecompTransposeXToY(handle, grid_desc, reinterpret_cast<cuda::std::complex<double>*>(input),
-                            reinterpret_cast<cuda::std::complex<double>*>(output),
-                            reinterpret_cast<cuda::std::complex<double>*>(work), input_halo_extents,
-                            output_halo_extents, input_padding, output_padding, stream);
+      cudecompTransposeXToY(handle, grid_desc, reinterpret_cast<std::complex<double>*>(input),
+                            reinterpret_cast<std::complex<double>*>(output),
+                            reinterpret_cast<std::complex<double>*>(work), input_halo_extents, output_halo_extents,
+                            input_padding, output_padding, stream);
       break;
     }
   } catch (const cudecomp::BaseException& e) {
@@ -1423,7 +1202,7 @@ cudecompResult_t cudecompTransposeXToY(cudecompHandle_t handle, cudecompGridDesc
 cudecompResult_t cudecompTransposeYToZ(cudecompHandle_t handle, cudecompGridDesc_t grid_desc, void* input, void* output,
                                        void* work, cudecompDataType_t dtype, const int32_t input_halo_extents[],
                                        const int32_t output_halo_extents[], const int32_t input_padding[],
-                                       const int32_t output_padding[], cudaStream_t stream) {
+                                       const int32_t output_padding[], hipStream_t stream) {
   using namespace cudecomp;
   try {
     checkHandle(handle);
@@ -1444,16 +1223,16 @@ cudecompResult_t cudecompTransposeYToZ(cudecompHandle_t handle, cudecompGridDesc
                             output_padding, stream);
       break;
     case CUDECOMP_FLOAT_COMPLEX:
-      cudecompTransposeYToZ(handle, grid_desc, reinterpret_cast<cuda::std::complex<float>*>(input),
-                            reinterpret_cast<cuda::std::complex<float>*>(output),
-                            reinterpret_cast<cuda::std::complex<float>*>(work), input_halo_extents, output_halo_extents,
+      cudecompTransposeYToZ(handle, grid_desc, reinterpret_cast<std::complex<float>*>(input),
+                            reinterpret_cast<std::complex<float>*>(output),
+                            reinterpret_cast<std::complex<float>*>(work), input_halo_extents, output_halo_extents,
                             input_padding, output_padding, stream);
       break;
     case CUDECOMP_DOUBLE_COMPLEX:
-      cudecompTransposeYToZ(handle, grid_desc, reinterpret_cast<cuda::std::complex<double>*>(input),
-                            reinterpret_cast<cuda::std::complex<double>*>(output),
-                            reinterpret_cast<cuda::std::complex<double>*>(work), input_halo_extents,
-                            output_halo_extents, input_padding, output_padding, stream);
+      cudecompTransposeYToZ(handle, grid_desc, reinterpret_cast<std::complex<double>*>(input),
+                            reinterpret_cast<std::complex<double>*>(output),
+                            reinterpret_cast<std::complex<double>*>(work), input_halo_extents, output_halo_extents,
+                            input_padding, output_padding, stream);
       break;
     }
   } catch (const cudecomp::BaseException& e) {
@@ -1466,7 +1245,7 @@ cudecompResult_t cudecompTransposeYToZ(cudecompHandle_t handle, cudecompGridDesc
 cudecompResult_t cudecompTransposeZToY(cudecompHandle_t handle, cudecompGridDesc_t grid_desc, void* input, void* output,
                                        void* work, cudecompDataType_t dtype, const int32_t input_halo_extents[],
                                        const int32_t output_halo_extents[], const int32_t input_padding[],
-                                       const int32_t output_padding[], cudaStream_t stream) {
+                                       const int32_t output_padding[], hipStream_t stream) {
   using namespace cudecomp;
   try {
     checkHandle(handle);
@@ -1487,16 +1266,16 @@ cudecompResult_t cudecompTransposeZToY(cudecompHandle_t handle, cudecompGridDesc
                             output_padding, stream);
       break;
     case CUDECOMP_FLOAT_COMPLEX:
-      cudecompTransposeZToY(handle, grid_desc, reinterpret_cast<cuda::std::complex<float>*>(input),
-                            reinterpret_cast<cuda::std::complex<float>*>(output),
-                            reinterpret_cast<cuda::std::complex<float>*>(work), input_halo_extents, output_halo_extents,
+      cudecompTransposeZToY(handle, grid_desc, reinterpret_cast<std::complex<float>*>(input),
+                            reinterpret_cast<std::complex<float>*>(output),
+                            reinterpret_cast<std::complex<float>*>(work), input_halo_extents, output_halo_extents,
                             input_padding, output_padding, stream);
       break;
     case CUDECOMP_DOUBLE_COMPLEX:
-      cudecompTransposeZToY(handle, grid_desc, reinterpret_cast<cuda::std::complex<double>*>(input),
-                            reinterpret_cast<cuda::std::complex<double>*>(output),
-                            reinterpret_cast<cuda::std::complex<double>*>(work), input_halo_extents,
-                            output_halo_extents, input_padding, output_padding, stream);
+      cudecompTransposeZToY(handle, grid_desc, reinterpret_cast<std::complex<double>*>(input),
+                            reinterpret_cast<std::complex<double>*>(output),
+                            reinterpret_cast<std::complex<double>*>(work), input_halo_extents, output_halo_extents,
+                            input_padding, output_padding, stream);
       break;
     }
   } catch (const cudecomp::BaseException& e) {
@@ -1509,7 +1288,7 @@ cudecompResult_t cudecompTransposeZToY(cudecompHandle_t handle, cudecompGridDesc
 cudecompResult_t cudecompTransposeYToX(cudecompHandle_t handle, cudecompGridDesc_t grid_desc, void* input, void* output,
                                        void* work, cudecompDataType_t dtype, const int32_t input_halo_extents[],
                                        const int32_t output_halo_extents[], const int32_t input_padding[],
-                                       const int32_t output_padding[], cudaStream_t stream) {
+                                       const int32_t output_padding[], hipStream_t stream) {
   using namespace cudecomp;
   try {
     checkHandle(handle);
@@ -1530,16 +1309,16 @@ cudecompResult_t cudecompTransposeYToX(cudecompHandle_t handle, cudecompGridDesc
                             output_padding, stream);
       break;
     case CUDECOMP_FLOAT_COMPLEX:
-      cudecompTransposeYToX(handle, grid_desc, reinterpret_cast<cuda::std::complex<float>*>(input),
-                            reinterpret_cast<cuda::std::complex<float>*>(output),
-                            reinterpret_cast<cuda::std::complex<float>*>(work), input_halo_extents, output_halo_extents,
+      cudecompTransposeYToX(handle, grid_desc, reinterpret_cast<std::complex<float>*>(input),
+                            reinterpret_cast<std::complex<float>*>(output),
+                            reinterpret_cast<std::complex<float>*>(work), input_halo_extents, output_halo_extents,
                             input_padding, output_padding, stream);
       break;
     case CUDECOMP_DOUBLE_COMPLEX:
-      cudecompTransposeYToX(handle, grid_desc, reinterpret_cast<cuda::std::complex<double>*>(input),
-                            reinterpret_cast<cuda::std::complex<double>*>(output),
-                            reinterpret_cast<cuda::std::complex<double>*>(work), input_halo_extents,
-                            output_halo_extents, input_padding, output_padding, stream);
+      cudecompTransposeYToX(handle, grid_desc, reinterpret_cast<std::complex<double>*>(input),
+                            reinterpret_cast<std::complex<double>*>(output),
+                            reinterpret_cast<std::complex<double>*>(work), input_halo_extents, output_halo_extents,
+                            input_padding, output_padding, stream);
       break;
     }
   } catch (const cudecomp::BaseException& e) {
@@ -1551,7 +1330,7 @@ cudecompResult_t cudecompTransposeYToX(cudecompHandle_t handle, cudecompGridDesc
 
 cudecompResult_t cudecompUpdateHalosX(cudecompHandle_t handle, cudecompGridDesc_t grid_desc, void* input, void* work,
                                       cudecompDataType_t dtype, const int32_t halo_extents[], const bool halo_periods[],
-                                      int32_t dim, const int32_t padding[], cudaStream_t stream) {
+                                      int32_t dim, const int32_t padding[], hipStream_t stream) {
   using namespace cudecomp;
   try {
     checkHandle(handle);
@@ -1577,14 +1356,14 @@ cudecompResult_t cudecompUpdateHalosX(cudecompHandle_t handle, cudecompGridDesc_
                            halo_extents, halo_periods, dim, padding, stream);
       break;
     case CUDECOMP_FLOAT_COMPLEX:
-      cudecompUpdateHalosX(handle, grid_desc, reinterpret_cast<cuda::std::complex<float>*>(input),
-                           reinterpret_cast<cuda::std::complex<float>*>(work), halo_extents, halo_periods, dim, padding,
+      cudecompUpdateHalosX(handle, grid_desc, reinterpret_cast<std::complex<float>*>(input),
+                           reinterpret_cast<std::complex<float>*>(work), halo_extents, halo_periods, dim, padding,
                            stream);
       break;
     case CUDECOMP_DOUBLE_COMPLEX:
-      cudecompUpdateHalosX(handle, grid_desc, reinterpret_cast<cuda::std::complex<double>*>(input),
-                           reinterpret_cast<cuda::std::complex<double>*>(work), halo_extents, halo_periods, dim,
-                           padding, stream);
+      cudecompUpdateHalosX(handle, grid_desc, reinterpret_cast<std::complex<double>*>(input),
+                           reinterpret_cast<std::complex<double>*>(work), halo_extents, halo_periods, dim, padding,
+                           stream);
       break;
     }
 
@@ -1597,7 +1376,7 @@ cudecompResult_t cudecompUpdateHalosX(cudecompHandle_t handle, cudecompGridDesc_
 
 cudecompResult_t cudecompUpdateHalosY(cudecompHandle_t handle, cudecompGridDesc_t grid_desc, void* input, void* work,
                                       cudecompDataType_t dtype, const int32_t halo_extents[], const bool halo_periods[],
-                                      int32_t dim, const int32_t padding[], cudaStream_t stream) {
+                                      int32_t dim, const int32_t padding[], hipStream_t stream) {
   using namespace cudecomp;
   try {
     checkHandle(handle);
@@ -1623,14 +1402,14 @@ cudecompResult_t cudecompUpdateHalosY(cudecompHandle_t handle, cudecompGridDesc_
                            halo_extents, halo_periods, dim, padding, stream);
       break;
     case CUDECOMP_FLOAT_COMPLEX:
-      cudecompUpdateHalosY(handle, grid_desc, reinterpret_cast<cuda::std::complex<float>*>(input),
-                           reinterpret_cast<cuda::std::complex<float>*>(work), halo_extents, halo_periods, dim, padding,
+      cudecompUpdateHalosY(handle, grid_desc, reinterpret_cast<std::complex<float>*>(input),
+                           reinterpret_cast<std::complex<float>*>(work), halo_extents, halo_periods, dim, padding,
                            stream);
       break;
     case CUDECOMP_DOUBLE_COMPLEX:
-      cudecompUpdateHalosY(handle, grid_desc, reinterpret_cast<cuda::std::complex<double>*>(input),
-                           reinterpret_cast<cuda::std::complex<double>*>(work), halo_extents, halo_periods, dim,
-                           padding, stream);
+      cudecompUpdateHalosY(handle, grid_desc, reinterpret_cast<std::complex<double>*>(input),
+                           reinterpret_cast<std::complex<double>*>(work), halo_extents, halo_periods, dim, padding,
+                           stream);
       break;
     }
 
@@ -1643,7 +1422,7 @@ cudecompResult_t cudecompUpdateHalosY(cudecompHandle_t handle, cudecompGridDesc_
 
 cudecompResult_t cudecompUpdateHalosZ(cudecompHandle_t handle, cudecompGridDesc_t grid_desc, void* input, void* work,
                                       cudecompDataType_t dtype, const int32_t halo_extents[], const bool halo_periods[],
-                                      int32_t dim, const int32_t padding[], cudaStream_t stream) {
+                                      int32_t dim, const int32_t padding[], hipStream_t stream) {
   using namespace cudecomp;
   try {
     checkHandle(handle);
@@ -1669,14 +1448,14 @@ cudecompResult_t cudecompUpdateHalosZ(cudecompHandle_t handle, cudecompGridDesc_
                            halo_extents, halo_periods, dim, padding, stream);
       break;
     case CUDECOMP_FLOAT_COMPLEX:
-      cudecompUpdateHalosZ(handle, grid_desc, reinterpret_cast<cuda::std::complex<float>*>(input),
-                           reinterpret_cast<cuda::std::complex<float>*>(work), halo_extents, halo_periods, dim, padding,
+      cudecompUpdateHalosZ(handle, grid_desc, reinterpret_cast<std::complex<float>*>(input),
+                           reinterpret_cast<std::complex<float>*>(work), halo_extents, halo_periods, dim, padding,
                            stream);
       break;
     case CUDECOMP_DOUBLE_COMPLEX:
-      cudecompUpdateHalosZ(handle, grid_desc, reinterpret_cast<cuda::std::complex<double>*>(input),
-                           reinterpret_cast<cuda::std::complex<double>*>(work), halo_extents, halo_periods, dim,
-                           padding, stream);
+      cudecompUpdateHalosZ(handle, grid_desc, reinterpret_cast<std::complex<double>*>(input),
+                           reinterpret_cast<std::complex<double>*>(work), halo_extents, halo_periods, dim, padding,
+                           stream);
       break;
     }
 

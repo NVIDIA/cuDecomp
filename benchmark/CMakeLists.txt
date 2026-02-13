@@ -1,3 +1,5 @@
+find_package(hipfft REQUIRED)
+
 set(benchmark_targets
   benchmark_r2c
   benchmark_c2c
@@ -7,12 +9,7 @@ set(benchmark_targets
 
 foreach(tgt ${benchmark_targets})
   add_executable(${tgt})
-  if (CMAKE_VERSION VERSION_LESS 3.18)
-    target_compile_options(${tgt} PRIVATE $<$<COMPILE_LANGUAGE:CUDA>: ${CUDA_CC_FLAGS}>)
-  else()
-    set_target_properties(${tgt} PROPERTIES CUDA_ARCHITECTURES "${CUDECOMP_CUDA_CC_LIST}")
-  endif()
-  target_compile_options(${tgt} PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-Wno-deprecated-gpu-targets >)
+  set_target_properties(${tgt} PROPERTIES CUDA_ARCHITECTURES "${CUDECOMP_HIP_ARCH_LIST}")
   target_sources(${tgt}
     PRIVATE
     benchmark.cu
@@ -20,11 +17,9 @@ foreach(tgt ${benchmark_targets})
   target_include_directories(${tgt}
 	                     PRIVATE
 			     ${CMAKE_CURRENT_SOURCE_DIR}/../include
-			     ${NVHPC_CUFFT_INCLUDE_DIR}
-			     ${NCCL_INCLUDE_DIR}
 			     ${MPI_CXX_INCLUDE_DIRS})
-  target_link_libraries(${tgt} PRIVATE cudecomp)
-  target_link_libraries(${tgt} PRIVATE NVHPC::CUFFT)
+  target_link_libraries(${tgt} PRIVATE hipdecomp)
+  target_link_libraries(${tgt} PRIVATE hip::hipfft)
   set_target_properties(${tgt} PROPERTIES LINKER_LANGUAGE CXX)
 endforeach()
 

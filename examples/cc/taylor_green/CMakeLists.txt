@@ -1,3 +1,5 @@
+find_package(hipfft REQUIRED)
+
 add_executable(tg)
 
 target_sources(tg
@@ -5,13 +7,7 @@ target_sources(tg
   tg.cu
 )
 
-if (CMAKE_VERSION VERSION_LESS 3.18)
-  target_compile_options(tg PRIVATE $<$<COMPILE_LANGUAGE:CUDA>: ${CUDA_CC_FLAGS}>)
-else()
-  set_target_properties(tg PROPERTIES CUDA_ARCHITECTURES "${CUDECOMP_CUDA_CC_LIST}")
-endif()
-target_compile_options(tg PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-Wno-deprecated-gpu-targets >)
-target_compile_options(tg PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-diag-suppress 177>) # Silence unused function warning
+set_target_properties(tg PROPERTIES HIP_ARCHITECTURES "${CUDECOMP_HIP_ARCH_LIST}")
 
 target_include_directories(tg
   PRIVATE
@@ -20,8 +16,8 @@ target_include_directories(tg
   ${NVHPC_CUFFT_INCLUDE_DIR}
 )
 target_link_libraries(tg PRIVATE MPI::MPI_CXX)
-target_link_libraries(tg PRIVATE NVHPC::CUFFT)
-target_link_libraries(tg PRIVATE cudecomp)
+target_link_libraries(tg PRIVATE hip::hipfft)
+target_link_libraries(tg PRIVATE hipdecomp)
 set_target_properties(tg PROPERTIES LINKER_LANGUAGE CXX)
 
 install(

@@ -107,8 +107,7 @@ __launch_bounds__(CUDECOMP_CUDA_NTHREADS) __global__
 }
 
 template <typename T>
-void cudecomp_batched_d2d_memcpy_3d_nd_dispatch(const cudecompBatchedD2DMemcpy3DParams<T>& params,
-                                                cudaStream_t stream) {
+void cudecomp_batched_d2d_memcpy_3d_nd_dispatch(const cudecompBatchedD2DMemcpy3DParams<T>& params, hipStream_t stream) {
   size_t N = params.extents[0][0] * params.extents[1][0] * params.extents[2][0];
 
   // Determine reduced copy dimension to simplify indexing
@@ -140,8 +139,8 @@ void cudecomp_batched_d2d_memcpy_3d_nd_dispatch(const cudecompBatchedD2DMemcpy3D
 
   // Clamp minimum number of blocks from unrolling
   int dev, num_sms;
-  CHECK_CUDA(cudaGetDevice(&dev));
-  CHECK_CUDA(cudaDeviceGetAttribute(&num_sms, cudaDevAttrMultiProcessorCount, dev));
+  CHECK_CUDA(hipGetDevice(&dev));
+  CHECK_CUDA(hipDeviceGetAttribute(&num_sms, hipDeviceAttributeMultiprocessorCount, dev));
 
   if (total_blocks_unroll > CUDECOMP_MIN_BLOCKS_PER_SM * num_sms) { blocks_per_copy = blocks_per_copy_unroll; }
 

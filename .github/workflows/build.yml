@@ -1,109 +1,21 @@
 name: "Build"
 
 on:
-  issue_comment:
-    types: [ created ]
+  pull_request:
+  workflow_dispatch:
 
 jobs:
-  trigger-comment:
-    if: github.event.issue.pull_request && contains(github.event.comment.body, '/build') && (github.actor == 'romerojosh')
+  test-build:
+    name: "Build"
     runs-on: ubuntu-latest
-    permissions:
-      issues: write
-      pull-requests: write
     steps:
-    - name: "Post trigger comment"
-      uses: actions/github-script@v7
-      with:
-        script: |
-          const workflowUrl = `${context.payload.repository.html_url}/actions/runs/${context.runId}`;
-          github.rest.issues.createComment({
-            issue_number: context.issue.number,
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            body: `🚀 Build workflow triggered! [View run](${workflowUrl})`
-          });
-
-  build:
-    needs: trigger-comment
-    if: github.event.issue.pull_request && contains(github.event.comment.body, '/build') && (github.actor == 'romerojosh')
-    strategy:
-      matrix:
-        include:
-          - name: "NVHPC SDK 25.9, CUDA 13.0, Ubuntu 24.04"
-            image: "nvcr.io/nvidia/nvhpc:25.9-devel-cuda13.0-ubuntu24.04"
-          - name: "NVHPC SDK 25.7, CUDA 12.9, Ubuntu 22.04"
-            image: "nvcr.io/nvidia/nvhpc:25.7-devel-cuda12.9-ubuntu22.04"
-          - name: "NVHPC SDK 22.11, CUDA 11.8, Ubuntu 20.04"
-            image: "nvcr.io/nvidia/nvhpc:22.11-devel-cuda11.8-ubuntu20.04"
-    
-    name: ${{ matrix.name }}
-    runs-on: ubuntu-latest
-    
-    steps:
-    - name: "Free disk space"
-      run: |
-        sudo rm -rf /usr/local/lib/android || true
-        sudo rm -rf /usr/share/dotnet || true
-
-    - name: "Retrieve PR info"
-      uses: actions/github-script@v7
-      id: pr-info
-      with:
-        script: |
-          const pr = await github.rest.pulls.get({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            pull_number: context.issue.number
-          });
-          core.setOutput('sha', pr.data.head.sha);
-
-    - name: "Checkout PR code"
-      uses: actions/checkout@v4
-      with:
-        persist-credentials: false
-        ref: ${{ steps.pr-info.outputs.sha }}
-
-    - name: "Full build with NVSHMEM"
-      run: |
-        docker run --rm -v $PWD:/workspace -w /workspace ${{ matrix.image }} bash -c '
-          mkdir -p build-nvshmem
-          cd build-nvshmem
-          cmake -DCUDECOMP_ENABLE_NVSHMEM=1 -DCUDECOMP_BUILD_EXTRAS=1 ..
-          make -j$(nproc)
-        '
-
-    - name: "Library only build without NVSHMEM"
-      run: |
-        docker run --rm -v $PWD:/workspace -w /workspace ${{ matrix.image }} bash -c '
-          mkdir -p build-no-nvshmem
-          cd build-no-nvshmem
-          cmake ..
-          make -j$(nproc)
-        '
-
-  result-comment:
-    needs: build
-    if: always() && github.event.issue.pull_request && contains(github.event.comment.body, '/build') && (github.actor == 'romerojosh')
-    runs-on: ubuntu-latest
-    permissions:
-      issues: write
-      pull-requests: write
-    steps:
-      - name: "Post result comment"
-        uses: actions/github-script@v7
+      - uses: actions/checkout@v4
+      - uses: loostrum/rocm-installer@v0.2
         with:
-          script: |
-            const workflowUrl = `${context.payload.repository.html_url}/actions/runs/${context.runId}`;
-            const success = '${{ needs.build.result }}' === 'success';
-
-            const message = success
-              ? `✅ Build workflow passed! [View run](${workflowUrl})`
-              : `❌ Build workflow failed! [View run](${workflowUrl})`;
-
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: message
-            });
+          version: "7.2.0"
+          packages: rocm-hip-runtime-dev hipfft-dev hiptensor-dev rccl-dev
+      - run: |
+          sudo apt update && sudo apt install -y libopenmpi-dev
+      - run: |
+          cmake -S . -B build -DHIPDECOMP_BUILD_EXTRAS=1 -DHIPDECOMP_HIP_ARCH_LIST=gfx90a
+          make -C build -j
