@@ -21,7 +21,7 @@
 #include <array>
 #include <vector>
 
-#include <cuda_runtime.h>
+#include <hip/hip_runtime.h>
 #include <mpi.h>
 
 #include "internal/checks.h"
@@ -36,7 +36,7 @@ namespace cudecomp {
 template <typename T>
 void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompGridDesc_t grid_desc, T* input, T* work,
                           const int32_t halo_extents_ptr[], const bool halo_periods_ptr[], int32_t dim,
-                          const int32_t padding_ptr[], cudaStream_t stream) {
+                          const int32_t padding_ptr[], hipStream_t stream) {
   std::array<int32_t, 3> halo_extents{};
   if (halo_extents_ptr) std::copy(halo_extents_ptr, halo_extents_ptr + 3, halo_extents.begin());
   std::array<bool, 3> halo_periods{};
@@ -73,7 +73,7 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
     current_sample->valid = true;
 
     // Record start event
-    CHECK_CUDA(cudaEventRecord(current_sample->halo_start_event, stream));
+    CHECK_CUDA(hipEventRecord(current_sample->halo_start_event, stream));
   }
 
   // Check if halos include more than one process (unsupported currently).
@@ -125,7 +125,7 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
     // Single rank in this dimension and not periodic. Return.
     if (handle->performance_report_enable && current_sample) {
       // Record end event and advance sample even for early return
-      CHECK_CUDA(cudaEventRecord(current_sample->halo_end_event, stream));
+      CHECK_CUDA(hipEventRecord(current_sample->halo_end_event, stream));
       advanceHaloPerformanceSample(handle, grid_desc,
                                    createHaloConfig(ax, dim, input, halo_extents.data(), halo_periods.data(),
                                                     padding.data(), getCudecompDataType<T>()));
@@ -291,7 +291,7 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
 
   if (handle->performance_report_enable && current_sample) {
     // Record end event
-    CHECK_CUDA(cudaEventRecord(current_sample->halo_end_event, stream));
+    CHECK_CUDA(hipEventRecord(current_sample->halo_end_event, stream));
     advanceHaloPerformanceSample(handle, grid_desc,
                                  createHaloConfig(ax, dim, input, halo_extents.data(), halo_periods.data(),
                                                   padding.data(), getCudecompDataType<T>()));
@@ -301,7 +301,7 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
 template <typename T>
 void cudecompUpdateHalosX(const cudecompHandle_t handle, const cudecompGridDesc_t grid_desc, T* input, T* work,
                           const int32_t halo_extents_ptr[], const bool halo_periods_ptr[], int32_t dim,
-                          const int32_t padding_ptr[], cudaStream_t stream) {
+                          const int32_t padding_ptr[], hipStream_t stream) {
   std::stringstream os;
   os << "cudecompUpdateHalosX_" << dim;
   nvtx::rangePush(os.str());
@@ -312,7 +312,7 @@ void cudecompUpdateHalosX(const cudecompHandle_t handle, const cudecompGridDesc_
 template <typename T>
 void cudecompUpdateHalosY(const cudecompHandle_t handle, const cudecompGridDesc_t grid_desc, T* input, T* work,
                           const int32_t halo_extents_ptr[], const bool halo_periods_ptr[], int32_t dim,
-                          const int32_t padding_ptr[], cudaStream_t stream) {
+                          const int32_t padding_ptr[], hipStream_t stream) {
   std::stringstream os;
   os << "cudecompUpdateHalosY_" << dim;
   nvtx::rangePush(os.str());
@@ -323,7 +323,7 @@ void cudecompUpdateHalosY(const cudecompHandle_t handle, const cudecompGridDesc_
 template <typename T>
 void cudecompUpdateHalosZ(const cudecompHandle_t handle, const cudecompGridDesc_t grid_desc, T* input, T* work,
                           const int32_t halo_extents_ptr[], const bool halo_periods_ptr[], int32_t dim,
-                          const int32_t padding_ptr[], cudaStream_t stream) {
+                          const int32_t padding_ptr[], hipStream_t stream) {
   std::stringstream os;
   os << "cudecompUpdateHalosZ_" << dim;
   nvtx::rangePush(os.str());

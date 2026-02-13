@@ -30,7 +30,7 @@
 
 #include <mpi.h>
 
-#include <cuda_runtime.h>
+#include <hip/hip_runtime.h>
 
 #include "cudecomp.h"
 #include "internal/checks.h"
@@ -426,9 +426,9 @@ static int run_test(const std::string& arguments, bool silent) {
 
     real_t *data_d, *work_d;
     if (args.use_managed_memory) {
-      CHECK_CUDA(cudaMallocManaged(&data_d, data.size() * sizeof(*data_d)));
+      CHECK_CUDA(hipMallocManaged(&data_d, data.size() * sizeof(*data_d)));
     } else {
-      CHECK_CUDA(cudaMalloc(&data_d, data.size() * sizeof(*data_d)));
+      CHECK_CUDA(hipMalloc(&data_d, data.size() * sizeof(*data_d)));
     }
     int64_t dtype_size;
     CHECK_CUDECOMP(cudecompGetDataTypeSize(get_cudecomp_datatype(real_t(0)), &dtype_size));
@@ -463,7 +463,7 @@ static int run_test(const std::string& arguments, bool silent) {
     // Running correctness tests
     if (!silent && rank == 0) printf("running correctness tests...\n");
     // Initialize data to initial pencil data
-    CHECK_CUDA(cudaMemcpy(data_d, init.data(), init.size() * sizeof(*data_d), cudaMemcpyHostToDevice));
+    CHECK_CUDA(hipMemcpy(data_d, init.data(), init.size() * sizeof(*data_d), hipMemcpyHostToDevice));
 
     real_t* input = data_d;
     for (int i = 0; i < 3; ++i) {
@@ -483,13 +483,13 @@ static int run_test(const std::string& arguments, bool silent) {
       }
     }
 
-    CHECK_CUDA(cudaMemcpy(data.data(), data_d, data.size() * sizeof(*data_d), cudaMemcpyDeviceToHost));
+    CHECK_CUDA(hipMemcpy(data.data(), data_d, data.size() * sizeof(*data_d), hipMemcpyDeviceToHost));
     if (!compare_pencils(ref, data, pinfo)) {
       fprintf(stderr, "FAILED cudecompUpdateHalos\n");
       return 1;
     }
 
-    CHECK_CUDA(cudaFree(data_d));
+    CHECK_CUDA(hipFree(data_d));
   } catch (const std::exception& e) { return 1; }
 
   return 0;
@@ -504,7 +504,7 @@ int main(int argc, char** argv) {
   MPI_Comm_split_type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL, &local_comm);
   int local_rank;
   MPI_Comm_rank(local_comm, &local_rank);
-  CHECK_CUDA_EXIT(cudaSetDevice(local_rank));
+  CHECK_CUDA_EXIT(hipSetDevice(local_rank));
 
   // Check if test file was provided
   std::string testfile;

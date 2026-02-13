@@ -21,7 +21,7 @@
 #include <tuple>
 #include <unordered_map>
 
-#include <cuda_runtime.h>
+#include <hip/hip_runtime.h>
 
 #include "cudecomp.h"
 #include "internal/checks.h"
@@ -36,15 +36,15 @@ class graphCache {
 public:
   graphCache();
   ~graphCache();
-  void replay(const key_type& key, cudaStream_t stream) const;
-  cudaStream_t startCapture(const key_type& key, cudaStream_t stream) const;
+  void replay(const key_type& key, hipStream_t stream) const;
+  hipStream_t startCapture(const key_type& key, hipStream_t stream) const;
   void endCapture(const key_type& key);
   bool cached(const key_type& key) const;
   void clear();
 
 private:
-  std::unordered_map<key_type, cudaGraphExec_t> graph_cache_;
-  cudaStream_t graph_stream_;
+  std::unordered_map<key_type, hipGraphExec_t> graph_cache_;
+  hipStream_t graph_stream_;
 };
 
 } // namespace cudecomp

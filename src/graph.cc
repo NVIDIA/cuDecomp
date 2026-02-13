@@ -18,7 +18,7 @@
 #include <tuple>
 #include <unordered_map>
 
-#include <cuda_runtime.h>
+#include <hip/hip_runtime.h>
 
 #include "cudecomp.h"
 #include "internal/checks.h"
@@ -27,28 +27,28 @@
 
 namespace cudecomp {
 
-graphCache::graphCache() { CHECK_CUDA(cudaStreamCreateWithFlags(&graph_stream_, cudaStreamNonBlocking)); }
+graphCache::graphCache() { CHECK_CUDA(hipStreamCreateWithFlags(&graph_stream_, hipStreamNonBlocking)); }
 
 graphCache::~graphCache() {
-  CHECK_CUDA(cudaStreamDestroy(graph_stream_));
+  CHECK_CUDA(hipStreamDestroy(graph_stream_));
   this->clear();
 }
 
-void graphCache::replay(const graphCache::key_type& key, cudaStream_t stream) const {
-  CHECK_CUDA(cudaGraphLaunch(graph_cache_.at(key), stream));
+void graphCache::replay(const graphCache::key_type& key, hipStream_t stream) const {
+  CHECK_CUDA(hipGraphLaunch(graph_cache_.at(key), stream));
 }
 
-cudaStream_t graphCache::startCapture(const graphCache::key_type& key, cudaStream_t stream) const {
-  CHECK_CUDA(cudaStreamBeginCapture(graph_stream_, cudaStreamCaptureModeGlobal));
+hipStream_t graphCache::startCapture(const graphCache::key_type& key, hipStream_t stream) const {
+  CHECK_CUDA(hipStreamBeginCapture(graph_stream_, hipStreamCaptureModeGlobal));
   return graph_stream_;
 }
 
 void graphCache::endCapture(const graphCache::key_type& key) {
-  cudaGraph_t graph;
-  cudaGraphExec_t graph_exec;
-  CHECK_CUDA(cudaStreamEndCapture(graph_stream_, &graph));
-  CHECK_CUDA(cudaGraphInstantiate(&graph_exec, graph, nullptr, nullptr, 0));
-  CHECK_CUDA(cudaGraphDestroy(graph));
+  hipGraph_t graph;
+  hipGraphExec_t graph_exec;
+  CHECK_CUDA(hipStreamEndCapture(graph_stream_, &graph));
+  CHECK_CUDA(hipGraphInstantiate(&graph_exec, graph, nullptr, nullptr, 0));
+  CHECK_CUDA(hipGraphDestroy(graph));
 
   graph_cache_[key] = graph_exec;
 }
@@ -57,7 +57,7 @@ bool graphCache::cached(const graphCache::key_type& key) const { return graph_ca
 
 void graphCache::clear() {
   for (auto& entry : graph_cache_) {
-    CHECK_CUDA(cudaGraphExecDestroy(entry.second));
+    CHECK_CUDA(hipGraphExecDestroy(entry.second));
   }
 
   graph_cache_.clear();

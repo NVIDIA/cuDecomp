@@ -24,7 +24,7 @@
 #ifndef CUDECOMP_H
 #define CUDECOMP_H
 
-#include <cuda_runtime.h>
+#include <hip/hip_runtime.h>
 #include <mpi.h>
 
 #define CUDECOMP_MAJOR 0
@@ -455,7 +455,7 @@ cudecompResult_t cudecompGetShiftedRank(cudecompHandle_t handle, cudecompGridDes
 cudecompResult_t cudecompTransposeXToY(cudecompHandle_t handle, cudecompGridDesc_t grid_desc, void* input, void* output,
                                        void* work, cudecompDataType_t dtype, const int32_t input_halo_extents[],
                                        const int32_t output_halo_extents[], const int32_t input_padding[],
-                                       const int32_t output_padding[], cudaStream_t stream);
+                                       const int32_t output_padding[], hipStream_t stream);
 
 /**
  * @brief Function to transpose data from Y-axis aligned pencils to a Z-axis aligned pencils.
@@ -484,7 +484,7 @@ cudecompResult_t cudecompTransposeXToY(cudecompHandle_t handle, cudecompGridDesc
 cudecompResult_t cudecompTransposeYToZ(cudecompHandle_t handle, cudecompGridDesc_t grid_desc, void* input, void* output,
                                        void* work, cudecompDataType_t dtype, const int32_t input_halo_extents[],
                                        const int32_t output_halo_extents[], const int32_t input_padding[],
-                                       const int32_t output_padding[], cudaStream_t stream);
+                                       const int32_t output_padding[], hipStream_t stream);
 
 /**
  * @brief Function to transpose data from Z-axis aligned pencils to a Y-axis aligned pencils.
@@ -513,7 +513,7 @@ cudecompResult_t cudecompTransposeYToZ(cudecompHandle_t handle, cudecompGridDesc
 cudecompResult_t cudecompTransposeZToY(cudecompHandle_t handle, cudecompGridDesc_t grid_desc, void* input, void* output,
                                        void* work, cudecompDataType_t dtype, const int32_t input_halo_extents[],
                                        const int32_t output_halo_extents[], const int32_t input_padding[],
-                                       const int32_t output_padding[], cudaStream_t stream);
+                                       const int32_t output_padding[], hipStream_t stream);
 
 /**
  * @brief Function to transpose data from Y-axis aligned pencils to a X-axis aligned pencils.
@@ -542,7 +542,7 @@ cudecompResult_t cudecompTransposeZToY(cudecompHandle_t handle, cudecompGridDesc
 cudecompResult_t cudecompTransposeYToX(cudecompHandle_t handle, cudecompGridDesc_t grid_desc, void* input, void* output,
                                        void* work, cudecompDataType_t dtype, const int32_t input_halo_extents[],
                                        const int32_t output_halo_extents[], const int32_t input_padding[],
-                                       const int32_t output_padding[], cudaStream_t stream);
+                                       const int32_t output_padding[], hipStream_t stream);
 
 // Halo functions
 /**
@@ -570,7 +570,7 @@ cudecompResult_t cudecompTransposeYToX(cudecompHandle_t handle, cudecompGridDesc
  */
 cudecompResult_t cudecompUpdateHalosX(cudecompHandle_t handle, cudecompGridDesc_t grid_desc, void* input, void* work,
                                       cudecompDataType_t dtype, const int32_t halo_extents[], const bool halo_periods[],
-                                      int32_t dim, const int32_t padding[], cudaStream_t stream);
+                                      int32_t dim, const int32_t padding[], hipStream_t stream);
 
 /**
  * @brief Function to perform halo communication of Y-axis aligned pencil data
@@ -596,7 +596,7 @@ cudecompResult_t cudecompUpdateHalosX(cudecompHandle_t handle, cudecompGridDesc_
  */
 cudecompResult_t cudecompUpdateHalosY(cudecompHandle_t handle, cudecompGridDesc_t grid_desc, void* input, void* work,
                                       cudecompDataType_t dtype, const int32_t halo_extents[], const bool halo_periods[],
-                                      int32_t dim, const int32_t padding[], cudaStream_t stream);
+                                      int32_t dim, const int32_t padding[], hipStream_t stream);
 
 /**
  * @brief Function to perform halo communication of Z-axis aligned pencil data
@@ -622,7 +622,7 @@ cudecompResult_t cudecompUpdateHalosY(cudecompHandle_t handle, cudecompGridDesc_
  */
 cudecompResult_t cudecompUpdateHalosZ(cudecompHandle_t handle, cudecompGridDesc_t grid_desc, void* input, void* work,
                                       cudecompDataType_t dtype, const int32_t halo_extents[], const bool halo_periods[],
-                                      int32_t dim, const int32_t padding[], cudaStream_t stream);
+                                      int32_t dim, const int32_t padding[], hipStream_t stream);
 
 #ifdef __cplusplus
 }

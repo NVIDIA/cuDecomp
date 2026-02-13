@@ -24,8 +24,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include <cuda.h>
-#include <cuda_runtime.h>
+#include <hip/hip_runtime.h>
 #include <mpi.h>
 #include <nccl.h>
 #ifdef ENABLE_NVSHMEM
@@ -199,9 +198,9 @@ static void gatherGlobalMPIInfo(cudecompHandle_t& handle) {
 
   // Gather MNNVL clique related structures (if supported)
   int dev;
-  CHECK_CUDA(cudaGetDevice(&dev));
+  CHECK_CUDA(hipGetDevice(&dev));
   char pciBusId[] = "00000000:00:00.0";
-  CHECK_CUDA(cudaDeviceGetPCIBusId(pciBusId, sizeof(pciBusId), dev));
+  CHECK_CUDA(hipDeviceGetPCIBusId(pciBusId, sizeof(pciBusId), dev));
   nvmlDevice_t nvml_dev;
   CHECK_NVML(nvmlDeviceGetHandleByPciBusId(pciBusId, &nvml_dev));
 #if NVML_API_VERSION >= 12 && CUDART_VERSION >= 12040
@@ -287,7 +286,7 @@ static void getCudecompEnvVars(cudecompHandle_t& handle) {
     handle->cuda_cumem_enable = false;
 #else
     int driverVersion;
-    CHECK_CUDA(cudaDriverGetVersion(&driverVersion));
+    CHECK_CUDA(hipDriverGetVersion(&driverVersion));
     if (driverVersion < 12030) {
       if (handle->rank == 0) {
         printf("CUDECOMP:WARN: CUDECOMP_ENABLE_CUMEM is set but installed driver does not "
@@ -297,11 +296,11 @@ static void getCudecompEnvVars(cudecompHandle_t& handle) {
     } else {
       // Check if fabric allocation type is supported
       int dev;
-      CUdevice cu_dev;
-      CHECK_CUDA(cudaGetDevice(&dev));
-      CHECK_CUDA_DRV(cuDeviceGet(&cu_dev, dev));
+      hipDevice_t cu_dev;
+      CHECK_CUDA(hipGetDevice(&dev));
+      CHECK_CUDA_DRV(hipDeviceGet(&cu_dev, dev));
       int flag = 0;
-      CHECK_CUDA_DRV(cuDeviceGetAttribute(&flag, CU_DEVICE_ATTRIBUTE_HANDLE_TYPE_FABRIC_SUPPORTED, cu_dev));
+      CHECK_CUDA_DRV(hipDeviceGetAttribute(&flag, CU_DEVICE_ATTRIBUTE_HANDLE_TYPE_FABRIC_SUPPORTED, cu_dev));
       if (!flag) {
         if (handle->rank == 0) {
           printf("CUDECOMP:WARN: CUDECOMP_ENABLE_CUMEM is set but device does not "
@@ -319,7 +318,7 @@ static void getCudecompEnvVars(cudecompHandle_t& handle) {
 #if CUDART_VERSION < 11010
     if (handle->rank == 0) {
       printf("CUDECOMP:WARN: CUDECOMP_ENABLE_CUDA_GRAPHS is set but CUDA version used for compilation does not "
-             "support cudaEventRecordWithFlags which is required. Disabling this feature.\n");
+             "support hipEventRecordWithFlags which is required. Disabling this feature.\n");
     }
     handle->cuda_graphs_enable = false;
 #endif
@@ -436,9 +435,9 @@ cudecompResult_t cudecompInit(cudecompHandle_t* handle_in, MPI_Comm mpi_comm) {
 
     // Initialize cuTENSOR library
 #if CUTENSOR_MAJOR >= 2
-    CHECK_CUTENSOR(cutensorCreate(&handle->cutensor_handle));
-    CHECK_CUTENSOR(cutensorCreatePlanPreference(handle->cutensor_handle, &handle->cutensor_plan_pref,
-                                                CUTENSOR_ALGO_DEFAULT, CUTENSOR_JIT_MODE_NONE));
+    CHECK_CUTENSOR(hiptensorCreate(&handle->cutensor_handle));
+    CHECK_CUTENSOR(hiptensorCreatePlanPreference(handle->cutensor_handle, &handle->cutensor_plan_pref,
+                                                 HIPTENSOR_ALGO_DEFAULT, HIPTENSOR_JIT_MODE_NONE));
 #else
     CHECK_CUTENSOR(cutensorInit(&handle->cutensor_handle));
 #endif
@@ -451,11 +450,11 @@ cudecompResult_t cudecompInit(cudecompHandle_t* handle_in, MPI_Comm mpi_comm) {
 
     // Determine P2P CE count
     int dev;
-    CUdevice cu_dev;
-    CHECK_CUDA(cudaGetDevice(&dev));
-    CHECK_CUDA_DRV(cuDeviceGet(&cu_dev, dev));
+    hipDevice_t cu_dev;
+    CHECK_CUDA(hipGetDevice(&dev));
+    CHECK_CUDA_DRV(hipDeviceGet(&cu_dev, dev));
     char pciBusId[] = "00000000:00:00.0";
-    CHECK_CUDA(cudaDeviceGetPCIBusId(pciBusId, sizeof(pciBusId), dev));
+    CHECK_CUDA(hipDeviceGetPCIBusId(pciBusId, sizeof(pciBusId), dev));
     nvmlDevice_t nvml_dev;
     CHECK_NVML(nvmlDeviceGetHandleByPciBusId(pciBusId, &nvml_dev));
 
@@ -523,7 +522,7 @@ cudecompResult_t cudecompFinalize(cudecompHandle_t handle) {
     handle->nccl_local_comm.reset();
 
     for (auto& stream : handle->streams) {
-      CHECK_CUDA(cudaStreamDestroy(stream));
+      CHECK_CUDA(hipStreamDestroy(stream));
     }
 #ifdef ENABLE_NVSHMEM
     if (handle->nvshmem_initialized) {
@@ -536,8 +535,8 @@ cudecompResult_t cudecompFinalize(cudecompHandle_t handle) {
     CHECK_MPI(MPI_Comm_free(&handle->mpi_local_comm));
 
 #if CUTENSOR_MAJOR >= 2
-    CHECK_CUTENSOR(cutensorDestroy(handle->cutensor_handle));
-    CHECK_CUTENSOR(cutensorDestroyPlanPreference(handle->cutensor_plan_pref));
+    CHECK_CUTENSOR(hiptensorDestroy(handle->cutensor_handle));
+    CHECK_CUTENSOR(hiptensorDestroyPlanPreference(handle->cutensor_plan_pref));
 #endif
 
     CHECK_NVML(nvmlShutdown());
@@ -702,19 +701,19 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
     if (handle->streams.empty()) {
       handle->streams.resize(handle->device_p2p_ce_count + 1);
       int greatest_priority;
-      CHECK_CUDA(cudaDeviceGetStreamPriorityRange(nullptr, &greatest_priority));
+      CHECK_CUDA(hipDeviceGetStreamPriorityRange(nullptr, &greatest_priority));
       for (auto& stream : handle->streams) {
-        CHECK_CUDA(cudaStreamCreateWithPriority(&stream, cudaStreamNonBlocking, greatest_priority));
+        CHECK_CUDA(hipStreamCreateWithPriority(&stream, hipStreamNonBlocking, greatest_priority));
       }
     }
 
     // Create CUDA events for scheduling
     grid_desc->events.resize(handle->nranks);
     for (auto& event : grid_desc->events) {
-      CHECK_CUDA(cudaEventCreateWithFlags(&event, cudaEventDisableTiming));
+      CHECK_CUDA(hipEventCreateWithFlags(&event, hipEventDisableTiming));
     }
 #ifdef ENABLE_NVSHMEM
-    CHECK_CUDA(cudaEventCreateWithFlags(&grid_desc->nvshmem_sync_event, cudaEventDisableTiming));
+    CHECK_CUDA(hipEventCreateWithFlags(&grid_desc->nvshmem_sync_event, hipEventDisableTiming));
 #endif
 
     // Disable decompositions with empty pencils
@@ -838,11 +837,11 @@ cudecompResult_t cudecompGridDescDestroy(cudecompHandle_t handle, cudecompGridDe
     }
 
     for (auto e : grid_desc->events) {
-      if (e) { CHECK_CUDA(cudaEventDestroy(e)); }
+      if (e) { CHECK_CUDA(hipEventDestroy(e)); }
     }
 
 #ifdef ENABLE_NVSHMEM
-    if (grid_desc->nvshmem_sync_event) { CHECK_CUDA(cudaEventDestroy(grid_desc->nvshmem_sync_event)); }
+    if (grid_desc->nvshmem_sync_event) { CHECK_CUDA(hipEventDestroy(grid_desc->nvshmem_sync_event)); }
 #endif
 
     if (handle->performance_report_enable) {
@@ -853,13 +852,13 @@ cudecompResult_t cudecompGridDescDestroy(cudecompHandle_t handle, cudecompGridDe
       for (auto& entry : grid_desc->transpose_perf_samples_map) {
         auto& collection = entry.second;
         for (auto& sample : collection.samples) {
-          CHECK_CUDA(cudaEventDestroy(sample.transpose_start_event));
-          CHECK_CUDA(cudaEventDestroy(sample.transpose_end_event));
+          CHECK_CUDA(hipEventDestroy(sample.transpose_start_event));
+          CHECK_CUDA(hipEventDestroy(sample.transpose_end_event));
           for (auto& event : sample.alltoall_start_events) {
-            CHECK_CUDA(cudaEventDestroy(event));
+            CHECK_CUDA(hipEventDestroy(event));
           }
           for (auto& event : sample.alltoall_end_events) {
-            CHECK_CUDA(cudaEventDestroy(event));
+            CHECK_CUDA(hipEventDestroy(event));
           }
         }
       }
@@ -868,10 +867,10 @@ cudecompResult_t cudecompGridDescDestroy(cudecompHandle_t handle, cudecompGridDe
       for (auto& entry : grid_desc->halo_perf_samples_map) {
         auto& collection = entry.second;
         for (auto& sample : collection.samples) {
-          CHECK_CUDA(cudaEventDestroy(sample.halo_start_event));
-          CHECK_CUDA(cudaEventDestroy(sample.halo_end_event));
-          CHECK_CUDA(cudaEventDestroy(sample.sendrecv_start_event));
-          CHECK_CUDA(cudaEventDestroy(sample.sendrecv_end_event));
+          CHECK_CUDA(hipEventDestroy(sample.halo_start_event));
+          CHECK_CUDA(hipEventDestroy(sample.halo_end_event));
+          CHECK_CUDA(hipEventDestroy(sample.sendrecv_start_event));
+          CHECK_CUDA(hipEventDestroy(sample.sendrecv_end_event));
         }
       }
     }
@@ -1167,42 +1166,42 @@ cudecompResult_t cudecompMalloc(cudecompHandle_t handle, cudecompGridDesc_t grid
       if (handle->cuda_cumem_enable) {
 #if CUDART_VERSION >= 12030
         int dev;
-        CUdevice cu_dev;
-        CHECK_CUDA(cudaGetDevice(&dev));
-        CHECK_CUDA_DRV(cuDeviceGet(&cu_dev, dev));
+        hipDevice_t cu_dev;
+        CHECK_CUDA(hipGetDevice(&dev));
+        CHECK_CUDA_DRV(hipDeviceGet(&cu_dev, dev));
 
-        CUmemAllocationProp prop = {};
-        prop.type = CU_MEM_ALLOCATION_TYPE_PINNED;
-        prop.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
+        hipMemAllocationProp prop = {};
+        prop.type = hipMemAllocationTypePinned;
+        prop.location.type = hipMemLocationTypeDevice;
         prop.requestedHandleTypes = CU_MEM_HANDLE_TYPE_FABRIC;
         prop.location.id = cu_dev;
 
         // Check for RDMA support
         int flag;
         CHECK_CUDA_DRV(
-            cuDeviceGetAttribute(&flag, CU_DEVICE_ATTRIBUTE_GPU_DIRECT_RDMA_WITH_CUDA_VMM_SUPPORTED, cu_dev));
+            hipDeviceGetAttribute(&flag, CU_DEVICE_ATTRIBUTE_GPU_DIRECT_RDMA_WITH_CUDA_VMM_SUPPORTED, cu_dev));
         if (flag) prop.allocFlags.gpuDirectRDMACapable = 1;
 
         // Align allocation size to required granularity
         size_t granularity;
-        CHECK_CUDA_DRV(cuMemGetAllocationGranularity(&granularity, &prop, CU_MEM_ALLOC_GRANULARITY_MINIMUM));
+        CHECK_CUDA_DRV(hipMemGetAllocationGranularity(&granularity, &prop, hipMemAllocationGranularityMinimum));
         buffer_size_bytes = (buffer_size_bytes + granularity - 1) / granularity * granularity;
 
         // Allocate memory
-        CUmemGenericAllocationHandle cumem_handle;
-        CHECK_CUDA_DRV(cuMemCreate(&cumem_handle, buffer_size_bytes, &prop, 0));
-        CHECK_CUDA_DRV(cuMemAddressReserve((CUdeviceptr*)buffer, buffer_size_bytes, granularity, 0, 0));
-        CHECK_CUDA_DRV(cuMemMap((CUdeviceptr)*buffer, buffer_size_bytes, 0, cumem_handle, 0));
+        hipMemGenericAllocationHandle_t cumem_handle;
+        CHECK_CUDA_DRV(hipMemCreate(&cumem_handle, buffer_size_bytes, &prop, 0));
+        CHECK_CUDA_DRV(hipMemAddressReserve((hipDeviceptr_t*)buffer, buffer_size_bytes, granularity, 0, 0));
+        CHECK_CUDA_DRV(hipMemMap((hipDeviceptr_t)*buffer, buffer_size_bytes, 0, cumem_handle, 0));
 
         // Set read/write access
-        CUmemAccessDesc accessDesc = {};
-        accessDesc.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
+        hipMemAccessDesc accessDesc = {};
+        accessDesc.location.type = hipMemLocationTypeDevice;
         accessDesc.location.id = cu_dev;
-        accessDesc.flags = CU_MEM_ACCESS_FLAGS_PROT_READWRITE;
-        CHECK_CUDA_DRV(cuMemSetAccess((CUdeviceptr)*buffer, buffer_size_bytes, &accessDesc, 1));
+        accessDesc.flags = hipMemAccessFlagsProtReadWrite;
+        CHECK_CUDA_DRV(hipMemSetAccess((hipDeviceptr_t)*buffer, buffer_size_bytes, &accessDesc, 1));
 #endif
       } else {
-        CHECK_CUDA(cudaMalloc(buffer, buffer_size_bytes));
+        CHECK_CUDA(hipMalloc(buffer, buffer_size_bytes));
       }
 #if NCCL_VERSION_CODE >= NCCL_VERSION(2, 19, 0)
       if (transposeBackendRequiresNccl(grid_desc->config.transpose_comm_backend) ||
@@ -1268,18 +1267,18 @@ cudecompResult_t cudecompFree(cudecompHandle_t handle, cudecompGridDesc_t grid_d
       if (handle->cuda_cumem_enable) {
 #if CUDART_VERSION >= 12030
         if (buffer) {
-          CUmemGenericAllocationHandle cumem_handle;
-          CHECK_CUDA_DRV(cuMemRetainAllocationHandle(&cumem_handle, buffer));
-          CHECK_CUDA_DRV(cuMemRelease(cumem_handle));
+          hipMemGenericAllocationHandle_t cumem_handle;
+          CHECK_CUDA_DRV(hipMemRetainAllocationHandle(&cumem_handle, buffer));
+          CHECK_CUDA_DRV(hipMemRelease(cumem_handle));
           size_t size = 0;
-          CHECK_CUDA_DRV(cuMemGetAddressRange(NULL, &size, (CUdeviceptr)buffer));
-          CHECK_CUDA_DRV(cuMemUnmap((CUdeviceptr)buffer, size));
-          CHECK_CUDA_DRV(cuMemRelease(cumem_handle));
-          CHECK_CUDA_DRV(cuMemAddressFree((CUdeviceptr)buffer, size));
+          CHECK_CUDA_DRV(hipMemGetAddressRange(NULL, &size, (hipDeviceptr_t)buffer));
+          CHECK_CUDA_DRV(hipMemUnmap((hipDeviceptr_t)buffer, size));
+          CHECK_CUDA_DRV(hipMemRelease(cumem_handle));
+          CHECK_CUDA_DRV(hipMemAddressFree((hipDeviceptr_t)buffer, size));
         }
 #endif
       } else {
-        if (buffer) { CHECK_CUDA(cudaFree(buffer)); }
+        if (buffer) { CHECK_CUDA(hipFree(buffer)); }
       }
     }
   } catch (const cudecomp::BaseException& e) {
@@ -1380,7 +1379,7 @@ cudecompResult_t cudecompGetShiftedRank(cudecompHandle_t handle, cudecompGridDes
 cudecompResult_t cudecompTransposeXToY(cudecompHandle_t handle, cudecompGridDesc_t grid_desc, void* input, void* output,
                                        void* work, cudecompDataType_t dtype, const int32_t input_halo_extents[],
                                        const int32_t output_halo_extents[], const int32_t input_padding[],
-                                       const int32_t output_padding[], cudaStream_t stream) {
+                                       const int32_t output_padding[], hipStream_t stream) {
   using namespace cudecomp;
   try {
     checkHandle(handle);
@@ -1423,7 +1422,7 @@ cudecompResult_t cudecompTransposeXToY(cudecompHandle_t handle, cudecompGridDesc
 cudecompResult_t cudecompTransposeYToZ(cudecompHandle_t handle, cudecompGridDesc_t grid_desc, void* input, void* output,
                                        void* work, cudecompDataType_t dtype, const int32_t input_halo_extents[],
                                        const int32_t output_halo_extents[], const int32_t input_padding[],
-                                       const int32_t output_padding[], cudaStream_t stream) {
+                                       const int32_t output_padding[], hipStream_t stream) {
   using namespace cudecomp;
   try {
     checkHandle(handle);
@@ -1466,7 +1465,7 @@ cudecompResult_t cudecompTransposeYToZ(cudecompHandle_t handle, cudecompGridDesc
 cudecompResult_t cudecompTransposeZToY(cudecompHandle_t handle, cudecompGridDesc_t grid_desc, void* input, void* output,
                                        void* work, cudecompDataType_t dtype, const int32_t input_halo_extents[],
                                        const int32_t output_halo_extents[], const int32_t input_padding[],
-                                       const int32_t output_padding[], cudaStream_t stream) {
+                                       const int32_t output_padding[], hipStream_t stream) {
   using namespace cudecomp;
   try {
     checkHandle(handle);
@@ -1509,7 +1508,7 @@ cudecompResult_t cudecompTransposeZToY(cudecompHandle_t handle, cudecompGridDesc
 cudecompResult_t cudecompTransposeYToX(cudecompHandle_t handle, cudecompGridDesc_t grid_desc, void* input, void* output,
                                        void* work, cudecompDataType_t dtype, const int32_t input_halo_extents[],
                                        const int32_t output_halo_extents[], const int32_t input_padding[],
-                                       const int32_t output_padding[], cudaStream_t stream) {
+                                       const int32_t output_padding[], hipStream_t stream) {
   using namespace cudecomp;
   try {
     checkHandle(handle);
@@ -1551,7 +1550,7 @@ cudecompResult_t cudecompTransposeYToX(cudecompHandle_t handle, cudecompGridDesc
 
 cudecompResult_t cudecompUpdateHalosX(cudecompHandle_t handle, cudecompGridDesc_t grid_desc, void* input, void* work,
                                       cudecompDataType_t dtype, const int32_t halo_extents[], const bool halo_periods[],
-                                      int32_t dim, const int32_t padding[], cudaStream_t stream) {
+                                      int32_t dim, const int32_t padding[], hipStream_t stream) {
   using namespace cudecomp;
   try {
     checkHandle(handle);
@@ -1597,7 +1596,7 @@ cudecompResult_t cudecompUpdateHalosX(cudecompHandle_t handle, cudecompGridDesc_
 
 cudecompResult_t cudecompUpdateHalosY(cudecompHandle_t handle, cudecompGridDesc_t grid_desc, void* input, void* work,
                                       cudecompDataType_t dtype, const int32_t halo_extents[], const bool halo_periods[],
-                                      int32_t dim, const int32_t padding[], cudaStream_t stream) {
+                                      int32_t dim, const int32_t padding[], hipStream_t stream) {
   using namespace cudecomp;
   try {
     checkHandle(handle);
@@ -1643,7 +1642,7 @@ cudecompResult_t cudecompUpdateHalosY(cudecompHandle_t handle, cudecompGridDesc_
 
 cudecompResult_t cudecompUpdateHalosZ(cudecompHandle_t handle, cudecompGridDesc_t grid_desc, void* input, void* work,
                                       cudecompDataType_t dtype, const int32_t halo_extents[], const bool halo_periods[],
-                                      int32_t dim, const int32_t padding[], cudaStream_t stream) {
+                                      int32_t dim, const int32_t padding[], hipStream_t stream) {
   using namespace cudecomp;
   try {
     checkHandle(handle);

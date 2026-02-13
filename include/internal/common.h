@@ -29,7 +29,7 @@
 #include <utility>
 #include <vector>
 
-#include <cuda_runtime.h>
+#include <hip/hip_runtime.h>
 #include <mpi.h>
 #include <nccl.h>
 #ifdef ENABLE_NVSHMEM
@@ -72,11 +72,11 @@ struct cudecompHandle {
   std::unordered_map<void*, std::vector<std::pair<ncclComm_t, void*>>>
       nccl_ubr_handles; // map of allocated buffer address to NCCL registration handle(s)
 
-  std::vector<cudaStream_t> streams; // internal streams for concurrent scheduling
+  std::vector<hipStream_t> streams; // internal streams for concurrent scheduling
 
-  cutensorHandle_t cutensor_handle; // cuTENSOR handle;
+  hiptensorHandle_t cutensor_handle; // cuTENSOR handle;
 #if CUTENSOR_MAJOR >= 2
-  cutensorPlanPreference_t cutensor_plan_pref; // cuTENSOR plan preference;
+  hiptensorPlanPreference_t cutensor_plan_pref; // cuTENSOR plan preference;
 #endif
 
   std::vector<std::array<char, MPI_MAX_PROCESSOR_NAME>> hostnames; // list of hostnames by rank
@@ -132,10 +132,10 @@ struct cudecompCommInfo {
 
 // Structure to contain data for transpose performance sample
 struct cudecompTransposePerformanceSample {
-  cudaEvent_t transpose_start_event;
-  cudaEvent_t transpose_end_event;
-  std::vector<cudaEvent_t> alltoall_start_events;
-  std::vector<cudaEvent_t> alltoall_end_events;
+  hipEvent_t transpose_start_event;
+  hipEvent_t transpose_end_event;
+  std::vector<hipEvent_t> alltoall_start_events;
+  std::vector<hipEvent_t> alltoall_end_events;
   int32_t alltoall_timing_count = 0;
   size_t alltoall_bytes = 0;
   bool valid = false;
@@ -150,10 +150,10 @@ struct cudecompTransposePerformanceSampleCollection {
 
 // Structure to contain data for halo performance sample
 struct cudecompHaloPerformanceSample {
-  cudaEvent_t halo_start_event;
-  cudaEvent_t halo_end_event;
-  cudaEvent_t sendrecv_start_event;
-  cudaEvent_t sendrecv_end_event;
+  hipEvent_t halo_start_event;
+  hipEvent_t halo_end_event;
+  hipEvent_t sendrecv_start_event;
+  hipEvent_t sendrecv_end_event;
   size_t sendrecv_bytes = 0;
   bool valid = false;
 };
@@ -176,8 +176,8 @@ struct cudecompGridDesc {
   cudecompCommInfo row_comm_info; // row communicator information
   cudecompCommInfo col_comm_info; // column communicator information
 
-  std::vector<cudaEvent_t> events{nullptr}; // CUDA events used for scheduling
-  cudaEvent_t nvshmem_sync_event = nullptr; // NVSHMEM event used for synchronization
+  std::vector<hipEvent_t> events{nullptr}; // CUDA events used for scheduling
+  hipEvent_t nvshmem_sync_event = nullptr; // NVSHMEM event used for synchronization
 
   cudecomp::graphCache graph_cache; // CUDA graph cache
 
@@ -186,11 +186,11 @@ struct cudecompGridDesc {
       nccl_local_comm; // NCCL communicator (intra-node, or intra-clique on MNNVL systems), shared from handle
 
   // Performance reporting related entries
-  std::vector<cudaEvent_t> alltoall_start_events; // events for alltoall timing
-  std::vector<cudaEvent_t> alltoall_end_events;   // events for alltoall timing
-  int32_t alltoall_timing_count = 0;              // count of alltoall timing events pairs (for pipelined alltoall)
-  cudaEvent_t transpose_start_event;              // event for transpose timing
-  cudaEvent_t transpose_end_event;                // event for transpose timing
+  std::vector<hipEvent_t> alltoall_start_events; // events for alltoall timing
+  std::vector<hipEvent_t> alltoall_end_events;   // events for alltoall timing
+  int32_t alltoall_timing_count = 0;             // count of alltoall timing events pairs (for pipelined alltoall)
+  hipEvent_t transpose_start_event;              // event for transpose timing
+  hipEvent_t transpose_end_event;                // event for transpose timing
 
   std::unordered_map<std::tuple<int32_t, int32_t, std::array<int32_t, 3>, std::array<int32_t, 3>,
                                 std::array<int32_t, 3>, std::array<int32_t, 3>, bool, bool, cudecompDataType_t>,
@@ -297,9 +297,9 @@ static inline bool haloBackendRequiresNvshmem(cudecompHaloCommBackend_t comm_bac
 
 static inline bool isManagedPointer(void* ptr) {
   // Check if input pointer is managed
-  cudaPointerAttributes attr;
-  CHECK_CUDA(cudaPointerGetAttributes(&attr, ptr));
-  return attr.type == cudaMemoryTypeManaged;
+  hipPointerAttribute_t attr;
+  CHECK_CUDA(hipPointerGetAttributes(&attr, ptr));
+  return attr.type == hipMemoryTypeManaged;
 }
 
 static void setCommInfo(cudecompHandle_t& handle, cudecompGridDesc_t& grid_desc, MPI_Comm mpi_comm,

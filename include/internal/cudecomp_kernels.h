@@ -34,11 +34,10 @@ template <typename T> struct cudecompNvshmemA2AParams {
   int peer_ranks[CUDECOMP_NVSHMEM_A2A_PARAM_CAPACITY];
 };
 
-void cudecomp_nvshmem_alltoallv(const cudecompNvshmemA2AParams<float>& params, cudaStream_t stream);
-void cudecomp_nvshmem_alltoallv(const cudecompNvshmemA2AParams<double>& params, cudaStream_t stream);
-void cudecomp_nvshmem_alltoallv(const cudecompNvshmemA2AParams<cuda::std::complex<float>>& params, cudaStream_t stream);
-void cudecomp_nvshmem_alltoallv(const cudecompNvshmemA2AParams<cuda::std::complex<double>>& params,
-                                cudaStream_t stream);
+void cudecomp_nvshmem_alltoallv(const cudecompNvshmemA2AParams<float>& params, hipStream_t stream);
+void cudecomp_nvshmem_alltoallv(const cudecompNvshmemA2AParams<double>& params, hipStream_t stream);
+void cudecomp_nvshmem_alltoallv(const cudecompNvshmemA2AParams<cuda::std::complex<float>>& params, hipStream_t stream);
+void cudecomp_nvshmem_alltoallv(const cudecompNvshmemA2AParams<cuda::std::complex<double>>& params, hipStream_t stream);
 #endif
 
 #define CUDECOMP_BATCHED_D2D_3D_PARAM_CAPACITY 56
@@ -51,12 +50,12 @@ template <typename T> struct cudecompBatchedD2DMemcpy3DParams {
   size_t extents[3][CUDECOMP_BATCHED_D2D_3D_PARAM_CAPACITY];      // [depth, height, width]
 };
 
-void cudecomp_batched_d2d_memcpy_3d(cudecompBatchedD2DMemcpy3DParams<float>& params, cudaStream_t stream);
-void cudecomp_batched_d2d_memcpy_3d(cudecompBatchedD2DMemcpy3DParams<double>& params, cudaStream_t stream);
+void cudecomp_batched_d2d_memcpy_3d(cudecompBatchedD2DMemcpy3DParams<float>& params, hipStream_t stream);
+void cudecomp_batched_d2d_memcpy_3d(cudecompBatchedD2DMemcpy3DParams<double>& params, hipStream_t stream);
 void cudecomp_batched_d2d_memcpy_3d(cudecompBatchedD2DMemcpy3DParams<cuda::std::complex<float>>& params,
-                                    cudaStream_t stream);
+                                    hipStream_t stream);
 void cudecomp_batched_d2d_memcpy_3d(cudecompBatchedD2DMemcpy3DParams<cuda::std::complex<double>>& params,
-                                    cudaStream_t stream);
+                                    hipStream_t stream);
 
 } // namespace cudecomp
 

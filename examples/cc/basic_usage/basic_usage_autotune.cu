@@ -25,7 +25,7 @@
 
 #include <mpi.h>
 
-#include <cuda_runtime.h>
+#include <hip/hip_runtime.h>
 
 #include "cudecomp.h"
 
@@ -41,9 +41,9 @@
 
 #define CHECK_CUDA_EXIT(call)                                                                                          \
   do {                                                                                                                 \
-    cudaError_t err = call;                                                                                            \
-    if (cudaSuccess != err) {                                                                                          \
-      fprintf(stderr, "%s:%d CUDA error. (%s)\n", __FILE__, __LINE__, cudaGetErrorString(err));                        \
+    hipError_t err = call;                                                                                             \
+    if (hipSuccess != err) {                                                                                           \
+      fprintf(stderr, "%s:%d CUDA error. (%s)\n", __FILE__, __LINE__, hipGetErrorString(err));                         \
       exit(EXIT_FAILURE);                                                                                              \
     }                                                                                                                  \
   } while (false)
@@ -100,7 +100,7 @@ int main(int argc, char** argv) {
   MPI_Comm_split_type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL, &local_comm);
   int local_rank;
   MPI_Comm_rank(local_comm, &local_rank);
-  CHECK_CUDA_EXIT(cudaSetDevice(local_rank));
+  CHECK_CUDA_EXIT(hipSetDevice(local_rank));
 
   cudecompHandle_t handle;
   CHECK_CUDECOMP_EXIT(cudecompInit(&handle, MPI_COMM_WORLD));
@@ -198,7 +198,7 @@ int main(int argc, char** argv) {
 
   // Allocate device buffer
   double* data_d;
-  CHECK_CUDA_EXIT(cudaMalloc(&data_d, data_num_elements * sizeof(*data_d)));
+  CHECK_CUDA_EXIT(hipMalloc(&data_d, data_num_elements * sizeof(*data_d)));
 
   // Allocate host buffer
   double* data = reinterpret_cast<double*>(malloc(data_num_elements * sizeof(*data)));
@@ -267,7 +267,7 @@ int main(int argc, char** argv) {
 
   // Cleanup resources
   free(data);
-  CHECK_CUDA_EXIT(cudaFree(data_d));
+  CHECK_CUDA_EXIT(hipFree(data_d));
   CHECK_CUDECOMP_EXIT(cudecompFree(handle, grid_desc, transpose_work_d));
   CHECK_CUDECOMP_EXIT(cudecompFree(handle, grid_desc, halo_work_d));
   CHECK_CUDECOMP_EXIT(cudecompGridDescDestroy(handle, grid_desc));

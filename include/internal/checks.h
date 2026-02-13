@@ -22,10 +22,9 @@
 #include <iostream>
 #include <string>
 
-#include <cuda.h>
-#include <cuda_runtime.h>
-#include <cufft.h>
-#include <cutensor.h>
+#include <hip/hip_runtime.h>
+#include <hipfft/hipfft.h>
+#include <hiptensor.h>
 #include <mpi.h>
 #include <nccl.h>
 #include <nvml.h>
@@ -46,14 +45,14 @@
 
 #define CHECK_CUDA(call)                                                                                               \
   do {                                                                                                                 \
-    cudaError_t err = call;                                                                                            \
-    if (cudaSuccess != err) { throw cudecomp::CudaError(__FILE__, __LINE__, cudaGetErrorString(err)); }                \
+    hipError_t err = call;                                                                                             \
+    if (hipSuccess != err) { throw cudecomp::CudaError(__FILE__, __LINE__, hipGetErrorString(err)); }                  \
   } while (false)
 
 #define CHECK_CUDA_DRV(call)                                                                                           \
   do {                                                                                                                 \
-    CUresult err = cuFnTable.pfn_##call;                                                                               \
-    if (CUDA_SUCCESS != err) {                                                                                         \
+    hipError_t err = cuFnTable.pfn_##call;                                                                             \
+    if (hipSuccess != err) {                                                                                           \
       const char* error_str;                                                                                           \
       cuFnTable.pfn_cuGetErrorString(err, &error_str);                                                                 \
       throw cudecomp::CudaError(__FILE__, __LINE__, error_str);                                                        \
@@ -62,15 +61,15 @@
 
 #define CHECK_CUDA_LAUNCH()                                                                                            \
   do {                                                                                                                 \
-    cudaError_t err = cudaGetLastError();                                                                              \
-    if (cudaSuccess != err) { throw cudecomp::CudaError(__FILE__, __LINE__, cudaGetErrorString(err)); }                \
+    hipError_t err = hipGetLastError();                                                                                \
+    if (hipSuccess != err) { throw cudecomp::CudaError(__FILE__, __LINE__, hipGetErrorString(err)); }                  \
   } while (false)
 
 #define CHECK_CUTENSOR(call)                                                                                           \
   do {                                                                                                                 \
-    cutensorStatus_t err = call;                                                                                       \
-    if (CUTENSOR_STATUS_SUCCESS != err) {                                                                              \
-      throw cudecomp::CutensorError(__FILE__, __LINE__, cutensorGetErrorString(err));                                  \
+    hiptensorStatus_t err = call;                                                                                      \
+    if (HIPTENSOR_STATUS_SUCCESS != err) {                                                                             \
+      throw cudecomp::CutensorError(__FILE__, __LINE__, hiptensorGetErrorString(err));                                 \
     }                                                                                                                  \
   } while (false)
 
@@ -119,18 +118,18 @@
 
 #define CHECK_CUDA_EXIT(call)                                                                                          \
   do {                                                                                                                 \
-    cudaError_t err = call;                                                                                            \
-    if (cudaSuccess != err) {                                                                                          \
-      fprintf(stderr, "%s:%d CUDA error. (%s)\n", __FILE__, __LINE__, cudaGetErrorString(err));                        \
+    hipError_t err = call;                                                                                             \
+    if (hipSuccess != err) {                                                                                           \
+      fprintf(stderr, "%s:%d CUDA error. (%s)\n", __FILE__, __LINE__, hipGetErrorString(err));                         \
       exit(EXIT_FAILURE);                                                                                              \
     }                                                                                                                  \
   } while (false)
 
 #define CHECK_CUDA_LAUNCH_EXIT()                                                                                       \
   do {                                                                                                                 \
-    cudaError_t err = cudaGetLastError();                                                                              \
-    if (cudaSuccess != err) {                                                                                          \
-      fprintf(stderr, "%s:%d CUDA error. (%s)\n", __FILE__, __LINE__, cudaGetErrorString(err));                        \
+    hipError_t err = hipGetLastError();                                                                                \
+    if (hipSuccess != err) {                                                                                           \
+      fprintf(stderr, "%s:%d CUDA error. (%s)\n", __FILE__, __LINE__, hipGetErrorString(err));                         \
       exit(EXIT_FAILURE);                                                                                              \
     }                                                                                                                  \
   } while (false)
@@ -154,8 +153,8 @@
 
 #define CHECK_CUFFT_EXIT(call)                                                                                         \
   do {                                                                                                                 \
-    cufftResult_t err = call;                                                                                          \
-    if (CUFFT_SUCCESS != err) {                                                                                        \
+    hipfftResult_t err = call;                                                                                         \
+    if (HIPFFT_SUCCESS != err) {                                                                                       \
       fprintf(stderr, "%s:%d CUFFT error. (error code %d)\n", __FILE__, __LINE__, err);                                \
       exit(EXIT_FAILURE);                                                                                              \
     }                                                                                                                  \

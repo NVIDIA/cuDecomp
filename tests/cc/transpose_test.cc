@@ -31,7 +31,7 @@
 
 #include <mpi.h>
 
-#include <cuda_runtime.h>
+#include <hip/hip_runtime.h>
 
 #include "cudecomp.h"
 #include "internal/checks.h"
@@ -452,9 +452,9 @@ static int run_test(const std::string& arguments, bool silent) {
 
     real_t *data_d, *work_d;
     if (args.use_managed_memory) {
-      CHECK_CUDA(cudaMallocManaged(&data_d, data.size() * sizeof(*data_d)));
+      CHECK_CUDA(hipMallocManaged(&data_d, data.size() * sizeof(*data_d)));
     } else {
-      CHECK_CUDA(cudaMalloc(&data_d, data.size() * sizeof(*data_d)));
+      CHECK_CUDA(hipMalloc(&data_d, data.size() * sizeof(*data_d)));
     }
     int64_t dtype_size;
     CHECK_CUDECOMP(cudecompGetDataTypeSize(get_cudecomp_datatype(real_t(0)), &dtype_size));
@@ -490,9 +490,9 @@ static int run_test(const std::string& arguments, bool silent) {
     real_t* data_2_d = nullptr;
     if (args.out_of_place) {
       if (args.use_managed_memory) {
-        CHECK_CUDA(cudaMallocManaged(&data_2_d, data.size() * sizeof(*data_2_d)));
+        CHECK_CUDA(hipMallocManaged(&data_2_d, data.size() * sizeof(*data_2_d)));
       } else {
-        CHECK_CUDA(cudaMalloc(&data_2_d, data.size() * sizeof(*data_2_d)));
+        CHECK_CUDA(hipMalloc(&data_2_d, data.size() * sizeof(*data_2_d)));
       }
     }
 
@@ -500,17 +500,17 @@ static int run_test(const std::string& arguments, bool silent) {
     if (!silent && rank == 0) printf("running correctness tests...\n");
 
     // Initialize data to reference x-pencil data
-    CHECK_CUDA(cudaMemcpy(data_d, xref.data(), xref.size() * sizeof(*data_d), cudaMemcpyHostToDevice));
+    CHECK_CUDA(hipMemcpy(data_d, xref.data(), xref.size() * sizeof(*data_d), hipMemcpyHostToDevice));
 
     real_t* input = data_d;
     real_t* output = data_d;
     if (args.out_of_place) output = data_2_d;
 
-    CHECK_CUDA(cudaMemset(work_d, 0, workspace_num_elements * dtype_size));
+    CHECK_CUDA(hipMemset(work_d, 0, workspace_num_elements * dtype_size));
     CHECK_CUDECOMP(cudecompTransposeXToY(handle, grid_desc, input, output, work_d, get_cudecomp_datatype(real_t(0)),
                                          pinfo_x.halo_extents, pinfo_y.halo_extents, pinfo_x.padding, pinfo_y.padding,
                                          0));
-    CHECK_CUDA(cudaMemcpy(data.data(), output, data.size() * sizeof(*output), cudaMemcpyDeviceToHost));
+    CHECK_CUDA(hipMemcpy(data.data(), output, data.size() * sizeof(*output), hipMemcpyDeviceToHost));
     if (!compare_pencils(yref, data, pinfo_y)) {
       fprintf(stderr, "FAILED cudecompTransposeXToY\n");
       return 1;
@@ -518,11 +518,11 @@ static int run_test(const std::string& arguments, bool silent) {
 
     if (args.out_of_place) std::swap(input, output);
 
-    CHECK_CUDA(cudaMemset(work_d, 0, workspace_num_elements * dtype_size));
+    CHECK_CUDA(hipMemset(work_d, 0, workspace_num_elements * dtype_size));
     CHECK_CUDECOMP(cudecompTransposeYToZ(handle, grid_desc, input, output, work_d, get_cudecomp_datatype(real_t(0)),
                                          pinfo_y.halo_extents, pinfo_z.halo_extents, pinfo_y.padding, pinfo_z.padding,
                                          0));
-    CHECK_CUDA(cudaMemcpy(data.data(), output, data.size() * sizeof(*data_d), cudaMemcpyDeviceToHost));
+    CHECK_CUDA(hipMemcpy(data.data(), output, data.size() * sizeof(*data_d), hipMemcpyDeviceToHost));
     if (!compare_pencils(zref, data, pinfo_z)) {
       fprintf(stderr, "FAILED cudecompTransposeYToZ\n");
       return 1;
@@ -530,11 +530,11 @@ static int run_test(const std::string& arguments, bool silent) {
 
     if (args.out_of_place) std::swap(input, output);
 
-    CHECK_CUDA(cudaMemset(work_d, 0, workspace_num_elements * dtype_size));
+    CHECK_CUDA(hipMemset(work_d, 0, workspace_num_elements * dtype_size));
     CHECK_CUDECOMP(cudecompTransposeZToY(handle, grid_desc, input, output, work_d, get_cudecomp_datatype(real_t(0)),
                                          pinfo_z.halo_extents, pinfo_y.halo_extents, pinfo_z.padding, pinfo_y.padding,
                                          0));
-    CHECK_CUDA(cudaMemcpy(data.data(), output, data.size() * sizeof(*data_d), cudaMemcpyDeviceToHost));
+    CHECK_CUDA(hipMemcpy(data.data(), output, data.size() * sizeof(*data_d), hipMemcpyDeviceToHost));
     if (!compare_pencils(yref, data, pinfo_y)) {
       fprintf(stderr, "FAILED cudecompTransposeZToY\n");
       return 1;
@@ -542,18 +542,18 @@ static int run_test(const std::string& arguments, bool silent) {
 
     if (args.out_of_place) std::swap(input, output);
 
-    CHECK_CUDA(cudaMemset(work_d, 0, workspace_num_elements * dtype_size));
+    CHECK_CUDA(hipMemset(work_d, 0, workspace_num_elements * dtype_size));
     CHECK_CUDECOMP(cudecompTransposeYToX(handle, grid_desc, input, output, work_d, get_cudecomp_datatype(real_t(0)),
                                          pinfo_y.halo_extents, pinfo_x.halo_extents, pinfo_y.padding, pinfo_x.padding,
                                          0));
-    CHECK_CUDA(cudaMemcpy(data.data(), output, data.size() * sizeof(*data_d), cudaMemcpyDeviceToHost));
+    CHECK_CUDA(hipMemcpy(data.data(), output, data.size() * sizeof(*data_d), hipMemcpyDeviceToHost));
     if (!compare_pencils(xref, data, pinfo_x)) {
       fprintf(stderr, "FAILED cudecompTransposeYToX\n");
       return 1;
     }
 
-    CHECK_CUDA(cudaFree(data_d));
-    if (data_2_d) CHECK_CUDA(cudaFree(data_2_d));
+    CHECK_CUDA(hipFree(data_d));
+    if (data_2_d) CHECK_CUDA(hipFree(data_2_d));
   } catch (const std::exception& e) { return 1; }
 
   return 0;
@@ -568,7 +568,7 @@ int main(int argc, char** argv) {
   MPI_Comm_split_type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL, &local_comm);
   int local_rank;
   MPI_Comm_rank(local_comm, &local_rank);
-  CHECK_CUDA_EXIT(cudaSetDevice(local_rank));
+  CHECK_CUDA_EXIT(hipSetDevice(local_rank));
 
   // Check if test file was provided
   std::string testfile;

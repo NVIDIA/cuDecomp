@@ -18,7 +18,7 @@
 #ifndef CUDECOMP_NVML_WRAP_H
 #define CUDECOMP_NVML_WRAP_H
 
-#include <cuda_runtime.h>
+#include <hip/hip_runtime.h>
 #include <nvml.h>
 
 namespace cudecomp {

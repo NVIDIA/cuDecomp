@@ -28,10 +28,10 @@
 #include <mpi.h>
 
 #include <cuda/std/complex>
-#include <cuda_runtime.h>
-#include <cufftXt.h>
+#include <hip/hip_runtime.h>
+#include <hipfft/hipfftXt.h>
 
-#include <cub/cub.cuh>
+#include <hipcub/hipcub.hpp>
 
 #include <cudecomp.h>
 
@@ -49,18 +49,18 @@
 
 #define CHECK_CUDA_EXIT(call)                                                                                          \
   do {                                                                                                                 \
-    cudaError_t err = call;                                                                                            \
-    if (cudaSuccess != err) {                                                                                          \
-      fprintf(stderr, "%s:%d CUDA error. (%s)\n", __FILE__, __LINE__, cudaGetErrorString(err));                        \
+    hipError_t err = call;                                                                                             \
+    if (hipSuccess != err) {                                                                                           \
+      fprintf(stderr, "%s:%d CUDA error. (%s)\n", __FILE__, __LINE__, hipGetErrorString(err));                         \
       exit(EXIT_FAILURE);                                                                                              \
     }                                                                                                                  \
   } while (false)
 
 #define CHECK_CUDA_LAUNCH_EXIT()                                                                                       \
   do {                                                                                                                 \
-    cudaError_t err = cudaGetLastError();                                                                              \
-    if (cudaSuccess != err) {                                                                                          \
-      fprintf(stderr, "%s:%d CUDA error. (%s)\n", __FILE__, __LINE__, cudaGetErrorString(err));                        \
+    hipError_t err = hipGetLastError();                                                                                \
+    if (hipSuccess != err) {                                                                                           \
+      fprintf(stderr, "%s:%d CUDA error. (%s)\n", __FILE__, __LINE__, hipGetErrorString(err));                         \
       exit(EXIT_FAILURE);                                                                                              \
     }                                                                                                                  \
   } while (false)
@@ -84,8 +84,8 @@
 
 #define CHECK_CUFFT_EXIT(call)                                                                                         \
   do {                                                                                                                 \
-    cufftResult_t err = call;                                                                                          \
-    if (CUFFT_SUCCESS != err) {                                                                                        \
+    hipfftResult_t err = call;                                                                                         \
+    if (HIPFFT_SUCCESS != err) {                                                                                       \
       fprintf(stderr, "%s:%d CUFFT error. (error code %d)\n", __FILE__, __LINE__, err);                                \
       exit(EXIT_FAILURE);                                                                                              \
     }                                                                                                                  \
@@ -94,12 +94,12 @@
 using real_t = double;
 using complex_t = cuda::std::complex<real_t>;
 
-static cufftType get_cufft_type_r2c(double) { return CUFFT_D2Z; }
-static cufftType get_cufft_type_r2c(float) { return CUFFT_R2C; }
-static cufftType get_cufft_type_c2r(double) { return CUFFT_Z2D; }
-static cufftType get_cufft_type_c2r(float) { return CUFFT_C2R; }
-static cufftType get_cufft_type_c2c(double) { return CUFFT_Z2Z; }
-static cufftType get_cufft_type_c2c(float) { return CUFFT_C2C; }
+static hipfftType get_cufft_type_r2c(double) { return HIPFFT_D2Z; }
+static hipfftType get_cufft_type_r2c(float) { return HIPFFT_R2C; }
+static hipfftType get_cufft_type_c2r(double) { return HIPFFT_Z2D; }
+static hipfftType get_cufft_type_c2r(float) { return HIPFFT_C2R; }
+static hipfftType get_cufft_type_c2c(double) { return HIPFFT_Z2Z; }
+static hipfftType get_cufft_type_c2c(float) { return HIPFFT_C2C; }
 
 static cudecompDataType_t get_cudecomp_datatype(float) { return CUDECOMP_FLOAT; }
 static cudecompDataType_t get_cudecomp_datatype(double) { return CUDECOMP_DOUBLE; }
@@ -319,16 +319,16 @@ public:
   enum TimeScheme { RK1, RK4 };
 
   TGSolver(int64_t N, real_t nu, real_t dt, real_t cfl, TimeScheme tscheme = RK1)
-      : N(N), nu(nu), dt_(dt), cfl(cfl), tscheme(tscheme){};
+      : N(N), nu(nu), dt_(dt), cfl(cfl), tscheme(tscheme) {};
   void finalize() {
     // Free memory
     for (int i = 0; i < 3; ++i) {
-      CHECK_CUDA_EXIT(cudaFree(U[i]));
-      CHECK_CUDA_EXIT(cudaFree(dU[i]));
+      CHECK_CUDA_EXIT(hipFree(U[i]));
+      CHECK_CUDA_EXIT(hipFree(dU[i]));
       free(U_cpu[i]);
     }
-    CHECK_CUDA_EXIT(cudaFree(cub_sum));
-    CHECK_CUDA_EXIT(cudaFree(cub_work));
+    CHECK_CUDA_EXIT(hipFree(cub_sum));
+    CHECK_CUDA_EXIT(hipFree(cub_work));
 
     // Cleanup cudecomp resources
     CHECK_CUDECOMP_EXIT(cudecompFree(handle, grid_desc_c, work));
@@ -346,7 +346,7 @@ public:
 
     CHECK_MPI_EXIT(MPI_Comm_split_type(mpi_comm, MPI_COMM_TYPE_SHARED, rank, MPI_INFO_NULL, &mpi_local_comm));
     CHECK_MPI_EXIT(MPI_Comm_rank(mpi_local_comm, &local_rank));
-    CHECK_CUDA_EXIT(cudaSetDevice(local_rank));
+    CHECK_CUDA_EXIT(hipSetDevice(local_rank));
 
     if (rank == 0) printf("running on %d x %d x %d spatial grid...\n", (int)N, (int)N, (int)N);
 
@@ -397,32 +397,32 @@ public:
 
     // Setup cuFFT
     // x-axis real-to-complex
-    CHECK_CUFFT_EXIT(cufftCreate(&cufft_plan_r2c_x));
-    CHECK_CUFFT_EXIT(cufftSetAutoAllocation(cufft_plan_r2c_x, 0));
+    CHECK_CUFFT_EXIT(hipfftCreate(&cufft_plan_r2c_x));
+    CHECK_CUFFT_EXIT(hipfftSetAutoAllocation(cufft_plan_r2c_x, 0));
     size_t work_sz_r2c_x;
-    CHECK_CUFFT_EXIT(cufftMakePlan1d(cufft_plan_r2c_x, N, get_cufft_type_r2c(real_t(0)),
-                                     pinfo_x_r.shape[1] * pinfo_x_r.shape[2], &work_sz_r2c_x));
+    CHECK_CUFFT_EXIT(hipfftMakePlan1d(cufft_plan_r2c_x, N, get_cufft_type_r2c(real_t(0)),
+                                      pinfo_x_r.shape[1] * pinfo_x_r.shape[2], &work_sz_r2c_x));
 
     // x-axis complex-to-real
-    CHECK_CUFFT_EXIT(cufftCreate(&cufft_plan_c2r_x));
-    CHECK_CUFFT_EXIT(cufftSetAutoAllocation(cufft_plan_c2r_x, 0));
+    CHECK_CUFFT_EXIT(hipfftCreate(&cufft_plan_c2r_x));
+    CHECK_CUFFT_EXIT(hipfftSetAutoAllocation(cufft_plan_c2r_x, 0));
     size_t work_sz_c2r_x;
-    CHECK_CUFFT_EXIT(cufftMakePlan1d(cufft_plan_c2r_x, N, get_cufft_type_c2r(real_t(0)),
-                                     pinfo_x_c.shape[1] * pinfo_x_c.shape[2], &work_sz_c2r_x));
+    CHECK_CUFFT_EXIT(hipfftMakePlan1d(cufft_plan_c2r_x, N, get_cufft_type_c2r(real_t(0)),
+                                      pinfo_x_c.shape[1] * pinfo_x_c.shape[2], &work_sz_c2r_x));
 
     // y-axis complex-to-complex
-    CHECK_CUFFT_EXIT(cufftCreate(&cufft_plan_c2c_y));
-    CHECK_CUFFT_EXIT(cufftSetAutoAllocation(cufft_plan_c2c_y, 0));
+    CHECK_CUFFT_EXIT(hipfftCreate(&cufft_plan_c2c_y));
+    CHECK_CUFFT_EXIT(hipfftSetAutoAllocation(cufft_plan_c2c_y, 0));
     size_t work_sz_c2c_y;
-    CHECK_CUFFT_EXIT(cufftMakePlan1d(cufft_plan_c2c_y, N, get_cufft_type_c2c(real_t(0)),
-                                     pinfo_y_c.shape[1] * pinfo_y_c.shape[2], &work_sz_c2c_y));
+    CHECK_CUFFT_EXIT(hipfftMakePlan1d(cufft_plan_c2c_y, N, get_cufft_type_c2c(real_t(0)),
+                                      pinfo_y_c.shape[1] * pinfo_y_c.shape[2], &work_sz_c2c_y));
 
     // z-axis complex-to-complex
-    CHECK_CUFFT_EXIT(cufftCreate(&cufft_plan_c2c_z));
-    CHECK_CUFFT_EXIT(cufftSetAutoAllocation(cufft_plan_c2c_z, 0));
+    CHECK_CUFFT_EXIT(hipfftCreate(&cufft_plan_c2c_z));
+    CHECK_CUFFT_EXIT(hipfftSetAutoAllocation(cufft_plan_c2c_z, 0));
     size_t work_sz_c2c_z;
-    CHECK_CUFFT_EXIT(cufftMakePlan1d(cufft_plan_c2c_z, N, get_cufft_type_c2c(real_t(0)),
-                                     pinfo_z_c.shape[1] * pinfo_z_c.shape[2], &work_sz_c2c_z));
+    CHECK_CUFFT_EXIT(hipfftMakePlan1d(cufft_plan_c2c_z, N, get_cufft_type_c2c(real_t(0)),
+                                      pinfo_z_c.shape[1] * pinfo_z_c.shape[2], &work_sz_c2c_z));
 
     // Allocate data arrays
     int64_t data_sz =
@@ -438,15 +438,15 @@ public:
     work_c = static_cast<complex_t*>(work);
 
     // Assign cuFFT work area
-    CHECK_CUFFT_EXIT(cufftSetWorkArea(cufft_plan_r2c_x, work));
-    CHECK_CUFFT_EXIT(cufftSetWorkArea(cufft_plan_c2c_y, work));
-    CHECK_CUFFT_EXIT(cufftSetWorkArea(cufft_plan_c2c_z, work));
-    CHECK_CUFFT_EXIT(cufftSetWorkArea(cufft_plan_c2r_x, work));
+    CHECK_CUFFT_EXIT(hipfftSetWorkArea(cufft_plan_r2c_x, work));
+    CHECK_CUFFT_EXIT(hipfftSetWorkArea(cufft_plan_c2c_y, work));
+    CHECK_CUFFT_EXIT(hipfftSetWorkArea(cufft_plan_c2c_z, work));
+    CHECK_CUFFT_EXIT(hipfftSetWorkArea(cufft_plan_c2r_x, work));
 
     // Data arrays
     for (int i = 0; i < 3; ++i) {
-      CHECK_CUDA_EXIT(cudaMalloc(&U[i], data_sz));
-      CHECK_CUDA_EXIT(cudaMalloc(&dU[i], data_sz));
+      CHECK_CUDA_EXIT(hipMalloc(&U[i], data_sz));
+      CHECK_CUDA_EXIT(hipMalloc(&dU[i], data_sz));
       U_cpu[i] = malloc(data_sz);
       U_r[i] = static_cast<real_t*>(U[i]);
       U_c[i] = static_cast<complex_t*>(U[i]);
@@ -457,12 +457,12 @@ public:
     }
 
     // Set up CUB arrays
-    CHECK_CUDA_EXIT(cudaMallocManaged(&cub_sum, sizeof(real_t)));
+    CHECK_CUDA_EXIT(hipMallocManaged(&cub_sum, sizeof(real_t)));
     size_t cub_work_sz_sum, cub_work_sz_max;
-    CHECK_CUDA_EXIT(cub::DeviceReduce::Sum(cub_work, cub_work_sz_sum, U_r[0], cub_sum, pinfo_x_r.size));
-    CHECK_CUDA_EXIT(cub::DeviceReduce::Max(cub_work, cub_work_sz_max, U_r[0], cub_sum, pinfo_x_r.size));
+    CHECK_CUDA_EXIT(hipcub::DeviceReduce::Sum(cub_work, cub_work_sz_sum, U_r[0], cub_sum, pinfo_x_r.size));
+    CHECK_CUDA_EXIT(hipcub::DeviceReduce::Max(cub_work, cub_work_sz_max, U_r[0], cub_sum, pinfo_x_r.size));
     cub_work_sz = std::max(cub_work_sz_sum, cub_work_sz_max);
-    CHECK_CUDA_EXIT(cudaMalloc(&cub_work, cub_work_sz));
+    CHECK_CUDA_EXIT(hipMalloc(&cub_work, cub_work_sz));
 
     // Set timestepping variables
     switch (tscheme) {
@@ -483,7 +483,7 @@ public:
     Uh_c.resize(rk_b.size());
     for (int n = 0; n < rk_b.size(); ++n) {
       for (int i = 0; i < 3; ++i) {
-        CHECK_CUDA_EXIT(cudaMalloc(&Uh[n][i], data_sz));
+        CHECK_CUDA_EXIT(hipMalloc(&Uh[n][i], data_sz));
         Uh_r[n][i] = static_cast<real_t*>(Uh[n][i]);
         Uh_c[n][i] = static_cast<complex_t*>(Uh[n][i]);
       }
@@ -491,7 +491,7 @@ public:
 
     // Spectrum
     int num_shells = int(std::sqrt(9 * N * N + 4 * N + 4) / 4) + 1;
-    CHECK_CUDA_EXIT(cudaMallocManaged(&ek, num_shells * sizeof(real_t)));
+    CHECK_CUDA_EXIT(hipMallocManaged(&ek, num_shells * sizeof(real_t)));
 
     // Initialize U (physical space)
     real_t dx = 2 * PI / N;
@@ -502,11 +502,11 @@ public:
 
     // Compute initial Uh (transformed U)
     for (int i = 0; i < 3; ++i) {
-      CHECK_CUDA_EXIT(cudaMemcpy(Uh_r[0][i], U_r[i], pinfo_x_r.size * sizeof(*U_r[i]), cudaMemcpyDeviceToDevice));
+      CHECK_CUDA_EXIT(hipMemcpy(Uh_r[0][i], U_r[i], pinfo_x_r.size * sizeof(*U_r[i]), hipMemcpyDeviceToDevice));
     }
     forward(Uh_r[0], Uh_c[0]);
 
-    CHECK_CUDA_EXIT(cudaDeviceSynchronize());
+    CHECK_CUDA_EXIT(hipDeviceSynchronize());
 
     // Scale up initial U by N^3 as solver expects this
     scale<<<(pinfo_x_r.size + 256 - 1) / 256, 256>>>(U_r[0], U_r[1], U_r[2], N * N * N, pinfo_x_r);
@@ -536,8 +536,8 @@ public:
     sumsq<<<(pinfo_x_r.size + 256 - 1) / 256, 256>>>(N, dU_r[0], dU_r[1], dU_r[2], dU_r[0], pinfo_x_r);
     CHECK_CUDA_LAUNCH_EXIT();
 
-    CHECK_CUDA_EXIT(cub::DeviceReduce::Sum(cub_work, cub_work_sz, dU_r[0], cub_sum, pinfo_x_r.size));
-    CHECK_CUDA_EXIT(cudaDeviceSynchronize());
+    CHECK_CUDA_EXIT(hipcub::DeviceReduce::Sum(cub_work, cub_work_sz, dU_r[0], cub_sum, pinfo_x_r.size));
+    CHECK_CUDA_EXIT(hipDeviceSynchronize());
 
     double enst = 0.5 * (*cub_sum) / (N * N * N);
     if (nranks > 1) {
@@ -548,8 +548,8 @@ public:
     sumsq<<<(pinfo_x_r.size + 256 - 1) / 256, 256>>>(N, U_r[0], U_r[1], U_r[2], dU_r[0], pinfo_x_r);
     CHECK_CUDA_LAUNCH_EXIT();
 
-    CHECK_CUDA_EXIT(cub::DeviceReduce::Sum(cub_work, cub_work_sz, dU_r[0], cub_sum, pinfo_x_r.size));
-    CHECK_CUDA_EXIT(cudaDeviceSynchronize());
+    CHECK_CUDA_EXIT(hipcub::DeviceReduce::Sum(cub_work, cub_work_sz, dU_r[0], cub_sum, pinfo_x_r.size));
+    CHECK_CUDA_EXIT(hipDeviceSynchronize());
 
     double ke = 0.5 * (*cub_sum) / (N * N * N);
     if (nranks > 1) {
@@ -581,10 +581,10 @@ public:
   void write_spectrum_sample(int idx) {
     // Compute spectrum per rank
     int num_shells = int(std::sqrt(9 * N * N + 4 * N + 4) / 4) + 1;
-    CHECK_CUDA_EXIT(cudaMemset(ek, 0, num_shells * sizeof(real_t)));
+    CHECK_CUDA_EXIT(hipMemset(ek, 0, num_shells * sizeof(real_t)));
     spectrum<<<(pinfo_z_c.size + 256 - 1) / 256, 256>>>(Uh_c[0][0], Uh_c[0][1], Uh_c[0][2], ek, N, pinfo_z_c);
     CHECK_CUDA_LAUNCH_EXIT();
-    CHECK_CUDA_EXIT(cudaDeviceSynchronize());
+    CHECK_CUDA_EXIT(hipDeviceSynchronize());
 
     if (nranks > 1) {
       CHECK_MPI_EXIT(MPI_Reduce((rank == 0) ? MPI_IN_PLACE : ek, ek, num_shells, get_mpi_datatype(real_t(0)), MPI_SUM,
@@ -611,9 +611,9 @@ public:
   void write_solution(std::string prefix) {
     // Copy solution to host
     for (int i = 0; i < 3; ++i) {
-      CHECK_CUDA_EXIT(cudaMemcpy(U_cpu_r[i], U_r[i], pinfo_x_r.size * sizeof(*U_r[i]), cudaMemcpyDeviceToHost));
+      CHECK_CUDA_EXIT(hipMemcpy(U_cpu_r[i], U_r[i], pinfo_x_r.size * sizeof(*U_r[i]), hipMemcpyDeviceToHost));
     }
-    CHECK_CUDA_EXIT(cudaDeviceSynchronize());
+    CHECK_CUDA_EXIT(hipDeviceSynchronize());
 
     std::string fname;
     fname = prefix + "_" + std::to_string(rank) + ".csv";
@@ -644,25 +644,25 @@ public:
 private:
   void forward(std::array<real_t*, 3>& U_r, std::array<complex_t*, 3>& U_c) {
     for (int i = 0; i < 3; ++i) {
-      CHECK_CUFFT_EXIT(cufftXtExec(cufft_plan_r2c_x, U_r[i], U_c[i], CUFFT_FORWARD));
+      CHECK_CUFFT_EXIT(hipfftXtExec(cufft_plan_r2c_x, U_r[i], U_c[i], HIPFFT_FORWARD));
       cudecompTransposeXToY(handle, grid_desc_c, U_c[i], U_c[i], work_c, get_cudecomp_datatype(complex_t(0)), nullptr,
                             nullptr, nullptr, nullptr, 0);
-      CHECK_CUFFT_EXIT(cufftXtExec(cufft_plan_c2c_y, U_c[i], U_c[i], CUFFT_FORWARD));
+      CHECK_CUFFT_EXIT(hipfftXtExec(cufft_plan_c2c_y, U_c[i], U_c[i], HIPFFT_FORWARD));
       cudecompTransposeYToZ(handle, grid_desc_c, U_c[i], U_c[i], work_c, get_cudecomp_datatype(complex_t(0)), nullptr,
                             nullptr, nullptr, nullptr, 0);
-      CHECK_CUFFT_EXIT(cufftXtExec(cufft_plan_c2c_z, U_c[i], U_c[i], CUFFT_FORWARD));
+      CHECK_CUFFT_EXIT(hipfftXtExec(cufft_plan_c2c_z, U_c[i], U_c[i], HIPFFT_FORWARD));
     }
   }
 
   void backward(std::array<complex_t*, 3>& U_c, std::array<real_t*, 3>& U_r) {
     for (int i = 0; i < 3; ++i) {
-      CHECK_CUFFT_EXIT(cufftXtExec(cufft_plan_c2c_z, U_c[i], U_c[i], CUFFT_INVERSE));
+      CHECK_CUFFT_EXIT(hipfftXtExec(cufft_plan_c2c_z, U_c[i], U_c[i], HIPFFT_BACKWARD));
       cudecompTransposeZToY(handle, grid_desc_c, U_c[i], U_c[i], work_c, get_cudecomp_datatype(complex_t(0)), nullptr,
                             nullptr, nullptr, nullptr, 0);
-      CHECK_CUFFT_EXIT(cufftXtExec(cufft_plan_c2c_y, U_c[i], U_c[i], CUFFT_INVERSE));
+      CHECK_CUFFT_EXIT(hipfftXtExec(cufft_plan_c2c_y, U_c[i], U_c[i], HIPFFT_BACKWARD));
       cudecompTransposeYToX(handle, grid_desc_c, U_c[i], U_c[i], work_c, get_cudecomp_datatype(complex_t(0)), nullptr,
                             nullptr, nullptr, nullptr, 0);
-      CHECK_CUFFT_EXIT(cufftXtExec(cufft_plan_c2r_x, U_c[i], U_r[i], CUFFT_INVERSE));
+      CHECK_CUFFT_EXIT(hipfftXtExec(cufft_plan_c2r_x, U_c[i], U_r[i], HIPFFT_BACKWARD));
     }
   }
 
@@ -697,7 +697,7 @@ private:
     // Get physical U (z-pencil -> x-pencil)
     // Copy Uh to U (cuFFT C2R clobbers input, need to make copy)
     for (int i = 0; i < 3; ++i) {
-      CHECK_CUDA_EXIT(cudaMemcpy(U_c[i], Uh_c[0][i], pinfo_z_c.size * sizeof(*U_c[i]), cudaMemcpyDeviceToDevice));
+      CHECK_CUDA_EXIT(hipMemcpy(U_c[i], Uh_c[0][i], pinfo_z_c.size * sizeof(*U_c[i]), hipMemcpyDeviceToDevice));
     }
     backward(U_c, U_r);
   }
@@ -706,8 +706,7 @@ private:
   void update_rk4() {
     // Copy initial Uh
     for (int i = 0; i < 3; ++i) {
-      CHECK_CUDA_EXIT(
-          cudaMemcpy(Uh_c[1][i], Uh_c[0][i], pinfo_z_c.size * sizeof(*Uh_c[0][i]), cudaMemcpyDeviceToDevice));
+      CHECK_CUDA_EXIT(hipMemcpy(Uh_c[1][i], Uh_c[0][i], pinfo_z_c.size * sizeof(*Uh_c[0][i]), hipMemcpyDeviceToDevice));
     }
 
     // Run RK stages
@@ -722,7 +721,7 @@ private:
         // Get physical U (z-pencil -> x-pencil)
         // Copy Uh to U (cuFFT C2R clobbers input, need to make copy)
         for (int i = 0; i < 3; ++i) {
-          CHECK_CUDA_EXIT(cudaMemcpy(U_c[i], Uh_c[1][i], pinfo_z_c.size * sizeof(*U_c[i]), cudaMemcpyDeviceToDevice));
+          CHECK_CUDA_EXIT(hipMemcpy(U_c[i], Uh_c[1][i], pinfo_z_c.size * sizeof(*U_c[i]), hipMemcpyDeviceToDevice));
         }
         backward(U_c, U_r);
       }
@@ -751,7 +750,7 @@ private:
     // Get physical U (z-pencil -> x-pencil)
     // Copy Uh to U (cuFFT C2R clobbers input, need to make copy)
     for (int i = 0; i < 3; ++i) {
-      CHECK_CUDA_EXIT(cudaMemcpy(U_c[i], Uh_c[0][i], pinfo_z_c.size * sizeof(*U_c[i]), cudaMemcpyDeviceToDevice));
+      CHECK_CUDA_EXIT(hipMemcpy(U_c[i], Uh_c[0][i], pinfo_z_c.size * sizeof(*U_c[i]), hipMemcpyDeviceToDevice));
     }
     backward(U_c, U_r);
   }
@@ -760,9 +759,9 @@ private:
     velmax<<<(pinfo_x_r.size + 256 - 1) / 256, 256>>>(N, U_r[0], U_r[1], U_r[2], dU_r[0], pinfo_x_r);
     CHECK_CUDA_LAUNCH_EXIT();
 
-    CHECK_CUDA_EXIT(cub::DeviceReduce::Max(cub_work, cub_work_sz, dU_r[0], cub_sum, pinfo_x_r.size));
+    CHECK_CUDA_EXIT(hipcub::DeviceReduce::Max(cub_work, cub_work_sz, dU_r[0], cub_sum, pinfo_x_r.size));
     ;
-    CHECK_CUDA_EXIT(cudaDeviceSynchronize());
+    CHECK_CUDA_EXIT(hipDeviceSynchronize());
     real_t velmax = *cub_sum;
     if (nranks > 1) {
       CHECK_MPI_EXIT(MPI_Allreduce(MPI_IN_PLACE, &velmax, 1, get_mpi_datatype(velmax), MPI_MAX, mpi_comm));
@@ -795,10 +794,10 @@ private:
   cudecompPencilInfo_t pinfo_z_c;
 
   // cuFFT
-  cufftHandle cufft_plan_r2c_x;
-  cufftHandle cufft_plan_c2r_x;
-  cufftHandle cufft_plan_c2c_y;
-  cufftHandle cufft_plan_c2c_z;
+  hipfftHandle cufft_plan_r2c_x;
+  hipfftHandle cufft_plan_c2r_x;
+  hipfftHandle cufft_plan_c2c_y;
+  hipfftHandle cufft_plan_c2c_z;
 
   // CUB
   void* cub_work = nullptr;
@@ -936,7 +935,7 @@ int main(int argc, char** argv) {
   if (specfreq > 0) solver.write_spectrum_sample(0);
 
   // Run simulation
-  CHECK_CUDA_EXIT(cudaDeviceSynchronize());
+  CHECK_CUDA_EXIT(hipDeviceSynchronize());
   CHECK_MPI_EXIT(MPI_Barrier(MPI_COMM_WORLD));
   double ts = MPI_Wtime();
   double ts_step = MPI_Wtime();
@@ -949,13 +948,13 @@ int main(int argc, char** argv) {
     count++;
 
     if (i > 0 && (i + 1) % printfreq == 0) {
-      CHECK_CUDA_EXIT(cudaDeviceSynchronize());
+      CHECK_CUDA_EXIT(hipDeviceSynchronize());
       CHECK_MPI_EXIT(MPI_Barrier(MPI_COMM_WORLD));
       double te_step = MPI_Wtime();
       if (rank == 0) printf("Average iteration time: %f ms\n", (te_step - ts_step) * 1000 / count);
       count = 0;
       solver.print_stats(logfile);
-      CHECK_CUDA_EXIT(cudaDeviceSynchronize());
+      CHECK_CUDA_EXIT(hipDeviceSynchronize());
       CHECK_MPI_EXIT(MPI_Barrier(MPI_COMM_WORLD));
       ts_step = MPI_Wtime();
     }
@@ -970,7 +969,7 @@ int main(int argc, char** argv) {
     i++;
   }
 
-  CHECK_CUDA_EXIT(cudaDeviceSynchronize());
+  CHECK_CUDA_EXIT(hipDeviceSynchronize());
   CHECK_MPI_EXIT(MPI_Barrier(MPI_COMM_WORLD));
   double te = MPI_Wtime();
   if (rank == 0) printf("Simulation time: %f s\n", te - ts);
@@ -980,6 +979,6 @@ int main(int argc, char** argv) {
 
   solver.finalize();
 
-  CHECK_CUDA_EXIT(cudaDeviceSynchronize());
+  CHECK_CUDA_EXIT(hipDeviceSynchronize());
   CHECK_MPI_EXIT(MPI_Finalize());
 }

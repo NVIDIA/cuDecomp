@@ -23,8 +23,8 @@
 #include <vector>
 
 #include <cuda/std/complex>
-#include <cuda_runtime.h>
-#include <cutensor.h>
+#include <hip/hip_runtime.h>
+#include <hiptensor.h>
 #include <mpi.h>
 
 #include "internal/checks.h"
@@ -45,19 +45,19 @@ static inline bool isTransposeCommPipelined(cudecompTransposeCommBackend_t commT
 }
 
 #if CUTENSOR_MAJOR >= 2
-static inline cutensorDataType_t getCutensorDataType(float) { return CUTENSOR_R_32F; }
-static inline cutensorDataType_t getCutensorDataType(double) { return CUTENSOR_R_64F; }
-static inline cutensorDataType_t getCutensorDataType(cuda::std::complex<float>) { return CUTENSOR_C_32F; }
-static inline cutensorDataType_t getCutensorDataType(cuda::std::complex<double>) { return CUTENSOR_C_64F; }
-template <typename T> static inline cutensorDataType_t getCutensorDataType() { return getCutensorDataType(T(0)); }
+static inline hiptensorDataType_t getCutensorDataType(float) { return HIPTENSOR_R_32F; }
+static inline hiptensorDataType_t getCutensorDataType(double) { return HIPTENSOR_R_64F; }
+static inline hiptensorDataType_t getCutensorDataType(cuda::std::complex<float>) { return HIPTENSOR_C_32F; }
+static inline hiptensorDataType_t getCutensorDataType(cuda::std::complex<double>) { return HIPTENSOR_C_64F; }
+template <typename T> static inline hiptensorDataType_t getCutensorDataType() { return getCutensorDataType(T(0)); }
 
-static inline cutensorComputeDescriptor_t getCutensorComputeType(cutensorDataType_t cutensor_dtype) {
+static inline hiptensorComputeDescriptor_t getCutensorComputeType(hiptensorDataType_t cutensor_dtype) {
   switch (cutensor_dtype) {
-  case CUTENSOR_R_32F:
-  case CUTENSOR_C_32F: return CUTENSOR_COMPUTE_DESC_32F;
-  case CUTENSOR_R_64F:
-  case CUTENSOR_C_64F:
-  default: return CUTENSOR_COMPUTE_DESC_64F;
+  case HIPTENSOR_R_32F:
+  case HIPTENSOR_C_32F: return HIPTENSOR_COMPUTE_DESC_32F;
+  case HIPTENSOR_R_64F:
+  case HIPTENSOR_C_64F:
+  default: return HIPTENSOR_COMPUTE_DESC_64F;
   }
 }
 
@@ -72,8 +72,8 @@ template <typename T> static inline uint32_t getAlignment(const T* ptr) {
 template <typename T>
 static void localPermute(const cudecompHandle_t handle, const std::array<int64_t, 3>& extent_in,
                          const std::array<int32_t, 3>& order_out, const std::array<int64_t, 3>& strides_in,
-                         const std::array<int64_t, 3>& strides_out, T* input, T* output, cudaStream_t stream) {
-  cutensorDataType_t cutensor_type = getCutensorDataType<T>();
+                         const std::array<int64_t, 3>& strides_out, T* input, T* output, hipStream_t stream) {
+  hiptensorDataType_t cutensor_type = getCutensorDataType<T>();
 
   std::array<int32_t, 3> order_in{0, 1, 2};
   std::array<int64_t, 3> extent_out;
@@ -85,43 +85,43 @@ static void localPermute(const cudecompHandle_t handle, const std::array<int64_t
   auto strides_in_ptr = anyNonzeros(strides_in) ? strides_in.data() : nullptr;
   auto strides_out_ptr = anyNonzeros(strides_out) ? strides_out.data() : nullptr;
 
-  cutensorTensorDescriptor_t desc_in;
-  CHECK_CUTENSOR(cutensorCreateTensorDescriptor(handle->cutensor_handle, &desc_in, 3, extent_in.data(), strides_in_ptr,
-                                                cutensor_type, getAlignment(input)));
-  cutensorTensorDescriptor_t desc_out;
-  CHECK_CUTENSOR(cutensorCreateTensorDescriptor(handle->cutensor_handle, &desc_out, 3, extent_out.data(),
-                                                strides_out_ptr, cutensor_type, getAlignment(output)));
+  hiptensorTensorDescriptor_t desc_in;
+  CHECK_CUTENSOR(hiptensorCreateTensorDescriptor(handle->cutensor_handle, &desc_in, 3, extent_in.data(), strides_in_ptr,
+                                                 cutensor_type, getAlignment(input)));
+  hiptensorTensorDescriptor_t desc_out;
+  CHECK_CUTENSOR(hiptensorCreateTensorDescriptor(handle->cutensor_handle, &desc_out, 3, extent_out.data(),
+                                                 strides_out_ptr, cutensor_type, getAlignment(output)));
 
-  cutensorOperationDescriptor_t desc_op;
-  CHECK_CUTENSOR(cutensorCreatePermutation(handle->cutensor_handle, &desc_op, desc_in, order_in.data(),
-                                           CUTENSOR_OP_IDENTITY, desc_out, order_out.data(),
-                                           getCutensorComputeType(cutensor_type)));
+  hiptensorOperationDescriptor_t desc_op;
+  CHECK_CUTENSOR(hiptensorCreatePermutation(handle->cutensor_handle, &desc_op, desc_in, order_in.data(),
+                                            HIPTENSOR_OP_IDENTITY, desc_out, order_out.data(),
+                                            getCutensorComputeType(cutensor_type)));
 
-  cutensorPlan_t plan;
-  CHECK_CUTENSOR(cutensorCreatePlan(handle->cutensor_handle, &plan, desc_op, handle->cutensor_plan_pref, 0));
+  hiptensorPlan_t plan;
+  CHECK_CUTENSOR(hiptensorCreatePlan(handle->cutensor_handle, &plan, desc_op, handle->cutensor_plan_pref, 0));
 
   T one(1);
-  CHECK_CUTENSOR(cutensorPermute(handle->cutensor_handle, plan, &one, input, output, stream));
+  CHECK_CUTENSOR(hiptensorPermute(handle->cutensor_handle, plan, &one, input, output, stream));
 
-  CHECK_CUTENSOR(cutensorDestroyTensorDescriptor(desc_in));
-  CHECK_CUTENSOR(cutensorDestroyTensorDescriptor(desc_out));
-  CHECK_CUTENSOR(cutensorDestroyOperationDescriptor(desc_op));
-  CHECK_CUTENSOR(cutensorDestroyPlan(plan));
+  CHECK_CUTENSOR(hiptensorDestroyTensorDescriptor(desc_in));
+  CHECK_CUTENSOR(hiptensorDestroyTensorDescriptor(desc_out));
+  CHECK_CUTENSOR(hiptensorDestroyOperationDescriptor(desc_op));
+  CHECK_CUTENSOR(hiptensorDestroyPlan(plan));
 }
 
 #else
 
-static inline cudaDataType_t getCudaDataType(float) { return CUDA_R_32F; }
-static inline cudaDataType_t getCudaDataType(double) { return CUDA_R_64F; }
-static inline cudaDataType_t getCudaDataType(cuda::std::complex<float>) { return CUDA_C_32F; }
-static inline cudaDataType_t getCudaDataType(cuda::std::complex<double>) { return CUDA_C_64F; }
-template <typename T> static inline cudaDataType_t getCudaDataType() { return getCudaDataType(T(0)); }
+static inline hipDataType getCudaDataType(float) { return HIP_R_32F; }
+static inline hipDataType getCudaDataType(double) { return HIP_R_64F; }
+static inline hipDataType getCudaDataType(cuda::std::complex<float>) { return HIP_C_32F; }
+static inline hipDataType getCudaDataType(cuda::std::complex<double>) { return HIP_C_64F; }
+template <typename T> static inline hipDataType getCudaDataType() { return getCudaDataType(T(0)); }
 
 template <typename T>
 static void localPermute(const cudecompHandle_t handle, const std::array<int64_t, 3>& extent_in,
                          const std::array<int32_t, 3>& order_out, const std::array<int64_t, 3>& strides_in,
-                         const std::array<int64_t, 3>& strides_out, T* input, T* output, cudaStream_t stream) {
-  cudaDataType_t cuda_type = getCudaDataType<T>();
+                         const std::array<int64_t, 3>& strides_out, T* input, T* output, hipStream_t stream) {
+  hipDataType cuda_type = getCudaDataType<T>();
 
   std::array<int32_t, 3> order_in{0, 1, 2};
   std::array<int64_t, 3> extent_out;
@@ -133,16 +133,16 @@ static void localPermute(const cudecompHandle_t handle, const std::array<int64_t
   auto strides_in_ptr = anyNonzeros(strides_in) ? strides_in.data() : nullptr;
   auto strides_out_ptr = anyNonzeros(strides_out) ? strides_out.data() : nullptr;
 
-  cutensorTensorDescriptor_t desc_in;
-  CHECK_CUTENSOR(cutensorInitTensorDescriptor(&handle->cutensor_handle, &desc_in, 3, extent_in.data(), strides_in_ptr,
-                                              cuda_type, CUTENSOR_OP_IDENTITY));
-  cutensorTensorDescriptor_t desc_out;
-  CHECK_CUTENSOR(cutensorInitTensorDescriptor(&handle->cutensor_handle, &desc_out, 3, extent_out.data(),
-                                              strides_out_ptr, cuda_type, CUTENSOR_OP_IDENTITY));
+  hiptensorTensorDescriptor_t desc_in;
+  CHECK_CUTENSOR(hiptensorInitTensorDescriptor(&handle->cutensor_handle, &desc_in, 3, extent_in.data(), strides_in_ptr,
+                                               cuda_type, HIPTENSOR_OP_IDENTITY));
+  hiptensorTensorDescriptor_t desc_out;
+  CHECK_CUTENSOR(hiptensorInitTensorDescriptor(&handle->cutensor_handle, &desc_out, 3, extent_out.data(),
+                                               strides_out_ptr, cuda_type, HIPTENSOR_OP_IDENTITY));
 
   T one(1);
-  CHECK_CUTENSOR(cutensorPermutation(&handle->cutensor_handle, &one, input, &desc_in, order_in.data(), output,
-                                     &desc_out, order_out.data(), cuda_type, stream));
+  CHECK_CUTENSOR(hiptensorPermutation(&handle->cutensor_handle, &one, input, &desc_in, order_in.data(), output,
+                                      &desc_out, order_out.data(), cuda_type, stream));
 }
 #endif
 
@@ -151,7 +151,7 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
                                T* input, T* output, T* work, const int32_t input_halo_extents_ptr[] = nullptr,
                                const int32_t output_halo_extents_ptr[] = nullptr,
                                const int32_t input_padding_ptr[] = nullptr,
-                               const int32_t output_padding_ptr[] = nullptr, cudaStream_t stream = 0) {
+                               const int32_t output_padding_ptr[] = nullptr, hipStream_t stream = 0) {
 
   std::array<int32_t, 3> input_halo_extents{};
   std::array<int32_t, 3> output_halo_extents{};
@@ -236,7 +236,7 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
     auto max_pencil_size_a = getGlobalMaxPencilSize(handle, grid_desc, ax_a);
     o2 = work + max_pencil_size_a;
     // Record event at start of transpose op for NVSHMEM team synchronization
-    CHECK_CUDA(cudaEventRecord(grid_desc->nvshmem_sync_event, stream));
+    CHECK_CUDA(hipEventRecord(grid_desc->nvshmem_sync_event, stream));
   }
 
   cudecompTransposePerformanceSample* current_sample = nullptr;
@@ -252,7 +252,7 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
     current_sample->valid = true;
 
     // Record start event
-    CHECK_CUDA(cudaEventRecord(current_sample->transpose_start_event, stream));
+    CHECK_CUDA(hipEventRecord(current_sample->transpose_start_event, stream));
   }
 
   // Adjust pointers to handle special cases
@@ -266,7 +266,7 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
           // Single rank, in place, Pack -> Unpack: No transpose necessary.
           if (handle->performance_report_enable) {
             // Record performance data
-            CHECK_CUDA(cudaEventRecord(current_sample->transpose_end_event, stream));
+            CHECK_CUDA(hipEventRecord(current_sample->transpose_end_event, stream));
             advanceTransposePerformanceSample(handle, grid_desc,
                                               createTransposeConfig(ax, dir, input, output, input_halo_extents.data(),
                                                                     output_halo_extents.data(), input_padding.data(),
@@ -387,7 +387,7 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
         if (handle->cuda_graphs_enable && grid_desc->graph_cache.cached(key)) {
           grid_desc->graph_cache.replay(key, stream);
         } else {
-          cudaStream_t graph_stream = stream;
+          hipStream_t graph_stream = stream;
           if (handle->cuda_graphs_enable && splits_a.size() > 1) {
             graph_stream = grid_desc->graph_cache.startCapture(key, stream);
           }
@@ -423,14 +423,13 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
 
             localPermute(handle, extents, order, strides_in, strides_out, src, dst, graph_stream);
 #if CUDART_VERSION >= 11010
-            cudaStreamCaptureStatus capture_status;
-            CHECK_CUDA(cudaStreamIsCapturing(graph_stream, &capture_status));
-            CHECK_CUDA(cudaEventRecordWithFlags(grid_desc->events[dst_rank], graph_stream,
-                                                capture_status == cudaStreamCaptureStatusActive
-                                                    ? cudaEventRecordExternal
-                                                    : cudaEventRecordDefault));
+            hipStreamCaptureStatus capture_status;
+            CHECK_CUDA(hipStreamIsCapturing(graph_stream, &capture_status));
+            CHECK_CUDA(hipEventRecordWithFlags(grid_desc->events[dst_rank], graph_stream,
+                                               capture_status == hipStreamCaptureStatusActive ? hipEventRecordExternal
+                                                                                              : hipEventRecordDefault));
 #else
-            CHECK_CUDA(cudaEventRecord((grid_desc->events[dst_rank], graph_stream));
+            CHECK_CUDA(hipEventRecord((grid_desc->events[dst_rank], graph_stream));
 #endif
           }
 
@@ -463,7 +462,7 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
       if (handle->cuda_graphs_enable && grid_desc->graph_cache.cached(key)) {
         grid_desc->graph_cache.replay(key, stream);
       } else {
-        cudaStream_t graph_stream = stream;
+        hipStream_t graph_stream = stream;
         if (handle->cuda_graphs_enable && pipelined && splits_a.size() > 1) {
           graph_stream = grid_desc->graph_cache.startCapture(key, stream);
         }
@@ -517,15 +516,14 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
           }
 #if CUDART_VERSION >= 11010
           if (pipelined) {
-            cudaStreamCaptureStatus capture_status;
-            CHECK_CUDA(cudaStreamIsCapturing(graph_stream, &capture_status));
-            CHECK_CUDA(cudaEventRecordWithFlags(grid_desc->events[dst_rank], graph_stream,
-                                                capture_status == cudaStreamCaptureStatusActive
-                                                    ? cudaEventRecordExternal
-                                                    : cudaEventRecordDefault));
+            hipStreamCaptureStatus capture_status;
+            CHECK_CUDA(hipStreamIsCapturing(graph_stream, &capture_status));
+            CHECK_CUDA(hipEventRecordWithFlags(grid_desc->events[dst_rank], graph_stream,
+                                               capture_status == hipStreamCaptureStatusActive ? hipEventRecordExternal
+                                                                                              : hipEventRecordDefault));
           }
 #else
-          if (pipelined) CHECK_CUDA(cudaEventRecord((grid_desc->events[dst_rank], graph_stream));
+          if (pipelined) CHECK_CUDA(hipEventRecord((grid_desc->events[dst_rank], graph_stream));
 #endif
         }
         if (handle->cuda_graphs_enable && pipelined && splits_a.size() > 1) {
@@ -538,7 +536,7 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
     if (o1 == output) {
       // o1 is output. Return.
       if (handle->performance_report_enable) {
-        CHECK_CUDA(cudaEventRecord(current_sample->transpose_end_event, stream));
+        CHECK_CUDA(hipEventRecord(current_sample->transpose_end_event, stream));
         advanceTransposePerformanceSample(handle, grid_desc,
                                           createTransposeConfig(ax, dir, input, output, input_halo_extents.data(),
                                                                 output_halo_extents.data(), input_padding.data(),
@@ -551,7 +549,7 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
     // enforce input data dependency
     if (pipelined) {
       for (int j = 0; j < splits_a.size(); ++j) {
-        CHECK_CUDA(cudaEventRecord(grid_desc->events[j], stream));
+        CHECK_CUDA(hipEventRecord(grid_desc->events[j], stream));
       }
     }
   }
@@ -821,7 +819,7 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
 
   if (handle->performance_report_enable) {
     // Record performance data
-    CHECK_CUDA(cudaEventRecord(current_sample->transpose_end_event, stream));
+    CHECK_CUDA(hipEventRecord(current_sample->transpose_end_event, stream));
     advanceTransposePerformanceSample(handle, grid_desc,
                                       createTransposeConfig(ax, dir, input, output, input_halo_extents.data(),
                                                             output_halo_extents.data(), input_padding.data(),
@@ -834,7 +832,7 @@ void cudecompTransposeXToY(const cudecompHandle_t handle, const cudecompGridDesc
                            T* work, const int32_t input_halo_extents_ptr[] = nullptr,
                            const int32_t output_halo_extents_ptr[] = nullptr,
                            const int32_t input_padding_ptr[] = nullptr, const int32_t output_padding_ptr[] = nullptr,
-                           cudaStream_t stream = 0) {
+                           hipStream_t stream = 0) {
   nvtx::rangePush("cudecompTransposeXToY");
   cudecompTranspose_(0, 1, handle, grid_desc, input, output, work, input_halo_extents_ptr, output_halo_extents_ptr,
                      input_padding_ptr, output_padding_ptr, stream);
@@ -846,7 +844,7 @@ void cudecompTransposeYToZ(const cudecompHandle_t handle, const cudecompGridDesc
                            T* work, const int32_t input_halo_extents_ptr[] = nullptr,
                            const int32_t output_halo_extents_ptr[] = nullptr,
                            const int32_t input_padding_ptr[] = nullptr, const int32_t output_padding_ptr[] = nullptr,
-                           cudaStream_t stream = 0) {
+                           hipStream_t stream = 0) {
   nvtx::rangePush("cudecompTransposeYToZ");
   cudecompTranspose_(1, 1, handle, grid_desc, input, output, work, input_halo_extents_ptr, output_halo_extents_ptr,
                      input_padding_ptr, output_padding_ptr, stream);
@@ -858,7 +856,7 @@ void cudecompTransposeZToY(const cudecompHandle_t handle, const cudecompGridDesc
                            T* work, const int32_t input_halo_extents_ptr[] = nullptr,
                            const int32_t output_halo_extents_ptr[] = nullptr,
                            const int32_t input_padding_ptr[] = nullptr, const int32_t output_padding_ptr[] = nullptr,
-                           cudaStream_t stream = 0) {
+                           hipStream_t stream = 0) {
   nvtx::rangePush("cudecompTransposeZToY");
   cudecompTranspose_(2, -1, handle, grid_desc, input, output, work, input_halo_extents_ptr, output_halo_extents_ptr,
                      input_padding_ptr, output_padding_ptr, stream);
@@ -870,7 +868,7 @@ void cudecompTransposeYToX(const cudecompHandle_t handle, const cudecompGridDesc
                            T* work, const int32_t input_halo_extents_ptr[] = nullptr,
                            const int32_t output_halo_extents_ptr[] = nullptr,
                            const int32_t input_padding_ptr[] = nullptr, const int32_t output_padding_ptr[] = nullptr,
-                           cudaStream_t stream = 0) {
+                           hipStream_t stream = 0) {
   nvtx::rangePush("cudecompTransposeYToX");
   cudecompTranspose_(1, -1, handle, grid_desc, input, output, work, input_halo_extents_ptr, output_halo_extents_ptr,
                      input_padding_ptr, output_padding_ptr, stream);

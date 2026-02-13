@@ -15,8 +15,8 @@
  * limitations under the License.
  */
 
-#include <cuda_runtime.h>
 #include <dlfcn.h>
+#include <hip/hip_runtime.h>
 
 #include "internal/checks.h"
 #include "internal/exceptions.h"

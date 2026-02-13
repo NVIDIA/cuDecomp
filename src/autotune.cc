@@ -20,7 +20,7 @@
 #include <string>
 #include <vector>
 
-#include <cuda_runtime.h>
+#include <hip/hip_runtime.h>
 #include <mpi.h>
 #include <nccl.h>
 #ifdef ENABLE_NVSHMEM
@@ -82,9 +82,9 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
   double t_start = MPI_Wtime();
 
   // Create cuda_events for intermediate timings
-  std::vector<cudaEvent_t> events(5);
+  std::vector<hipEvent_t> events(5);
   for (auto& event : events) {
-    CHECK_CUDA(cudaEventCreate(&event));
+    CHECK_CUDA(hipEventCreate(&event));
   }
 
   bool autotune_comm = options->autotune_transpose_backend;
@@ -198,11 +198,11 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
     int64_t work_sz_new = num_elements_work * dtype_size;
     if (data_sz_new > data_sz) {
       data_sz = data_sz_new;
-      if (data) CHECK_CUDA(cudaFree(data));
-      CHECK_CUDA(cudaMalloc(&data, data_sz));
+      if (data) CHECK_CUDA(hipFree(data));
+      CHECK_CUDA(hipMalloc(&data, data_sz));
       if (need_data2) {
-        if (data2) CHECK_CUDA(cudaFree(data2));
-        CHECK_CUDA(cudaMalloc(&data2, data_sz));
+        if (data2) CHECK_CUDA(hipFree(data2));
+        CHECK_CUDA(hipMalloc(&data2, data_sz));
       }
     }
 
@@ -228,17 +228,17 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
         grid_desc->config.transpose_comm_backend = tmp;
 
         // Check if there is enough memory for separate non-NVSHMEM allocated work buffer
-        auto ret = cudaMalloc(&work, work_sz);
-        if (ret == cudaErrorMemoryAllocation) {
+        auto ret = hipMalloc(&work, work_sz);
+        if (ret == hipErrorOutOfMemory) {
           if (handle->rank == 0) {
             printf("CUDECOMP:WARN: Cannot allocate separate workspace for non-NVSHMEM backends during "
                    "autotuning. Using NVSHMEM allocated workspace for all backends, which may cause issues "
                    "for some MPI implementations. See documentation for more details and suggested workarounds.\n");
           }
           work = work_nvshmem;
-          cudaGetLastError(); // Reset CUDA error state
+          hipGetLastError(); // Reset CUDA error state
         } else {
-          CHECK_CUDA(cudaFree(work));
+          CHECK_CUDA(hipFree(work));
           auto tmp = grid_desc->config.transpose_comm_backend;
           grid_desc->config.transpose_comm_backend =
               (need_nccl) ? CUDECOMP_TRANSPOSE_COMM_NCCL : CUDECOMP_TRANSPOSE_COMM_MPI_P2P;
@@ -320,50 +320,50 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
       std::vector<float> trial_zy_times(options->n_trials);
       std::vector<float> trial_yx_times(options->n_trials);
       bool skip_case = false;
-      CHECK_CUDA(cudaDeviceSynchronize());
+      CHECK_CUDA(hipDeviceSynchronize());
       CHECK_MPI(MPI_Barrier(handle->mpi_comm));
       double ts = MPI_Wtime();
       for (int i = 0; i < options->n_trials; ++i) {
-        CHECK_CUDA(cudaEventRecord(events[0], 0));
+        CHECK_CUDA(hipEventRecord(events[0], 0));
         if (options->transpose_op_weights[0] != 0.0) {
           CHECK_CUDECOMP(cudecompTransposeXToY(handle, grid_desc, data,
                                                options->transpose_use_inplace_buffers[0] ? data : data2, w,
                                                options->dtype, pinfo_x0.halo_extents, pinfo_y0.halo_extents,
                                                pinfo_x0.padding, pinfo_y0.padding, 0));
         }
-        CHECK_CUDA(cudaEventRecord(events[1], 0));
+        CHECK_CUDA(hipEventRecord(events[1], 0));
         if (options->transpose_op_weights[1] != 0.0) {
           CHECK_CUDECOMP(cudecompTransposeYToZ(handle, grid_desc, data,
                                                options->transpose_use_inplace_buffers[1] ? data : data2, w,
                                                options->dtype, pinfo_y1.halo_extents, pinfo_z1.halo_extents,
                                                pinfo_y1.padding, pinfo_z1.padding, 0));
         }
-        CHECK_CUDA(cudaEventRecord(events[2], 0));
+        CHECK_CUDA(hipEventRecord(events[2], 0));
         if (options->transpose_op_weights[2] != 0.0) {
           CHECK_CUDECOMP(cudecompTransposeZToY(handle, grid_desc, data,
                                                options->transpose_use_inplace_buffers[2] ? data : data2, w,
                                                options->dtype, pinfo_z2.halo_extents, pinfo_y2.halo_extents,
                                                pinfo_z2.padding, pinfo_y2.padding, 0));
         }
-        CHECK_CUDA(cudaEventRecord(events[3], 0));
+        CHECK_CUDA(hipEventRecord(events[3], 0));
         if (options->transpose_op_weights[3] != 0.0) {
           CHECK_CUDECOMP(cudecompTransposeYToX(handle, grid_desc, data,
                                                options->transpose_use_inplace_buffers[3] ? data : data2, w,
                                                options->dtype, pinfo_y3.halo_extents, pinfo_x3.halo_extents,
                                                pinfo_y3.padding, pinfo_x3.padding, 0));
         }
-        CHECK_CUDA(cudaEventRecord(events[4], 0));
-        CHECK_CUDA(cudaDeviceSynchronize());
+        CHECK_CUDA(hipEventRecord(events[4], 0));
+        CHECK_CUDA(hipDeviceSynchronize());
         CHECK_MPI(MPI_Barrier(handle->mpi_comm));
 
         if (options->transpose_op_weights[0] != 0.0)
-          CHECK_CUDA(cudaEventElapsedTime(&trial_xy_times[i], events[0], events[1]));
+          CHECK_CUDA(hipEventElapsedTime(&trial_xy_times[i], events[0], events[1]));
         if (options->transpose_op_weights[1] != 0.0)
-          CHECK_CUDA(cudaEventElapsedTime(&trial_yz_times[i], events[1], events[2]));
+          CHECK_CUDA(hipEventElapsedTime(&trial_yz_times[i], events[1], events[2]));
         if (options->transpose_op_weights[2] != 0.0)
-          CHECK_CUDA(cudaEventElapsedTime(&trial_zy_times[i], events[2], events[3]));
+          CHECK_CUDA(hipEventElapsedTime(&trial_zy_times[i], events[2], events[3]));
         if (options->transpose_op_weights[3] != 0.0)
-          CHECK_CUDA(cudaEventElapsedTime(&trial_yx_times[i], events[3], events[4]));
+          CHECK_CUDA(hipEventElapsedTime(&trial_yx_times[i], events[3], events[4]));
 
         trial_times[i] = trial_xy_times[i] + trial_yz_times[i] + trial_zy_times[i] + trial_yx_times[i];
 
@@ -477,12 +477,12 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
     grid_desc->config.transpose_comm_backend = tmp;
   }
 
-  CHECK_CUDA(cudaFree(data));
-  if (need_data2) { CHECK_CUDA(cudaFree(data2)); }
+  CHECK_CUDA(hipFree(data));
+  if (need_data2) { CHECK_CUDA(hipFree(data2)); }
 
   // Delete cuda events
   for (auto& event : events) {
-    CHECK_CUDA(cudaEventDestroy(event));
+    CHECK_CUDA(hipEventDestroy(event));
   }
 
   // Set handle to best option (broadcast from rank 0 for consistency)
@@ -508,12 +508,12 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
   // the test buffer GPU memory.
   char *tmp1, *tmp2;
   size_t per_rank_size = (1024 * 1024 + handle->nranks - 1) / handle->nranks;
-  CHECK_CUDA(cudaMalloc(&tmp1, per_rank_size * handle->nranks * sizeof(*tmp1)));
-  CHECK_CUDA(cudaMalloc(&tmp2, per_rank_size * handle->nranks * sizeof(*tmp2)));
+  CHECK_CUDA(hipMalloc(&tmp1, per_rank_size * handle->nranks * sizeof(*tmp1)));
+  CHECK_CUDA(hipMalloc(&tmp2, per_rank_size * handle->nranks * sizeof(*tmp2)));
   CHECK_MPI(MPI_Alltoall(tmp1, per_rank_size, MPI_CHAR, tmp2, per_rank_size, MPI_CHAR, handle->mpi_comm));
   CHECK_MPI(MPI_Barrier(handle->mpi_comm));
-  CHECK_CUDA(cudaFree(tmp1));
-  CHECK_CUDA(cudaFree(tmp2));
+  CHECK_CUDA(hipFree(tmp1));
+  CHECK_CUDA(hipFree(tmp2));
 
   // Reset performance samples after autotuning
   resetPerformanceSamples(handle, grid_desc);
@@ -611,8 +611,8 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
     int64_t work_sz_new = num_elements_work * dtype_size;
     if (data_sz_new > data_sz) {
       data_sz = data_sz_new;
-      if (data) CHECK_CUDA(cudaFree(data));
-      CHECK_CUDA(cudaMalloc(&data, data_sz));
+      if (data) CHECK_CUDA(hipFree(data));
+      CHECK_CUDA(hipMalloc(&data, data_sz));
     }
 
     // For nvshmem, buffers must be the same size. Find global maximums.
@@ -636,17 +636,17 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
         grid_desc->config.halo_comm_backend = tmp;
 
         // Check if there is enough memory for separate non-NVSHMEM allocated work buffer
-        auto ret = cudaMalloc(&work, work_sz);
-        if (ret == cudaErrorMemoryAllocation) {
+        auto ret = hipMalloc(&work, work_sz);
+        if (ret == hipErrorOutOfMemory) {
           if (handle->rank == 0) {
             printf("CUDECOMP:WARN: Cannot allocate separate workspace for non-NVSHMEM backends during "
                    "autotuning. Using NVSHMEM allocated workspace for all backends, which may cause issues "
                    "for some MPI implementations. See documentation for more details and suggested workarounds.\n");
           }
           work = work_nvshmem;
-          cudaGetLastError(); // Reset CUDA error state
+          hipGetLastError(); // Reset CUDA error state
         } else {
-          CHECK_CUDA(cudaFree(work));
+          CHECK_CUDA(hipFree(work));
           auto tmp = grid_desc->config.halo_comm_backend;
           grid_desc->config.halo_comm_backend = (need_nccl) ? CUDECOMP_HALO_COMM_NCCL : CUDECOMP_HALO_COMM_MPI;
           cudecompResult_t ret = cudecompMalloc(handle, grid_desc, reinterpret_cast<void**>(&work), work_sz);
@@ -714,7 +714,7 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
 
       // Trials
       std::vector<double> trial_times(options->n_trials);
-      CHECK_CUDA(cudaDeviceSynchronize());
+      CHECK_CUDA(hipDeviceSynchronize());
       CHECK_MPI(MPI_Barrier(handle->mpi_comm));
       double ts = MPI_Wtime();
       for (int i = 0; i < options->n_trials; ++i) {
@@ -734,7 +734,7 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
             break;
           }
         }
-        CHECK_CUDA(cudaDeviceSynchronize());
+        CHECK_CUDA(hipDeviceSynchronize());
         CHECK_MPI(MPI_Barrier(handle->mpi_comm));
         double te = MPI_Wtime();
         trial_times[i] = te - ts;
@@ -818,7 +818,7 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
     grid_desc->config.halo_comm_backend = tmp;
   }
 
-  CHECK_CUDA(cudaFree(data));
+  CHECK_CUDA(hipFree(data));
 
   // Set handle to best option (broadcast from rank 0 for consistency)
   CHECK_MPI(MPI_Bcast(&comm_backend_best, sizeof(cudecompHaloCommBackend_t), MPI_CHAR, 0, handle->mpi_comm));

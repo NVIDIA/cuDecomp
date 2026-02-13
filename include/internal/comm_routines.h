@@ -20,7 +20,7 @@
 
 #include <vector>
 
-#include <cuda_runtime.h>
+#include <hip/hip_runtime.h>
 #include <mpi.h>
 #include <nccl.h>
 #ifdef ENABLE_NVSHMEM
@@ -73,20 +73,20 @@ static void
 nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_desc, T* send_buff,
                  const std::vector<comm_count_t>& send_counts, const std::vector<comm_count_t>& send_offsets,
                  T* recv_buff, const std::vector<comm_count_t>& recv_counts,
-                 const std::vector<comm_count_t>& recv_offsets, cudecompCommAxis comm_axis, cudaStream_t stream) {
+                 const std::vector<comm_count_t>& recv_offsets, cudecompCommAxis comm_axis, hipStream_t stream) {
   auto comm_info = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info : grid_desc->col_comm_info;
   auto comm = comm_info.mpi_comm;
   auto team = comm_info.nvshmem_team;
   int self_rank = comm_info.rank;
 
   // Event dependency on external stream for intra-group transfers
-  CHECK_CUDA(cudaEventRecord(grid_desc->events[0], stream));
+  CHECK_CUDA(hipEventRecord(grid_desc->events[0], stream));
   for (int i = 0; i < handle->device_p2p_ce_count; ++i) {
-    CHECK_CUDA(cudaStreamWaitEvent(handle->streams[i], grid_desc->events[0], 0));
+    CHECK_CUDA(hipStreamWaitEvent(handle->streams[i], grid_desc->events[0], 0));
   }
 
-  // Using cudaEventSynchronize + barrier instead of nvshmemx_team_sync_on_stream for lower latency
-  CHECK_CUDA(cudaEventSynchronize(grid_desc->nvshmem_sync_event));
+  // Using hipEventSynchronize + barrier instead of nvshmemx_team_sync_on_stream for lower latency
+  CHECK_CUDA(hipEventSynchronize(grid_desc->nvshmem_sync_event));
   CHECK_MPI(MPI_Barrier(comm));
   // nvshmemx_team_sync_on_stream(team, stream);
 
@@ -136,15 +136,15 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
         // CUDECOMP_NVSHMEM_INTRAGROUP_SYNC_FREQ transfers This helps reduce CE contention due to accumulation of
         // jitter.
         for (int i = 0; i < handle->device_p2p_ce_count; ++i) {
-          CHECK_CUDA(cudaEventRecord(grid_desc->events[0], handle->streams[i]));
-          CHECK_CUDA(cudaStreamWaitEvent(handle->streams[handle->device_p2p_ce_count], grid_desc->events[0], 0));
+          CHECK_CUDA(hipEventRecord(grid_desc->events[0], handle->streams[i]));
+          CHECK_CUDA(hipStreamWaitEvent(handle->streams[handle->device_p2p_ce_count], grid_desc->events[0], 0));
         }
 
         nvshmemx_team_sync_on_stream(team, handle->streams[handle->device_p2p_ce_count]);
 
-        CHECK_CUDA(cudaEventRecord(grid_desc->events[0], handle->streams[handle->device_p2p_ce_count]));
+        CHECK_CUDA(hipEventRecord(grid_desc->events[0], handle->streams[handle->device_p2p_ce_count]));
         for (int i = 0; i < handle->device_p2p_ce_count; ++i) {
-          CHECK_CUDA(cudaStreamWaitEvent(handle->streams[i], grid_desc->events[0], 0));
+          CHECK_CUDA(hipStreamWaitEvent(handle->streams[i], grid_desc->events[0], 0));
         }
       }
 
@@ -162,20 +162,20 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
     }
   }
 
-  // Self-copy with cudaMemcpy
-  CHECK_CUDA(cudaMemcpyAsync(recv_buff + recv_offsets[self_rank], send_buff + send_offsets[self_rank],
-                             send_counts[self_rank] * sizeof(T), cudaMemcpyDeviceToDevice, stream));
+  // Self-copy with hipMemcpy
+  CHECK_CUDA(hipMemcpyAsync(recv_buff + recv_offsets[self_rank], send_buff + send_offsets[self_rank],
+                            send_counts[self_rank] * sizeof(T), hipMemcpyDeviceToDevice, stream));
 
   // Event dependency on internal streams for completion of intra-group transfers
   for (int i = 0; i < handle->device_p2p_ce_count; ++i) {
-    CHECK_CUDA(cudaEventRecord(grid_desc->events[0], handle->streams[i]));
-    CHECK_CUDA(cudaStreamWaitEvent(stream, grid_desc->events[0], 0));
+    CHECK_CUDA(hipEventRecord(grid_desc->events[0], handle->streams[i]));
+    CHECK_CUDA(hipStreamWaitEvent(stream, grid_desc->events[0], 0));
   }
 
   if (need_quiet) { nvshmemx_quiet_on_stream(stream); }
 
-  // Using cudaStreamSynchronize + barrier instead of nvshmemx_team_sync_on_stream for lower latency
-  CHECK_CUDA(cudaStreamSynchronize(stream));
+  // Using hipStreamSynchronize + barrier instead of nvshmemx_team_sync_on_stream for lower latency
+  CHECK_CUDA(hipStreamSynchronize(stream));
   CHECK_MPI(MPI_Barrier(comm));
   // nvshmemx_team_sync_on_stream(team, stream);
 }
@@ -188,11 +188,11 @@ static void cudecompAlltoall(const cudecompHandle_t& handle, const cudecompGridD
                              const std::vector<comm_count_t>& recv_counts,
                              const std::vector<comm_count_t>& recv_offsets,
                              const std::vector<comm_count_t>& recv_offsets_nvshmem, cudecompCommAxis comm_axis,
-                             cudaStream_t stream, cudecompTransposePerformanceSample* current_sample = nullptr) {
+                             hipStream_t stream, cudecompTransposePerformanceSample* current_sample = nullptr) {
   nvtx::rangePush("cudecompAlltoall");
 
   if (handle->performance_report_enable) {
-    CHECK_CUDA(cudaEventRecord(current_sample->alltoall_start_events[current_sample->alltoall_timing_count], stream));
+    CHECK_CUDA(hipEventRecord(current_sample->alltoall_start_events[current_sample->alltoall_timing_count], stream));
   }
 
 #ifdef ENABLE_NVSHMEM
@@ -245,15 +245,15 @@ static void cudecompAlltoall(const cudecompHandle_t& handle, const cudecompGridD
   }
   case CUDECOMP_TRANSPOSE_COMM_MPI_P2P: {
     std::vector<MPI_Request> reqs(2 * send_counts.size(), MPI_REQUEST_NULL);
-    CHECK_CUDA(cudaStreamSynchronize(stream));
+    CHECK_CUDA(hipStreamSynchronize(stream));
 
     auto comm =
         (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info.mpi_comm : grid_desc->col_comm_info.mpi_comm;
     int self_rank = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info.rank : grid_desc->col_comm_info.rank;
 
-    // Self-copy with cudaMemcpy
-    CHECK_CUDA(cudaMemcpyAsync(recv_buff + recv_offsets[self_rank], send_buff + send_offsets[self_rank],
-                               send_counts[self_rank] * sizeof(T), cudaMemcpyDeviceToDevice, stream));
+    // Self-copy with hipMemcpy
+    CHECK_CUDA(hipMemcpyAsync(recv_buff + recv_offsets[self_rank], send_buff + send_offsets[self_rank],
+                              send_counts[self_rank] * sizeof(T), hipMemcpyDeviceToDevice, stream));
 
     for (int i = 1; i < recv_counts.size(); ++i) {
       int src_rank, dst_rank;
@@ -278,7 +278,7 @@ static void cudecompAlltoall(const cudecompHandle_t& handle, const cudecompGridD
     break;
   }
   case CUDECOMP_TRANSPOSE_COMM_MPI_A2A: {
-    CHECK_CUDA(cudaStreamSynchronize(stream));
+    CHECK_CUDA(hipStreamSynchronize(stream));
     auto comm =
         (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info.mpi_comm : grid_desc->col_comm_info.mpi_comm;
     int self_rank = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info.rank : grid_desc->col_comm_info.rank;
@@ -289,9 +289,9 @@ static void cudecompAlltoall(const cudecompHandle_t& handle, const cudecompGridD
       CHECK_MPI(MPI_Alltoall(send_buff, send_counts[0], getMpiDataType<T>(), recv_buff, recv_counts[0],
                              getMpiDataType<T>(), comm));
     } else {
-      // Self-copy with cudaMemcpy
-      CHECK_CUDA(cudaMemcpyAsync(recv_buff + recv_offsets[self_rank], send_buff + send_offsets[self_rank],
-                                 send_counts[self_rank] * sizeof(T), cudaMemcpyDeviceToDevice, stream));
+      // Self-copy with hipMemcpy
+      CHECK_CUDA(hipMemcpyAsync(recv_buff + recv_offsets[self_rank], send_buff + send_offsets[self_rank],
+                                send_counts[self_rank] * sizeof(T), hipMemcpyDeviceToDevice, stream));
 
       auto send_counts_mod = send_counts;
       auto recv_counts_mod = recv_counts;
@@ -308,7 +308,7 @@ static void cudecompAlltoall(const cudecompHandle_t& handle, const cudecompGridD
   }
 
   if (handle->performance_report_enable) {
-    CHECK_CUDA(cudaEventRecord(current_sample->alltoall_end_events[current_sample->alltoall_timing_count], stream));
+    CHECK_CUDA(hipEventRecord(current_sample->alltoall_end_events[current_sample->alltoall_timing_count], stream));
     current_sample->alltoall_timing_count++;
   }
 
@@ -322,7 +322,7 @@ cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cudecompGridDesc
                           T* recv_buff, const std::vector<comm_count_t>& recv_counts,
                           const std::vector<comm_count_t>& recv_offsets,
                           const std::vector<comm_count_t>& recv_offsets_nvshmem, cudecompCommAxis comm_axis,
-                          const std::vector<int>& src_ranks, const std::vector<int>& dst_ranks, cudaStream_t stream,
+                          const std::vector<int>& src_ranks, const std::vector<int>& dst_ranks, hipStream_t stream,
                           bool& synced, cudecompTransposePerformanceSample* current_sample = nullptr) {
 
   // If there are no transfers to complete, quick return
@@ -339,9 +339,9 @@ cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cudecompGridDesc
   int self_rank = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info.rank : grid_desc->col_comm_info.rank;
   if (handle->performance_report_enable && src_ranks[0] != self_rank) {
     // Note: skipping self-copy for timing as it should be overlapped
-    CHECK_CUDA(cudaStreamWaitEvent(handle->streams[0], grid_desc->events[dst_ranks[0]], 0));
-    CHECK_CUDA(cudaEventRecord(current_sample->alltoall_start_events[current_sample->alltoall_timing_count],
-                               handle->streams[0]));
+    CHECK_CUDA(hipStreamWaitEvent(handle->streams[0], grid_desc->events[dst_ranks[0]], 0));
+    CHECK_CUDA(hipEventRecord(current_sample->alltoall_start_events[current_sample->alltoall_timing_count],
+                              handle->streams[0]));
   }
 
 #ifdef ENABLE_NVSHMEM
@@ -373,14 +373,14 @@ cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cudecompGridDesc
         int dst_rank = dst_ranks[i];
 
         if (src_rank == self_rank) {
-          // Self-copy with cudaMemcpy
-          CHECK_CUDA(cudaMemcpyAsync(recv_buff + recv_offsets_nvshmem[self_rank], send_buff + send_offsets[self_rank],
-                                     send_counts[self_rank] * sizeof(T), cudaMemcpyDeviceToDevice, stream));
+          // Self-copy with hipMemcpy
+          CHECK_CUDA(hipMemcpyAsync(recv_buff + recv_offsets_nvshmem[self_rank], send_buff + send_offsets[self_rank],
+                                    send_counts[self_rank] * sizeof(T), hipMemcpyDeviceToDevice, stream));
         } else {
-          CHECK_CUDA(cudaStreamWaitEvent(pl_stream, grid_desc->events[dst_rank], 0));
+          CHECK_CUDA(hipStreamWaitEvent(pl_stream, grid_desc->events[dst_rank], 0));
           if (!synced) {
-            // Using cudaEventSynchronize + barrier instead of nvshmemx_team_sync_on_stream for lower latency
-            CHECK_CUDA(cudaEventSynchronize(grid_desc->nvshmem_sync_event));
+            // Using hipEventSynchronize + barrier instead of nvshmemx_team_sync_on_stream for lower latency
+            CHECK_CUDA(hipEventSynchronize(grid_desc->nvshmem_sync_event));
             CHECK_MPI(MPI_Barrier(comm));
             // Only need to sync on the first remote operation of an alltoall sequence to ensure reads on other ranks
             // from previous communication have completed.
@@ -405,8 +405,8 @@ cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cudecompGridDesc
 
       if (barrier) {
         nvshmemx_quiet_on_stream(pl_stream);
-        // Using cudaStreamSynchronize + barrier instead of nvshmemx_team_sync_on_stream for lower latency
-        CHECK_CUDA(cudaStreamSynchronize(pl_stream));
+        // Using hipStreamSynchronize + barrier instead of nvshmemx_team_sync_on_stream for lower latency
+        CHECK_CUDA(hipStreamSynchronize(pl_stream));
         CHECK_MPI(MPI_Barrier(comm));
 
         // nvshmemx_team_sync_on_stream(team, pl_stream);
@@ -414,8 +414,8 @@ cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cudecompGridDesc
         //  int src_rank = src_ranks[i];
         //  int dst_rank = dst_ranks[i];
         //  if (src_rank != self_rank) {
-        //    CHECK_CUDA(cudaEventRecord(grid_desc->events[dst_rank], pl_stream));
-        //    CHECK_CUDA(cudaStreamWaitEvent(stream, grid_desc->events[dst_rank], 0));
+        //    CHECK_CUDA(hipEventRecord(grid_desc->events[dst_rank], pl_stream));
+        //    CHECK_CUDA(hipStreamWaitEvent(stream, grid_desc->events[dst_rank], 0));
         //  }
         //}
       }
@@ -440,11 +440,11 @@ cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cudecompGridDesc
       int dst_rank = dst_ranks[i];
 
       if (src_rank == self_rank) {
-        // Self-copy with cudaMemcpy
-        CHECK_CUDA(cudaMemcpyAsync(recv_buff + recv_offsets[self_rank], send_buff + send_offsets[self_rank],
-                                   send_counts[self_rank] * sizeof(T), cudaMemcpyDeviceToDevice, stream));
+        // Self-copy with hipMemcpy
+        CHECK_CUDA(hipMemcpyAsync(recv_buff + recv_offsets[self_rank], send_buff + send_offsets[self_rank],
+                                  send_counts[self_rank] * sizeof(T), hipMemcpyDeviceToDevice, stream));
       } else {
-        CHECK_CUDA(cudaStreamWaitEvent(pl_stream, grid_desc->events[dst_rank], 0));
+        CHECK_CUDA(hipStreamWaitEvent(pl_stream, grid_desc->events[dst_rank], 0));
 
         if (!group_started) {
           CHECK_NCCL(ncclGroupStart());
@@ -473,8 +473,8 @@ cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cudecompGridDesc
       int src_rank = src_ranks[i];
       int dst_rank = dst_ranks[i];
       if (src_rank != self_rank) {
-        CHECK_CUDA(cudaEventRecord(grid_desc->events[dst_rank], pl_stream));
-        CHECK_CUDA(cudaStreamWaitEvent(stream, grid_desc->events[dst_rank], 0));
+        CHECK_CUDA(hipEventRecord(grid_desc->events[dst_rank], pl_stream));
+        CHECK_CUDA(hipStreamWaitEvent(stream, grid_desc->events[dst_rank], 0));
       }
     }
     break;
@@ -489,11 +489,11 @@ cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cudecompGridDesc
       int src_rank = src_ranks[i];
       int dst_rank = dst_ranks[i];
       if (src_rank == self_rank) {
-        // Self-copy with cudaMemcpy
-        CHECK_CUDA(cudaMemcpyAsync(recv_buff + recv_offsets[self_rank], send_buff + send_offsets[self_rank],
-                                   send_counts[self_rank] * sizeof(T), cudaMemcpyDeviceToDevice, stream));
+        // Self-copy with hipMemcpy
+        CHECK_CUDA(hipMemcpyAsync(recv_buff + recv_offsets[self_rank], send_buff + send_offsets[self_rank],
+                                  send_counts[self_rank] * sizeof(T), hipMemcpyDeviceToDevice, stream));
       } else {
-        CHECK_CUDA(cudaEventSynchronize(grid_desc->events[dst_rank]));
+        CHECK_CUDA(hipEventSynchronize(grid_desc->events[dst_rank]));
 
         if (send_counts[dst_rank] != 0) {
           CHECK_MPI(MPI_Isend(send_buff + send_offsets[dst_rank], send_counts[dst_rank], getMpiDataType<T>(), dst_rank,
@@ -516,8 +516,8 @@ cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cudecompGridDesc
   }
 
   if (handle->performance_report_enable && src_ranks[0] != self_rank) {
-    CHECK_CUDA(cudaEventRecord(current_sample->alltoall_end_events[current_sample->alltoall_timing_count],
-                               handle->streams[0]));
+    CHECK_CUDA(
+        hipEventRecord(current_sample->alltoall_end_events[current_sample->alltoall_timing_count], handle->streams[0]));
     current_sample->alltoall_timing_count++;
   }
   nvtx::rangePop();
@@ -529,12 +529,12 @@ static void cudecompSendRecvPair(const cudecompHandle_t& handle, const cudecompG
                                  const std::array<comm_count_t, 2>& send_counts,
                                  const std::array<size_t, 2>& send_offsets, T* recv_buff,
                                  const std::array<comm_count_t, 2>& recv_counts,
-                                 const std::array<size_t, 2>& recv_offsets, cudaStream_t stream = 0,
+                                 const std::array<size_t, 2>& recv_offsets, hipStream_t stream = 0,
                                  cudecompHaloPerformanceSample* current_sample = nullptr) {
   nvtx::rangePush("cudecompSendRecvPair");
 
   if (handle->performance_report_enable && current_sample) {
-    CHECK_CUDA(cudaEventRecord(current_sample->sendrecv_start_event, stream));
+    CHECK_CUDA(hipEventRecord(current_sample->sendrecv_start_event, stream));
   }
 
 #ifdef ENABLE_NVSHMEM
@@ -558,9 +558,9 @@ static void cudecompSendRecvPair(const cudecompHandle_t& handle, const cudecompG
       nvshmemx_sync_all_on_stream(stream);
       for (int i = 0; i < send_counts.size(); ++i) {
         if (peer_ranks[i] == handle->rank) {
-          // Self-copy with cudaMemcpy
-          CHECK_CUDA(cudaMemcpyAsync(recv_buff + recv_offsets[i], send_buff + send_offsets[i],
-                                     send_counts[i] * sizeof(T), cudaMemcpyDeviceToDevice, stream));
+          // Self-copy with hipMemcpy
+          CHECK_CUDA(hipMemcpyAsync(recv_buff + recv_offsets[i], send_buff + send_offsets[i],
+                                    send_counts[i] * sizeof(T), hipMemcpyDeviceToDevice, stream));
         } else {
           if (peer_ranks[(i + 1) % 2] != -1) {
             nvshmemx_putmem_nbi_on_stream(recv_buff + recv_offsets[i], send_buff + send_offsets[(i + 1) % 2],
@@ -590,9 +590,9 @@ static void cudecompSendRecvPair(const cudecompHandle_t& handle, const cudecompG
     CHECK_NCCL(ncclGroupStart());
     for (int i = 0; i < send_counts.size(); ++i) {
       if (peer_ranks[i] == handle->rank) {
-        // Self-copy with cudaMemcpy
-        CHECK_CUDA(cudaMemcpyAsync(recv_buff + recv_offsets[i], send_buff + send_offsets[i], send_counts[i] * sizeof(T),
-                                   cudaMemcpyDeviceToDevice, stream));
+        // Self-copy with hipMemcpy
+        CHECK_CUDA(hipMemcpyAsync(recv_buff + recv_offsets[i], send_buff + send_offsets[i], send_counts[i] * sizeof(T),
+                                  hipMemcpyDeviceToDevice, stream));
       } else {
         if (send_counts[(i + 1) % 2] != 0 && peer_ranks[(i + 1) % 2] != -1) {
           CHECK_NCCL(ncclSend(send_buff + send_offsets[(i + 1) % 2], send_counts[(i + 1) % 2] * sizeof(T), ncclChar,
@@ -610,12 +610,12 @@ static void cudecompSendRecvPair(const cudecompHandle_t& handle, const cudecompG
   case CUDECOMP_HALO_COMM_MPI: {
     auto comm = handle->mpi_comm;
     std::vector<MPI_Request> reqs(2 * send_counts.size(), MPI_REQUEST_NULL);
-    CHECK_CUDA(cudaStreamSynchronize(stream));
+    CHECK_CUDA(hipStreamSynchronize(stream));
     for (int i = 0; i < send_counts.size(); ++i) {
       if (peer_ranks[i] == handle->rank) {
-        // Self-copy with cudaMemcpy
-        CHECK_CUDA(cudaMemcpyAsync(recv_buff + recv_offsets[i], send_buff + send_offsets[i], send_counts[i] * sizeof(T),
-                                   cudaMemcpyDeviceToDevice, stream));
+        // Self-copy with hipMemcpy
+        CHECK_CUDA(hipMemcpyAsync(recv_buff + recv_offsets[i], send_buff + send_offsets[i], send_counts[i] * sizeof(T),
+                                  hipMemcpyDeviceToDevice, stream));
       } else {
         if (recv_counts[(i + 1) % 2] != 0 && peer_ranks[(i + 1) % 2] != -1) {
           CHECK_MPI(MPI_Irecv(recv_buff + recv_offsets[(i + 1) % 2], recv_counts[(i + 1) % 2], getMpiDataType<T>(),
@@ -633,12 +633,12 @@ static void cudecompSendRecvPair(const cudecompHandle_t& handle, const cudecompG
   }
   case CUDECOMP_HALO_COMM_MPI_BLOCKING: {
     auto comm = handle->mpi_comm;
-    CHECK_CUDA(cudaStreamSynchronize(stream));
+    CHECK_CUDA(hipStreamSynchronize(stream));
     for (int i = 0; i < send_counts.size(); ++i) {
       if (peer_ranks[i] == handle->rank) {
-        // Self-copy with cudaMemcpy
-        CHECK_CUDA(cudaMemcpyAsync(recv_buff + recv_offsets[i], send_buff + send_offsets[i], send_counts[i] * sizeof(T),
-                                   cudaMemcpyDeviceToDevice, stream));
+        // Self-copy with hipMemcpy
+        CHECK_CUDA(hipMemcpyAsync(recv_buff + recv_offsets[i], send_buff + send_offsets[i], send_counts[i] * sizeof(T),
+                                  hipMemcpyDeviceToDevice, stream));
       } else {
         MPI_Request r = MPI_REQUEST_NULL;
         if (recv_counts[(i + 1) % 2] != 0 && peer_ranks[(i + 1) % 2] != -1) {
@@ -660,7 +660,7 @@ static void cudecompSendRecvPair(const cudecompHandle_t& handle, const cudecompG
   }
 
   if (handle->performance_report_enable && current_sample) {
-    CHECK_CUDA(cudaEventRecord(current_sample->sendrecv_end_event, stream));
+    CHECK_CUDA(hipEventRecord(current_sample->sendrecv_end_event, stream));
   }
 
   nvtx::rangePop();
