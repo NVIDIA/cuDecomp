@@ -36,8 +36,8 @@ namespace cudecomp {
 
 static inline MPI_Datatype getMpiDataType(float) { return MPI_FLOAT; }
 static inline MPI_Datatype getMpiDataType(double) { return MPI_DOUBLE; }
-static inline MPI_Datatype getMpiDataType(cuda::std::complex<float>) { return MPI_C_FLOAT_COMPLEX; }
-static inline MPI_Datatype getMpiDataType(cuda::std::complex<double>) { return MPI_C_DOUBLE_COMPLEX; }
+static inline MPI_Datatype getMpiDataType(std::complex<float>) { return MPI_C_FLOAT_COMPLEX; }
+static inline MPI_Datatype getMpiDataType(std::complex<double>) { return MPI_C_DOUBLE_COMPLEX; }
 template <typename T> static inline MPI_Datatype getMpiDataType() { return getMpiDataType(T(0)); }
 
 static inline bool canUseMpiAlltoall(const std::vector<comm_count_t>& send_counts,

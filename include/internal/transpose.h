@@ -22,7 +22,7 @@
 #include <cstdint>
 #include <vector>
 
-#include <cuda/std/complex>
+#include <complex>
 #include <hip/hip_runtime.h>
 #include <hiptensor/hiptensor.h>
 #include <mpi.h>
@@ -47,8 +47,8 @@ static inline bool isTransposeCommPipelined(cudecompTransposeCommBackend_t commT
 #if CUTENSOR_MAJOR >= 2
 static inline hiptensorDataType_t getCutensorDataType(float) { return HIPTENSOR_R_32F; }
 static inline hiptensorDataType_t getCutensorDataType(double) { return HIPTENSOR_R_64F; }
-static inline hiptensorDataType_t getCutensorDataType(cuda::std::complex<float>) { return HIPTENSOR_C_32F; }
-static inline hiptensorDataType_t getCutensorDataType(cuda::std::complex<double>) { return HIPTENSOR_C_64F; }
+static inline hiptensorDataType_t getCutensorDataType(std::complex<float>) { return HIPTENSOR_C_32F; }
+static inline hiptensorDataType_t getCutensorDataType(std::complex<double>) { return HIPTENSOR_C_64F; }
 template <typename T> static inline hiptensorDataType_t getCutensorDataType() { return getCutensorDataType(T(0)); }
 
 static inline hiptensorComputeDescriptor_t getCutensorComputeType(hiptensorDataType_t cutensor_dtype) {
@@ -113,8 +113,8 @@ static void localPermute(const cudecompHandle_t handle, const std::array<int64_t
 
 static inline hipDataType getCudaDataType(float) { return HIP_R_32F; }
 static inline hipDataType getCudaDataType(double) { return HIP_R_64F; }
-static inline hipDataType getCudaDataType(cuda::std::complex<float>) { return HIP_C_32F; }
-static inline hipDataType getCudaDataType(cuda::std::complex<double>) { return HIP_C_64F; }
+static inline hipDataType getCudaDataType(std::complex<float>) { return HIP_C_32F; }
+static inline hipDataType getCudaDataType(std::complex<double>) { return HIP_C_64F; }
 template <typename T> static inline hipDataType getCudaDataType() { return getCudaDataType(T(0)); }
 
 template <typename T>

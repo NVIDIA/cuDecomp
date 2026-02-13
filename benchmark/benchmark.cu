@@ -13,7 +13,7 @@
 #include <hip/hip_runtime.h>
 #include <hipfft/hipfftXt.h>
 
-#include <cuda/std/complex>
+#include <complex>
 
 #include <cudecomp.h>
 #include <internal/checks.h>
@@ -25,7 +25,7 @@ using real_t = float;
 using real_t = double;
 #define TOL (1e-10)
 #endif
-using complex_t = cuda::std::complex<real_t>;
+using complex_t = std::complex<real_t>;
 
 #ifdef USE_FLOAT
 #ifdef R2C
@@ -33,14 +33,14 @@ static hipfftType get_cufft_type_r2c(float) { return HIPFFT_R2C; }
 static hipfftType get_cufft_type_c2r(float) { return HIPFFT_C2R; }
 #endif
 static hipfftType get_cufft_type_c2c(float) { return HIPFFT_C2C; }
-static cudecompDataType_t get_cudecomp_datatype(cuda::std::complex<float>) { return CUDECOMP_FLOAT_COMPLEX; }
+static cudecompDataType_t get_cudecomp_datatype(std::complex<float>) { return CUDECOMP_FLOAT_COMPLEX; }
 #else
 #ifdef R2C
 static hipfftType get_cufft_type_r2c(double) { return HIPFFT_D2Z; }
 static hipfftType get_cufft_type_c2r(double) { return HIPFFT_Z2D; }
 #endif
 static hipfftType get_cufft_type_c2c(double) { return HIPFFT_Z2Z; }
-static cudecompDataType_t get_cudecomp_datatype(cuda::std::complex<double>) { return CUDECOMP_DOUBLE_COMPLEX; }
+static cudecompDataType_t get_cudecomp_datatype(std::complex<double>) { return CUDECOMP_DOUBLE_COMPLEX; }
 
 #endif
 

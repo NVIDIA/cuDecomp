@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-#include <cuda/std/complex>
+#include <complex>
 
 #include "internal/checks.h"
 #include "internal/cudecomp_kernels.cuh"
@@ -28,11 +28,11 @@ void cudecomp_batched_d2d_memcpy_3d(cudecompBatchedD2DMemcpy3DParams<float>& par
 void cudecomp_batched_d2d_memcpy_3d(cudecompBatchedD2DMemcpy3DParams<double>& params, hipStream_t stream) {
   cudecomp_batched_d2d_memcpy_3d_nd_dispatch(params, stream);
 }
-void cudecomp_batched_d2d_memcpy_3d(cudecompBatchedD2DMemcpy3DParams<cuda::std::complex<float>>& params,
+void cudecomp_batched_d2d_memcpy_3d(cudecompBatchedD2DMemcpy3DParams<std::complex<float>>& params,
                                     hipStream_t stream) {
   cudecomp_batched_d2d_memcpy_3d_nd_dispatch(params, stream);
 }
-void cudecomp_batched_d2d_memcpy_3d(cudecompBatchedD2DMemcpy3DParams<cuda::std::complex<double>>& params,
+void cudecomp_batched_d2d_memcpy_3d(cudecompBatchedD2DMemcpy3DParams<std::complex<double>>& params,
                                     hipStream_t stream) {
   cudecomp_batched_d2d_memcpy_3d_nd_dispatch(params, stream);
 }

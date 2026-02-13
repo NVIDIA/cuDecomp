@@ -18,7 +18,7 @@
 #ifndef CUDECOMP_KERNELS_H
 #define CUDECOMP_KERNELS_H
 
-#include <cuda/std/complex>
+#include <complex>
 
 namespace cudecomp {
 
@@ -36,8 +36,8 @@ template <typename T> struct cudecompNvshmemA2AParams {
 
 void cudecomp_nvshmem_alltoallv(const cudecompNvshmemA2AParams<float>& params, hipStream_t stream);
 void cudecomp_nvshmem_alltoallv(const cudecompNvshmemA2AParams<double>& params, hipStream_t stream);
-void cudecomp_nvshmem_alltoallv(const cudecompNvshmemA2AParams<cuda::std::complex<float>>& params, hipStream_t stream);
-void cudecomp_nvshmem_alltoallv(const cudecompNvshmemA2AParams<cuda::std::complex<double>>& params, hipStream_t stream);
+void cudecomp_nvshmem_alltoallv(const cudecompNvshmemA2AParams<std::complex<float>>& params, hipStream_t stream);
+void cudecomp_nvshmem_alltoallv(const cudecompNvshmemA2AParams<std::complex<double>>& params, hipStream_t stream);
 #endif
 
 #define CUDECOMP_BATCHED_D2D_3D_PARAM_CAPACITY 56
@@ -52,9 +52,9 @@ template <typename T> struct cudecompBatchedD2DMemcpy3DParams {
 
 void cudecomp_batched_d2d_memcpy_3d(cudecompBatchedD2DMemcpy3DParams<float>& params, hipStream_t stream);
 void cudecomp_batched_d2d_memcpy_3d(cudecompBatchedD2DMemcpy3DParams<double>& params, hipStream_t stream);
-void cudecomp_batched_d2d_memcpy_3d(cudecompBatchedD2DMemcpy3DParams<cuda::std::complex<float>>& params,
+void cudecomp_batched_d2d_memcpy_3d(cudecompBatchedD2DMemcpy3DParams<std::complex<float>>& params,
                                     hipStream_t stream);
-void cudecomp_batched_d2d_memcpy_3d(cudecompBatchedD2DMemcpy3DParams<cuda::std::complex<double>>& params,
+void cudecomp_batched_d2d_memcpy_3d(cudecompBatchedD2DMemcpy3DParams<std::complex<double>>& params,
                                     hipStream_t stream);
 
 } // namespace cudecomp

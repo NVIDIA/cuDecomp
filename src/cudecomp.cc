@@ -1242,15 +1242,15 @@ cudecompResult_t cudecompTransposeXToY(cudecompHandle_t handle, cudecompGridDesc
                             output_padding, stream);
       break;
     case CUDECOMP_FLOAT_COMPLEX:
-      cudecompTransposeXToY(handle, grid_desc, reinterpret_cast<cuda::std::complex<float>*>(input),
-                            reinterpret_cast<cuda::std::complex<float>*>(output),
-                            reinterpret_cast<cuda::std::complex<float>*>(work), input_halo_extents, output_halo_extents,
+      cudecompTransposeXToY(handle, grid_desc, reinterpret_cast<std::complex<float>*>(input),
+                            reinterpret_cast<std::complex<float>*>(output),
+                            reinterpret_cast<std::complex<float>*>(work), input_halo_extents, output_halo_extents,
                             input_padding, output_padding, stream);
       break;
     case CUDECOMP_DOUBLE_COMPLEX:
-      cudecompTransposeXToY(handle, grid_desc, reinterpret_cast<cuda::std::complex<double>*>(input),
-                            reinterpret_cast<cuda::std::complex<double>*>(output),
-                            reinterpret_cast<cuda::std::complex<double>*>(work), input_halo_extents,
+      cudecompTransposeXToY(handle, grid_desc, reinterpret_cast<std::complex<double>*>(input),
+                            reinterpret_cast<std::complex<double>*>(output),
+                            reinterpret_cast<std::complex<double>*>(work), input_halo_extents,
                             output_halo_extents, input_padding, output_padding, stream);
       break;
     }
@@ -1285,15 +1285,15 @@ cudecompResult_t cudecompTransposeYToZ(cudecompHandle_t handle, cudecompGridDesc
                             output_padding, stream);
       break;
     case CUDECOMP_FLOAT_COMPLEX:
-      cudecompTransposeYToZ(handle, grid_desc, reinterpret_cast<cuda::std::complex<float>*>(input),
-                            reinterpret_cast<cuda::std::complex<float>*>(output),
-                            reinterpret_cast<cuda::std::complex<float>*>(work), input_halo_extents, output_halo_extents,
+      cudecompTransposeYToZ(handle, grid_desc, reinterpret_cast<std::complex<float>*>(input),
+                            reinterpret_cast<std::complex<float>*>(output),
+                            reinterpret_cast<std::complex<float>*>(work), input_halo_extents, output_halo_extents,
                             input_padding, output_padding, stream);
       break;
     case CUDECOMP_DOUBLE_COMPLEX:
-      cudecompTransposeYToZ(handle, grid_desc, reinterpret_cast<cuda::std::complex<double>*>(input),
-                            reinterpret_cast<cuda::std::complex<double>*>(output),
-                            reinterpret_cast<cuda::std::complex<double>*>(work), input_halo_extents,
+      cudecompTransposeYToZ(handle, grid_desc, reinterpret_cast<std::complex<double>*>(input),
+                            reinterpret_cast<std::complex<double>*>(output),
+                            reinterpret_cast<std::complex<double>*>(work), input_halo_extents,
                             output_halo_extents, input_padding, output_padding, stream);
       break;
     }
@@ -1328,15 +1328,15 @@ cudecompResult_t cudecompTransposeZToY(cudecompHandle_t handle, cudecompGridDesc
                             output_padding, stream);
       break;
     case CUDECOMP_FLOAT_COMPLEX:
-      cudecompTransposeZToY(handle, grid_desc, reinterpret_cast<cuda::std::complex<float>*>(input),
-                            reinterpret_cast<cuda::std::complex<float>*>(output),
-                            reinterpret_cast<cuda::std::complex<float>*>(work), input_halo_extents, output_halo_extents,
+      cudecompTransposeZToY(handle, grid_desc, reinterpret_cast<std::complex<float>*>(input),
+                            reinterpret_cast<std::complex<float>*>(output),
+                            reinterpret_cast<std::complex<float>*>(work), input_halo_extents, output_halo_extents,
                             input_padding, output_padding, stream);
       break;
     case CUDECOMP_DOUBLE_COMPLEX:
-      cudecompTransposeZToY(handle, grid_desc, reinterpret_cast<cuda::std::complex<double>*>(input),
-                            reinterpret_cast<cuda::std::complex<double>*>(output),
-                            reinterpret_cast<cuda::std::complex<double>*>(work), input_halo_extents,
+      cudecompTransposeZToY(handle, grid_desc, reinterpret_cast<std::complex<double>*>(input),
+                            reinterpret_cast<std::complex<double>*>(output),
+                            reinterpret_cast<std::complex<double>*>(work), input_halo_extents,
                             output_halo_extents, input_padding, output_padding, stream);
       break;
     }
@@ -1371,15 +1371,15 @@ cudecompResult_t cudecompTransposeYToX(cudecompHandle_t handle, cudecompGridDesc
                             output_padding, stream);
       break;
     case CUDECOMP_FLOAT_COMPLEX:
-      cudecompTransposeYToX(handle, grid_desc, reinterpret_cast<cuda::std::complex<float>*>(input),
-                            reinterpret_cast<cuda::std::complex<float>*>(output),
-                            reinterpret_cast<cuda::std::complex<float>*>(work), input_halo_extents, output_halo_extents,
+      cudecompTransposeYToX(handle, grid_desc, reinterpret_cast<std::complex<float>*>(input),
+                            reinterpret_cast<std::complex<float>*>(output),
+                            reinterpret_cast<std::complex<float>*>(work), input_halo_extents, output_halo_extents,
                             input_padding, output_padding, stream);
       break;
     case CUDECOMP_DOUBLE_COMPLEX:
-      cudecompTransposeYToX(handle, grid_desc, reinterpret_cast<cuda::std::complex<double>*>(input),
-                            reinterpret_cast<cuda::std::complex<double>*>(output),
-                            reinterpret_cast<cuda::std::complex<double>*>(work), input_halo_extents,
+      cudecompTransposeYToX(handle, grid_desc, reinterpret_cast<std::complex<double>*>(input),
+                            reinterpret_cast<std::complex<double>*>(output),
+                            reinterpret_cast<std::complex<double>*>(work), input_halo_extents,
                             output_halo_extents, input_padding, output_padding, stream);
       break;
     }
@@ -1418,13 +1418,13 @@ cudecompResult_t cudecompUpdateHalosX(cudecompHandle_t handle, cudecompGridDesc_
                            halo_extents, halo_periods, dim, padding, stream);
       break;
     case CUDECOMP_FLOAT_COMPLEX:
-      cudecompUpdateHalosX(handle, grid_desc, reinterpret_cast<cuda::std::complex<float>*>(input),
-                           reinterpret_cast<cuda::std::complex<float>*>(work), halo_extents, halo_periods, dim, padding,
+      cudecompUpdateHalosX(handle, grid_desc, reinterpret_cast<std::complex<float>*>(input),
+                           reinterpret_cast<std::complex<float>*>(work), halo_extents, halo_periods, dim, padding,
                            stream);
       break;
     case CUDECOMP_DOUBLE_COMPLEX:
-      cudecompUpdateHalosX(handle, grid_desc, reinterpret_cast<cuda::std::complex<double>*>(input),
-                           reinterpret_cast<cuda::std::complex<double>*>(work), halo_extents, halo_periods, dim,
+      cudecompUpdateHalosX(handle, grid_desc, reinterpret_cast<std::complex<double>*>(input),
+                           reinterpret_cast<std::complex<double>*>(work), halo_extents, halo_periods, dim,
                            padding, stream);
       break;
     }
@@ -1464,13 +1464,13 @@ cudecompResult_t cudecompUpdateHalosY(cudecompHandle_t handle, cudecompGridDesc_
                            halo_extents, halo_periods, dim, padding, stream);
       break;
     case CUDECOMP_FLOAT_COMPLEX:
-      cudecompUpdateHalosY(handle, grid_desc, reinterpret_cast<cuda::std::complex<float>*>(input),
-                           reinterpret_cast<cuda::std::complex<float>*>(work), halo_extents, halo_periods, dim, padding,
+      cudecompUpdateHalosY(handle, grid_desc, reinterpret_cast<std::complex<float>*>(input),
+                           reinterpret_cast<std::complex<float>*>(work), halo_extents, halo_periods, dim, padding,
                            stream);
       break;
     case CUDECOMP_DOUBLE_COMPLEX:
-      cudecompUpdateHalosY(handle, grid_desc, reinterpret_cast<cuda::std::complex<double>*>(input),
-                           reinterpret_cast<cuda::std::complex<double>*>(work), halo_extents, halo_periods, dim,
+      cudecompUpdateHalosY(handle, grid_desc, reinterpret_cast<std::complex<double>*>(input),
+                           reinterpret_cast<std::complex<double>*>(work), halo_extents, halo_periods, dim,
                            padding, stream);
       break;
     }
@@ -1510,13 +1510,13 @@ cudecompResult_t cudecompUpdateHalosZ(cudecompHandle_t handle, cudecompGridDesc_
                            halo_extents, halo_periods, dim, padding, stream);
       break;
     case CUDECOMP_FLOAT_COMPLEX:
-      cudecompUpdateHalosZ(handle, grid_desc, reinterpret_cast<cuda::std::complex<float>*>(input),
-                           reinterpret_cast<cuda::std::complex<float>*>(work), halo_extents, halo_periods, dim, padding,
+      cudecompUpdateHalosZ(handle, grid_desc, reinterpret_cast<std::complex<float>*>(input),
+                           reinterpret_cast<std::complex<float>*>(work), halo_extents, halo_periods, dim, padding,
                            stream);
       break;
     case CUDECOMP_DOUBLE_COMPLEX:
-      cudecompUpdateHalosZ(handle, grid_desc, reinterpret_cast<cuda::std::complex<double>*>(input),
-                           reinterpret_cast<cuda::std::complex<double>*>(work), halo_extents, halo_periods, dim,
+      cudecompUpdateHalosZ(handle, grid_desc, reinterpret_cast<std::complex<double>*>(input),
+                           reinterpret_cast<std::complex<double>*>(work), halo_extents, halo_periods, dim,
                            padding, stream);
       break;
     }

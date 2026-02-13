@@ -27,7 +27,7 @@
 
 #include <mpi.h>
 
-#include <cuda/std/complex>
+#include <complex>
 #include <hip/hip_runtime.h>
 #include <hipfft/hipfftXt.h>
 
@@ -92,7 +92,7 @@
   } while (false)
 
 using real_t = double;
-using complex_t = cuda::std::complex<real_t>;
+using complex_t = std::complex<real_t>;
 
 static hipfftType get_cufft_type_r2c(double) { return HIPFFT_D2Z; }
 static hipfftType get_cufft_type_r2c(float) { return HIPFFT_R2C; }
@@ -103,8 +103,8 @@ static hipfftType get_cufft_type_c2c(float) { return HIPFFT_C2C; }
 
 static cudecompDataType_t get_cudecomp_datatype(float) { return CUDECOMP_FLOAT; }
 static cudecompDataType_t get_cudecomp_datatype(double) { return CUDECOMP_DOUBLE; }
-static cudecompDataType_t get_cudecomp_datatype(cuda::std::complex<float>) { return CUDECOMP_FLOAT_COMPLEX; }
-static cudecompDataType_t get_cudecomp_datatype(cuda::std::complex<double>) { return CUDECOMP_DOUBLE_COMPLEX; }
+static cudecompDataType_t get_cudecomp_datatype(std::complex<float>) { return CUDECOMP_FLOAT_COMPLEX; }
+static cudecompDataType_t get_cudecomp_datatype(std::complex<double>) { return CUDECOMP_DOUBLE_COMPLEX; }
 
 static MPI_Datatype get_mpi_datatype(float) { return MPI_FLOAT; }
 static MPI_Datatype get_mpi_datatype(double) { return MPI_DOUBLE; }

@@ -18,7 +18,7 @@
 #ifndef CUDECOMP_UTILS_H
 #define CUDECOMP_UTILS_H
 
-#include <cuda/std/complex>
+#include <complex>
 
 #include "cudecomp.h"
 
@@ -35,8 +35,8 @@ inline bool operator==(const cudecompPencilInfo_t& a, const cudecompPencilInfo_t
 
 inline cudecompDataType_t getCudecompDataType(float) { return CUDECOMP_FLOAT; }
 inline cudecompDataType_t getCudecompDataType(double) { return CUDECOMP_DOUBLE; }
-inline cudecompDataType_t getCudecompDataType(cuda::std::complex<float>) { return CUDECOMP_FLOAT_COMPLEX; }
-inline cudecompDataType_t getCudecompDataType(cuda::std::complex<double>) { return CUDECOMP_DOUBLE_COMPLEX; }
+inline cudecompDataType_t getCudecompDataType(std::complex<float>) { return CUDECOMP_FLOAT_COMPLEX; }
+inline cudecompDataType_t getCudecompDataType(std::complex<double>) { return CUDECOMP_DOUBLE_COMPLEX; }
 template <typename T> inline cudecompDataType_t getCudecompDataType() { return getCudecompDataType(T(0)); }
 
 #endif // CUDECOMP_UTILS_H
