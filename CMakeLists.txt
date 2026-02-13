@@ -110,7 +110,6 @@ target_sources(hipdecomp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/cudecomp_kernels_rdc.cu
   ${CMAKE_CURRENT_SOURCE_DIR}/src/cudecomp.cc
   ${CMAKE_CURRENT_SOURCE_DIR}/src/graph.cc
-  ${CMAKE_CURRENT_SOURCE_DIR}/src/nvml_wrap.cc
   ${CMAKE_CURRENT_SOURCE_DIR}/src/performance.cc
 )
 

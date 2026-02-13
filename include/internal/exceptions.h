@@ -137,13 +137,6 @@ public:
   cudecompResult_t getResult() const override { return CUDECOMP_RESULT_NVSHMEM_ERROR; }
 };
 
-class NvmlError : public BaseException {
-public:
-  NvmlError(const char* file, int line, const char* extra_info = nullptr)
-      : BaseException(file, line, "NVML error.", extra_info) {};
-  cudecompResult_t getResult() const override { return CUDECOMP_RESULT_NVML_ERROR; }
-};
-
 } // namespace cudecomp
 
 #endif // CUDECOMP_EXCEPTIONS_H

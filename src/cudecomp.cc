@@ -40,7 +40,6 @@
 #include "internal/exceptions.h"
 #include "internal/halo.h"
 #include "internal/hashes.h"
-#include "internal/nvml_wrap.h"
 #include "internal/transpose.h"
 
 namespace cudecomp {
@@ -196,77 +195,6 @@ static void gatherGlobalMPIInfo(cudecompHandle_t& handle) {
   CHECK_MPI(MPI_Allgather(MPI_IN_PLACE, 0, MPI_DATATYPE_NULL, handle->rank_to_local_rank.data(), 1, MPI_INT,
                           handle->mpi_comm));
 
-  // Gather MNNVL clique related structures (if supported)
-  int dev;
-  CHECK_CUDA(hipGetDevice(&dev));
-  char pciBusId[] = "00000000:00:00.0";
-  CHECK_CUDA(hipDeviceGetPCIBusId(pciBusId, sizeof(pciBusId), dev));
-  nvmlDevice_t nvml_dev;
-  CHECK_NVML(nvmlDeviceGetHandleByPciBusId(pciBusId, &nvml_dev));
-#if NVML_API_VERSION >= 12 && CUDART_VERSION >= 12040
-  nvmlGpuFabricInfoV_t fabricInfo = {.version = nvmlGpuFabricInfo_v2};
-
-  // Check CUDECOMP_DISABLE_MNNVL (debug setting to disable MNNVL topology detection)
-  bool disable_mnnvl = checkEnvVar("CUDECOMP_DISABLE_MNNVL");
-
-  if (nvmlHasFabricSupport() && !disable_mnnvl) {
-    handle->rank_to_mnnvl_info.resize(handle->nranks);
-
-    // Gather MNNVL information (clusterUuid, cliqueId) by rank
-    CHECK_NVML(nvmlDeviceGetGpuFabricInfoV(nvml_dev, &fabricInfo));
-    unsigned char zeros[NVML_GPU_FABRIC_UUID_LEN]{};
-    std::vector<std::array<unsigned char, NVML_GPU_FABRIC_UUID_LEN>> clusterUuids(handle->nranks);
-    std::vector<unsigned int> cliqueIds(handle->nranks);
-
-    if (std::memcmp(fabricInfo.clusterUuid, zeros, NVML_GPU_FABRIC_UUID_LEN) != 0) {
-      std::memcpy(clusterUuids[handle->rank].data(), fabricInfo.clusterUuid, NVML_GPU_FABRIC_UUID_LEN);
-      cliqueIds[handle->rank] = fabricInfo.cliqueId;
-    } else {
-      std::memcpy(clusterUuids[handle->rank].data(), zeros, NVML_GPU_FABRIC_UUID_LEN);
-      cliqueIds[handle->rank] = 0;
-    }
-
-    CHECK_MPI(MPI_Allgather(MPI_IN_PLACE, 0, MPI_DATATYPE_NULL, clusterUuids.data(), NVML_GPU_FABRIC_UUID_LEN, MPI_CHAR,
-                            handle->mpi_comm));
-    CHECK_MPI(MPI_Allgather(MPI_IN_PLACE, 0, MPI_DATATYPE_NULL, cliqueIds.data(), 1, MPI_INT, handle->mpi_comm));
-
-    for (int i = 0; i < handle->nranks; ++i) {
-      if (std::memcmp(clusterUuids[i].data(), zeros, NVML_GPU_FABRIC_UUID_LEN) == 0) {
-        // If any rank has a zero cluster UUID, disable MNNVL.
-        handle->rank_to_mnnvl_info.resize(0);
-        break;
-      }
-      handle->rank_to_mnnvl_info[i].first = clusterUuids[i];
-      handle->rank_to_mnnvl_info[i].second = cliqueIds[i];
-    }
-  }
-
-  if (handle->rank_to_mnnvl_info.size() != 0) {
-    // cliqueIds returned in fabricInfo are not unique across MNNVL domains (defined by clusterUuid).
-    // Define a modified clique id that assigns a unique index to each (clusterUuid, cliqueId) pair.
-    std::unordered_map<mnnvl_info, unsigned int> clique_ids;
-    clique_ids = getUniqueIds(handle->rank_to_mnnvl_info);
-
-    // Populate rank to MNNVL clique mappings
-    handle->rank_to_clique.resize(handle->nranks);
-    for (int i = 0; i < handle->nranks; ++i) {
-      handle->rank_to_clique[i] = clique_ids[handle->rank_to_mnnvl_info[i]];
-    }
-
-    // Create clique local MPI communicator
-    CHECK_MPI(MPI_Comm_split(handle->mpi_comm, static_cast<int>(handle->rank_to_clique[handle->rank]), handle->rank,
-                             &handle->mpi_clique_comm));
-    CHECK_MPI(MPI_Comm_rank(handle->mpi_clique_comm, &handle->clique_rank));
-    CHECK_MPI(MPI_Comm_size(handle->mpi_clique_comm, &handle->clique_nranks));
-
-    // Gather rank to clique rank mappings
-    handle->rank_to_clique_rank.resize(handle->nranks);
-    handle->rank_to_clique_rank[handle->rank] = handle->clique_rank;
-    CHECK_MPI(MPI_Allgather(MPI_IN_PLACE, 0, MPI_DATATYPE_NULL, handle->rank_to_clique_rank.data(), 1, MPI_INT,
-                            handle->mpi_comm));
-  }
-#endif
-
   // Copy local rank mapping to clique rank mapping in general case
   if (handle->rank_to_clique_rank.size() == 0) { handle->rank_to_clique_rank = handle->rank_to_local_rank; }
 }
@@ -278,38 +206,11 @@ static void getCudecompEnvVars(cudecompHandle_t& handle) {
   // Check CUDECOMP_ENABLE_CUMEM (CUDA VMM allocations for work buffers)
   handle->cuda_cumem_enable = checkEnvVar("CUDECOMP_ENABLE_CUMEM");
   if (handle->cuda_cumem_enable) {
-#if CUDART_VERSION < 12030
     if (handle->rank == 0) {
       printf("CUDECOMP:WARN: CUDECOMP_ENABLE_CUMEM is set but CUDA version used for compilation does not "
              "support fabric allocations. Disabling this feature.\n");
     }
     handle->cuda_cumem_enable = false;
-#else
-    int driverVersion;
-    CHECK_CUDA(hipDriverGetVersion(&driverVersion));
-    if (driverVersion < 12030) {
-      if (handle->rank == 0) {
-        printf("CUDECOMP:WARN: CUDECOMP_ENABLE_CUMEM is set but installed driver does not "
-               "support fabric allocations. Disabling this feature.\n");
-      }
-      handle->cuda_cumem_enable = false;
-    } else {
-      // Check if fabric allocation type is supported
-      int dev;
-      hipDevice_t cu_dev;
-      CHECK_CUDA(hipGetDevice(&dev));
-      CHECK_CUDA_DRV(hipDeviceGet(&cu_dev, dev));
-      int flag = 0;
-      CHECK_CUDA_DRV(hipDeviceGetAttribute(&flag, CU_DEVICE_ATTRIBUTE_HANDLE_TYPE_FABRIC_SUPPORTED, cu_dev));
-      if (!flag) {
-        if (handle->rank == 0) {
-          printf("CUDECOMP:WARN: CUDECOMP_ENABLE_CUMEM is set but device does not "
-                 "support fabric allocations. Disabling this feature.\n");
-        }
-        handle->cuda_cumem_enable = false;
-      }
-    }
-#endif
   }
 
   // Check CUDECOMP_ENABLE_CUDA_GRAPHS (CUDA Graphs usage in pipelined backends)
@@ -428,11 +329,6 @@ cudecompResult_t cudecompInit(cudecompHandle_t* handle_in, MPI_Comm mpi_comm) {
     // Load CUDA driver symbols into table
     initCuFunctionTable();
 
-    // Load NVML symbols into table and initialize NVML
-    initNvmlFunctionTable();
-
-    CHECK_NVML(nvmlInit());
-
     // Initialize cuTENSOR library
 #if CUTENSOR_MAJOR >= 2
     CHECK_CUTENSOR(hiptensorCreate(&handle->cutensor_handle));
@@ -447,58 +343,6 @@ cudecompResult_t cudecompInit(cudecompHandle_t* handle_in, MPI_Comm mpi_comm) {
 
     // Gather extra MPI info from all communicator ranks
     gatherGlobalMPIInfo(handle);
-
-    // Determine P2P CE count
-    int dev;
-    hipDevice_t cu_dev;
-    CHECK_CUDA(hipGetDevice(&dev));
-    CHECK_CUDA_DRV(hipDeviceGet(&cu_dev, dev));
-    char pciBusId[] = "00000000:00:00.0";
-    CHECK_CUDA(hipDeviceGetPCIBusId(pciBusId, sizeof(pciBusId), dev));
-    nvmlDevice_t nvml_dev;
-    CHECK_NVML(nvmlDeviceGetHandleByPciBusId(pciBusId, &nvml_dev));
-
-    // Check if NVSwitch is present
-    bool has_nvswitch = false;
-    nvmlFieldValue_t fv;
-    fv.fieldId = NVML_FI_DEV_NVSWITCH_CONNECTED_LINK_COUNT;
-    CHECK_NVML(nvmlDeviceGetFieldValues(nvml_dev, 1, &fv));
-    if (fv.nvmlReturn == NVML_SUCCESS) { has_nvswitch = fv.value.uiVal > 0; }
-
-    // If NVSwitch is not present, determine number of NVLink connected peers
-    int num_nvlink_peers = 0;
-    if (!has_nvswitch) {
-      std::set<std::string> remote_bus_ids;
-      for (int i = 0; i < NVML_NVLINK_MAX_LINKS; ++i) {
-        unsigned int p2p_supported = 0;
-        nvmlReturn_t ret =
-            nvmlFnTable.pfn_nvmlDeviceGetNvLinkCapability(nvml_dev, i, NVML_NVLINK_CAP_P2P_SUPPORTED, &p2p_supported);
-        if (ret != NVML_SUCCESS || !p2p_supported) continue;
-
-        nvmlEnableState_t isActive;
-        ret = nvmlFnTable.pfn_nvmlDeviceGetNvLinkState(nvml_dev, i, &isActive);
-        if (ret != NVML_SUCCESS || isActive != NVML_FEATURE_ENABLED) continue;
-
-        nvmlPciInfo_t pciInfo = {};
-        CHECK_NVML(nvmlDeviceGetNvLinkRemotePciInfo(nvml_dev, i, &pciInfo));
-        std::string busId = std::string(pciInfo.busId);
-        if (busId.empty()) {
-          // Fall back to legacy bus ID
-          busId = std::string(pciInfo.busIdLegacy);
-        }
-        remote_bus_ids.insert(busId);
-      }
-      num_nvlink_peers = static_cast<int>(remote_bus_ids.size());
-    }
-
-    // Set P2P CE count
-    if (has_nvswitch) {
-      handle->device_p2p_ce_count = 1; // 1 P2P CE for NVSwitch
-    } else if (num_nvlink_peers > 0) {
-      handle->device_p2p_ce_count = num_nvlink_peers; // Assume each NVLink peer has a P2P CE available
-    } else {
-      handle->device_p2p_ce_count = 2; // Assume 2 P2P CE otherwise (shared D2H/H2D CE)
-    }
 
     handle->initialized = true;
     cudecomp_initialized = true;
@@ -538,8 +382,6 @@ cudecompResult_t cudecompFinalize(cudecompHandle_t handle) {
     CHECK_CUTENSOR(hiptensorDestroy(handle->cutensor_handle));
     CHECK_CUTENSOR(hiptensorDestroyPlanPreference(handle->cutensor_plan_pref));
 #endif
-
-    CHECK_NVML(nvmlShutdown());
 
     handle = nullptr;
     delete handle;

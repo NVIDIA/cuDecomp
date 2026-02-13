@@ -27,7 +27,6 @@
 #include <hiptensor/hiptensor.h>
 #include <mpi.h>
 #include <rccl/rccl.h>
-#include <nvml.h>
 
 #include "internal/exceptions.h"
 
@@ -98,12 +97,6 @@
         throw cudecomp::MpiError(__FILE__, __LINE__, os.str().c_str());                                                \
       }                                                                                                                \
     }                                                                                                                  \
-  } while (false)
-
-#define CHECK_NVML(call)                                                                                               \
-  do {                                                                                                                 \
-    nvmlReturn_t err = nvmlFnTable.pfn_##call;                                                                         \
-    if (NVML_SUCCESS != err) { throw cudecomp::NvmlError(__FILE__, __LINE__, nvmlFnTable.pfn_nvmlErrorString(err)); }  \
   } while (false)
 
 // Checks with exit (test usage)
