@@ -207,7 +207,7 @@ struct cudecompGridDesc {
 
 namespace cudecomp {
 
-using comm_count_t = int32_t;
+using comm_count_t = int64_t;
 
 enum cudecompCommAxis { CUDECOMP_COMM_COL = 0, CUDECOMP_COMM_ROW = 1 };
 
