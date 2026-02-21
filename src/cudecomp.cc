@@ -378,12 +378,6 @@ static void inspectNvshmemEnvVars(cudecompHandle_t& handle) {
   char* vmm_str = std::getenv("NVSHMEM_DISABLE_CUDA_VMM");
   if (vmm_str) { handle->nvshmem_vmm = std::strtol(vmm_str, nullptr, 10) == 0; }
 
-  if (handle->rank == 0 && handle->nvshmem_vmm) {
-    printf("CUDECOMP:WARN: NVSHMEM_DISABLE_CUDA_VMM is unset. We currently recommend setting it "
-           "(i.e. NVSHMEM_DISABLE_CUDA_VMM=1) for best compatibility with MPI libraries. See the documentation "
-           "for more details.\n");
-  }
-
   // Check NVSHMEM_SYMMETRIC_SIZE
   char* symmetric_size_str = std::getenv("NVSHMEM_SYMMETRIC_SIZE");
   if (symmetric_size_str) {
@@ -403,6 +397,16 @@ static void inspectNvshmemEnvVars(cudecompHandle_t& handle) {
   } else {
     // NVSHMEM symmetric size defaults to 1 GiB
     handle->nvshmem_symmetric_size = 1ull << 30;
+  }
+}
+
+static void checkNvshmemVersion() {
+  int major, minor, patch;
+  nvshmemx_vendor_get_version_info(&major, &minor, &patch);
+
+  // We have removed workarounds for bugs encountered with NVSHMEM versions earlier than 2.6.0.
+  if ((major == 2 && minor < 6) || major < 2) {
+    THROW_NOT_SUPPORTED("NVSHMEM versions earlier than 2.6.0 are not supported.");
   }
 }
 #endif
@@ -691,6 +695,7 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
         ((autotune_transpose_backend || autotune_halo_backend) && !autotune_disable_nvshmem_backends)) {
 #ifdef ENABLE_NVSHMEM
       if (!handle->nvshmem_initialized) {
+        checkNvshmemVersion();
         inspectNvshmemEnvVars(handle);
         initNvshmemFromMPIComm(handle->mpi_comm);
         handle->nvshmem_initialized = true;

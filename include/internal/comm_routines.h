@@ -88,7 +88,6 @@ static inline void checkMpiInt32Limit(int64_t val, cudecompHaloCommBackend_t bac
 }
 
 #ifdef ENABLE_NVSHMEM
-#define CUDECOMP_NVSHMEM_CHUNK_SZ (static_cast<size_t>(1024 * 1024 * 1024))
 #define CUDECOMP_NVSHMEM_INTRAGROUP_SYNC_FREQ 8 // max number of intra-group transfers to schedule between team syncs
 template <typename T>
 static void
@@ -170,16 +169,9 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
         }
       }
 
-      // Use host call for direct P2P accessible entries
-      // Need to chunk host API calls due to 2 GiB limitation in API
-      size_t send_bytes = send_counts[dst_rank] * sizeof(T);
-      size_t nchunks = (send_bytes + CUDECOMP_NVSHMEM_CHUNK_SZ - 1) / CUDECOMP_NVSHMEM_CHUNK_SZ;
-      for (size_t j = 0; j < nchunks; ++j) {
-        nvshmemx_putmem_on_stream(recv_buff + recv_offsets[dst_rank] + j * (CUDECOMP_NVSHMEM_CHUNK_SZ / sizeof(T)),
-                                  send_buff + send_offsets[dst_rank] + j * (CUDECOMP_NVSHMEM_CHUNK_SZ / sizeof(T)),
-                                  std::min(CUDECOMP_NVSHMEM_CHUNK_SZ, send_bytes - j * CUDECOMP_NVSHMEM_CHUNK_SZ),
-                                  dst_rank_global, handle->streams[count % handle->device_p2p_ce_count]);
-      }
+      nvshmemx_putmem_on_stream(recv_buff + recv_offsets[dst_rank], send_buff + send_offsets[dst_rank],
+                                send_counts[dst_rank] * sizeof(T), dst_rank_global,
+                                handle->streams[count % handle->device_p2p_ce_count]);
       count++;
     }
   }
@@ -440,16 +432,8 @@ cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cudecompGridDesc
           }
 
           int dst_rank_global = getGlobalRank(handle, grid_desc, comm_axis, dst_rank);
-          // Need to chunk host API calls due to 2 GiB limitation in API
-          size_t send_bytes = send_counts[dst_rank] * sizeof(T);
-          int nchunks = (send_bytes + CUDECOMP_NVSHMEM_CHUNK_SZ - 1) / CUDECOMP_NVSHMEM_CHUNK_SZ;
-          for (int j = 0; j < nchunks; ++j) {
-            nvshmemx_putmem_nbi_on_stream(
-                recv_buff + recv_offsets_nvshmem[dst_rank] + j * (CUDECOMP_NVSHMEM_CHUNK_SZ / sizeof(T)),
-                send_buff + send_offsets[dst_rank] + j * (CUDECOMP_NVSHMEM_CHUNK_SZ / sizeof(T)),
-                std::min(static_cast<size_t>(CUDECOMP_NVSHMEM_CHUNK_SZ), send_bytes - j * CUDECOMP_NVSHMEM_CHUNK_SZ),
-                dst_rank_global, pl_stream);
-          }
+          nvshmemx_putmem_nbi_on_stream(recv_buff + recv_offsets_nvshmem[dst_rank], send_buff + send_offsets[dst_rank],
+                                        send_counts[dst_rank] * sizeof(T), dst_rank_global, pl_stream);
 
           barrier = true;
         }
