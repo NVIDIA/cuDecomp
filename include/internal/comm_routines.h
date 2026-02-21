@@ -169,10 +169,9 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
         }
       }
 
-      nvshmemx_putmem_on_stream(recv_buff + recv_offsets[dst_rank],
-                                send_buff + send_offsets[dst_rank],
-                                send_counts[dst_rank] * sizeof(T),
-                                dst_rank_global, handle->streams[count % handle->device_p2p_ce_count]);
+      nvshmemx_putmem_on_stream(recv_buff + recv_offsets[dst_rank], send_buff + send_offsets[dst_rank],
+                                send_counts[dst_rank] * sizeof(T), dst_rank_global,
+                                handle->streams[count % handle->device_p2p_ce_count]);
       count++;
     }
   }
@@ -433,11 +432,8 @@ cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cudecompGridDesc
           }
 
           int dst_rank_global = getGlobalRank(handle, grid_desc, comm_axis, dst_rank);
-          nvshmemx_putmem_nbi_on_stream(
-              recv_buff + recv_offsets_nvshmem[dst_rank],
-              send_buff + send_offsets[dst_rank],
-              send_counts[dst_rank] * sizeof(T),
-              dst_rank_global, pl_stream);
+          nvshmemx_putmem_nbi_on_stream(recv_buff + recv_offsets_nvshmem[dst_rank], send_buff + send_offsets[dst_rank],
+                                        send_counts[dst_rank] * sizeof(T), dst_rank_global, pl_stream);
 
           barrier = true;
         }
