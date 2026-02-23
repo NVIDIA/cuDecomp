@@ -12,7 +12,7 @@ In general, NVSHMEM operations requires memory it operates on to be allocated on
 :code:`nvshmem_malloc`. While cuDecomp attempts to hide this complexity behind :code:`cudecompMalloc`, it is important
 to understand that memory allocated for usage with NVSHMEM comes out of a separate memory pool than all other
 CUDA allocations. At a high-level, NVSHMEM will preallocate this symmetric heap on each GPU when it is initialized, 
-with the heap size set by the `NVSHMEM_SYMMETRIC_SIZE <https://docs.nvidia.com/hpc-sdk/nvshmem/api/docs/gen/env.html#c.NVSHMEM_SYMMETRIC_SIZE>`_ environment variable.
+with the heap size set by the `NVSHMEM_SYMMETRIC_SIZE <https://docs.nvidia.com/nvshmem/api/gen/env.html#c.NVSHMEM_SYMMETRIC_SIZE>`_ environment variable.
 As such, it is important to set the symmetric heap size to a value that is large enough for any necessary allocations from cuDecomp,
 but not much larger as that will waste GPU memory space.
 
@@ -24,11 +24,13 @@ To help with this, the code will produce warnings like the following
 
 if the library detects NVSHMEM allocations that may exceed the symmetric heap size, and suggests an appropriate value for :code:`NVSHMEM_SYMMETRIC_SIZE`.
 
+Note that manual symmetric heap size management is only required if CUDA VMM features are disabled in NVSHMEM via :code:`NVSHMEM_DISABLE_CUDA_VMM=1`.
+
 MPI compatibility
 -----------------
-As noted in the NVSHMEM documentation `here <https://docs.nvidia.com/hpc-sdk/nvshmem/api/docs/faq.html#interoperability-with-mpi-faqs>`_,
+As noted in the NVSHMEM documentation `here <https://docs.nvidia.com/nvshmem/api/faq.html#interoperability-with-mpi-faqs>`_,
 memory allocated on the symmetric heap may lead to crashes when used in MPI calls with some MPI implementations, especially when
-CUDA VMM features in NVSHMEM are enabled. We strongly encourage users to set :code:`NVSHMEM_DISABLE_CUDA_VMM=1` when using cuDecomp
+CUDA VMM features in NVSHMEM are enabled. If you find this is the case for your system, we suggest setting :code:`NVSHMEM_DISABLE_CUDA_VMM=1` when using cuDecomp
 with NVSHMEM enabled. However, this is not always sufficient and MPI can still crash when passed NVSHMEM allocated memory.
 
 Due to this, cuDecomp attempts to avoid using NVSHMEM-allocated memory with MPI where possible but it can arise in a couple of situations:
