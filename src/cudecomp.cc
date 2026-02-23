@@ -402,7 +402,12 @@ static void inspectNvshmemEnvVars(cudecompHandle_t& handle) {
 
 static void checkNvshmemVersion() {
   int major, minor, patch;
-  nvshmemx_vendor_get_version_info(&major, &minor, &patch);
+  char name[NVSHMEM_MAX_NAME_LEN];
+  nvshmem_info_get_name(name);
+  const char* vpos = strchr(name, 'v');
+  if (!vpos || sscanf(vpos, "v%d.%d.%d", &major, &minor, &patch) != 3) {
+    THROW_INTERNAL_ERROR("Could not parse NVSHMEM version.");
+  }
 
   // We have removed workarounds for bugs encountered with NVSHMEM versions earlier than 2.6.0.
   if ((major == 2 && minor < 6) || major < 2) {
