@@ -404,6 +404,9 @@ cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cudecompGridDesc
       int self_rank = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info.rank : grid_desc->col_comm_info.rank;
 
       bool barrier = false;
+      bool need_quiet = false;
+
+      // Inter-group transfers and self-copy (non-blocking)
       for (int i = 0; i < src_ranks.size(); ++i) {
         int src_rank = src_ranks[i];
         int dst_rank = dst_ranks[i];
@@ -413,6 +416,9 @@ cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cudecompGridDesc
           CHECK_CUDA(cudaMemcpyAsync(recv_buff + recv_offsets_nvshmem[self_rank], send_buff + send_offsets[self_rank],
                                      send_counts[self_rank] * sizeof(T), cudaMemcpyDeviceToDevice, stream));
         } else {
+          int dst_rank_global = getGlobalRank(handle, grid_desc, comm_axis, dst_rank);
+          if (nvshmem_ptr(recv_buff, dst_rank_global)) { continue; }
+
           CHECK_CUDA(cudaStreamWaitEvent(pl_stream, grid_desc->events[dst_rank], 0));
           if (!synced) {
             nvshmemx_team_sync_on_stream(team, pl_stream);
@@ -421,7 +427,6 @@ cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cudecompGridDesc
             synced = true;
           }
 
-          int dst_rank_global = getGlobalRank(handle, grid_desc, comm_axis, dst_rank);
           comm_info.nvshmem_signal_counts[src_rank]++;
           nvshmemx_putmem_signal_nbi_on_stream(
               recv_buff + recv_offsets_nvshmem[dst_rank], send_buff + send_offsets[dst_rank],
@@ -430,11 +435,38 @@ cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cudecompGridDesc
               dst_rank_global, pl_stream);
 
           barrier = true;
+          need_quiet = true;
         }
       }
 
+      // Intra-group transfers (blocking, scheduled after non-blocking inter-group transfers for concurrency)
+      for (int i = 0; i < src_ranks.size(); ++i) {
+        int src_rank = src_ranks[i];
+        int dst_rank = dst_ranks[i];
+
+        int dst_rank_global = getGlobalRank(handle, grid_desc, comm_axis, dst_rank);
+        if (!nvshmem_ptr(recv_buff, dst_rank_global) || src_rank == self_rank) { continue; }
+
+        CHECK_CUDA(cudaStreamWaitEvent(pl_stream, grid_desc->events[dst_rank], 0));
+        if (!synced) {
+          nvshmemx_team_sync_on_stream(team, pl_stream);
+          // Only need to sync on the first remote operation of an alltoall sequence to ensure reads on other ranks
+          // from previous communication have completed.
+          synced = true;
+        }
+
+        comm_info.nvshmem_signal_counts[src_rank]++;
+        nvshmemx_putmem_signal_on_stream(
+            recv_buff + recv_offsets_nvshmem[dst_rank], send_buff + send_offsets[dst_rank],
+            send_counts[dst_rank] * sizeof(T),
+            &comm_info.nvshmem_signals[comm_info.rank], comm_info.nvshmem_signal_counts[src_rank], NVSHMEM_SIGNAL_SET,
+            dst_rank_global, pl_stream);
+
+        barrier = true;
+      }
+
       if (barrier) {
-        nvshmemx_quiet_on_stream(pl_stream);
+        if (need_quiet) { nvshmemx_quiet_on_stream(pl_stream); }
         for (int i = 0; i < src_ranks.size(); ++i) {
           int src_rank = src_ranks[i];
           int dst_rank = dst_ranks[i];
