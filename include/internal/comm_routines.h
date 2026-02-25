@@ -148,7 +148,7 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
     if (nvshmem_ptr(recv_buff, dst_rank_global)) {
 
       if (comm_info.ngroups == 1 && handle->device_p2p_ce_count == 1 &&
-          count % CUDECOMP_NVSHMEM_INTRAGROUP_SYNC_FREQ == 0) {
+          count != 0 && count % CUDECOMP_NVSHMEM_INTRAGROUP_SYNC_FREQ == 0) {
         // For single group, single P2P CE (e.g. NVSwitch), synchronize NVSHMEM team every
         // CUDECOMP_NVSHMEM_INTRAGROUP_SYNC_FREQ transfers This helps reduce CE contention due to accumulation of
         // jitter.
@@ -472,9 +472,7 @@ cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cudecompGridDesc
           int dst_rank = dst_ranks[i];
           if (src_rank != self_rank) {
             nvshmemx_signal_wait_until_on_stream(&comm_info.nvshmem_signals[src_rank], NVSHMEM_CMP_EQ,
-                                                 comm_info.nvshmem_signal_counts[src_rank], pl_stream);
-            CHECK_CUDA(cudaEventRecord(grid_desc->events[dst_rank], pl_stream));
-            CHECK_CUDA(cudaStreamWaitEvent(stream, grid_desc->events[dst_rank], 0));
+                                                 comm_info.nvshmem_signal_counts[src_rank], stream);
           }
         }
       }
