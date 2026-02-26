@@ -109,14 +109,14 @@ target_sources(hipdecomp
   PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/src/autotune.cc
   ${CMAKE_CURRENT_SOURCE_DIR}/src/cuda_wrap.cc
-  ${CMAKE_CURRENT_SOURCE_DIR}/src/cudecomp_kernels.cu
-  ${CMAKE_CURRENT_SOURCE_DIR}/src/cudecomp_kernels_rdc.cu
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/cudecomp_kernels.hip
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/cudecomp_kernels_rdc.hip
   ${CMAKE_CURRENT_SOURCE_DIR}/src/cudecomp.cc
   ${CMAKE_CURRENT_SOURCE_DIR}/src/graph.cc
   ${CMAKE_CURRENT_SOURCE_DIR}/src/performance.cc
 )
 
-set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/src/hipdecomp_kernels_rdc.cu PROPERTIES COMPILE_FLAGS -fgpu-rdc)
+set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/src/hipdecomp_kernels_rdc.hip PROPERTIES COMPILE_FLAGS -fgpu-rdc)
 
 target_include_directories(hipdecomp
   PRIVATE

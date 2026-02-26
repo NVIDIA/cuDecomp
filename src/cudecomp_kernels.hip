@@ -18,7 +18,7 @@
 #include <complex>
 
 #include "internal/checks.h"
-#include "internal/cudecomp_kernels.cuh"
+#include "internal/cudecomp_kernels.hiph"
 
 namespace cudecomp {
 
