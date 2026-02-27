@@ -99,7 +99,13 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
   auto team = comm_info.nvshmem_team;
   int self_rank = comm_info.rank;
 
-  nvshmemx_team_sync_on_stream(team, stream);
+  auto aux_stream = handle->streams[handle->device_p2p_ce_count];
+
+  // Sync between transpose operations
+  CHECK_CUDA(cudaStreamWaitEvent(aux_stream, grid_desc->nvshmem_sync_event));
+  nvshmemx_team_sync_on_stream(team, aux_stream);
+  CHECK_CUDA(cudaEventRecord(grid_desc->events[0], aux_stream));
+  CHECK_CUDA(cudaStreamWaitEvent(stream, grid_desc->events[0]));
 
   // Event dependency on external stream for intra-group transfers
   CHECK_CUDA(cudaEventRecord(grid_desc->events[0], stream));
@@ -154,12 +160,12 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
         // jitter.
         for (int i = 0; i < handle->device_p2p_ce_count; ++i) {
           CHECK_CUDA(cudaEventRecord(grid_desc->events[0], handle->streams[i]));
-          CHECK_CUDA(cudaStreamWaitEvent(handle->streams[handle->device_p2p_ce_count], grid_desc->events[0], 0));
+          CHECK_CUDA(cudaStreamWaitEvent(aux_stream, grid_desc->events[0], 0));
         }
 
-        nvshmemx_team_sync_on_stream(team, handle->streams[handle->device_p2p_ce_count]);
+        nvshmemx_team_sync_on_stream(team, aux_stream);
 
-        CHECK_CUDA(cudaEventRecord(grid_desc->events[0], handle->streams[handle->device_p2p_ce_count]));
+        CHECK_CUDA(cudaEventRecord(grid_desc->events[0], aux_stream));
         for (int i = 0; i < handle->device_p2p_ce_count; ++i) {
           CHECK_CUDA(cudaStreamWaitEvent(handle->streams[i], grid_desc->events[0], 0));
         }
@@ -401,6 +407,7 @@ cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cudecompGridDesc
       auto& comm_info = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info
                                                          : grid_desc->col_comm_info;
       auto pl_stream = handle->streams[0];
+      auto aux_stream = handle->streams[handle->device_p2p_ce_count];
       int self_rank = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info.rank : grid_desc->col_comm_info.rank;
 
       bool barrier = false;
@@ -421,7 +428,11 @@ cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cudecompGridDesc
 
           CHECK_CUDA(cudaStreamWaitEvent(pl_stream, grid_desc->events[dst_rank], 0));
           if (!synced) {
-            nvshmemx_team_sync_on_stream(team, pl_stream);
+            // Sync between transpose operations
+            CHECK_CUDA(cudaStreamWaitEvent(aux_stream, grid_desc->nvshmem_sync_event));
+            nvshmemx_team_sync_on_stream(team, aux_stream);
+            CHECK_CUDA(cudaEventRecord(grid_desc->events[dst_rank], aux_stream));
+            CHECK_CUDA(cudaStreamWaitEvent(pl_stream, grid_desc->events[dst_rank]));
             // Only need to sync on the first remote operation of an alltoall sequence to ensure reads on other ranks
             // from previous communication have completed.
             synced = true;
@@ -449,7 +460,11 @@ cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cudecompGridDesc
 
         CHECK_CUDA(cudaStreamWaitEvent(pl_stream, grid_desc->events[dst_rank], 0));
         if (!synced) {
-          nvshmemx_team_sync_on_stream(team, pl_stream);
+          // Sync between transpose operations
+          CHECK_CUDA(cudaStreamWaitEvent(aux_stream, grid_desc->nvshmem_sync_event));
+          nvshmemx_team_sync_on_stream(team, aux_stream);
+          CHECK_CUDA(cudaEventRecord(grid_desc->events[dst_rank], aux_stream));
+          CHECK_CUDA(cudaStreamWaitEvent(pl_stream, grid_desc->events[dst_rank]));
           // Only need to sync on the first remote operation of an alltoall sequence to ensure reads on other ranks
           // from previous communication have completed.
           synced = true;
