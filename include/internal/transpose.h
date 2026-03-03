@@ -236,6 +236,7 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
   T* o2 = work + pinfo_a.size;
   T* o3 = output;
 
+#ifdef ENABLE_NVSHMEM
   if (transposeBackendRequiresNvshmem(grid_desc->config.transpose_comm_backend)) {
     auto max_pencil_size_a = getGlobalMaxPencilSize(handle, grid_desc, ax_a);
     o2 = work + max_pencil_size_a;
@@ -252,6 +253,7 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
       // Delay final stream wait dependency to alltoall to ensure sync runs concurrently with initial transpose/pack
     }
   }
+#endif
 
   cudecompTransposePerformanceSample* current_sample = nullptr;
   if (handle->performance_report_enable) {
