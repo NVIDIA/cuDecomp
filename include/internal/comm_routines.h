@@ -98,14 +98,10 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
   auto& comm_info = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info : grid_desc->col_comm_info;
   auto team = comm_info.nvshmem_team;
   int self_rank = comm_info.rank;
-
   auto aux_stream = handle->streams[handle->device_p2p_ce_count];
 
-  // Sync between transpose operations
-  CHECK_CUDA(cudaStreamWaitEvent(aux_stream, grid_desc->nvshmem_sync_event));
-  nvshmemx_team_sync_on_stream(team, aux_stream);
-  CHECK_CUDA(cudaEventRecord(grid_desc->events[0], aux_stream));
-  CHECK_CUDA(cudaStreamWaitEvent(stream, grid_desc->events[0]));
+  // Enforce sync dependency between transpose operations
+  CHECK_CUDA(cudaStreamWaitEvent(stream, grid_desc->nvshmem_sync_event));
 
   // Event dependency on external stream for intra-group transfers
   CHECK_CUDA(cudaEventRecord(grid_desc->events[0], stream));
@@ -365,7 +361,7 @@ cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cudecompGridDesc
                           const std::vector<comm_count_t>& recv_offsets,
                           const std::vector<comm_count_t>& recv_offsets_nvshmem, cudecompCommAxis comm_axis,
                           const std::vector<int>& src_ranks, const std::vector<int>& dst_ranks, cudaStream_t stream,
-                          bool& synced, cudecompTransposePerformanceSample* current_sample = nullptr) {
+                          cudecompTransposePerformanceSample* current_sample = nullptr) {
 
   // If there are no transfers to complete, quick return
   if (send_counts.size() == 0 && recv_counts.size() == 0) { return; }
@@ -402,13 +398,14 @@ cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cudecompGridDesc
   case CUDECOMP_TRANSPOSE_COMM_NVSHMEM_PL: {
 #ifdef ENABLE_NVSHMEM
     if (nvshmem_ptr(send_buff, handle->rank) && nvshmem_ptr(recv_buff, handle->rank)) {
-      auto team = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info.nvshmem_team
-                                                   : grid_desc->col_comm_info.nvshmem_team;
       auto& comm_info = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info
                                                          : grid_desc->col_comm_info;
       auto pl_stream = handle->streams[0];
       auto aux_stream = handle->streams[handle->device_p2p_ce_count];
       int self_rank = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info.rank : grid_desc->col_comm_info.rank;
+
+      // Enforce sync dependency between transpose operations
+      CHECK_CUDA(cudaStreamWaitEvent(pl_stream, grid_desc->nvshmem_sync_event));
 
       bool barrier = false;
       bool need_quiet = false;
@@ -427,16 +424,6 @@ cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cudecompGridDesc
           if (nvshmem_ptr(recv_buff, dst_rank_global)) { continue; }
 
           CHECK_CUDA(cudaStreamWaitEvent(pl_stream, grid_desc->events[dst_rank], 0));
-          if (!synced) {
-            // Sync between transpose operations
-            CHECK_CUDA(cudaStreamWaitEvent(aux_stream, grid_desc->nvshmem_sync_event));
-            nvshmemx_team_sync_on_stream(team, aux_stream);
-            CHECK_CUDA(cudaEventRecord(grid_desc->events[dst_rank], aux_stream));
-            CHECK_CUDA(cudaStreamWaitEvent(pl_stream, grid_desc->events[dst_rank]));
-            // Only need to sync on the first remote operation of an alltoall sequence to ensure reads on other ranks
-            // from previous communication have completed.
-            synced = true;
-          }
 
           comm_info.nvshmem_signal_counts[src_rank]++;
           nvshmemx_putmem_signal_nbi_on_stream(
@@ -459,16 +446,6 @@ cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cudecompGridDesc
         if (!nvshmem_ptr(recv_buff, dst_rank_global) || src_rank == self_rank) { continue; }
 
         CHECK_CUDA(cudaStreamWaitEvent(pl_stream, grid_desc->events[dst_rank], 0));
-        if (!synced) {
-          // Sync between transpose operations
-          CHECK_CUDA(cudaStreamWaitEvent(aux_stream, grid_desc->nvshmem_sync_event));
-          nvshmemx_team_sync_on_stream(team, aux_stream);
-          CHECK_CUDA(cudaEventRecord(grid_desc->events[dst_rank], aux_stream));
-          CHECK_CUDA(cudaStreamWaitEvent(pl_stream, grid_desc->events[dst_rank]));
-          // Only need to sync on the first remote operation of an alltoall sequence to ensure reads on other ranks
-          // from previous communication have completed.
-          synced = true;
-        }
 
         comm_info.nvshmem_signal_counts[src_rank]++;
         nvshmemx_putmem_signal_on_stream(
