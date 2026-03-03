@@ -643,8 +643,7 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
 
           if (o2 != o1) {
             cudecompAlltoallPipelined(handle, grid_desc, o1, send_counts, send_offsets, o2, recv_counts, recv_offsets,
-                                      recv_offsets_nvshmem, comm_axis, src_ranks, dst_ranks, stream,
-                                      current_sample);
+                                      recv_offsets_nvshmem, comm_axis, src_ranks, dst_ranks, stream, current_sample);
           }
 
           if (o2 != o3) {
@@ -738,8 +737,7 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
 
           if (o2 != o1) {
             cudecompAlltoallPipelined(handle, grid_desc, o1, send_counts, send_offsets, o2, recv_counts, recv_offsets,
-                                      recv_offsets_nvshmem, comm_axis, src_ranks, dst_ranks, stream,
-                                      current_sample);
+                                      recv_offsets_nvshmem, comm_axis, src_ranks, dst_ranks, stream, current_sample);
           }
         }
 
@@ -795,8 +793,7 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
 
         if (o2 != o1) {
           cudecompAlltoallPipelined(handle, grid_desc, o1, send_counts, send_offsets, o2, recv_counts, recv_offsets,
-                                    recv_offsets_nvshmem, comm_axis, src_ranks, dst_ranks, stream,
-                                    current_sample);
+                                    recv_offsets_nvshmem, comm_axis, src_ranks, dst_ranks, stream, current_sample);
         }
       }
 

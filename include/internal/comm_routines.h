@@ -146,8 +146,8 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
     int dst_rank_global = getGlobalRank(handle, grid_desc, comm_axis, dst_rank);
     if (nvshmem_ptr(recv_buff, dst_rank_global)) {
 
-      if (comm_info.ngroups == 1 && handle->device_p2p_ce_count == 1 &&
-          count != 0 && count % CUDECOMP_NVSHMEM_INTRAGROUP_SYNC_FREQ == 0) {
+      if (comm_info.ngroups == 1 && handle->device_p2p_ce_count == 1 && count != 0 &&
+          count % CUDECOMP_NVSHMEM_INTRAGROUP_SYNC_FREQ == 0) {
         // For single group, single P2P CE (e.g. NVSwitch), synchronize NVSHMEM team every
         // CUDECOMP_NVSHMEM_INTRAGROUP_SYNC_FREQ transfers This helps reduce CE contention due to accumulation of
         // jitter.
@@ -394,8 +394,7 @@ cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cudecompGridDesc
   case CUDECOMP_TRANSPOSE_COMM_NVSHMEM_PL: {
 #ifdef ENABLE_NVSHMEM
     if (nvshmem_ptr(send_buff, handle->rank) && nvshmem_ptr(recv_buff, handle->rank)) {
-      auto& comm_info = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info
-                                                         : grid_desc->col_comm_info;
+      auto& comm_info = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info : grid_desc->col_comm_info;
       auto pl_stream = handle->streams[0];
       auto aux_stream = handle->streams[handle->device_p2p_ce_count];
       int self_rank = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info.rank : grid_desc->col_comm_info.rank;
@@ -421,11 +420,11 @@ cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cudecompGridDesc
           CHECK_CUDA(cudaStreamWaitEvent(pl_stream, grid_desc->events[dst_rank], 0));
 
           comm_info.nvshmem_signal_counts[src_rank]++;
-          nvshmemx_putmem_signal_nbi_on_stream(
-              recv_buff + recv_offsets_nvshmem[dst_rank], send_buff + send_offsets[dst_rank],
-              send_counts[dst_rank] * sizeof(T),
-              &comm_info.nvshmem_signals[comm_info.rank], comm_info.nvshmem_signal_counts[src_rank], NVSHMEM_SIGNAL_SET,
-              dst_rank_global, pl_stream);
+          nvshmemx_putmem_signal_nbi_on_stream(recv_buff + recv_offsets_nvshmem[dst_rank],
+                                               send_buff + send_offsets[dst_rank], send_counts[dst_rank] * sizeof(T),
+                                               &comm_info.nvshmem_signals[comm_info.rank],
+                                               comm_info.nvshmem_signal_counts[src_rank], NVSHMEM_SIGNAL_SET,
+                                               dst_rank_global, pl_stream);
 
           need_quiet = true;
         }
@@ -442,12 +441,10 @@ cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cudecompGridDesc
         CHECK_CUDA(cudaStreamWaitEvent(pl_stream, grid_desc->events[dst_rank], 0));
 
         comm_info.nvshmem_signal_counts[src_rank]++;
-        nvshmemx_putmem_signal_on_stream(
-            recv_buff + recv_offsets_nvshmem[dst_rank], send_buff + send_offsets[dst_rank],
-            send_counts[dst_rank] * sizeof(T),
-            &comm_info.nvshmem_signals[comm_info.rank], comm_info.nvshmem_signal_counts[src_rank], NVSHMEM_SIGNAL_SET,
-            dst_rank_global, pl_stream);
-
+        nvshmemx_putmem_signal_on_stream(recv_buff + recv_offsets_nvshmem[dst_rank], send_buff + send_offsets[dst_rank],
+                                         send_counts[dst_rank] * sizeof(T), &comm_info.nvshmem_signals[comm_info.rank],
+                                         comm_info.nvshmem_signal_counts[src_rank], NVSHMEM_SIGNAL_SET, dst_rank_global,
+                                         pl_stream);
       }
 
       if (need_quiet) { nvshmemx_quiet_on_stream(pl_stream); }
