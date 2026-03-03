@@ -112,7 +112,6 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
   cudecompNvshmemA2AParams<T> params;
 
   // Inter-group transfers (non-blocking)
-  bool need_quiet = false;
   params.send_buff = send_buff;
   params.recv_buff = recv_buff;
   int count = 0;
@@ -132,13 +131,11 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
       params.ntransfers = count;
       cudecomp_nvshmem_alltoallv(params, stream);
       count = 0;
-      need_quiet = true;
     }
   }
   if (count != 0) {
     params.ntransfers = count;
     cudecomp_nvshmem_alltoallv(params, stream);
-    need_quiet = true;
   }
 
   // Intra-group transfers (blocking, scheduled after non-blocking inter-group transfers for concurrency)
@@ -184,8 +181,7 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
     CHECK_CUDA(cudaStreamWaitEvent(stream, grid_desc->events[0], 0));
   }
 
-  if (need_quiet) { nvshmemx_quiet_on_stream(stream); }
-  nvshmemx_team_sync_on_stream(team, stream);
+  nvshmemx_barrier_on_stream(team, stream);
 }
 #endif
 
@@ -407,7 +403,6 @@ cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cudecompGridDesc
       // Enforce sync dependency between transpose operations
       CHECK_CUDA(cudaStreamWaitEvent(pl_stream, grid_desc->nvshmem_sync_event));
 
-      bool barrier = false;
       bool need_quiet = false;
 
       // Inter-group transfers and self-copy (non-blocking)
@@ -432,7 +427,6 @@ cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cudecompGridDesc
               &comm_info.nvshmem_signals[comm_info.rank], comm_info.nvshmem_signal_counts[src_rank], NVSHMEM_SIGNAL_SET,
               dst_rank_global, pl_stream);
 
-          barrier = true;
           need_quiet = true;
         }
       }
@@ -454,20 +448,17 @@ cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cudecompGridDesc
             &comm_info.nvshmem_signals[comm_info.rank], comm_info.nvshmem_signal_counts[src_rank], NVSHMEM_SIGNAL_SET,
             dst_rank_global, pl_stream);
 
-        barrier = true;
       }
 
-      if (barrier) {
-        if (need_quiet) { nvshmemx_quiet_on_stream(pl_stream); }
-        for (int i = 0; i < src_ranks.size(); ++i) {
-          int src_rank = src_ranks[i];
-          int dst_rank = dst_ranks[i];
-          if (src_rank != self_rank) {
-            nvshmemx_signal_wait_until_on_stream(&comm_info.nvshmem_signals[src_rank], NVSHMEM_CMP_EQ,
-                                                 comm_info.nvshmem_signal_counts[src_rank], pl_stream);
-            CHECK_CUDA(cudaEventRecord(grid_desc->events[dst_rank], pl_stream));
-            CHECK_CUDA(cudaStreamWaitEvent(stream, grid_desc->events[dst_rank], 0));
-          }
+      if (need_quiet) { nvshmemx_quiet_on_stream(pl_stream); }
+      for (int i = 0; i < src_ranks.size(); ++i) {
+        int src_rank = src_ranks[i];
+        int dst_rank = dst_ranks[i];
+        if (src_rank != self_rank) {
+          nvshmemx_signal_wait_until_on_stream(&comm_info.nvshmem_signals[src_rank], NVSHMEM_CMP_EQ,
+                                               comm_info.nvshmem_signal_counts[src_rank], pl_stream);
+          CHECK_CUDA(cudaEventRecord(grid_desc->events[dst_rank], pl_stream));
+          CHECK_CUDA(cudaStreamWaitEvent(stream, grid_desc->events[dst_rank], 0));
         }
       }
       break;
