@@ -421,8 +421,7 @@ cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cudecompGridDesc
 
           nvshmemx_putmem_signal_nbi_on_stream(recv_buff + recv_offsets_nvshmem[dst_rank],
                                                send_buff + send_offsets[dst_rank], send_counts[dst_rank] * sizeof(T),
-                                               &comm_info.nvshmem_signals[comm_info.rank],
-                                               1, NVSHMEM_SIGNAL_SET,
+                                               &comm_info.nvshmem_signals[comm_info.rank], 1, NVSHMEM_SIGNAL_SET,
                                                dst_rank_global, pl_stream);
 
           need_quiet = true;
@@ -441,8 +440,7 @@ cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cudecompGridDesc
 
         nvshmemx_putmem_signal_on_stream(recv_buff + recv_offsets_nvshmem[dst_rank], send_buff + send_offsets[dst_rank],
                                          send_counts[dst_rank] * sizeof(T), &comm_info.nvshmem_signals[comm_info.rank],
-                                         1, NVSHMEM_SIGNAL_SET, dst_rank_global,
-                                         pl_stream);
+                                         1, NVSHMEM_SIGNAL_SET, dst_rank_global, pl_stream);
       }
 
       if (need_quiet) { nvshmemx_quiet_on_stream(pl_stream); }
@@ -450,8 +448,7 @@ cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cudecompGridDesc
         int src_rank = src_ranks[i];
         int dst_rank = dst_ranks[i];
         if (src_rank != self_rank) {
-          nvshmemx_signal_wait_until_on_stream(&comm_info.nvshmem_signals[src_rank], NVSHMEM_CMP_EQ,
-                                               1, pl_stream);
+          nvshmemx_signal_wait_until_on_stream(&comm_info.nvshmem_signals[src_rank], NVSHMEM_CMP_EQ, 1, pl_stream);
           CHECK_CUDA(cudaEventRecord(grid_desc->events[dst_rank], pl_stream));
           CHECK_CUDA(cudaStreamWaitEvent(stream, grid_desc->events[dst_rank], 0));
         }
