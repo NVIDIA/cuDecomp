@@ -768,12 +768,10 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
           (uint64_t*)nvshmem_malloc(grid_desc->row_comm_info.nranks * sizeof(uint64_t));
       CHECK_CUDA(
           cudaMemset(grid_desc->row_comm_info.nvshmem_signals, 0, grid_desc->row_comm_info.nranks * sizeof(uint64_t)));
-      grid_desc->row_comm_info.nvshmem_signal_counts.resize(grid_desc->row_comm_info.nranks);
       grid_desc->col_comm_info.nvshmem_signals =
           (uint64_t*)nvshmem_malloc(grid_desc->col_comm_info.nranks * sizeof(uint64_t));
       CHECK_CUDA(
           cudaMemset(grid_desc->col_comm_info.nvshmem_signals, 0, grid_desc->col_comm_info.nranks * sizeof(uint64_t)));
-      grid_desc->col_comm_info.nvshmem_signal_counts.resize(grid_desc->col_comm_info.nranks);
       handle->n_grid_descs_using_nvshmem++;
     } else {
       // Finalize nvshmem to reclaim symmetric heap memory if not used
@@ -902,12 +900,10 @@ cudecompResult_t cudecompGridDescDestroy(cudecompHandle_t handle, cudecompGridDe
       if (grid_desc->row_comm_info.nvshmem_team != NVSHMEM_TEAM_INVALID) {
         nvshmem_team_destroy(grid_desc->row_comm_info.nvshmem_team);
         nvshmem_free(grid_desc->row_comm_info.nvshmem_signals);
-        grid_desc->row_comm_info.nvshmem_signal_counts.clear();
       }
       if (grid_desc->col_comm_info.nvshmem_team != NVSHMEM_TEAM_INVALID) {
         nvshmem_team_destroy(grid_desc->col_comm_info.nvshmem_team);
         nvshmem_free(grid_desc->col_comm_info.nvshmem_signals);
-        grid_desc->col_comm_info.nvshmem_signal_counts.clear();
       }
       handle->n_grid_descs_using_nvshmem--;
 

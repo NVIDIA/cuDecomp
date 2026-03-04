@@ -248,6 +248,9 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
       auto aux_stream = handle->streams[handle->device_p2p_ce_count];
       CHECK_CUDA(cudaEventRecord(grid_desc->nvshmem_sync_event, stream));
       CHECK_CUDA(cudaStreamWaitEvent(aux_stream, grid_desc->nvshmem_sync_event));
+      // Zero out signal buffer for this team here.
+      CHECK_CUDA(
+          cudaMemsetAsync(comm_info.nvshmem_signals, 0, comm_info.nranks * sizeof(uint64_t), aux_stream));
       nvshmemx_team_sync_on_stream(team, aux_stream);
       CHECK_CUDA(cudaEventRecord(grid_desc->nvshmem_sync_event, aux_stream));
       // Delay final stream wait dependency to alltoall to ensure sync runs concurrently with initial transpose/pack

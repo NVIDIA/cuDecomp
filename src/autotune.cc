@@ -279,12 +279,10 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
           (uint64_t*)nvshmem_malloc(grid_desc->row_comm_info.nranks * sizeof(uint64_t));
       CHECK_CUDA(
           cudaMemset(grid_desc->row_comm_info.nvshmem_signals, 0, grid_desc->row_comm_info.nranks * sizeof(uint64_t)));
-      grid_desc->row_comm_info.nvshmem_signal_counts.resize(grid_desc->row_comm_info.nranks);
       grid_desc->col_comm_info.nvshmem_signals =
           (uint64_t*)nvshmem_malloc(grid_desc->col_comm_info.nranks * sizeof(uint64_t));
       CHECK_CUDA(
           cudaMemset(grid_desc->col_comm_info.nvshmem_signals, 0, grid_desc->col_comm_info.nranks * sizeof(uint64_t)));
-      grid_desc->col_comm_info.nvshmem_signal_counts.resize(grid_desc->col_comm_info.nranks);
 #endif
     }
 
@@ -463,8 +461,6 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
       nvshmem_team_destroy(grid_desc->col_comm_info.nvshmem_team);
       nvshmem_free(grid_desc->row_comm_info.nvshmem_signals);
       nvshmem_free(grid_desc->col_comm_info.nvshmem_signals);
-      grid_desc->row_comm_info.nvshmem_signal_counts.clear();
-      grid_desc->col_comm_info.nvshmem_signal_counts.clear();
       grid_desc->row_comm_info.nvshmem_team = NVSHMEM_TEAM_INVALID;
       grid_desc->col_comm_info.nvshmem_team = NVSHMEM_TEAM_INVALID;
 #endif
@@ -709,12 +705,10 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
           (uint64_t*)nvshmem_malloc(grid_desc->row_comm_info.nranks * sizeof(uint64_t));
       CHECK_CUDA(
           cudaMemset(grid_desc->row_comm_info.nvshmem_signals, 0, grid_desc->row_comm_info.nranks * sizeof(uint64_t)));
-      grid_desc->row_comm_info.nvshmem_signal_counts.resize(grid_desc->row_comm_info.nranks);
       grid_desc->col_comm_info.nvshmem_signals =
           (uint64_t*)nvshmem_malloc(grid_desc->col_comm_info.nranks * sizeof(uint64_t));
       CHECK_CUDA(
           cudaMemset(grid_desc->col_comm_info.nvshmem_signals, 0, grid_desc->col_comm_info.nranks * sizeof(uint64_t)));
-      grid_desc->col_comm_info.nvshmem_signal_counts.resize(grid_desc->col_comm_info.nranks);
 #endif
     }
 
@@ -830,8 +824,6 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
       nvshmem_team_destroy(grid_desc->col_comm_info.nvshmem_team);
       nvshmem_free(grid_desc->row_comm_info.nvshmem_signals);
       nvshmem_free(grid_desc->col_comm_info.nvshmem_signals);
-      grid_desc->row_comm_info.nvshmem_signal_counts.clear();
-      grid_desc->col_comm_info.nvshmem_signal_counts.clear();
       grid_desc->row_comm_info.nvshmem_team = NVSHMEM_TEAM_INVALID;
       grid_desc->col_comm_info.nvshmem_team = NVSHMEM_TEAM_INVALID;
 #endif
