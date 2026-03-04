@@ -1127,7 +1127,14 @@ cudecompResult_t cudecompGetTransposeWorkspaceSize(cudecompHandle_t handle, cude
     int64_t max_pencil_size_x = getGlobalMaxPencilSize(handle, grid_desc, 0);
     int64_t max_pencil_size_y = getGlobalMaxPencilSize(handle, grid_desc, 1);
     int64_t max_pencil_size_z = getGlobalMaxPencilSize(handle, grid_desc, 2);
-    *workspace_size = std::max(max_pencil_size_x + max_pencil_size_y, max_pencil_size_y + max_pencil_size_z);
+
+    // Round send portion of workspace to 256 byte boundary (in elements, assuming float)
+    int64_t wsize_xy = roundCountToBytes(max_pencil_size_x, 256) + max_pencil_size_y;
+    int64_t wsize_yx = roundCountToBytes(max_pencil_size_y, 256) + max_pencil_size_x;
+    int64_t wsize_yz= roundCountToBytes(max_pencil_size_y, 256) + max_pencil_size_z;
+    int64_t wsize_zy= roundCountToBytes(max_pencil_size_z, 256) + max_pencil_size_y;
+
+    *workspace_size = std::max({wsize_xy, wsize_yx, wsize_yz, wsize_zy});
 
   } catch (const cudecomp::BaseException& e) {
     std::cerr << e.what();
@@ -1148,11 +1155,13 @@ cudecompResult_t cudecompGetHaloWorkspaceSize(cudecompHandle_t handle, cudecompG
     cudecompPencilInfo_t pinfo;
     CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo, axis, halo_extents, nullptr));
     auto shape_g = getShapeG(pinfo);
-    size_t halo_size_x = 4 * shape_g[1] * shape_g[2] * pinfo.halo_extents[0];
-    size_t halo_size_y = 4 * shape_g[0] * shape_g[2] * pinfo.halo_extents[1];
-    size_t halo_size_z = 4 * shape_g[0] * shape_g[1] * pinfo.halo_extents[2];
 
-    *workspace_size = std::max(halo_size_x, std::max(halo_size_y, halo_size_z));
+    // Round all halo slots in workspace to 256 byte boundary (in elements, assuming float)
+    int64_t halo_size_x = 4 * roundCountToBytes(shape_g[1] * shape_g[2] * pinfo.halo_extents[0], 256);
+    int64_t halo_size_y = 4 * roundCountToBytes(shape_g[0] * shape_g[2] * pinfo.halo_extents[1], 256);
+    int64_t halo_size_z = 4 * roundCountToBytes(shape_g[0] * shape_g[1] * pinfo.halo_extents[2], 256);
+
+    *workspace_size = std::max({halo_size_x, halo_size_y, halo_size_z});
   } catch (const cudecomp::BaseException& e) {
     std::cerr << e.what();
     return e.getResult();

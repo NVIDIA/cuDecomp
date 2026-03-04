@@ -277,13 +277,13 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
   // Set input/output pointers for each phase
   T* i1 = input;
   T* o1 = work;
-  T* o2 = work + pinfo_a.size;
+  T* o2 = work + roundCountToBytes(pinfo_a.size, 256);
   T* o3 = output;
 
 #ifdef ENABLE_NVSHMEM
   if (transposeBackendRequiresNvshmem(grid_desc->config.transpose_comm_backend)) {
     auto max_pencil_size_a = getGlobalMaxPencilSize(handle, grid_desc, ax_a);
-    o2 = work + max_pencil_size_a;
+    o2 = work + roundCountToBytes(max_pencil_size_a, 256);
 
     // NVSHMEM team synchronization between transpose operations
     if (splits_a.size() != 1) {
