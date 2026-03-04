@@ -330,17 +330,13 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
     } else if (transposeBackendRequiresMpi(grid_desc->config.transpose_comm_backend)) {
       // Note: For MPI, disable special cases if input or output pointers are to managed memory
       // since MPI performance directly from managed memory is not great
-      if (isManagedPointer(input) || isManagedPointer(output)) {
-        enable = false;
-      }
+      if (isManagedPointer(input) || isManagedPointer(output)) { enable = false; }
 
       // Note: For MPI, disable special cases if communicator has an MNNVL connection and the workspace
       // is fabric allocated. This forces MPI comms to always use the fabric allocated workspace
       // which is more performant.
       auto& comm_info = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info : grid_desc->col_comm_info;
-      if (handle->cuda_cumem_enable && comm_info.mnnvl_active) {
-        enable = false;
-      }
+      if (handle->cuda_cumem_enable && comm_info.mnnvl_active) { enable = false; }
     }
 
     if (enable) {
