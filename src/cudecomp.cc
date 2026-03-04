@@ -1131,8 +1131,8 @@ cudecompResult_t cudecompGetTransposeWorkspaceSize(cudecompHandle_t handle, cude
     // Round send portion of workspace to 256 byte boundary (in elements, assuming float)
     int64_t wsize_xy = roundCountToBytes(max_pencil_size_x, 256) + max_pencil_size_y;
     int64_t wsize_yx = roundCountToBytes(max_pencil_size_y, 256) + max_pencil_size_x;
-    int64_t wsize_yz= roundCountToBytes(max_pencil_size_y, 256) + max_pencil_size_z;
-    int64_t wsize_zy= roundCountToBytes(max_pencil_size_z, 256) + max_pencil_size_y;
+    int64_t wsize_yz = roundCountToBytes(max_pencil_size_y, 256) + max_pencil_size_z;
+    int64_t wsize_zy = roundCountToBytes(max_pencil_size_z, 256) + max_pencil_size_y;
 
     *workspace_size = std::max({wsize_xy, wsize_yx, wsize_yz, wsize_zy});
 
