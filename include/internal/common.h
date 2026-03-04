@@ -129,6 +129,8 @@ struct cudecompCommInfo {
   nvshmem_team_t nvshmem_team = NVSHMEM_TEAM_INVALID;
   uint64_t* nvshmem_signals = nullptr;
 #endif
+
+  bool mnnvl_active = false; // flag to indicate whether communicator has MNNVL connections
 };
 
 // Structure to contain data for transpose performance sample
@@ -347,6 +349,23 @@ static void setCommInfo(cudecompHandle_t& handle, cudecompGridDesc_t& grid_desc,
         count = e.second;
       } else {
         if (count != e.second) { count = gcd(count, e.second); }
+      }
+    }
+
+    // Check if any cliques contain multiple nodes (i.e. there are MNNVL connections in this communicator)
+    std::map<unsigned int, std::string> clique_to_hostname;
+    for (int i = 0; i < info.nranks; ++i) {
+      int peer_rank_global = getGlobalRank(handle, grid_desc, comm_axis, i);
+      unsigned int clique = handle->rank_to_clique[peer_rank_global];
+      std::string hostname = std::string(handle->hostnames[peer_rank_global].data());
+      if (clique_to_hostname.count(clique)) {
+        if (clique_to_hostname[clique] != hostname) {
+          // Multiple hostnames in clique detected, MNNVL connections are present
+          info.mnnvl_active = true;
+          break;
+        }
+      } else {
+        clique_to_hostname[clique] = hostname;
       }
     }
   }
