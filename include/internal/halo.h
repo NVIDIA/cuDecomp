@@ -80,6 +80,17 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
     CHECK_CUDA(cudaEventRecord(current_sample->halo_start_event, stream));
   }
 
+  int count = 0;
+  for (int i = 0; i < 3; ++i) {
+    if (i == ax) continue;
+    if (i == dim) break;
+    count++;
+  }
+
+  auto comm_axis = (count == 0) ? CUDECOMP_COMM_COL : CUDECOMP_COMM_ROW;
+  int comm_rank = (comm_axis == CUDECOMP_COMM_COL) ? grid_desc->col_comm_info.rank : grid_desc->row_comm_info.rank;
+  auto& comm_info = (comm_axis == CUDECOMP_COMM_COL) ? grid_desc->col_comm_info : grid_desc->row_comm_info;
+
   // Select correct case based on pencil memory order and transfer dim
   int c;
   if (dim != pinfo_h.order[0] && dim != pinfo_h.order[1]) {
@@ -103,16 +114,6 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
     return;
   } else {
     // For multi-rank cases, check if halos include ranks other than nearest neighbor process (unsupported currently).
-    int count = 0;
-    for (int i = 0; i < 3; ++i) {
-      if (i == ax) continue;
-      if (i == dim) break;
-      count++;
-    }
-
-    auto comm_axis = (count == 0) ? CUDECOMP_COMM_COL : CUDECOMP_COMM_ROW;
-    int comm_rank = (comm_axis == CUDECOMP_COMM_COL) ? grid_desc->col_comm_info.rank : grid_desc->row_comm_info.rank;
-
     auto splits =
         getSplits(grid_desc->config.gdims_dist[dim], grid_desc->config.pdims[comm_axis == CUDECOMP_COMM_COL ? 0 : 1],
                   grid_desc->config.gdims[dim] - grid_desc->config.gdims_dist[dim]);
@@ -143,9 +144,12 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
   bool input_has_padding = anyNonzeros(padding);
 
   if (c == 2 && (input_has_padding || haloBackendRequiresNvshmem(grid_desc->config.halo_comm_backend) ||
-                 (managed && haloBackendRequiresMpi(grid_desc->config.halo_comm_backend)))) {
+                 (managed && haloBackendRequiresMpi(grid_desc->config.halo_comm_backend)) ||
+                 (handle->cuda_cumem_enable && comm_info.mnnvl_active &&
+                  haloBackendRequiresMpi(grid_desc->config.halo_comm_backend)))) {
     // For padded input, always stage to work space.
     // For managed memory, always stage to work space if using MPI.
+    // If using MPI and communicator has MNNVL connections, stage to work space if fabric-allocated.
     // For any memory, always stage to workspace if using NVSHMEM.
     // Can revisit for NVSHMEM if input is NVSHMEM allocated.
     c = 1;
