@@ -44,6 +44,45 @@ void cudecomp_nvshmem_alltoallv(const cudecompNvshmemA2AParams<cuda::std::comple
   cudecomp_nvshmem_alltoallv_k<<<1, CUDECOMP_CUDA_NTHREADS, 0, stream>>>(params);
   CHECK_CUDA_LAUNCH();
 }
+
+static int nvshmem_p2p_nblocks(int ntransfers) {
+  int dev, num_sms, max_threads_per_sm;
+  CHECK_CUDA(cudaGetDevice(&dev));
+  CHECK_CUDA(cudaDeviceGetAttribute(&num_sms, cudaDevAttrMultiProcessorCount, dev));
+  CHECK_CUDA(cudaDeviceGetAttribute(&max_threads_per_sm, cudaDevAttrMaxThreadsPerMultiProcessor, dev));
+  // Theoretical max blocks per SM based on thread count, then round up to a multiple of ntransfers
+  // so that each copy receives the same number of blocks.
+  int max_blocks_per_sm = max_threads_per_sm / CUDECOMP_NVSHMEM_NTHREADS;
+  int nblocks_max = max_blocks_per_sm * num_sms;
+  int blocks_per_copy = (nblocks_max + ntransfers - 1) / ntransfers;
+  return blocks_per_copy * ntransfers;
+}
+
+void cudecomp_nvshmem_alltoallv_p2p(const cudecompNvshmemA2AParams<float>& params, cudaStream_t stream) {
+  int nblocks = nvshmem_p2p_nblocks(params.ntransfers);
+  cudecomp_nvshmem_alltoallv_p2p_k<<<nblocks, CUDECOMP_NVSHMEM_NTHREADS, 0, stream>>>(params);
+  CHECK_CUDA_LAUNCH();
+}
+
+void cudecomp_nvshmem_alltoallv_p2p(const cudecompNvshmemA2AParams<double>& params, cudaStream_t stream) {
+  int nblocks = nvshmem_p2p_nblocks(params.ntransfers);
+  cudecomp_nvshmem_alltoallv_p2p_k<<<nblocks, CUDECOMP_NVSHMEM_NTHREADS, 0, stream>>>(params);
+  CHECK_CUDA_LAUNCH();
+}
+
+void cudecomp_nvshmem_alltoallv_p2p(const cudecompNvshmemA2AParams<cuda::std::complex<float>>& params,
+                                    cudaStream_t stream) {
+  int nblocks = nvshmem_p2p_nblocks(params.ntransfers);
+  cudecomp_nvshmem_alltoallv_p2p_k<<<nblocks, CUDECOMP_NVSHMEM_NTHREADS, 0, stream>>>(params);
+  CHECK_CUDA_LAUNCH();
+}
+
+void cudecomp_nvshmem_alltoallv_p2p(const cudecompNvshmemA2AParams<cuda::std::complex<double>>& params,
+                                    cudaStream_t stream) {
+  int nblocks = nvshmem_p2p_nblocks(params.ntransfers);
+  cudecomp_nvshmem_alltoallv_p2p_k<<<nblocks, CUDECOMP_NVSHMEM_NTHREADS, 0, stream>>>(params);
+  CHECK_CUDA_LAUNCH();
+}
 #endif
 
 } // namespace cudecomp
