@@ -102,11 +102,13 @@ static void checkTransposeCommBackend(cudecompTransposeCommBackend_t comm_backen
   case CUDECOMP_TRANSPOSE_COMM_MPI_A2A:
 #ifdef ENABLE_NVSHMEM
   case CUDECOMP_TRANSPOSE_COMM_NVSHMEM:
-  case CUDECOMP_TRANSPOSE_COMM_NVSHMEM_PL: return;
+  case CUDECOMP_TRANSPOSE_COMM_NVSHMEM_PL:
+  case CUDECOMP_TRANSPOSE_COMM_NVSHMEM_SM: return;
 #else
     return;
   case CUDECOMP_TRANSPOSE_COMM_NVSHMEM:
-  case CUDECOMP_TRANSPOSE_COMM_NVSHMEM_PL: THROW_NOT_SUPPORTED("transpose communication type unsupported");
+  case CUDECOMP_TRANSPOSE_COMM_NVSHMEM_PL:
+  case CUDECOMP_TRANSPOSE_COMM_NVSHMEM_SM: THROW_NOT_SUPPORTED("transpose communication type unsupported");
 #endif
 
   default: THROW_INVALID_USAGE("unknown transpose communication type");
@@ -1338,6 +1340,7 @@ const char* cudecompTransposeCommBackendToString(cudecompTransposeCommBackend_t 
   case CUDECOMP_TRANSPOSE_COMM_MPI_A2A: return "MPI_A2A";
   case CUDECOMP_TRANSPOSE_COMM_NVSHMEM: return "NVSHMEM";
   case CUDECOMP_TRANSPOSE_COMM_NVSHMEM_PL: return "NVSHMEM (pipelined)";
+  case CUDECOMP_TRANSPOSE_COMM_NVSHMEM_SM: return "NVSHMEM_SM";
   default: return "ERROR";
   }
 }
