@@ -192,8 +192,9 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
   }
 
   // Self-copy with cudaMemcpy
+  auto self_stream = use_sm ? handle->streams[0] : stream;
   CHECK_CUDA(cudaMemcpyAsync(recv_buff + recv_offsets[self_rank], send_buff + send_offsets[self_rank],
-                             send_counts[self_rank] * sizeof(T), cudaMemcpyDeviceToDevice, stream));
+                             send_counts[self_rank] * sizeof(T), cudaMemcpyDeviceToDevice, self_stream));
 
   // Event dependency on internal streams for completion of intra-group transfers
   for (int i = 0; i < handle->device_p2p_ce_count; ++i) {
