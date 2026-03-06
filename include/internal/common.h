@@ -381,8 +381,8 @@ static inline void getAlltoallPeerRanks(cudecompGridDesc_t grid_desc, cudecompCo
 
   const auto& info = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info : grid_desc->col_comm_info;
 
-  // Quick return for single rank case
-  if (info.nranks == 1) {
+  // Return self for single rank case or when iter is zero
+  if (info.nranks == 1 || iter == 0) {
     src_rank = info.rank;
     dst_rank = info.rank;
     return;

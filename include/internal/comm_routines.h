@@ -141,7 +141,7 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
 
   // Intra-group transfers (blocking, scheduled after non-blocking inter-group transfers for concurrency)
   count = 0;
-  for (int i = 1; i < send_counts.size(); ++i) {
+  for (int i = (use_sm ? 0 : 1); i < send_counts.size(); ++i) {
     int src_rank, dst_rank;
     getAlltoallPeerRanks(grid_desc, comm_axis, i, src_rank, dst_rank);
     int dst_rank_global = getGlobalRank(handle, grid_desc, comm_axis, dst_rank);
@@ -171,30 +171,40 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
                                   handle->streams[count % handle->device_p2p_ce_count]);
         count++;
       } else {
-        params.send_offsets[count] = send_offsets[dst_rank];
-        params.recv_offsets[count] = recv_offsets[dst_rank];
-        params.send_counts[count] = send_counts[dst_rank];
-        params.peer_ranks[count] = dst_rank_global;
-        count++;
+        if (dst_rank == self_rank) {
+          // Record self-copy entries in params but do not add to remote transfer count.
+          params.has_self = true;
+          params.self_send_offset = send_offsets[self_rank];
+          params.self_recv_offset = recv_offsets[self_rank];
+          params.self_count = send_counts[self_rank];
+        } else {
+          params.send_offsets[count] = send_offsets[dst_rank];
+          params.recv_offsets[count] = recv_offsets[dst_rank];
+          params.send_counts[count] = send_counts[dst_rank];
+          params.peer_ranks[count] = dst_rank_global;
+          count++;
+        }
 
         if (count == CUDECOMP_NVSHMEM_A2A_PARAM_CAPACITY) {
           params.ntransfers = count;
           cudecomp_nvshmem_alltoallv_p2p(params, handle->streams[0]);
+          params.has_self = false;
           count = 0;
         }
       }
     }
   }
 
-  if (use_sm && count != 0) {
-    params.ntransfers = count;
-    cudecomp_nvshmem_alltoallv_p2p(params, handle->streams[0]);
+  if (use_sm) {
+    if (count != 0 || params.has_self) {
+      params.ntransfers = count;
+      cudecomp_nvshmem_alltoallv_p2p(params, handle->streams[0]);
+    }
+  } else {
+    // Self-copy with cudaMemcpy
+    CHECK_CUDA(cudaMemcpyAsync(recv_buff + recv_offsets[self_rank], send_buff + send_offsets[self_rank],
+                               send_counts[self_rank] * sizeof(T), cudaMemcpyDeviceToDevice, stream));
   }
-
-  // Self-copy with cudaMemcpy
-  auto self_stream = use_sm ? handle->streams[0] : stream;
-  CHECK_CUDA(cudaMemcpyAsync(recv_buff + recv_offsets[self_rank], send_buff + send_offsets[self_rank],
-                             send_counts[self_rank] * sizeof(T), cudaMemcpyDeviceToDevice, self_stream));
 
   // Event dependency on internal streams for completion of intra-group transfers
   for (int i = 0; i < handle->device_p2p_ce_count; ++i) {
