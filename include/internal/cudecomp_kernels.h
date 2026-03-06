@@ -30,13 +30,9 @@ template <typename T> struct cudecompNvshmemA2AParams {
   size_t send_offsets[CUDECOMP_NVSHMEM_A2A_PARAM_CAPACITY];
   size_t recv_offsets[CUDECOMP_NVSHMEM_A2A_PARAM_CAPACITY];
   size_t send_counts[CUDECOMP_NVSHMEM_A2A_PARAM_CAPACITY];
-  size_t self_send_offset;
-  size_t self_recv_offset;
-  size_t self_count;
   int peer_ranks[CUDECOMP_NVSHMEM_A2A_PARAM_CAPACITY];
   int ntransfers;
   int* block_counters;
-  bool has_self;
 };
 
 void cudecomp_nvshmem_alltoallv(const cudecompNvshmemA2AParams<float>& params, cudaStream_t stream);

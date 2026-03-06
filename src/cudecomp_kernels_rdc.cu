@@ -54,7 +54,7 @@ static int nvshmem_p2p_nblocks(int ntransfers) {
   // that all launched blocks fit in a single resident wave and each copy receives exactly the same
   // number of blocks, ensuring even NVLink subscription across peers.
   int max_blocks_per_sm = max_threads_per_sm / CUDECOMP_NVSHMEM_NTHREADS;
-  int nblocks_max = max_blocks_per_sm * num_sms;
+  int nblocks_max = max_blocks_per_sm * std::min(num_sms, CUDECOMP_NVSHMEM_MAX_SMS);
   if (ntransfers == 0) return nblocks_max;
   int blocks_per_copy = std::max(1, nblocks_max / ntransfers);
   return blocks_per_copy * ntransfers;

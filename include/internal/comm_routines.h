@@ -177,25 +177,16 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
                                   handle->streams[count % handle->device_p2p_ce_count]);
         count++;
       } else {
-        if (dst_rank == self_rank) {
-          // Record self-copy entries in params but do not add to remote transfer count.
-          params.has_self = true;
-          params.self_send_offset = send_offsets[self_rank];
-          params.self_recv_offset = recv_offsets[self_rank];
-          params.self_count = send_counts[self_rank];
-        } else {
-          params.send_offsets[count] = send_offsets[dst_rank];
-          params.recv_offsets[count] = recv_offsets[dst_rank];
-          params.send_counts[count] = send_counts[dst_rank];
-          params.peer_ranks[count] = dst_rank_global;
-          count++;
-        }
+        params.send_offsets[count] = send_offsets[dst_rank];
+        params.recv_offsets[count] = recv_offsets[dst_rank];
+        params.send_counts[count] = send_counts[dst_rank];
+        params.peer_ranks[count] = dst_rank_global;
+        count++;
 
         if (count == CUDECOMP_NVSHMEM_A2A_PARAM_CAPACITY) {
           params.ntransfers = count;
           total_sm_transfers += count;
           cudecomp_nvshmem_alltoallv_p2p(params, &comm_info.nvshmem_signals[0], handle->streams[0]);
-          params.has_self = false;
           count = 0;
         }
       }
@@ -203,7 +194,7 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
   }
 
   if (use_sm) {
-    if (count != 0 || params.has_self) {
+    if (count != 0) {
       params.ntransfers = count;
       total_sm_transfers += count;
       cudecomp_nvshmem_alltoallv_p2p(params, &comm_info.nvshmem_signals[0], handle->streams[0]);
