@@ -31,6 +31,7 @@
 #define CUDECOMP_MIN_BLOCKS_PER_SM (16)
 
 #define CUDECOMP_NVSHMEM_NTHREADS (1024)
+#define CUDECOMP_NVSHMEM_MAX_SMS (32)
 
 namespace cudecomp {
 
@@ -86,20 +87,6 @@ __launch_bounds__(CUDECOMP_NVSHMEM_NTHREADS) __global__
       if (atomicAdd(&params.block_counters[peer_rank], 1) + 1 == blocks_per_copy) {
         params.block_counters[peer_rank] = 0;
         nvshmemx_signal_op(sig_addr, 1, NVSHMEM_SIGNAL_ADD, peer_rank);
-      }
-    }
-  }
-
-  // Self-copy: runs after remote puts are issued, using all blocks for full HBM bandwidth.
-  if (params.has_self) {
-    size_t nelems_per_block = (params.self_count + gridDim.x - 1) / gridDim.x;
-    size_t block_offset = (size_t)bid * nelems_per_block;
-    if (block_offset < params.self_count) {
-      size_t block_count = min(nelems_per_block, params.self_count - block_offset);
-      T* src = send_buff + params.self_send_offset + block_offset;
-      T* dst = recv_buff + params.self_recv_offset + block_offset;
-      for (size_t j = threadIdx.x; j < block_count; j += blockDim.x) {
-        dst[j] = src[j];
       }
     }
   }
