@@ -110,11 +110,15 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
     CHECK_CUDA(cudaStreamWaitEvent(handle->streams[i], grid_desc->events[0], 0));
   }
 
+  bool need_barrier = false;
   cudecompNvshmemA2AParams<T> params;
+  params.block_counters = comm_info.nvshmem_block_counters;
 
   // Inter-group transfers (non-blocking)
   params.send_buff = send_buff;
   params.recv_buff = recv_buff;
+
+  int total_sm_transfers = 0;
   int count = 0;
   for (int i = 1; i < send_counts.size(); ++i) {
     int src_rank, dst_rank;
@@ -122,6 +126,7 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
     int dst_rank_global = getGlobalRank(handle, grid_desc, comm_axis, dst_rank);
     if (nvshmem_ptr(recv_buff, dst_rank_global)) { continue; }
 
+    need_barrier = true;
     params.send_offsets[count] = send_offsets[dst_rank];
     params.recv_offsets[count] = recv_offsets[dst_rank];
     params.send_counts[count] = send_counts[dst_rank];
@@ -148,6 +153,7 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
     if (nvshmem_ptr(recv_buff, dst_rank_global)) {
 
       if (!use_sm) {
+        need_barrier = true;
         if (comm_info.ngroups == 1 && handle->device_p2p_ce_count == 1 && count != 0 &&
             count % CUDECOMP_NVSHMEM_INTRAGROUP_SYNC_FREQ == 0) {
           // For single group, single P2P CE (e.g. NVSwitch), synchronize NVSHMEM team every
@@ -187,7 +193,8 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
 
         if (count == CUDECOMP_NVSHMEM_A2A_PARAM_CAPACITY) {
           params.ntransfers = count;
-          cudecomp_nvshmem_alltoallv_p2p(params, handle->streams[0]);
+          total_sm_transfers += count;
+          cudecomp_nvshmem_alltoallv_p2p(params, &comm_info.nvshmem_signals[0], handle->streams[0]);
           params.has_self = false;
           count = 0;
         }
@@ -198,8 +205,12 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
   if (use_sm) {
     if (count != 0 || params.has_self) {
       params.ntransfers = count;
-      cudecomp_nvshmem_alltoallv_p2p(params, handle->streams[0]);
+      total_sm_transfers += count;
+      cudecomp_nvshmem_alltoallv_p2p(params, &comm_info.nvshmem_signals[0], handle->streams[0]);
     }
+
+    nvshmemx_signal_wait_until_on_stream(&comm_info.nvshmem_signals[0], NVSHMEM_CMP_EQ,
+                                         static_cast<uint64_t>(total_sm_transfers), handle->streams[0]);
   } else {
     // Self-copy with cudaMemcpy
     CHECK_CUDA(cudaMemcpyAsync(recv_buff + recv_offsets[self_rank], send_buff + send_offsets[self_rank],
@@ -212,7 +223,9 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
     CHECK_CUDA(cudaStreamWaitEvent(stream, grid_desc->events[0], 0));
   }
 
-  nvshmemx_barrier_on_stream(team, stream);
+  if (need_barrier) {
+    nvshmemx_barrier_on_stream(team, stream);
+  }
 }
 #endif
 
