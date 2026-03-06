@@ -59,19 +59,19 @@ __launch_bounds__(CUDECOMP_NVSHMEM_NTHREADS) __global__
   T* send_buff = params.send_buff;
   T* recv_buff = params.recv_buff;
   int bid = blockIdx.x;
-  int blocks_per_copy = gridDim.x;
 
-  for (int i = 0; i < params.ntransfers; ++i) {
-    // Assign blocks across copies
-    int copyid = (bid + i) % params.ntransfers;
+  if (params.ntransfers > 0) {
+    int blocks_per_copy = gridDim.x / params.ntransfers;
+    int copyid = bid / blocks_per_copy;
+    int block_within_copy = bid % blocks_per_copy;
     int peer_rank = params.peer_ranks[copyid];
     size_t send_offset = params.send_offsets[copyid];
     size_t recv_offset = params.recv_offsets[copyid];
     size_t send_count = params.send_counts[copyid];
 
-    size_t nelems_per_block = (send_count + gridDim.x  - 1) / gridDim.x;
-    if (nelems_per_block * bid < send_count) {
-      size_t block_offset = bid * nelems_per_block;
+    size_t nelems_per_block = (send_count + blocks_per_copy - 1) / blocks_per_copy;
+    size_t block_offset = (size_t)block_within_copy * nelems_per_block;
+    if (block_offset < send_count) {
       size_t block_count = min(nelems_per_block, send_count - block_offset);
       nvshmemx_putmem_block(recv_buff + recv_offset + block_offset,
                             send_buff + send_offset + block_offset,
@@ -88,7 +88,6 @@ __launch_bounds__(CUDECOMP_NVSHMEM_NTHREADS) __global__
         nvshmemx_signal_op(sig_addr, 1, NVSHMEM_SIGNAL_ADD, peer_rank);
       }
     }
-    __syncthreads();
   }
 
   // Self-copy: runs after remote puts are issued, using all blocks for full HBM bandwidth.
