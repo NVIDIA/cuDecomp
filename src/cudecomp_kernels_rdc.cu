@@ -61,28 +61,28 @@ static int nvshmem_p2p_nblocks(int ntransfers) {
 }
 
 template <typename T>
-static void launch_nvshmem_alltoallv_p2p(const cudecompNvshmemA2AParams<T>& params, cudaStream_t stream) {
+static void launch_nvshmem_alltoallv_p2p(const cudecompNvshmemA2AParams<T>& params, uint64_t* sig_addr, cudaStream_t stream) {
   int nblocks = nvshmem_p2p_nblocks(params.ntransfers);
-  cudecomp_nvshmem_alltoallv_p2p_k<<<nblocks, CUDECOMP_NVSHMEM_NTHREADS, 0, stream>>>(params);
+  cudecomp_nvshmem_alltoallv_p2p_k<<<nblocks, CUDECOMP_NVSHMEM_NTHREADS, 0, stream>>>(params, sig_addr);
   CHECK_CUDA_LAUNCH();
 }
 
-void cudecomp_nvshmem_alltoallv_p2p(const cudecompNvshmemA2AParams<float>& params, cudaStream_t stream) {
-  launch_nvshmem_alltoallv_p2p(params, stream);
+void cudecomp_nvshmem_alltoallv_p2p(const cudecompNvshmemA2AParams<float>& params, uint64_t* sig_addr, cudaStream_t stream) {
+  launch_nvshmem_alltoallv_p2p(params, sig_addr, stream);
 }
 
-void cudecomp_nvshmem_alltoallv_p2p(const cudecompNvshmemA2AParams<double>& params, cudaStream_t stream) {
-  launch_nvshmem_alltoallv_p2p(params, stream);
+void cudecomp_nvshmem_alltoallv_p2p(const cudecompNvshmemA2AParams<double>& params, uint64_t* sig_addr, cudaStream_t stream) {
+  launch_nvshmem_alltoallv_p2p(params, sig_addr, stream);
 }
 
-void cudecomp_nvshmem_alltoallv_p2p(const cudecompNvshmemA2AParams<cuda::std::complex<float>>& params,
+void cudecomp_nvshmem_alltoallv_p2p(const cudecompNvshmemA2AParams<cuda::std::complex<float>>& params, uint64_t* sig_addr,
                                     cudaStream_t stream) {
-  launch_nvshmem_alltoallv_p2p(params, stream);
+  launch_nvshmem_alltoallv_p2p(params, sig_addr, stream);
 }
 
-void cudecomp_nvshmem_alltoallv_p2p(const cudecompNvshmemA2AParams<cuda::std::complex<double>>& params,
+void cudecomp_nvshmem_alltoallv_p2p(const cudecompNvshmemA2AParams<cuda::std::complex<double>>& params, uint64_t* sig_addr,
                                     cudaStream_t stream) {
-  launch_nvshmem_alltoallv_p2p(params, stream);
+  launch_nvshmem_alltoallv_p2p(params, sig_addr, stream);
 }
 #endif
 

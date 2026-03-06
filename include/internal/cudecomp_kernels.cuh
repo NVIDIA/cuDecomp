@@ -54,11 +54,12 @@ __launch_bounds__(CUDECOMP_CUDA_NTHREADS) __global__
 
 template <typename T>
 __launch_bounds__(CUDECOMP_NVSHMEM_NTHREADS) __global__
-    void cudecomp_nvshmem_alltoallv_p2p_k(cudecompNvshmemA2AParams<T> params) {
+    void cudecomp_nvshmem_alltoallv_p2p_k(cudecompNvshmemA2AParams<T> params, uint64_t *sig_addr) {
 
   T* send_buff = params.send_buff;
   T* recv_buff = params.recv_buff;
   int bid = blockIdx.x;
+  int blocks_per_copy = gridDim.x;
 
   for (int i = 0; i < params.ntransfers; ++i) {
     // Assign blocks across copies
@@ -72,11 +73,22 @@ __launch_bounds__(CUDECOMP_NVSHMEM_NTHREADS) __global__
     if (nelems_per_block * bid < send_count) {
       size_t block_offset = bid * nelems_per_block;
       size_t block_count = min(nelems_per_block, send_count - block_offset);
-      nvshmemx_putmem_nbi_block(recv_buff + recv_offset + block_offset,
-                                send_buff + send_offset + block_offset,
-                                block_count * sizeof(T),
-                                peer_rank);
+      nvshmemx_putmem_block(recv_buff + recv_offset + block_offset,
+                            send_buff + send_offset + block_offset,
+                            block_count * sizeof(T),
+                            peer_rank);
     }
+
+    // Last block to finish this copy signals the destination PE.
+    nvshmem_fence();
+    __syncthreads();
+    if (threadIdx.x == 0) {
+      if (atomicAdd(&params.block_counters[peer_rank], 1) + 1 == blocks_per_copy) {
+        params.block_counters[peer_rank] = 0;
+        nvshmemx_signal_op(sig_addr, 1, NVSHMEM_SIGNAL_ADD, peer_rank);
+      }
+    }
+    __syncthreads();
   }
 
   // Self-copy: runs after remote puts are issued, using all blocks for full HBM bandwidth.
