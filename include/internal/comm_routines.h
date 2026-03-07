@@ -105,12 +105,15 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
   CHECK_CUDA(cudaStreamWaitEvent(stream, grid_desc->nvshmem_sync_event));
 
   // Event dependency on external stream for intra-group transfers
-  CHECK_CUDA(cudaEventRecord(grid_desc->events[0], stream));
-  for (int i = 0; i < handle->device_p2p_ce_count; ++i) {
-    CHECK_CUDA(cudaStreamWaitEvent(handle->streams[i], grid_desc->events[0], 0));
+  if (!use_sm) {
+    CHECK_CUDA(cudaEventRecord(grid_desc->events[0], stream));
+    for (int i = 0; i < handle->device_p2p_ce_count; ++i) {
+      CHECK_CUDA(cudaStreamWaitEvent(handle->streams[i], grid_desc->events[0], 0));
+    }
   }
 
   bool need_barrier = false;
+  bool need_quiet = false;
   cudecompNvshmemA2AParams<T> params;
   params.block_counters = comm_info.nvshmem_block_counters;
 
@@ -118,7 +121,6 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
   params.send_buff = send_buff;
   params.recv_buff = recv_buff;
 
-  int total_sm_transfers = 0;
   int count = 0;
   for (int i = 1; i < send_counts.size(); ++i) {
     int src_rank, dst_rank;
@@ -126,7 +128,8 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
     int dst_rank_global = getGlobalRank(handle, grid_desc, comm_axis, dst_rank);
     if (nvshmem_ptr(recv_buff, dst_rank_global)) { continue; }
 
-    need_barrier = true;
+    if (!use_sm) need_barrier = true;
+    need_quiet = true;
     params.send_offsets[count] = send_offsets[dst_rank];
     params.recv_offsets[count] = recv_offsets[dst_rank];
     params.send_counts[count] = send_counts[dst_rank];
@@ -135,13 +138,13 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
 
     if (count == CUDECOMP_NVSHMEM_A2A_PARAM_CAPACITY) {
       params.ntransfers = count;
-      cudecomp_nvshmem_alltoallv(params, stream);
+      cudecomp_nvshmem_alltoallv(params, &comm_info.nvshmem_signals[0], stream);
       count = 0;
     }
   }
   if (count != 0) {
     params.ntransfers = count;
-    cudecomp_nvshmem_alltoallv(params, stream);
+    cudecomp_nvshmem_alltoallv(params, &comm_info.nvshmem_signals[0], stream);
   }
 
   // Intra-group transfers (blocking, scheduled after non-blocking inter-group transfers for concurrency)
@@ -185,8 +188,7 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
 
         if (count == CUDECOMP_NVSHMEM_A2A_PARAM_CAPACITY) {
           params.ntransfers = count;
-          total_sm_transfers += count;
-          cudecomp_nvshmem_alltoallv_p2p(params, &comm_info.nvshmem_signals[0], handle->streams[0]);
+          cudecomp_nvshmem_alltoallv_p2p(params, &comm_info.nvshmem_signals[0], stream);
           count = 0;
         }
       }
@@ -196,22 +198,24 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
   if (use_sm) {
     if (count != 0) {
       params.ntransfers = count;
-      total_sm_transfers += count;
-      cudecomp_nvshmem_alltoallv_p2p(params, &comm_info.nvshmem_signals[0], handle->streams[0]);
+      cudecomp_nvshmem_alltoallv_p2p(params, &comm_info.nvshmem_signals[0], stream);
     }
 
+    if (need_quiet) { nvshmemx_quiet_on_stream(stream); }
     nvshmemx_signal_wait_until_on_stream(&comm_info.nvshmem_signals[0], NVSHMEM_CMP_EQ,
-                                         static_cast<uint64_t>(total_sm_transfers), handle->streams[0]);
+                                         static_cast<uint64_t>(comm_info.nranks), stream);
   } else {
     // Self-copy with cudaMemcpy
     CHECK_CUDA(cudaMemcpyAsync(recv_buff + recv_offsets[self_rank], send_buff + send_offsets[self_rank],
                                send_counts[self_rank] * sizeof(T), cudaMemcpyDeviceToDevice, stream));
   }
 
-  // Event dependency on internal streams for completion of intra-group transfers
-  for (int i = 0; i < handle->device_p2p_ce_count; ++i) {
-    CHECK_CUDA(cudaEventRecord(grid_desc->events[0], handle->streams[i]));
-    CHECK_CUDA(cudaStreamWaitEvent(stream, grid_desc->events[0], 0));
+  // Event dependency on internal streams for completion of intra-group transfers (not needed for SM path)
+  if (!use_sm) {
+    for (int i = 0; i < handle->device_p2p_ce_count; ++i) {
+      CHECK_CUDA(cudaEventRecord(grid_desc->events[0], handle->streams[i]));
+      CHECK_CUDA(cudaStreamWaitEvent(stream, grid_desc->events[0], 0));
+    }
   }
 
   if (need_barrier) {
