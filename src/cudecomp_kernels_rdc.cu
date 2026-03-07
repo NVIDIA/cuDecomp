@@ -23,25 +23,25 @@
 namespace cudecomp {
 
 #ifdef ENABLE_NVSHMEM
-void cudecomp_nvshmem_alltoallv(const cudecompNvshmemA2AParams<float>& params, cudaStream_t stream) {
-  cudecomp_nvshmem_alltoallv_k<<<1, CUDECOMP_CUDA_NTHREADS, 0, stream>>>(params);
+void cudecomp_nvshmem_alltoallv(const cudecompNvshmemA2AParams<float>& params, uint64_t* sig_addr, cudaStream_t stream) {
+  cudecomp_nvshmem_alltoallv_k<<<1, CUDECOMP_CUDA_NTHREADS, 0, stream>>>(params, sig_addr);
   CHECK_CUDA_LAUNCH();
 }
 
-void cudecomp_nvshmem_alltoallv(const cudecompNvshmemA2AParams<double>& params, cudaStream_t stream) {
-  cudecomp_nvshmem_alltoallv_k<<<1, CUDECOMP_CUDA_NTHREADS, 0, stream>>>(params);
+void cudecomp_nvshmem_alltoallv(const cudecompNvshmemA2AParams<double>& params, uint64_t* sig_addr, cudaStream_t stream) {
+  cudecomp_nvshmem_alltoallv_k<<<1, CUDECOMP_CUDA_NTHREADS, 0, stream>>>(params, sig_addr);
   CHECK_CUDA_LAUNCH();
 }
 
-void cudecomp_nvshmem_alltoallv(const cudecompNvshmemA2AParams<cuda::std::complex<float>>& params,
+void cudecomp_nvshmem_alltoallv(const cudecompNvshmemA2AParams<cuda::std::complex<float>>& params, uint64_t* sig_addr,
                                 cudaStream_t stream) {
-  cudecomp_nvshmem_alltoallv_k<<<1, CUDECOMP_CUDA_NTHREADS, 0, stream>>>(params);
+  cudecomp_nvshmem_alltoallv_k<<<1, CUDECOMP_CUDA_NTHREADS, 0, stream>>>(params, sig_addr);
   CHECK_CUDA_LAUNCH();
 }
 
-void cudecomp_nvshmem_alltoallv(const cudecompNvshmemA2AParams<cuda::std::complex<double>>& params,
+void cudecomp_nvshmem_alltoallv(const cudecompNvshmemA2AParams<cuda::std::complex<double>>& params, uint64_t* sig_addr,
                                 cudaStream_t stream) {
-  cudecomp_nvshmem_alltoallv_k<<<1, CUDECOMP_CUDA_NTHREADS, 0, stream>>>(params);
+  cudecomp_nvshmem_alltoallv_k<<<1, CUDECOMP_CUDA_NTHREADS, 0, stream>>>(params, sig_addr);
   CHECK_CUDA_LAUNCH();
 }
 
