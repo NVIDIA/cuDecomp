@@ -236,26 +236,12 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
   T* o2 = work + pinfo_a.size;
   T* o3 = output;
 
-#ifdef ENABLE_NVSHMEM
   if (transposeBackendRequiresNvshmem(grid_desc->config.transpose_comm_backend)) {
     auto max_pencil_size_a = getGlobalMaxPencilSize(handle, grid_desc, ax_a);
     o2 = work + max_pencil_size_a;
-
-    // NVSHMEM team synchronization between transpose operations
-    if (splits_a.size() != 1) {
-      auto& comm_info = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info : grid_desc->col_comm_info;
-      auto team = comm_info.nvshmem_team;
-      auto aux_stream = handle->streams[handle->device_p2p_ce_count];
-      CHECK_CUDA(cudaEventRecord(grid_desc->nvshmem_sync_event, stream));
-      CHECK_CUDA(cudaStreamWaitEvent(aux_stream, grid_desc->nvshmem_sync_event));
-      // Zero out signal buffer for this team here.
-      CHECK_CUDA(cudaMemsetAsync(comm_info.nvshmem_signals, 0, comm_info.nranks * sizeof(uint64_t), aux_stream));
-      nvshmemx_team_sync_on_stream(team, aux_stream);
-      CHECK_CUDA(cudaEventRecord(grid_desc->nvshmem_sync_event, aux_stream));
-      // Delay final stream wait dependency to alltoall to ensure sync runs concurrently with initial transpose/pack
-    }
+    // Record event at start of transpose op for NVSHMEM team synchronization
+    CHECK_CUDA(cudaEventRecord(grid_desc->nvshmem_sync_event, stream));
   }
-#endif
 
   cudecompTransposePerformanceSample* current_sample = nullptr;
   if (handle->performance_report_enable) {
@@ -623,6 +609,7 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
       }
 
       if (pipelined) {
+        bool nvshmem_synced = false;
         for (int j = 0; j < splits_b.size(); ++j) {
           int src_rank, dst_rank;
           getAlltoallPeerRanks(grid_desc, comm_axis, j, src_rank, dst_rank);
@@ -652,7 +639,8 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
 
           if (o2 != o1) {
             cudecompAlltoallPipelined(handle, grid_desc, o1, send_counts, send_offsets, o2, recv_counts, recv_offsets,
-                                      recv_offsets_nvshmem, comm_axis, src_ranks, dst_ranks, stream, current_sample);
+                                      recv_offsets_nvshmem, comm_axis, src_ranks, dst_ranks, stream, nvshmem_synced,
+                                      current_sample);
           }
 
           if (o2 != o3) {
@@ -716,6 +704,7 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
         if (i > 0) { strides_out[i] = strides_out[i - 1] * extents_h[i - 1]; }
       }
 
+      bool nvshmem_synced = false;
       for (int j = 0; j < splits_b.size(); ++j) {
         int src_rank, dst_rank;
         getAlltoallPeerRanks(grid_desc, comm_axis, j, src_rank, dst_rank);
@@ -746,7 +735,8 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
 
           if (o2 != o1) {
             cudecompAlltoallPipelined(handle, grid_desc, o1, send_counts, send_offsets, o2, recv_counts, recv_offsets,
-                                      recv_offsets_nvshmem, comm_axis, src_ranks, dst_ranks, stream, current_sample);
+                                      recv_offsets_nvshmem, comm_axis, src_ranks, dst_ranks, stream, nvshmem_synced,
+                                      current_sample);
           }
         }
 
@@ -770,6 +760,7 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
     }
   } else {
     // Unpack
+    bool nvshmem_synced = false;
     int memcpy_count = 0;
     cudecompBatchedD2DMemcpy3DParams<T> memcpy_params;
     for (int j = 0; j < splits_a.size(); ++j) {
@@ -802,7 +793,8 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
 
         if (o2 != o1) {
           cudecompAlltoallPipelined(handle, grid_desc, o1, send_counts, send_offsets, o2, recv_counts, recv_offsets,
-                                    recv_offsets_nvshmem, comm_axis, src_ranks, dst_ranks, stream, current_sample);
+                                    recv_offsets_nvshmem, comm_axis, src_ranks, dst_ranks, stream, nvshmem_synced,
+                                    current_sample);
         }
       }
 
