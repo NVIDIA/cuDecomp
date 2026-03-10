@@ -396,7 +396,6 @@ cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cudecompGridDesc
     if (nvshmem_ptr(send_buff, handle->rank) && nvshmem_ptr(recv_buff, handle->rank)) {
       auto& comm_info = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info : grid_desc->col_comm_info;
       auto pl_stream = handle->streams[0];
-      auto aux_stream = handle->streams[handle->device_p2p_ce_count];
       int self_rank = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info.rank : grid_desc->col_comm_info.rank;
 
       // Enforce sync dependency between transpose operations
