@@ -415,17 +415,17 @@ static void checkNvshmemVersion(cudecompHandle_t& handle) {
   }
 
   // NVSHMEM <= 3.2.5 has a bug where putmem_signal APIs can trigger segfaults for inter-group
-  // transfers. Setting NVSHMEM_CUMEM_GRANULARITY to 1 GiB before initialization as a workaround
-  // for this issue.
+  // transfers. Setting NVSHMEM_CUMEM_GRANULARITY to 2 GiB before initialization works around
+  // this issue.
   bool has_signal_bug = (major < 3) || (major == 3 && minor < 2) || (major == 3 && minor == 2 && patch <= 5);
   if (has_signal_bug) {
     const char* granularity_str = std::getenv("NVSHMEM_CUMEM_GRANULARITY");
     if (granularity_str && handle->rank == 0) {
-      printf("CUDECOMP:WARN: Overriding NVSHMEM_CUMEM_GRANULARITY (was %s) to 1 GiB to work around "
+      printf("CUDECOMP:WARN: Overriding NVSHMEM_CUMEM_GRANULARITY (was %s) to 2 GiB to work around "
              "a known bug in NVSHMEM %d.%d.%d affecting putmem_signal for inter-group transfers.\n",
              granularity_str, major, minor, patch);
     }
-    setenv("NVSHMEM_CUMEM_GRANULARITY", "1073741824", 1);
+    setenv("NVSHMEM_CUMEM_GRANULARITY", "2147483648", 1);
   }
 }
 #endif
