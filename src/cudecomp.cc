@@ -400,7 +400,7 @@ static void inspectNvshmemEnvVars(cudecompHandle_t& handle) {
   }
 }
 
-static void checkNvshmemVersion() {
+static void checkNvshmemVersion(cudecompHandle_t& handle) {
   int major, minor, patch;
   char name[NVSHMEM_MAX_NAME_LEN];
   nvshmem_info_get_name(name);
@@ -412,6 +412,20 @@ static void checkNvshmemVersion() {
   // We have removed workarounds for bugs encountered with NVSHMEM versions earlier than 2.6.0.
   if ((major == 2 && minor < 6) || major < 2) {
     THROW_NOT_SUPPORTED("NVSHMEM versions earlier than 2.6.0 are not supported.");
+  }
+
+  // NVSHMEM <= 3.2.5 has a bug where putmem_signal APIs can trigger segfaults for inter-group
+  // transfers. Setting NVSHMEM_CUMEM_GRANULARITY to 2 GiB before initialization works around
+  // this issue.
+  bool has_signal_bug = (major < 3) || (major == 3 && minor < 2) || (major == 3 && minor == 2 && patch <= 5);
+  if (has_signal_bug) {
+    const char* granularity_str = std::getenv("NVSHMEM_CUMEM_GRANULARITY");
+    if (granularity_str && handle->rank == 0) {
+      printf("CUDECOMP:WARN: Overriding NVSHMEM_CUMEM_GRANULARITY (was %s) to 2 GiB to work around "
+             "a known bug in NVSHMEM %d.%d.%d affecting putmem_signal for inter-group transfers.\n",
+             granularity_str, major, minor, patch);
+    }
+    setenv("NVSHMEM_CUMEM_GRANULARITY", "2147483648", 1);
   }
 }
 #endif
@@ -700,7 +714,7 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
         ((autotune_transpose_backend || autotune_halo_backend) && !autotune_disable_nvshmem_backends)) {
 #ifdef ENABLE_NVSHMEM
       if (!handle->nvshmem_initialized) {
-        checkNvshmemVersion();
+        checkNvshmemVersion(handle);
         inspectNvshmemEnvVars(handle);
         initNvshmemFromMPIComm(handle->mpi_comm);
         handle->nvshmem_initialized = true;
@@ -764,6 +778,14 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
       nvshmem_team_config_t tmp;
       nvshmem_team_split_2d(NVSHMEM_TEAM_WORLD, grid_desc->config.pdims[1], &tmp, 0,
                             &grid_desc->row_comm_info.nvshmem_team, &tmp, 0, &grid_desc->col_comm_info.nvshmem_team);
+      grid_desc->row_comm_info.nvshmem_signals =
+          (uint64_t*)nvshmem_malloc(grid_desc->row_comm_info.nranks * sizeof(uint64_t));
+      CHECK_CUDA(
+          cudaMemset(grid_desc->row_comm_info.nvshmem_signals, 0, grid_desc->row_comm_info.nranks * sizeof(uint64_t)));
+      grid_desc->col_comm_info.nvshmem_signals =
+          (uint64_t*)nvshmem_malloc(grid_desc->col_comm_info.nranks * sizeof(uint64_t));
+      CHECK_CUDA(
+          cudaMemset(grid_desc->col_comm_info.nvshmem_signals, 0, grid_desc->col_comm_info.nranks * sizeof(uint64_t)));
       handle->n_grid_descs_using_nvshmem++;
     } else {
       // Finalize nvshmem to reclaim symmetric heap memory if not used
@@ -891,9 +913,11 @@ cudecompResult_t cudecompGridDescDestroy(cudecompHandle_t handle, cudecompGridDe
         haloBackendRequiresNvshmem(grid_desc->config.halo_comm_backend)) {
       if (grid_desc->row_comm_info.nvshmem_team != NVSHMEM_TEAM_INVALID) {
         nvshmem_team_destroy(grid_desc->row_comm_info.nvshmem_team);
+        nvshmem_free(grid_desc->row_comm_info.nvshmem_signals);
       }
       if (grid_desc->col_comm_info.nvshmem_team != NVSHMEM_TEAM_INVALID) {
         nvshmem_team_destroy(grid_desc->col_comm_info.nvshmem_team);
+        nvshmem_free(grid_desc->col_comm_info.nvshmem_signals);
       }
       handle->n_grid_descs_using_nvshmem--;
 
