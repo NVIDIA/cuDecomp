@@ -91,16 +91,13 @@ static void localPermute(const cudecompHandle_t handle, const std::array<int64_t
 
     // Always pass explicit strides when splitting
     std::array<int64_t, 3> actual_strides_in = strides_in;
-    if (!anyNonzeros(strides_in)) {
-      actual_strides_in = {extent_in[1] * extent_in[2], extent_in[2], 1};
-    }
+    if (!anyNonzeros(strides_in)) { actual_strides_in = {extent_in[1] * extent_in[2], extent_in[2], 1}; }
     std::array<int64_t, 3> actual_strides_out = strides_out;
-    if (!anyNonzeros(strides_out)) {
-      actual_strides_out = {extent_out[1] * extent_out[2], extent_out[2], 1};
-    }
+    if (!anyNonzeros(strides_out)) { actual_strides_out = {extent_out[1] * extent_out[2], extent_out[2], 1}; }
     // Try to split on input dims, starting with outermost dim.
     std::array<int, 3> inv_order_out;
-    for (int i = 0; i < 3; ++i) inv_order_out[order_out[i]] = i;
+    for (int i = 0; i < 3; ++i)
+      inv_order_out[order_out[i]] = i;
     int split_dim_in = -1;
     int64_t elems_per_slice = 0;
     for (int j = 2; j >= 0; --j) {
@@ -124,8 +121,8 @@ static void localPermute(const cudecompHandle_t handle, const std::array<int64_t
       }
       return;
     }
-    // All pairwise products exceed the limit so splitting isn't possible (requires each dimension > sqrt(INT32_MAX/2) ~= 32768).
-    // This is not a realistic scenario, but throw an error here for completeness.
+    // All pairwise products exceed the limit so splitting isn't possible (requires each dimension > sqrt(INT32_MAX/2)
+    // ~= 32768). This is not a realistic scenario, but throw an error here for completeness.
     THROW_INTERNAL_ERROR("Input too large to work around CUTENSOR large-tensor bug");
   }
 
