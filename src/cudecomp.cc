@@ -1157,9 +1157,12 @@ cudecompResult_t cudecompGetHaloWorkspaceSize(cudecompHandle_t handle, cudecompG
     auto shape_g = getShapeG(pinfo);
 
     // Round all halo slots in workspace to 256 byte boundary (in elements, assuming float)
-    int64_t halo_size_x = 4 * alignCountToBytes(shape_g[1] * shape_g[2] * pinfo.halo_extents[0], CUDECOMP_WORKSPACE_ALIGN_BYTES);
-    int64_t halo_size_y = 4 * alignCountToBytes(shape_g[0] * shape_g[2] * pinfo.halo_extents[1], CUDECOMP_WORKSPACE_ALIGN_BYTES);
-    int64_t halo_size_z = 4 * alignCountToBytes(shape_g[0] * shape_g[1] * pinfo.halo_extents[2], CUDECOMP_WORKSPACE_ALIGN_BYTES);
+    int64_t halo_size_x =
+        4 * alignCountToBytes(shape_g[1] * shape_g[2] * pinfo.halo_extents[0], CUDECOMP_WORKSPACE_ALIGN_BYTES);
+    int64_t halo_size_y =
+        4 * alignCountToBytes(shape_g[0] * shape_g[2] * pinfo.halo_extents[1], CUDECOMP_WORKSPACE_ALIGN_BYTES);
+    int64_t halo_size_z =
+        4 * alignCountToBytes(shape_g[0] * shape_g[1] * pinfo.halo_extents[2], CUDECOMP_WORKSPACE_ALIGN_BYTES);
 
     *workspace_size = std::max({halo_size_x, halo_size_y, halo_size_z});
   } catch (const cudecomp::BaseException& e) {
