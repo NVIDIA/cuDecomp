@@ -474,6 +474,16 @@ static inline bool checkForEmptyPencils(const cudecompGridDesc_t grid_desc, int 
   return false;
 }
 
+// Workspace buffer alignment in bytes
+static constexpr int CUDECOMP_WORKSPACE_ALIGN_BYTES = 256;
+
+// Helper to round element count to nearest multiple of nbytes (assuming smallest supported type float)
+static inline int64_t alignCountToBytes(int64_t count, int nbytes) {
+  int64_t count_bytes = count * sizeof(float);
+  int64_t count_bytes_rounded = ((count_bytes + nbytes - 1) / nbytes) * nbytes;
+  return count_bytes_rounded / sizeof(float);
+}
+
 } // namespace cudecomp
 
 #endif // CUDECOMP_COMMON_H
