@@ -462,6 +462,11 @@ cudecompResult_t cudecompInit(cudecompHandle_t* handle_in, MPI_Comm mpi_comm) {
     CHECK_CUTENSOR(cutensorCreate(&handle->cutensor_handle));
     CHECK_CUTENSOR(cutensorCreatePlanPreference(handle->cutensor_handle, &handle->cutensor_plan_pref,
                                                 CUTENSOR_ALGO_DEFAULT, CUTENSOR_JIT_MODE_NONE));
+    // cuTENSOR versions 2.3.x - 2.5.x have a bug where cutensorCreatePlan performs an out-of-bounds
+    // host write when the total number of tensor elements exceeds INT32_MAX/2. Set a flag
+    // to enable  workaround in localPermute to split large tensors.
+    size_t cutensor_ver = cutensorGetVersion();
+    handle->cutensor_needs_permute_chunking = (cutensor_ver >= 20300 && cutensor_ver < 20600);
 #else
     CHECK_CUTENSOR(cutensorInit(&handle->cutensor_handle));
 #endif

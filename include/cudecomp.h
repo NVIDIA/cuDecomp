@@ -29,7 +29,7 @@
 
 #define CUDECOMP_MAJOR 0
 #define CUDECOMP_MINOR 6
-#define CUDECOMP_PATCH 1
+#define CUDECOMP_PATCH 2
 
 #ifdef __cplusplus
 extern "C" {
