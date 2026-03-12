@@ -115,7 +115,7 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
   bool need_barrier = false;
   bool need_quiet = false;
   cudecompNvshmemA2AParams<T> params;
-  params.block_counters = comm_info.nvshmem_block_counters;
+  params.block_counters = grid_desc->nvshmem_block_counters;
 
   // Inter-group transfers (non-blocking)
   params.send_buff = send_buff;

@@ -789,18 +789,12 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
           (uint64_t*)nvshmem_malloc(grid_desc->row_comm_info.nranks * sizeof(uint64_t));
       CHECK_CUDA(
           cudaMemset(grid_desc->row_comm_info.nvshmem_signals, 0, grid_desc->row_comm_info.nranks * sizeof(uint64_t)));
-      CHECK_CUDA(cudaMalloc(&grid_desc->row_comm_info.nvshmem_block_counters,
-                            grid_desc->row_comm_info.nranks * sizeof(int)));
-      CHECK_CUDA(cudaMemset(grid_desc->row_comm_info.nvshmem_block_counters, 0,
-                            grid_desc->row_comm_info.nranks * sizeof(int)));
       grid_desc->col_comm_info.nvshmem_signals =
           (uint64_t*)nvshmem_malloc(grid_desc->col_comm_info.nranks * sizeof(uint64_t));
       CHECK_CUDA(
           cudaMemset(grid_desc->col_comm_info.nvshmem_signals, 0, grid_desc->col_comm_info.nranks * sizeof(uint64_t)));
-      CHECK_CUDA(cudaMalloc(&grid_desc->col_comm_info.nvshmem_block_counters,
-                            grid_desc->col_comm_info.nranks * sizeof(int)));
-      CHECK_CUDA(cudaMemset(grid_desc->col_comm_info.nvshmem_block_counters, 0,
-                            grid_desc->col_comm_info.nranks * sizeof(int)));
+      CHECK_CUDA(cudaMalloc(&grid_desc->nvshmem_block_counters, handle->nranks * sizeof(int)));
+      CHECK_CUDA(cudaMemset(grid_desc->nvshmem_block_counters, 0, handle->nranks * sizeof(int)));
       handle->n_grid_descs_using_nvshmem++;
     } else {
       // Finalize nvshmem to reclaim symmetric heap memory if not used
@@ -929,13 +923,12 @@ cudecompResult_t cudecompGridDescDestroy(cudecompHandle_t handle, cudecompGridDe
       if (grid_desc->row_comm_info.nvshmem_team != NVSHMEM_TEAM_INVALID) {
         nvshmem_team_destroy(grid_desc->row_comm_info.nvshmem_team);
         nvshmem_free(grid_desc->row_comm_info.nvshmem_signals);
-        CHECK_CUDA(cudaFree(grid_desc->row_comm_info.nvshmem_block_counters));
       }
       if (grid_desc->col_comm_info.nvshmem_team != NVSHMEM_TEAM_INVALID) {
         nvshmem_team_destroy(grid_desc->col_comm_info.nvshmem_team);
         nvshmem_free(grid_desc->col_comm_info.nvshmem_signals);
-        CHECK_CUDA(cudaFree(grid_desc->col_comm_info.nvshmem_block_counters));
       }
+      CHECK_CUDA(cudaFree(grid_desc->nvshmem_block_counters));
       handle->n_grid_descs_using_nvshmem--;
 
       // Finalize nvshmem to reclaim symmetric heap memory if not used

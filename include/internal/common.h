@@ -129,7 +129,6 @@ struct cudecompCommInfo {
 #ifdef ENABLE_NVSHMEM
   nvshmem_team_t nvshmem_team = NVSHMEM_TEAM_INVALID;
   uint64_t* nvshmem_signals = nullptr;
-  int* nvshmem_block_counters = nullptr; // device memory counters for SM alltoallv last-block detection
 #endif
 
   bool mnnvl_active = false; // flag to indicate whether communicator has MNNVL connections
@@ -183,6 +182,10 @@ struct cudecompGridDesc {
 
   std::vector<cudaEvent_t> events{nullptr}; // CUDA events used for scheduling
   cudaEvent_t nvshmem_sync_event = nullptr; // NVSHMEM event used for synchronization
+
+#ifdef ENABLE_NVSHMEM
+  int* nvshmem_block_counters = nullptr; // device memory counters for SM alltoallv last-block detection
+#endif
 
   cudecomp::graphCache graph_cache; // CUDA graph cache
 
