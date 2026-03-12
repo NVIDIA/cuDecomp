@@ -193,7 +193,7 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
 
     int64_t halo_size = shape_g_h[(dim + 1) % 3] * shape_g_h[(dim + 2) % 3] * halo_extents[dim];
     T* send_buff = work;
-    T* recv_buff = work + 2 * roundCountToBytes(halo_size, 256);
+    T* recv_buff = work + 2 * alignCountToBytes(halo_size, CUDECOMP_WORKSPACE_ALIGN_BYTES);
 
     // Pack
     // Left
@@ -204,7 +204,7 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
     // Right
     lx[dim] = shape_g_h_p[dim] - 2 * halo_extents[dim] - padding[dim];
     memcpy_params.src[1] = input + getPencilPtrOffset(pinfo_h_p, lx);
-    memcpy_params.dest[1] = send_buff + roundCountToBytes(halo_size, 256);
+    memcpy_params.dest[1] = send_buff + alignCountToBytes(halo_size, CUDECOMP_WORKSPACE_ALIGN_BYTES);
 
     for (int i = 0; i < 2; ++i) {
       memcpy_params.src_strides[0][i] = pinfo_h_p.shape[0] * pinfo_h_p.shape[1];
@@ -222,7 +222,7 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
 
     std::array<comm_count_t, 2> counts{static_cast<comm_count_t>(halo_size), static_cast<comm_count_t>(halo_size)};
     std::array<size_t, 2> offsets{};
-    offsets[1] = static_cast<size_t>(roundCountToBytes(halo_size, 256));
+    offsets[1] = static_cast<size_t>(alignCountToBytes(halo_size, CUDECOMP_WORKSPACE_ALIGN_BYTES));
 
     if (handle->performance_report_enable && current_sample) {
       current_sample->sendrecv_bytes = 0;
@@ -239,7 +239,7 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
     memcpy_params.dest[0] = input + getPencilPtrOffset(pinfo_h_p, {0, 0, 0});
 
     // Right
-    memcpy_params.src[1] = recv_buff + roundCountToBytes(halo_size, 256);
+    memcpy_params.src[1] = recv_buff + alignCountToBytes(halo_size, CUDECOMP_WORKSPACE_ALIGN_BYTES);
     lx[dim] = shape_g_h_p[dim] - halo_extents[dim] - padding[dim];
     memcpy_params.dest[1] = input + getPencilPtrOffset(pinfo_h_p, lx);
 

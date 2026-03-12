@@ -63,7 +63,7 @@ static inline cutensorComputeDescriptor_t getCutensorComputeType(cutensorDataTyp
 
 template <typename T> static inline uint32_t getAlignment(const T* ptr) {
   auto i_ptr = reinterpret_cast<std::uintptr_t>(ptr);
-  for (uint32_t d = 16; d > 0; d >>= 1) {
+  for (uint32_t d = CUDECOMP_WORKSPACE_ALIGN_BYTES; d > 0; d >>= 1) {
     if (i_ptr % d == 0) return d;
   }
   return 1;
@@ -277,13 +277,13 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
   // Set input/output pointers for each phase
   T* i1 = input;
   T* o1 = work;
-  T* o2 = work + roundCountToBytes(pinfo_a.size, 256);
+  T* o2 = work + alignCountToBytes(pinfo_a.size, CUDECOMP_WORKSPACE_ALIGN_BYTES);
   T* o3 = output;
 
 #ifdef ENABLE_NVSHMEM
   if (transposeBackendRequiresNvshmem(grid_desc->config.transpose_comm_backend)) {
     auto max_pencil_size_a = getGlobalMaxPencilSize(handle, grid_desc, ax_a);
-    o2 = work + roundCountToBytes(max_pencil_size_a, 256);
+    o2 = work + alignCountToBytes(max_pencil_size_a, CUDECOMP_WORKSPACE_ALIGN_BYTES);
 
     // NVSHMEM team synchronization between transpose operations
     if (splits_a.size() != 1) {
