@@ -18,6 +18,8 @@
 #ifndef CUDECOMP_KERNELS_CUH
 #define CUDECOMP_KERNELS_CUH
 
+#include <algorithm>
+
 #ifdef ENABLE_NVSHMEM
 #include <nvshmem.h>
 #endif
@@ -27,6 +29,8 @@
 #define CUDECOMP_CUDA_NTHREADS (128)
 #define CUDECOMP_UNROLL_FACTOR (4)
 #define CUDECOMP_MIN_BLOCKS_PER_SM (16)
+
+#define CUDECOMP_NVSHMEM_NTHREADS (1024)
 
 namespace cudecomp {
 
@@ -46,6 +50,61 @@ __launch_bounds__(CUDECOMP_CUDA_NTHREADS) __global__
   size_t send_count = params.send_counts[tid];
 
   nvshmem_putmem_nbi(recv_buff + recv_offset, send_buff + send_offset, send_count * sizeof(T), peer_rank);
+}
+
+template <typename T>
+__launch_bounds__(CUDECOMP_CUDA_NTHREADS) __global__
+    void cudecomp_nvshmem_alltoallv_signal_k(cudecompNvshmemA2AParams<T> params, uint64_t* sig_addr) {
+
+  const int tid = blockIdx.x * blockDim.x + threadIdx.x;
+  if (tid >= params.ntransfers) return;
+
+  int peer_rank = params.peer_ranks[tid];
+  T* send_buff = params.send_buff;
+  T* recv_buff = params.recv_buff;
+  size_t send_offset = params.send_offsets[tid];
+  size_t recv_offset = params.recv_offsets[tid];
+  size_t send_count = params.send_counts[tid];
+
+  nvshmem_putmem_signal_nbi(recv_buff + recv_offset, send_buff + send_offset, send_count * sizeof(T), sig_addr, 1,
+                            NVSHMEM_SIGNAL_ADD, peer_rank);
+}
+
+template <typename T>
+__launch_bounds__(CUDECOMP_NVSHMEM_NTHREADS) __global__
+    void cudecomp_nvshmem_alltoallv_p2p_k(cudecompNvshmemP2PParams<T> params, uint64_t* sig_addr) {
+
+  T* send_buff = params.send_buff;
+  T* recv_buff = params.recv_buff;
+  int bid = blockIdx.x;
+
+  if (params.ntransfers > 0) {
+    int blocks_per_copy = gridDim.x / params.ntransfers;
+    int copyid = bid / blocks_per_copy;
+    int block_within_copy = bid % blocks_per_copy;
+    int peer_rank = params.peer_ranks[copyid];
+    size_t send_offset = params.send_offsets[copyid];
+    size_t recv_offset = params.recv_offsets[copyid];
+    size_t send_count = params.send_counts[copyid];
+
+    size_t nelems_per_block = (send_count + blocks_per_copy - 1) / blocks_per_copy;
+    size_t block_offset = (size_t)block_within_copy * nelems_per_block;
+    if (block_offset < send_count) {
+      size_t block_count = min(nelems_per_block, send_count - block_offset);
+      nvshmemx_putmem_block(recv_buff + recv_offset + block_offset, send_buff + send_offset + block_offset,
+                            block_count * sizeof(T), peer_rank);
+    }
+
+    // Last block to finish this copy signals the destination PE.
+    nvshmem_fence();
+    __syncthreads();
+    if (threadIdx.x == 0) {
+      if (atomicAdd(&params.block_counters[peer_rank], 1) + 1 == blocks_per_copy) {
+        params.block_counters[peer_rank] = 0;
+        nvshmemx_signal_op(sig_addr, 1, NVSHMEM_SIGNAL_ADD, peer_rank);
+      }
+    }
+  }
 }
 #endif
 
@@ -107,7 +166,8 @@ __launch_bounds__(CUDECOMP_CUDA_NTHREADS) __global__
 }
 
 template <typename T>
-void cudecomp_batched_d2d_memcpy_3d_nd_dispatch(const cudecompBatchedD2DMemcpy3DParams<T>& params,
+void cudecomp_batched_d2d_memcpy_3d_nd_dispatch(cudecompHandle_t handle,
+                                                const cudecompBatchedD2DMemcpy3DParams<T>& params,
                                                 cudaStream_t stream) {
   size_t N = params.extents[0][0] * params.extents[1][0] * params.extents[2][0];
 
@@ -138,12 +198,9 @@ void cudecomp_batched_d2d_memcpy_3d_nd_dispatch(const cudecompBatchedD2DMemcpy3D
   int blocks_per_copy_unroll = (blocks_per_copy + CUDECOMP_UNROLL_FACTOR - 1) / CUDECOMP_UNROLL_FACTOR;
   size_t total_blocks_unroll = params.ncopies * blocks_per_copy_unroll;
 
-  // Clamp minimum number of blocks from unrolling
-  int dev, num_sms;
-  CHECK_CUDA(cudaGetDevice(&dev));
-  CHECK_CUDA(cudaDeviceGetAttribute(&num_sms, cudaDevAttrMultiProcessorCount, dev));
-
-  if (total_blocks_unroll > CUDECOMP_MIN_BLOCKS_PER_SM * num_sms) { blocks_per_copy = blocks_per_copy_unroll; }
+  if (total_blocks_unroll > CUDECOMP_MIN_BLOCKS_PER_SM * handle->device_num_sms) {
+    blocks_per_copy = blocks_per_copy_unroll;
+  }
 
   switch (src_nd) {
   case 1:

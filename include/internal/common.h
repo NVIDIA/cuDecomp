@@ -114,6 +114,8 @@ struct cudecompHandle {
 
   // Miscellaneous
   int32_t device_p2p_ce_count = 0;       // number of P2P CEs available
+  int32_t device_num_sms = 0;            // number of SMs on the device
+  int32_t device_max_threads_per_sm = 0; // maximum threads per SM
   bool use_col_major_rank_order = false; // Flag to control whether to use column-major rank order
 };
 
@@ -182,6 +184,10 @@ struct cudecompGridDesc {
 
   std::vector<cudaEvent_t> events{nullptr}; // CUDA events used for scheduling
   cudaEvent_t nvshmem_sync_event = nullptr; // NVSHMEM event used for synchronization
+
+#ifdef ENABLE_NVSHMEM
+  int* nvshmem_block_counters = nullptr; // device memory counters for SM alltoallv last-block detection
+#endif
 
   cudecomp::graphCache graph_cache; // CUDA graph cache
 
@@ -292,7 +298,8 @@ static inline bool haloBackendRequiresNccl(cudecompHaloCommBackend_t comm_backen
 }
 
 static inline bool transposeBackendRequiresNvshmem(cudecompTransposeCommBackend_t comm_backend) {
-  return (comm_backend == CUDECOMP_TRANSPOSE_COMM_NVSHMEM || comm_backend == CUDECOMP_TRANSPOSE_COMM_NVSHMEM_PL);
+  return (comm_backend == CUDECOMP_TRANSPOSE_COMM_NVSHMEM || comm_backend == CUDECOMP_TRANSPOSE_COMM_NVSHMEM_PL ||
+          comm_backend == CUDECOMP_TRANSPOSE_COMM_NVSHMEM_SM);
 }
 
 static inline bool haloBackendRequiresNvshmem(cudecompHaloCommBackend_t comm_backend) {
@@ -380,8 +387,8 @@ static inline void getAlltoallPeerRanks(cudecompGridDesc_t grid_desc, cudecompCo
 
   const auto& info = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info : grid_desc->col_comm_info;
 
-  // Quick return for single rank case
-  if (info.nranks == 1) {
+  // Return self for single rank case or when iter is zero
+  if (info.nranks == 1 || iter == 0) {
     src_rank = info.rank;
     dst_rank = info.rank;
     return;

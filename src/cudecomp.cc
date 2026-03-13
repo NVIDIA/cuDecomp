@@ -102,11 +102,13 @@ static void checkTransposeCommBackend(cudecompTransposeCommBackend_t comm_backen
   case CUDECOMP_TRANSPOSE_COMM_MPI_A2A:
 #ifdef ENABLE_NVSHMEM
   case CUDECOMP_TRANSPOSE_COMM_NVSHMEM:
-  case CUDECOMP_TRANSPOSE_COMM_NVSHMEM_PL: return;
+  case CUDECOMP_TRANSPOSE_COMM_NVSHMEM_PL:
+  case CUDECOMP_TRANSPOSE_COMM_NVSHMEM_SM: return;
 #else
     return;
   case CUDECOMP_TRANSPOSE_COMM_NVSHMEM:
-  case CUDECOMP_TRANSPOSE_COMM_NVSHMEM_PL: THROW_NOT_SUPPORTED("transpose communication type unsupported");
+  case CUDECOMP_TRANSPOSE_COMM_NVSHMEM_PL:
+  case CUDECOMP_TRANSPOSE_COMM_NVSHMEM_SM: THROW_NOT_SUPPORTED("transpose communication type unsupported");
 #endif
 
   default: THROW_INVALID_USAGE("unknown transpose communication type");
@@ -529,6 +531,10 @@ cudecompResult_t cudecompInit(cudecompHandle_t* handle_in, MPI_Comm mpi_comm) {
       handle->device_p2p_ce_count = 2; // Assume 2 P2P CE otherwise (shared D2H/H2D CE)
     }
 
+    // Cache device attributes
+    CHECK_CUDA(cudaDeviceGetAttribute(&handle->device_num_sms, cudaDevAttrMultiProcessorCount, dev));
+    CHECK_CUDA(cudaDeviceGetAttribute(&handle->device_max_threads_per_sm, cudaDevAttrMaxThreadsPerMultiProcessor, dev));
+
     handle->initialized = true;
     cudecomp_initialized = true;
 
@@ -791,6 +797,8 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
           (uint64_t*)nvshmem_malloc(grid_desc->col_comm_info.nranks * sizeof(uint64_t));
       CHECK_CUDA(
           cudaMemset(grid_desc->col_comm_info.nvshmem_signals, 0, grid_desc->col_comm_info.nranks * sizeof(uint64_t)));
+      CHECK_CUDA(cudaMalloc(&grid_desc->nvshmem_block_counters, handle->nranks * sizeof(int)));
+      CHECK_CUDA(cudaMemset(grid_desc->nvshmem_block_counters, 0, handle->nranks * sizeof(int)));
       handle->n_grid_descs_using_nvshmem++;
     } else {
       // Finalize nvshmem to reclaim symmetric heap memory if not used
@@ -924,6 +932,7 @@ cudecompResult_t cudecompGridDescDestroy(cudecompHandle_t handle, cudecompGridDe
         nvshmem_team_destroy(grid_desc->col_comm_info.nvshmem_team);
         nvshmem_free(grid_desc->col_comm_info.nvshmem_signals);
       }
+      CHECK_CUDA(cudaFree(grid_desc->nvshmem_block_counters));
       handle->n_grid_descs_using_nvshmem--;
 
       // Finalize nvshmem to reclaim symmetric heap memory if not used
@@ -1338,6 +1347,7 @@ const char* cudecompTransposeCommBackendToString(cudecompTransposeCommBackend_t 
   case CUDECOMP_TRANSPOSE_COMM_MPI_A2A: return "MPI_A2A";
   case CUDECOMP_TRANSPOSE_COMM_NVSHMEM: return "NVSHMEM";
   case CUDECOMP_TRANSPOSE_COMM_NVSHMEM_PL: return "NVSHMEM (pipelined)";
+  case CUDECOMP_TRANSPOSE_COMM_NVSHMEM_SM: return "NVSHMEM_SM";
   default: return "ERROR";
   }
 }
