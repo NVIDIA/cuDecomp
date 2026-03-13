@@ -18,7 +18,7 @@ transpose_test_base: &transpose_test_base
           'hex' ,'hey', 'hez',
           'pdx', 'pdy', 'pdz']
 
-  backend: [1, 2, 3, 4, 5, 6, 7]
+  backend: [1, 2, 3, 4, 5, 6, 7, 8]
 
   gx: [128]
   gy: [124]
