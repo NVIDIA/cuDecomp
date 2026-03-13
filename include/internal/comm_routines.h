@@ -115,7 +115,10 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
   bool need_barrier = false;
   bool need_quiet = false;
   cudecompNvshmemA2AParams<T> params;
-  params.block_counters = grid_desc->nvshmem_block_counters;
+  cudecompNvshmemP2PParams<T> p2p_params;
+  p2p_params.send_buff = send_buff;
+  p2p_params.recv_buff = recv_buff;
+  p2p_params.block_counters = grid_desc->nvshmem_block_counters;
 
   // Inter-group transfers (non-blocking)
   params.send_buff = send_buff;
@@ -180,15 +183,15 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
                                   handle->streams[count % handle->device_p2p_ce_count]);
         count++;
       } else {
-        params.send_offsets[count] = send_offsets[dst_rank];
-        params.recv_offsets[count] = recv_offsets[dst_rank];
-        params.send_counts[count] = send_counts[dst_rank];
-        params.peer_ranks[count] = dst_rank_global;
+        p2p_params.send_offsets[count] = send_offsets[dst_rank];
+        p2p_params.recv_offsets[count] = recv_offsets[dst_rank];
+        p2p_params.send_counts[count] = send_counts[dst_rank];
+        p2p_params.peer_ranks[count] = dst_rank_global;
         count++;
 
-        if (count == CUDECOMP_NVSHMEM_A2A_PARAM_CAPACITY) {
-          params.ntransfers = count;
-          cudecomp_nvshmem_alltoallv_p2p(handle, params, &comm_info.nvshmem_signals[0], stream);
+        if (count == CUDECOMP_NVSHMEM_P2P_PARAM_CAPACITY) {
+          p2p_params.ntransfers = count;
+          cudecomp_nvshmem_alltoallv_p2p(handle, p2p_params, &comm_info.nvshmem_signals[0], stream);
           count = 0;
         }
       }
@@ -197,8 +200,8 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
 
   if (use_sm) {
     if (count != 0) {
-      params.ntransfers = count;
-      cudecomp_nvshmem_alltoallv_p2p(handle, params, &comm_info.nvshmem_signals[0], stream);
+      p2p_params.ntransfers = count;
+      cudecomp_nvshmem_alltoallv_p2p(handle, p2p_params, &comm_info.nvshmem_signals[0], stream);
     }
 
     if (need_quiet) { nvshmemx_quiet_on_stream(stream); }

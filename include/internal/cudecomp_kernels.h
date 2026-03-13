@@ -25,7 +25,9 @@
 namespace cudecomp {
 
 #ifdef ENABLE_NVSHMEM
-#define CUDECOMP_NVSHMEM_A2A_PARAM_CAPACITY 96
+
+// Capacity for the inter-group alltoallv kernel.
+#define CUDECOMP_NVSHMEM_A2A_PARAM_CAPACITY (96)
 template <typename T> struct cudecompNvshmemA2AParams {
   T* send_buff = nullptr;
   T* recv_buff = nullptr;
@@ -34,7 +36,20 @@ template <typename T> struct cudecompNvshmemA2AParams {
   size_t send_counts[CUDECOMP_NVSHMEM_A2A_PARAM_CAPACITY];
   int peer_ranks[CUDECOMP_NVSHMEM_A2A_PARAM_CAPACITY];
   int ntransfers;
-  int* block_counters;
+};
+
+// Capacity for the intra-group SM P2P kernel.
+#define CUDECOMP_NVSHMEM_MAX_SMS (32)
+#define CUDECOMP_NVSHMEM_P2P_PARAM_CAPACITY (CUDECOMP_NVSHMEM_MAX_SMS * 2)
+template <typename T> struct cudecompNvshmemP2PParams {
+  T* send_buff = nullptr;
+  T* recv_buff = nullptr;
+  int* block_counters = nullptr;
+  size_t send_offsets[CUDECOMP_NVSHMEM_P2P_PARAM_CAPACITY];
+  size_t recv_offsets[CUDECOMP_NVSHMEM_P2P_PARAM_CAPACITY];
+  size_t send_counts[CUDECOMP_NVSHMEM_P2P_PARAM_CAPACITY];
+  int peer_ranks[CUDECOMP_NVSHMEM_P2P_PARAM_CAPACITY];
+  int ntransfers;
 };
 
 void cudecomp_nvshmem_alltoallv(const cudecompNvshmemA2AParams<float>& params, uint64_t* sig_addr, cudaStream_t stream);
@@ -44,15 +59,15 @@ void cudecomp_nvshmem_alltoallv(const cudecompNvshmemA2AParams<cuda::std::comple
 void cudecomp_nvshmem_alltoallv(const cudecompNvshmemA2AParams<cuda::std::complex<double>>& params, uint64_t* sig_addr,
                                 cudaStream_t stream);
 
-void cudecomp_nvshmem_alltoallv_p2p(cudecompHandle_t handle, const cudecompNvshmemA2AParams<float>& params,
+void cudecomp_nvshmem_alltoallv_p2p(cudecompHandle_t handle, const cudecompNvshmemP2PParams<float>& params,
                                     uint64_t* sig_addr, cudaStream_t stream);
-void cudecomp_nvshmem_alltoallv_p2p(cudecompHandle_t handle, const cudecompNvshmemA2AParams<double>& params,
-                                    uint64_t* sig_addr, cudaStream_t stream);
-void cudecomp_nvshmem_alltoallv_p2p(cudecompHandle_t handle,
-                                    const cudecompNvshmemA2AParams<cuda::std::complex<float>>& params,
+void cudecomp_nvshmem_alltoallv_p2p(cudecompHandle_t handle, const cudecompNvshmemP2PParams<double>& params,
                                     uint64_t* sig_addr, cudaStream_t stream);
 void cudecomp_nvshmem_alltoallv_p2p(cudecompHandle_t handle,
-                                    const cudecompNvshmemA2AParams<cuda::std::complex<double>>& params,
+                                    const cudecompNvshmemP2PParams<cuda::std::complex<float>>& params,
+                                    uint64_t* sig_addr, cudaStream_t stream);
+void cudecomp_nvshmem_alltoallv_p2p(cudecompHandle_t handle,
+                                    const cudecompNvshmemP2PParams<cuda::std::complex<double>>& params,
                                     uint64_t* sig_addr, cudaStream_t stream);
 #endif
 

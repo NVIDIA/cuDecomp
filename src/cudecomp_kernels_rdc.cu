@@ -64,31 +64,31 @@ static int nvshmem_p2p_nblocks(int ntransfers, cudecompHandle_t handle) {
 }
 
 template <typename T>
-static void launch_nvshmem_alltoallv_p2p(cudecompHandle_t handle, const cudecompNvshmemA2AParams<T>& params,
+static void launch_nvshmem_alltoallv_p2p(cudecompHandle_t handle, const cudecompNvshmemP2PParams<T>& params,
                                          uint64_t* sig_addr, cudaStream_t stream) {
   int nblocks = nvshmem_p2p_nblocks(params.ntransfers, handle);
   cudecomp_nvshmem_alltoallv_p2p_k<<<nblocks, CUDECOMP_NVSHMEM_NTHREADS, 0, stream>>>(params, sig_addr);
   CHECK_CUDA_LAUNCH();
 }
 
-void cudecomp_nvshmem_alltoallv_p2p(cudecompHandle_t handle, const cudecompNvshmemA2AParams<float>& params,
+void cudecomp_nvshmem_alltoallv_p2p(cudecompHandle_t handle, const cudecompNvshmemP2PParams<float>& params,
                                     uint64_t* sig_addr, cudaStream_t stream) {
   launch_nvshmem_alltoallv_p2p(handle, params, sig_addr, stream);
 }
 
-void cudecomp_nvshmem_alltoallv_p2p(cudecompHandle_t handle, const cudecompNvshmemA2AParams<double>& params,
-                                    uint64_t* sig_addr, cudaStream_t stream) {
-  launch_nvshmem_alltoallv_p2p(handle, params, sig_addr, stream);
-}
-
-void cudecomp_nvshmem_alltoallv_p2p(cudecompHandle_t handle,
-                                    const cudecompNvshmemA2AParams<cuda::std::complex<float>>& params,
+void cudecomp_nvshmem_alltoallv_p2p(cudecompHandle_t handle, const cudecompNvshmemP2PParams<double>& params,
                                     uint64_t* sig_addr, cudaStream_t stream) {
   launch_nvshmem_alltoallv_p2p(handle, params, sig_addr, stream);
 }
 
 void cudecomp_nvshmem_alltoallv_p2p(cudecompHandle_t handle,
-                                    const cudecompNvshmemA2AParams<cuda::std::complex<double>>& params,
+                                    const cudecompNvshmemP2PParams<cuda::std::complex<float>>& params,
+                                    uint64_t* sig_addr, cudaStream_t stream) {
+  launch_nvshmem_alltoallv_p2p(handle, params, sig_addr, stream);
+}
+
+void cudecomp_nvshmem_alltoallv_p2p(cudecompHandle_t handle,
+                                    const cudecompNvshmemP2PParams<cuda::std::complex<double>>& params,
                                     uint64_t* sig_addr, cudaStream_t stream) {
   launch_nvshmem_alltoallv_p2p(handle, params, sig_addr, stream);
 }

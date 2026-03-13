@@ -31,7 +31,6 @@
 #define CUDECOMP_MIN_BLOCKS_PER_SM (16)
 
 #define CUDECOMP_NVSHMEM_NTHREADS (1024)
-#define CUDECOMP_NVSHMEM_MAX_SMS (32)
 
 namespace cudecomp {
 
@@ -73,7 +72,7 @@ __launch_bounds__(CUDECOMP_CUDA_NTHREADS) __global__
 
 template <typename T>
 __launch_bounds__(CUDECOMP_NVSHMEM_NTHREADS) __global__
-    void cudecomp_nvshmem_alltoallv_p2p_k(cudecompNvshmemA2AParams<T> params, uint64_t *sig_addr) {
+    void cudecomp_nvshmem_alltoallv_p2p_k(cudecompNvshmemP2PParams<T> params, uint64_t *sig_addr) {
 
   T* send_buff = params.send_buff;
   T* recv_buff = params.recv_buff;
