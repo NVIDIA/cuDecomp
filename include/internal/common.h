@@ -114,6 +114,8 @@ struct cudecompHandle {
 
   // Miscellaneous
   int32_t device_p2p_ce_count = 0;       // number of P2P CEs available
+  int32_t device_num_sms = 0;            // number of SMs on the device
+  int32_t device_max_threads_per_sm = 0; // maximum threads per SM
   bool use_col_major_rank_order = false; // Flag to control whether to use column-major rank order
 };
 

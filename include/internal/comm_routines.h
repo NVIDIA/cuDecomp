@@ -188,7 +188,7 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
 
         if (count == CUDECOMP_NVSHMEM_A2A_PARAM_CAPACITY) {
           params.ntransfers = count;
-          cudecomp_nvshmem_alltoallv_p2p(params, &comm_info.nvshmem_signals[0], stream);
+          cudecomp_nvshmem_alltoallv_p2p(handle, params, &comm_info.nvshmem_signals[0], stream);
           count = 0;
         }
       }
@@ -198,7 +198,7 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
   if (use_sm) {
     if (count != 0) {
       params.ntransfers = count;
-      cudecomp_nvshmem_alltoallv_p2p(params, &comm_info.nvshmem_signals[0], stream);
+      cudecomp_nvshmem_alltoallv_p2p(handle, params, &comm_info.nvshmem_signals[0], stream);
     }
 
     if (need_quiet) { nvshmemx_quiet_on_stream(stream); }

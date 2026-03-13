@@ -531,6 +531,10 @@ cudecompResult_t cudecompInit(cudecompHandle_t* handle_in, MPI_Comm mpi_comm) {
       handle->device_p2p_ce_count = 2; // Assume 2 P2P CE otherwise (shared D2H/H2D CE)
     }
 
+    // Cache device attributes
+    CHECK_CUDA(cudaDeviceGetAttribute(&handle->device_num_sms, cudaDevAttrMultiProcessorCount, dev));
+    CHECK_CUDA(cudaDeviceGetAttribute(&handle->device_max_threads_per_sm, cudaDevAttrMaxThreadsPerMultiProcessor, dev));
+
     handle->initialized = true;
     cudecomp_initialized = true;
 

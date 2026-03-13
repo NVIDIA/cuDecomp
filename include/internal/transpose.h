@@ -579,7 +579,7 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
           memcpy_count++;
           if (memcpy_count == memcpy_limit || j == splits_a.size()) {
             memcpy_params.ncopies = memcpy_count;
-            cudecomp_batched_d2d_memcpy_3d(memcpy_params, graph_stream);
+            cudecomp_batched_d2d_memcpy_3d(handle, memcpy_params, graph_stream);
             memcpy_count = 0;
           }
 #if CUDART_VERSION >= 11010
@@ -873,7 +873,7 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
         memcpy_count++;
         if (memcpy_count == memcpy_limit || j == splits_a.size() - 1) {
           memcpy_params.ncopies = memcpy_count;
-          cudecomp_batched_d2d_memcpy_3d(memcpy_params, stream);
+          cudecomp_batched_d2d_memcpy_3d(handle, memcpy_params, stream);
           memcpy_count = 0;
         }
       }
