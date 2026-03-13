@@ -38,7 +38,24 @@ namespace cudecomp {
 #ifdef ENABLE_NVSHMEM
 template <typename T>
 __launch_bounds__(CUDECOMP_CUDA_NTHREADS) __global__
-    void cudecomp_nvshmem_alltoallv_k(cudecompNvshmemA2AParams<T> params, uint64_t* sig_addr) {
+    void cudecomp_nvshmem_alltoallv_k(cudecompNvshmemA2AParams<T> params) {
+
+  const int tid = blockIdx.x * blockDim.x + threadIdx.x;
+  if (tid >= params.ntransfers) return;
+
+  int peer_rank = params.peer_ranks[tid];
+  T* send_buff = params.send_buff;
+  T* recv_buff = params.recv_buff;
+  size_t send_offset = params.send_offsets[tid];
+  size_t recv_offset = params.recv_offsets[tid];
+  size_t send_count = params.send_counts[tid];
+
+  nvshmem_putmem_nbi(recv_buff + recv_offset, send_buff + send_offset, send_count * sizeof(T), peer_rank);
+}
+
+template <typename T>
+__launch_bounds__(CUDECOMP_CUDA_NTHREADS) __global__
+    void cudecomp_nvshmem_alltoallv_signal_k(cudecompNvshmemA2AParams<T> params, uint64_t* sig_addr) {
 
   const int tid = blockIdx.x * blockDim.x + threadIdx.x;
   if (tid >= params.ntransfers) return;

@@ -138,13 +138,13 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
 
     if (count == CUDECOMP_NVSHMEM_A2A_PARAM_CAPACITY) {
       params.ntransfers = count;
-      cudecomp_nvshmem_alltoallv(params, &comm_info.nvshmem_signals[0], stream);
+      cudecomp_nvshmem_alltoallv(params, use_sm ? &comm_info.nvshmem_signals[0] : nullptr, stream);
       count = 0;
     }
   }
   if (count != 0) {
     params.ntransfers = count;
-    cudecomp_nvshmem_alltoallv(params, &comm_info.nvshmem_signals[0], stream);
+    cudecomp_nvshmem_alltoallv(params, use_sm ? &comm_info.nvshmem_signals[0] : nullptr, stream);
   }
 
   // Intra-group transfers (blocking, scheduled after non-blocking inter-group transfers for concurrency)
