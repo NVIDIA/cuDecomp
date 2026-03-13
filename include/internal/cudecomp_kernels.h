@@ -53,7 +53,8 @@ template <typename T> struct cudecompNvshmemP2PParams {
 };
 
 void cudecomp_nvshmem_alltoallv(const cudecompNvshmemA2AParams<float>& params, uint64_t* sig_addr, cudaStream_t stream);
-void cudecomp_nvshmem_alltoallv(const cudecompNvshmemA2AParams<double>& params, uint64_t* sig_addr, cudaStream_t stream);
+void cudecomp_nvshmem_alltoallv(const cudecompNvshmemA2AParams<double>& params, uint64_t* sig_addr,
+                                cudaStream_t stream);
 void cudecomp_nvshmem_alltoallv(const cudecompNvshmemA2AParams<cuda::std::complex<float>>& params, uint64_t* sig_addr,
                                 cudaStream_t stream);
 void cudecomp_nvshmem_alltoallv(const cudecompNvshmemA2AParams<cuda::std::complex<double>>& params, uint64_t* sig_addr,

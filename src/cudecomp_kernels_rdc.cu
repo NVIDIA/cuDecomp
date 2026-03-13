@@ -34,11 +34,13 @@ static void launch_nvshmem_alltoallv(const cudecompNvshmemA2AParams<T>& params, 
   CHECK_CUDA_LAUNCH();
 }
 
-void cudecomp_nvshmem_alltoallv(const cudecompNvshmemA2AParams<float>& params, uint64_t* sig_addr, cudaStream_t stream) {
+void cudecomp_nvshmem_alltoallv(const cudecompNvshmemA2AParams<float>& params, uint64_t* sig_addr,
+                                cudaStream_t stream) {
   launch_nvshmem_alltoallv(params, sig_addr, stream);
 }
 
-void cudecomp_nvshmem_alltoallv(const cudecompNvshmemA2AParams<double>& params, uint64_t* sig_addr, cudaStream_t stream) {
+void cudecomp_nvshmem_alltoallv(const cudecompNvshmemA2AParams<double>& params, uint64_t* sig_addr,
+                                cudaStream_t stream) {
   launch_nvshmem_alltoallv(params, sig_addr, stream);
 }
 

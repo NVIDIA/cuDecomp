@@ -72,7 +72,7 @@ __launch_bounds__(CUDECOMP_CUDA_NTHREADS) __global__
 
 template <typename T>
 __launch_bounds__(CUDECOMP_NVSHMEM_NTHREADS) __global__
-    void cudecomp_nvshmem_alltoallv_p2p_k(cudecompNvshmemP2PParams<T> params, uint64_t *sig_addr) {
+    void cudecomp_nvshmem_alltoallv_p2p_k(cudecompNvshmemP2PParams<T> params, uint64_t* sig_addr) {
 
   T* send_buff = params.send_buff;
   T* recv_buff = params.recv_buff;
@@ -91,10 +91,8 @@ __launch_bounds__(CUDECOMP_NVSHMEM_NTHREADS) __global__
     size_t block_offset = (size_t)block_within_copy * nelems_per_block;
     if (block_offset < send_count) {
       size_t block_count = min(nelems_per_block, send_count - block_offset);
-      nvshmemx_putmem_block(recv_buff + recv_offset + block_offset,
-                            send_buff + send_offset + block_offset,
-                            block_count * sizeof(T),
-                            peer_rank);
+      nvshmemx_putmem_block(recv_buff + recv_offset + block_offset, send_buff + send_offset + block_offset,
+                            block_count * sizeof(T), peer_rank);
     }
 
     // Last block to finish this copy signals the destination PE.
@@ -200,7 +198,9 @@ void cudecomp_batched_d2d_memcpy_3d_nd_dispatch(cudecompHandle_t handle,
   int blocks_per_copy_unroll = (blocks_per_copy + CUDECOMP_UNROLL_FACTOR - 1) / CUDECOMP_UNROLL_FACTOR;
   size_t total_blocks_unroll = params.ncopies * blocks_per_copy_unroll;
 
-  if (total_blocks_unroll > CUDECOMP_MIN_BLOCKS_PER_SM * handle->device_num_sms) { blocks_per_copy = blocks_per_copy_unroll; }
+  if (total_blocks_unroll > CUDECOMP_MIN_BLOCKS_PER_SM * handle->device_num_sms) {
+    blocks_per_copy = blocks_per_copy_unroll;
+  }
 
   switch (src_nd) {
   case 1:

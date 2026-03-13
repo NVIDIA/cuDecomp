@@ -90,12 +90,12 @@ static inline void checkMpiInt32Limit(int64_t val, cudecompHaloCommBackend_t bac
 #ifdef ENABLE_NVSHMEM
 #define CUDECOMP_NVSHMEM_INTRAGROUP_SYNC_FREQ 8 // max number of intra-group transfers to schedule between team syncs
 template <typename T>
-static void
-nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_desc, T* send_buff,
-                 const std::vector<comm_count_t>& send_counts, const std::vector<comm_count_t>& send_offsets,
-                 T* recv_buff, const std::vector<comm_count_t>& recv_counts,
-                 const std::vector<comm_count_t>& recv_offsets, cudecompCommAxis comm_axis, bool use_sm,
-                 cudaStream_t stream) {
+static void nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_desc, T* send_buff,
+                             const std::vector<comm_count_t>& send_counts,
+                             const std::vector<comm_count_t>& send_offsets, T* recv_buff,
+                             const std::vector<comm_count_t>& recv_counts,
+                             const std::vector<comm_count_t>& recv_offsets, cudecompCommAxis comm_axis, bool use_sm,
+                             cudaStream_t stream) {
   auto& comm_info = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info : grid_desc->col_comm_info;
   auto team = comm_info.nvshmem_team;
   int self_rank = comm_info.rank;
@@ -221,9 +221,7 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
     }
   }
 
-  if (need_barrier) {
-    nvshmemx_barrier_on_stream(team, stream);
-  }
+  if (need_barrier) { nvshmemx_barrier_on_stream(team, stream); }
 }
 #endif
 
@@ -260,7 +258,8 @@ static void cudecompAlltoall(const cudecompHandle_t& handle, const cudecompGridD
 #ifdef ENABLE_NVSHMEM
     if (nvshmem_ptr(send_buff, handle->rank) && nvshmem_ptr(recv_buff, handle->rank)) {
       nvshmemAlltoallV(handle, grid_desc, send_buff, send_counts, send_offsets, recv_buff, recv_counts,
-                       recv_offsets_nvshmem, comm_axis, grid_desc->config.transpose_comm_backend == CUDECOMP_TRANSPOSE_COMM_NVSHMEM_SM, stream);
+                       recv_offsets_nvshmem, comm_axis,
+                       grid_desc->config.transpose_comm_backend == CUDECOMP_TRANSPOSE_COMM_NVSHMEM_SM, stream);
       break;
     } else {
       THROW_INVALID_USAGE("NVSHMEM communication backends require workspace allocated via cudecompMalloc.");
