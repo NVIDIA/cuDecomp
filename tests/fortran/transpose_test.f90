@@ -48,8 +48,8 @@ module transpose_CUDECOMP_DOUBLE_COMPLEX_mod
 
   type(cudecompHandle) :: handle
   integer :: rank, nranks
-  type(cudecompGridDesc) :: grid_desc_cache(7)
-  logical :: grid_desc_cache_set(7) = .false.
+  type(cudecompGridDesc) :: grid_desc_cache(8)
+  logical :: grid_desc_cache_set(8) = .false.
   ARRTYPE, pointer, device, contiguous :: work_d(:)
   integer :: work_backend = -1
 
@@ -642,7 +642,7 @@ program main
   endif
 
   ! Free grid descriptors
-  do i = 1, 7
+  do i = 1, 8
     if (grid_desc_cache_set(i)) then
       ! Free workspace with correct grid descriptor
       if (work_backend == i) then
