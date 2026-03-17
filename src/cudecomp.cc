@@ -422,11 +422,12 @@ static void checkNvshmemVersion(cudecompHandle_t& handle) {
   bool has_signal_bug = (major < 3) || (major == 3 && minor < 2) || (major == 3 && minor == 2 && patch <= 5);
   if (has_signal_bug) {
     const char* granularity_str = std::getenv("NVSHMEM_CUMEM_GRANULARITY");
-    if (granularity_str && handle->rank == 0) {
+    if (granularity_str && std::string(granularity_str) != "2147483648" && handle->rank == 0) {
       printf("CUDECOMP:WARN: Overriding NVSHMEM_CUMEM_GRANULARITY (was %s) to 2 GiB to work around "
              "a known bug in NVSHMEM %d.%d.%d affecting putmem_signal for inter-group transfers.\n",
              granularity_str, major, minor, patch);
     }
+    CHECK_MPI(MPI_Barrier(handle->mpi_comm));
     setenv("NVSHMEM_CUMEM_GRANULARITY", "2147483648", 1);
   }
 }
