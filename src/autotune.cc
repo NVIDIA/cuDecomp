@@ -81,8 +81,8 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
   CHECK_MPI(MPI_Barrier(handle->mpi_comm));
   double t_start = MPI_Wtime();
 
-  // Create cuda_events for intermediate timings
-  std::vector<cudaEvent_t> events(5);
+  // Create cuda_events for intermediate timings (5 events per trial: start + 4 op boundaries)
+  std::vector<cudaEvent_t> events(5 * options->n_trials);
   for (auto& event : events) {
     CHECK_CUDA(cudaEventCreate(&event));
   }
@@ -299,8 +299,8 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
       // Reset performance samples
       resetPerformanceSamples(handle, grid_desc);
 
-      // Warmup
-      for (int i = 0; i < options->n_warmup_trials; ++i) {
+      // Lambda to run one untimed iteration of all enabled transpose ops
+      auto run_untimed = [&]() {
         if (options->transpose_op_weights[0] != 0.0) {
           CHECK_CUDECOMP(cudecompTransposeXToY(handle, grid_desc, data,
                                                options->transpose_use_inplace_buffers[0] ? data : data2, w,
@@ -325,9 +325,8 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
                                                options->dtype, pinfo_y3.halo_extents, pinfo_x3.halo_extents,
                                                pinfo_y3.padding, pinfo_x3.padding, 0));
         }
-      }
+      };
 
-      // Trials
       std::vector<float> trial_times(options->n_trials);
       std::vector<float> trial_times_w(options->n_trials);
       std::vector<float> trial_xy_times(options->n_trials);
@@ -335,68 +334,94 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
       std::vector<float> trial_zy_times(options->n_trials);
       std::vector<float> trial_yx_times(options->n_trials);
       bool skip_case = false;
-      CHECK_CUDA(cudaDeviceSynchronize());
-      CHECK_MPI(MPI_Barrier(handle->mpi_comm));
-      double ts = MPI_Wtime();
+
+      // Warmup
+      for (int i = 0; i < options->n_warmup_trials; ++i) { run_untimed(); }
+
+      // Trials
       for (int i = 0; i < options->n_trials; ++i) {
-        CHECK_CUDA(cudaEventRecord(events[0], 0));
+        int b = i * 5;
+        CHECK_CUDA(cudaEventRecord(events[b], 0));
         if (options->transpose_op_weights[0] != 0.0) {
           CHECK_CUDECOMP(cudecompTransposeXToY(handle, grid_desc, data,
                                                options->transpose_use_inplace_buffers[0] ? data : data2, w,
                                                options->dtype, pinfo_x0.halo_extents, pinfo_y0.halo_extents,
                                                pinfo_x0.padding, pinfo_y0.padding, 0));
         }
-        CHECK_CUDA(cudaEventRecord(events[1], 0));
+        CHECK_CUDA(cudaEventRecord(events[b + 1], 0));
         if (options->transpose_op_weights[1] != 0.0) {
           CHECK_CUDECOMP(cudecompTransposeYToZ(handle, grid_desc, data,
                                                options->transpose_use_inplace_buffers[1] ? data : data2, w,
                                                options->dtype, pinfo_y1.halo_extents, pinfo_z1.halo_extents,
                                                pinfo_y1.padding, pinfo_z1.padding, 0));
         }
-        CHECK_CUDA(cudaEventRecord(events[2], 0));
+        CHECK_CUDA(cudaEventRecord(events[b + 2], 0));
         if (options->transpose_op_weights[2] != 0.0) {
           CHECK_CUDECOMP(cudecompTransposeZToY(handle, grid_desc, data,
                                                options->transpose_use_inplace_buffers[2] ? data : data2, w,
                                                options->dtype, pinfo_z2.halo_extents, pinfo_y2.halo_extents,
                                                pinfo_z2.padding, pinfo_y2.padding, 0));
         }
-        CHECK_CUDA(cudaEventRecord(events[3], 0));
+        CHECK_CUDA(cudaEventRecord(events[b + 3], 0));
         if (options->transpose_op_weights[3] != 0.0) {
           CHECK_CUDECOMP(cudecompTransposeYToX(handle, grid_desc, data,
                                                options->transpose_use_inplace_buffers[3] ? data : data2, w,
                                                options->dtype, pinfo_y3.halo_extents, pinfo_x3.halo_extents,
                                                pinfo_y3.padding, pinfo_x3.padding, 0));
         }
-        CHECK_CUDA(cudaEventRecord(events[4], 0));
-        CHECK_CUDA(cudaDeviceSynchronize());
-        CHECK_MPI(MPI_Barrier(handle->mpi_comm));
+        CHECK_CUDA(cudaEventRecord(events[b + 4], 0));
 
-        if (options->transpose_op_weights[0] != 0.0)
-          CHECK_CUDA(cudaEventElapsedTime(&trial_xy_times[i], events[0], events[1]));
-        if (options->transpose_op_weights[1] != 0.0)
-          CHECK_CUDA(cudaEventElapsedTime(&trial_yz_times[i], events[1], events[2]));
-        if (options->transpose_op_weights[2] != 0.0)
-          CHECK_CUDA(cudaEventElapsedTime(&trial_zy_times[i], events[2], events[3]));
-        if (options->transpose_op_weights[3] != 0.0)
-          CHECK_CUDA(cudaEventElapsedTime(&trial_yx_times[i], events[3], events[4]));
+        if (options->skip_threshold > 0.0 && i == 0) {
+          // Sync after first trial only to evaluate skip threshold
+          CHECK_CUDA(cudaDeviceSynchronize());
+          CHECK_MPI(MPI_Barrier(handle->mpi_comm));
 
-        trial_times[i] = trial_xy_times[i] + trial_yz_times[i] + trial_zy_times[i] + trial_yx_times[i];
+          float t0_xy = 0, t0_yz = 0, t0_zy = 0, t0_yx = 0;
+          if (options->transpose_op_weights[0] != 0.0)
+            CHECK_CUDA(cudaEventElapsedTime(&t0_xy, events[0], events[1]));
+          if (options->transpose_op_weights[1] != 0.0)
+            CHECK_CUDA(cudaEventElapsedTime(&t0_yz, events[1], events[2]));
+          if (options->transpose_op_weights[2] != 0.0)
+            CHECK_CUDA(cudaEventElapsedTime(&t0_zy, events[2], events[3]));
+          if (options->transpose_op_weights[3] != 0.0)
+            CHECK_CUDA(cudaEventElapsedTime(&t0_yx, events[3], events[4]));
 
-        trial_times_w[i] = options->transpose_op_weights[0] * trial_xy_times[i] +
-                           options->transpose_op_weights[1] * trial_yz_times[i] +
-                           options->transpose_op_weights[2] * trial_zy_times[i] +
-                           options->transpose_op_weights[3] * trial_yx_times[i];
+          float t0_w = options->transpose_op_weights[0] * t0_xy + options->transpose_op_weights[1] * t0_yz +
+                       options->transpose_op_weights[2] * t0_zy + options->transpose_op_weights[3] * t0_yx;
+          std::vector<float> t0 = {t0_w};
+          auto t0_stats = processTimings(handle, t0);
 
-        if (i == 0) {
-          std::vector<float> t0 = {trial_times_w[0]};
-          auto times = processTimings(handle, t0);
-          auto t_avg = times[2];
-
-          if (options->skip_threshold * t_avg > t_best) {
+          if (options->skip_threshold * t0_stats[2] > t_best) {
             // Performance of first iteration of this configuration meets skip threshold. Skipping.
             skip_case = true;
             break;
           }
+
+          // Run one untimed iteration to reprime the queue after the skip-check sync
+          run_untimed();
+        }
+      }
+
+      // Sync once after all trials and read event timings
+      if (!skip_case) {
+        CHECK_CUDA(cudaDeviceSynchronize());
+        for (int i = 0; i < options->n_trials; ++i) {
+          int b = i * 5;
+          trial_xy_times[i] = trial_yz_times[i] = trial_zy_times[i] = trial_yx_times[i] = 0;
+          if (options->transpose_op_weights[0] != 0.0)
+            CHECK_CUDA(cudaEventElapsedTime(&trial_xy_times[i], events[b], events[b + 1]));
+          if (options->transpose_op_weights[1] != 0.0)
+            CHECK_CUDA(cudaEventElapsedTime(&trial_yz_times[i], events[b + 1], events[b + 2]));
+          if (options->transpose_op_weights[2] != 0.0)
+            CHECK_CUDA(cudaEventElapsedTime(&trial_zy_times[i], events[b + 2], events[b + 3]));
+          if (options->transpose_op_weights[3] != 0.0)
+            CHECK_CUDA(cudaEventElapsedTime(&trial_yx_times[i], events[b + 3], events[b + 4]));
+
+          trial_times[i] = trial_xy_times[i] + trial_yz_times[i] + trial_zy_times[i] + trial_yx_times[i];
+          trial_times_w[i] = options->transpose_op_weights[0] * trial_xy_times[i] +
+                             options->transpose_op_weights[1] * trial_yz_times[i] +
+                             options->transpose_op_weights[2] * trial_zy_times[i] +
+                             options->transpose_op_weights[3] * trial_yx_times[i];
         }
       }
 
@@ -547,6 +572,12 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
   }
   CHECK_MPI(MPI_Barrier(handle->mpi_comm));
   double t_start = MPI_Wtime();
+
+  // Create cuda events for timing (one per trial boundary: n_trials + 1 total)
+  std::vector<cudaEvent_t> events(options->n_trials + 1);
+  for (auto& event : events) {
+    CHECK_CUDA(cudaEventCreate(&event));
+  }
 
   bool autotune_comm = options->autotune_halo_backend;
   bool autotune_pdims = (grid_desc->config.pdims[0] == 0 && grid_desc->config.pdims[1] == 0);
@@ -718,7 +749,6 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
 #endif
     }
 
-    bool skip_case = false;
     for (auto& comm : comm_backend_list) {
       grid_desc->config.halo_comm_backend = comm;
       void* d = data;
@@ -730,8 +760,8 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
       // Reset performance samples
       resetPerformanceSamples(handle, grid_desc);
 
-      // Warmup
-      for (int i = 0; i < options->n_warmup_trials; ++i) {
+      // Lambda to run one untimed iteration of all halo dims
+      auto run_untimed = [&]() {
         for (int dim = 0; dim < 3; ++dim) {
           switch (options->halo_axis) {
           case 0:
@@ -748,50 +778,49 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
             break;
           }
         }
-      }
+      };
+
+      std::vector<float> trial_times(options->n_trials);
+      bool skip_case = false;
+
+      // Warmup
+      for (int i = 0; i < options->n_warmup_trials; ++i) { run_untimed(); }
 
       // Trials
-      std::vector<double> trial_times(options->n_trials);
-      CHECK_CUDA(cudaDeviceSynchronize());
-      CHECK_MPI(MPI_Barrier(handle->mpi_comm));
-      double ts = MPI_Wtime();
       for (int i = 0; i < options->n_trials; ++i) {
-        for (int dim = 0; dim < 3; ++dim) {
-          switch (options->halo_axis) {
-          case 0:
-            CHECK_CUDECOMP(cudecompUpdateHalosX(handle, grid_desc, d, w, options->dtype, pinfo.halo_extents,
-                                                options->halo_periods, dim, pinfo.padding, 0));
-            break;
-          case 1:
-            CHECK_CUDECOMP(cudecompUpdateHalosY(handle, grid_desc, d, w, options->dtype, pinfo.halo_extents,
-                                                options->halo_periods, dim, pinfo.padding, 0));
-            break;
-          case 2:
-            CHECK_CUDECOMP(cudecompUpdateHalosZ(handle, grid_desc, d, w, options->dtype, pinfo.halo_extents,
-                                                options->halo_periods, dim, pinfo.padding, 0));
-            break;
-          }
-        }
-        CHECK_CUDA(cudaDeviceSynchronize());
-        CHECK_MPI(MPI_Barrier(handle->mpi_comm));
-        double te = MPI_Wtime();
-        trial_times[i] = te - ts;
-        ts = te;
+        CHECK_CUDA(cudaEventRecord(events[i], 0));
+        run_untimed();
+        CHECK_CUDA(cudaEventRecord(events[i + 1], 0));
 
-        if (i == 0) {
-          double t_avg = trial_times[0];
-          CHECK_MPI(MPI_Allreduce(MPI_IN_PLACE, &t_avg, 1, MPI_DOUBLE, MPI_SUM, handle->mpi_comm));
-          t_avg /= handle->nranks;
+        if (options->skip_threshold > 0.0 && i == 0) {
+          // Sync after first trial only to evaluate skip threshold
+          CHECK_CUDA(cudaDeviceSynchronize());
+          CHECK_MPI(MPI_Barrier(handle->mpi_comm));
+          CHECK_CUDA(cudaEventElapsedTime(&trial_times[0], events[0], events[1]));
 
-          if (options->skip_threshold * (t_avg * 1000.) > t_best) {
+          std::vector<float> t0 = {trial_times[0]};
+          auto t0_stats = processTimings(handle, t0);
+
+          if (options->skip_threshold * t0_stats[2] > t_best) {
             // Performance of first iteration of this configuration meets skip threshold. Skipping.
             skip_case = true;
             break;
           }
+
+          // Run one untimed iteration to reprime the queue after the skip-check sync
+          run_untimed();
         }
       }
 
-      auto times = processTimings(handle, trial_times, 1000.);
+      // Sync once after all trials and read event timings
+      if (!skip_case) {
+        CHECK_CUDA(cudaDeviceSynchronize());
+        for (int i = 0; i < options->n_trials; ++i) {
+          CHECK_CUDA(cudaEventElapsedTime(&trial_times[i], events[i], events[i + 1]));
+        }
+      }
+
+      auto times = processTimings(handle, trial_times);
 
       if (handle->rank == 0) {
         if (skip_case) {
@@ -860,6 +889,11 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
   }
 
   CHECK_CUDA(cudaFree(data));
+
+  // Delete cuda events
+  for (auto& event : events) {
+    CHECK_CUDA(cudaEventDestroy(event));
+  }
 
   // Set handle to best option (broadcast from rank 0 for consistency)
   CHECK_MPI(MPI_Bcast(&comm_backend_best, sizeof(cudecompHaloCommBackend_t), MPI_CHAR, 0, handle->mpi_comm));
