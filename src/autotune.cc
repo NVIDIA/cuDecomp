@@ -336,7 +336,9 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
       bool skip_case = false;
 
       // Warmup
-      for (int i = 0; i < options->n_warmup_trials; ++i) { run_untimed(); }
+      for (int i = 0; i < options->n_warmup_trials; ++i) {
+        run_untimed();
+      }
 
       // Trials
       for (int i = 0; i < options->n_trials; ++i) {
@@ -377,14 +379,10 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
           CHECK_MPI(MPI_Barrier(handle->mpi_comm));
 
           float t0_xy = 0, t0_yz = 0, t0_zy = 0, t0_yx = 0;
-          if (options->transpose_op_weights[0] != 0.0)
-            CHECK_CUDA(cudaEventElapsedTime(&t0_xy, events[0], events[1]));
-          if (options->transpose_op_weights[1] != 0.0)
-            CHECK_CUDA(cudaEventElapsedTime(&t0_yz, events[1], events[2]));
-          if (options->transpose_op_weights[2] != 0.0)
-            CHECK_CUDA(cudaEventElapsedTime(&t0_zy, events[2], events[3]));
-          if (options->transpose_op_weights[3] != 0.0)
-            CHECK_CUDA(cudaEventElapsedTime(&t0_yx, events[3], events[4]));
+          if (options->transpose_op_weights[0] != 0.0) CHECK_CUDA(cudaEventElapsedTime(&t0_xy, events[0], events[1]));
+          if (options->transpose_op_weights[1] != 0.0) CHECK_CUDA(cudaEventElapsedTime(&t0_yz, events[1], events[2]));
+          if (options->transpose_op_weights[2] != 0.0) CHECK_CUDA(cudaEventElapsedTime(&t0_zy, events[2], events[3]));
+          if (options->transpose_op_weights[3] != 0.0) CHECK_CUDA(cudaEventElapsedTime(&t0_yx, events[3], events[4]));
 
           float t0_w = options->transpose_op_weights[0] * t0_xy + options->transpose_op_weights[1] * t0_yz +
                        options->transpose_op_weights[2] * t0_zy + options->transpose_op_weights[3] * t0_yx;
@@ -784,7 +782,9 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
       bool skip_case = false;
 
       // Warmup
-      for (int i = 0; i < options->n_warmup_trials; ++i) { run_untimed(); }
+      for (int i = 0; i < options->n_warmup_trials; ++i) {
+        run_untimed();
+      }
 
       // Trials
       for (int i = 0; i < options->n_trials; ++i) {
