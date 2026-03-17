@@ -30,6 +30,7 @@ module cudecomp
     enumerator :: CUDECOMP_TRANSPOSE_COMM_NCCL_PL = 5
     enumerator :: CUDECOMP_TRANSPOSE_COMM_NVSHMEM = 6
     enumerator :: CUDECOMP_TRANSPOSE_COMM_NVSHMEM_PL = 7
+    enumerator :: CUDECOMP_TRANSPOSE_COMM_NVSHMEM_SM = 8
   end enum
 
   ! enum for cuDecomp halo backend options

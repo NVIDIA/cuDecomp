@@ -22,19 +22,23 @@
 
 namespace cudecomp {
 
-void cudecomp_batched_d2d_memcpy_3d(cudecompBatchedD2DMemcpy3DParams<float>& params, cudaStream_t stream) {
-  cudecomp_batched_d2d_memcpy_3d_nd_dispatch(params, stream);
-}
-void cudecomp_batched_d2d_memcpy_3d(cudecompBatchedD2DMemcpy3DParams<double>& params, cudaStream_t stream) {
-  cudecomp_batched_d2d_memcpy_3d_nd_dispatch(params, stream);
-}
-void cudecomp_batched_d2d_memcpy_3d(cudecompBatchedD2DMemcpy3DParams<cuda::std::complex<float>>& params,
+void cudecomp_batched_d2d_memcpy_3d(cudecompHandle_t handle, cudecompBatchedD2DMemcpy3DParams<float>& params,
                                     cudaStream_t stream) {
-  cudecomp_batched_d2d_memcpy_3d_nd_dispatch(params, stream);
+  cudecomp_batched_d2d_memcpy_3d_nd_dispatch(handle, params, stream);
 }
-void cudecomp_batched_d2d_memcpy_3d(cudecompBatchedD2DMemcpy3DParams<cuda::std::complex<double>>& params,
+void cudecomp_batched_d2d_memcpy_3d(cudecompHandle_t handle, cudecompBatchedD2DMemcpy3DParams<double>& params,
                                     cudaStream_t stream) {
-  cudecomp_batched_d2d_memcpy_3d_nd_dispatch(params, stream);
+  cudecomp_batched_d2d_memcpy_3d_nd_dispatch(handle, params, stream);
+}
+void cudecomp_batched_d2d_memcpy_3d(cudecompHandle_t handle,
+                                    cudecompBatchedD2DMemcpy3DParams<cuda::std::complex<float>>& params,
+                                    cudaStream_t stream) {
+  cudecomp_batched_d2d_memcpy_3d_nd_dispatch(handle, params, stream);
+}
+void cudecomp_batched_d2d_memcpy_3d(cudecompHandle_t handle,
+                                    cudecompBatchedD2DMemcpy3DParams<cuda::std::complex<double>>& params,
+                                    cudaStream_t stream) {
+  cudecomp_batched_d2d_memcpy_3d_nd_dispatch(handle, params, stream);
 }
 
 } // namespace cudecomp

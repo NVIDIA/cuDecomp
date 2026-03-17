@@ -90,11 +90,12 @@ static inline void checkMpiInt32Limit(int64_t val, cudecompHaloCommBackend_t bac
 #ifdef ENABLE_NVSHMEM
 #define CUDECOMP_NVSHMEM_INTRAGROUP_SYNC_FREQ 8 // max number of intra-group transfers to schedule between team syncs
 template <typename T>
-static void
-nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_desc, T* send_buff,
-                 const std::vector<comm_count_t>& send_counts, const std::vector<comm_count_t>& send_offsets,
-                 T* recv_buff, const std::vector<comm_count_t>& recv_counts,
-                 const std::vector<comm_count_t>& recv_offsets, cudecompCommAxis comm_axis, cudaStream_t stream) {
+static void nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_desc, T* send_buff,
+                             const std::vector<comm_count_t>& send_counts,
+                             const std::vector<comm_count_t>& send_offsets, T* recv_buff,
+                             const std::vector<comm_count_t>& recv_counts,
+                             const std::vector<comm_count_t>& recv_offsets, cudecompCommAxis comm_axis, bool use_sm,
+                             cudaStream_t stream) {
   auto& comm_info = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info : grid_desc->col_comm_info;
   auto team = comm_info.nvshmem_team;
   int self_rank = comm_info.rank;
@@ -104,16 +105,25 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
   CHECK_CUDA(cudaStreamWaitEvent(stream, grid_desc->nvshmem_sync_event));
 
   // Event dependency on external stream for intra-group transfers
-  CHECK_CUDA(cudaEventRecord(grid_desc->events[0], stream));
-  for (int i = 0; i < handle->device_p2p_ce_count; ++i) {
-    CHECK_CUDA(cudaStreamWaitEvent(handle->streams[i], grid_desc->events[0], 0));
+  if (!use_sm) {
+    CHECK_CUDA(cudaEventRecord(grid_desc->events[0], stream));
+    for (int i = 0; i < handle->device_p2p_ce_count; ++i) {
+      CHECK_CUDA(cudaStreamWaitEvent(handle->streams[i], grid_desc->events[0], 0));
+    }
   }
 
+  bool need_barrier = false;
+  bool need_quiet = false;
   cudecompNvshmemA2AParams<T> params;
+  cudecompNvshmemP2PParams<T> p2p_params;
+  p2p_params.send_buff = send_buff;
+  p2p_params.recv_buff = recv_buff;
+  p2p_params.block_counters = grid_desc->nvshmem_block_counters;
 
   // Inter-group transfers (non-blocking)
   params.send_buff = send_buff;
   params.recv_buff = recv_buff;
+
   int count = 0;
   for (int i = 1; i < send_counts.size(); ++i) {
     int src_rank, dst_rank;
@@ -121,6 +131,8 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
     int dst_rank_global = getGlobalRank(handle, grid_desc, comm_axis, dst_rank);
     if (nvshmem_ptr(recv_buff, dst_rank_global)) { continue; }
 
+    if (!use_sm) need_barrier = true;
+    need_quiet = true;
     params.send_offsets[count] = send_offsets[dst_rank];
     params.recv_offsets[count] = recv_offsets[dst_rank];
     params.send_counts[count] = send_counts[dst_rank];
@@ -129,59 +141,87 @@ nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_
 
     if (count == CUDECOMP_NVSHMEM_A2A_PARAM_CAPACITY) {
       params.ntransfers = count;
-      cudecomp_nvshmem_alltoallv(params, stream);
+      cudecomp_nvshmem_alltoallv(params, use_sm ? &comm_info.nvshmem_signals[0] : nullptr, stream);
       count = 0;
     }
   }
   if (count != 0) {
     params.ntransfers = count;
-    cudecomp_nvshmem_alltoallv(params, stream);
+    cudecomp_nvshmem_alltoallv(params, use_sm ? &comm_info.nvshmem_signals[0] : nullptr, stream);
   }
 
   // Intra-group transfers (blocking, scheduled after non-blocking inter-group transfers for concurrency)
   count = 0;
-  for (int i = 1; i < send_counts.size(); ++i) {
+  for (int i = (use_sm ? 0 : 1); i < send_counts.size(); ++i) {
     int src_rank, dst_rank;
     getAlltoallPeerRanks(grid_desc, comm_axis, i, src_rank, dst_rank);
     int dst_rank_global = getGlobalRank(handle, grid_desc, comm_axis, dst_rank);
     if (nvshmem_ptr(recv_buff, dst_rank_global)) {
 
-      if (comm_info.ngroups == 1 && handle->device_p2p_ce_count == 1 && count != 0 &&
-          count % CUDECOMP_NVSHMEM_INTRAGROUP_SYNC_FREQ == 0) {
-        // For single group, single P2P CE (e.g. NVSwitch), synchronize NVSHMEM team every
-        // CUDECOMP_NVSHMEM_INTRAGROUP_SYNC_FREQ transfers This helps reduce CE contention due to accumulation of
-        // jitter.
-        for (int i = 0; i < handle->device_p2p_ce_count; ++i) {
-          CHECK_CUDA(cudaEventRecord(grid_desc->events[0], handle->streams[i]));
-          CHECK_CUDA(cudaStreamWaitEvent(aux_stream, grid_desc->events[0], 0));
+      if (!use_sm) {
+        need_barrier = true;
+        if (comm_info.ngroups == 1 && handle->device_p2p_ce_count == 1 && count != 0 &&
+            count % CUDECOMP_NVSHMEM_INTRAGROUP_SYNC_FREQ == 0) {
+          // For single group, single P2P CE (e.g. NVSwitch), synchronize NVSHMEM team every
+          // CUDECOMP_NVSHMEM_INTRAGROUP_SYNC_FREQ transfers This helps reduce CE contention due to accumulation of
+          // jitter.
+          for (int i = 0; i < handle->device_p2p_ce_count; ++i) {
+            CHECK_CUDA(cudaEventRecord(grid_desc->events[0], handle->streams[i]));
+            CHECK_CUDA(cudaStreamWaitEvent(aux_stream, grid_desc->events[0], 0));
+          }
+
+          nvshmemx_team_sync_on_stream(team, aux_stream);
+
+          CHECK_CUDA(cudaEventRecord(grid_desc->events[0], aux_stream));
+          for (int i = 0; i < handle->device_p2p_ce_count; ++i) {
+            CHECK_CUDA(cudaStreamWaitEvent(handle->streams[i], grid_desc->events[0], 0));
+          }
         }
 
-        nvshmemx_team_sync_on_stream(team, aux_stream);
+        nvshmemx_putmem_on_stream(recv_buff + recv_offsets[dst_rank], send_buff + send_offsets[dst_rank],
+                                  send_counts[dst_rank] * sizeof(T), dst_rank_global,
+                                  handle->streams[count % handle->device_p2p_ce_count]);
+        count++;
+      } else {
+        p2p_params.send_offsets[count] = send_offsets[dst_rank];
+        p2p_params.recv_offsets[count] = recv_offsets[dst_rank];
+        p2p_params.send_counts[count] = send_counts[dst_rank];
+        p2p_params.peer_ranks[count] = dst_rank_global;
+        count++;
 
-        CHECK_CUDA(cudaEventRecord(grid_desc->events[0], aux_stream));
-        for (int i = 0; i < handle->device_p2p_ce_count; ++i) {
-          CHECK_CUDA(cudaStreamWaitEvent(handle->streams[i], grid_desc->events[0], 0));
+        if (count == CUDECOMP_NVSHMEM_P2P_PARAM_CAPACITY) {
+          p2p_params.ntransfers = count;
+          cudecomp_nvshmem_alltoallv_p2p(handle, p2p_params, &comm_info.nvshmem_signals[0], stream);
+          count = 0;
         }
       }
-
-      nvshmemx_putmem_on_stream(recv_buff + recv_offsets[dst_rank], send_buff + send_offsets[dst_rank],
-                                send_counts[dst_rank] * sizeof(T), dst_rank_global,
-                                handle->streams[count % handle->device_p2p_ce_count]);
-      count++;
     }
   }
 
-  // Self-copy with cudaMemcpy
-  CHECK_CUDA(cudaMemcpyAsync(recv_buff + recv_offsets[self_rank], send_buff + send_offsets[self_rank],
-                             send_counts[self_rank] * sizeof(T), cudaMemcpyDeviceToDevice, stream));
+  if (use_sm) {
+    if (count != 0) {
+      p2p_params.ntransfers = count;
+      cudecomp_nvshmem_alltoallv_p2p(handle, p2p_params, &comm_info.nvshmem_signals[0], stream);
+    }
 
-  // Event dependency on internal streams for completion of intra-group transfers
-  for (int i = 0; i < handle->device_p2p_ce_count; ++i) {
-    CHECK_CUDA(cudaEventRecord(grid_desc->events[0], handle->streams[i]));
-    CHECK_CUDA(cudaStreamWaitEvent(stream, grid_desc->events[0], 0));
+    if (need_quiet) { nvshmemx_quiet_on_stream(stream); }
+    nvshmemx_signal_wait_until_on_stream(&comm_info.nvshmem_signals[0], NVSHMEM_CMP_EQ,
+                                         static_cast<uint64_t>(comm_info.nranks), stream);
+  } else {
+    // Self-copy with cudaMemcpy
+    CHECK_CUDA(cudaMemcpyAsync(recv_buff + recv_offsets[self_rank], send_buff + send_offsets[self_rank],
+                               send_counts[self_rank] * sizeof(T), cudaMemcpyDeviceToDevice, stream));
   }
 
-  nvshmemx_barrier_on_stream(team, stream);
+  // Event dependency on internal streams for completion of intra-group transfers (not needed for SM path)
+  if (!use_sm) {
+    for (int i = 0; i < handle->device_p2p_ce_count; ++i) {
+      CHECK_CUDA(cudaEventRecord(grid_desc->events[0], handle->streams[i]));
+      CHECK_CUDA(cudaStreamWaitEvent(stream, grid_desc->events[0], 0));
+    }
+  }
+
+  if (need_barrier) { nvshmemx_barrier_on_stream(team, stream); }
 }
 #endif
 
@@ -213,11 +253,13 @@ static void cudecompAlltoall(const cudecompHandle_t& handle, const cudecompGridD
 
   std::vector<MPI_Request> reqs;
   switch (grid_desc->config.transpose_comm_backend) {
-  case CUDECOMP_TRANSPOSE_COMM_NVSHMEM: {
+  case CUDECOMP_TRANSPOSE_COMM_NVSHMEM:
+  case CUDECOMP_TRANSPOSE_COMM_NVSHMEM_SM: {
 #ifdef ENABLE_NVSHMEM
     if (nvshmem_ptr(send_buff, handle->rank) && nvshmem_ptr(recv_buff, handle->rank)) {
       nvshmemAlltoallV(handle, grid_desc, send_buff, send_counts, send_offsets, recv_buff, recv_counts,
-                       recv_offsets_nvshmem, comm_axis, stream);
+                       recv_offsets_nvshmem, comm_axis,
+                       grid_desc->config.transpose_comm_backend == CUDECOMP_TRANSPOSE_COMM_NVSHMEM_SM, stream);
       break;
     } else {
       THROW_INVALID_USAGE("NVSHMEM communication backends require workspace allocated via cudecompMalloc.");
