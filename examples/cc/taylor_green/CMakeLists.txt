@@ -4,7 +4,7 @@ add_executable(tg)
 
 target_sources(tg
   PRIVATE
-  tg.cu
+  tg.cc
 )
 
 set_target_properties(tg PROPERTIES HIP_ARCHITECTURES "${CUDECOMP_HIP_ARCH_LIST}")

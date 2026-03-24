@@ -6,13 +6,13 @@ set(basic_usage_targets_cc
 add_executable(basic_usage_cc)
   target_sources(basic_usage_cc
   PRIVATE
-  basic_usage.cu
+  basic_usage.cc
 )
 
 add_executable(basic_usage_autotune_cc)
 target_sources(basic_usage_autotune_cc
   PRIVATE
-  basic_usage_autotune.cu
+  basic_usage_autotune.cc
 )
 
 foreach(tgt ${basic_usage_targets_cc})

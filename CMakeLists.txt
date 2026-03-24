@@ -232,8 +232,8 @@ if (HIPDECOMP_BUILD_EXTRAS)
   # add_subdirectory(benchmark)
 
   add_subdirectory(tests/cc)
-  # add_subdirectory(examples/cc/basic_usage)
-  # add_subdirectory(examples/cc/taylor_green)
+  add_subdirectory(examples/cc/basic_usage)
+  add_subdirectory(examples/cc/taylor_green)
 
 #   if (HIPDECOMP_BUILD_FORTRAN)
 #     add_subdirectory(tests/fortran)

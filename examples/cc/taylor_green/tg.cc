@@ -346,7 +346,10 @@ public:
 
     CHECK_MPI_EXIT(MPI_Comm_split_type(mpi_comm, MPI_COMM_TYPE_SHARED, rank, MPI_INFO_NULL, &mpi_local_comm));
     CHECK_MPI_EXIT(MPI_Comm_rank(mpi_local_comm, &local_rank));
-    CHECK_CUDA_EXIT(hipSetDevice(local_rank));
+
+    int device_count;
+    CHECK_CUDA_EXIT(hipGetDeviceCount(&device_count));
+    CHECK_CUDA_EXIT(hipSetDevice(local_rank % device_count));
 
     if (rank == 0) printf("running on %d x %d x %d spatial grid...\n", (int)N, (int)N, (int)N);
 
