@@ -59,33 +59,26 @@ endif()
 
 # Detect if Cray compiler wrappers are available to assess if in Cray environment.
 # We do not use the Cray compiler wrappers directly for greater flexibility.
-# find_program(CRAY_CC_BIN "CC")
+find_program(CRAY_CC_BIN "CC")
 
-# if (CRAY_CC_BIN)
-#   message(STATUS "Found Cray CC wrapper. Compiling for Cray programming environment.")
-# endif()
+if (CRAY_CC_BIN)
+  message(STATUS "Found Cray CC wrapper. Compiling for Cray programming environment.")
+endif()
 
 # MPI
 find_package(MPI REQUIRED)
 
-# if (CRAY_CC_BIN)
-#   # FindMPI does not include Cray GTL (e.g. CUDA-aware) libs
-#   # automatically in Cray environment. Locate it to include in linking.
-#   string(REPLACE ":" ";" CRAY_LIB_PATHS $ENV{CRAY_LD_LIBRARY_PATH})
-#   find_library(CRAY_MPI_GTL_CUDA_LIBRARY REQUIRED
-#     NAMES mpi_gtl_cuda
-#     HINTS ${CRAY_LIB_PATHS}
-#   )
+if (CRAY_CC_BIN)
+  # FindMPI does not include Cray GTL (e.g. GPU-aware MPI) libs
+  # automatically in Cray environment. Locate it to include in linking.
+  string(REPLACE ":" ";" CRAY_LIB_PATHS $ENV{CRAY_LD_LIBRARY_PATH})
+  find_library(CRAY_MPI_GTL_HIP_LIBRARY REQUIRED
+    NAMES mpi_gtl_hsa
+    HINTS ${CRAY_LIB_PATHS}
+  )
 
-#   # Cray GTL libs benefit from linking against gdrcopy, so also
-#   # locating that library.
-#   find_library(GDRCOPY_LIBRARY REQUIRED
-#     NAMES gdrapi
-#   )
-
-#   message(STATUS "Found Cray GTL library: " ${CRAY_MPI_GTL_CUDA_LIBRARY})
-#   message(STATUS "Found GDRCopy library: " ${GDRCOPY_LIBRARY})
-# endif()
+  message(STATUS "Found Cray GTL library: " ${CRAY_MPI_GTL_HIP_LIBRARY})
+endif()
 
 # Get RCCL library
 find_package(rccl REQUIRED)
@@ -128,11 +121,10 @@ target_link_libraries(hipdecomp PUBLIC hip::host hip::device)
 target_link_libraries(hipdecomp PUBLIC MPI::MPI_CXX)
 target_link_libraries(hipdecomp PRIVATE hiptensor)
 target_link_libraries(hipdecomp PRIVATE rccl)
-# if (CRAY_CC_BIN)
-#   # In Cray environments, add links to GTL and GDRCopy libs for CUDA-aware support
-#   target_link_libraries(hipdecomp PRIVATE ${CRAY_MPI_GTL_CUDA_LIBRARY})
-#   target_link_libraries(hipdecomp PRIVATE ${GDRCOPY_LIBRARY})
-# endif()
+if (CRAY_CC_BIN)
+  # In Cray environments, add link to GTL lib for GPU-aware MPI support
+  target_link_libraries(hipdecomp PRIVATE ${CRAY_MPI_GTL_HIP_LIBRARY})
+endif()
 
 # Test for std::filesystem linking
 try_compile(

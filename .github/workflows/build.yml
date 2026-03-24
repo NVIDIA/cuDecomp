@@ -13,7 +13,7 @@ jobs:
       - uses: loostrum/rocm-installer@v0.2
         with:
           version: "7.2.0"
-          packages: rocm-hip-runtime-dev hipfft-dev hiptensor-dev rccl-dev
+          packages: rocm-hip-runtime-dev hipcub-dev hipfft-dev hiptensor-dev rccl-dev
       - run: |
           sudo apt update && sudo apt install -y libopenmpi-dev
       - run: |

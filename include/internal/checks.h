@@ -24,7 +24,12 @@
 
 #include <hip/hip_runtime.h>
 #include <hipfft/hipfft.h>
+// ToDo: select hiptensor header through CMake
+#if HIP_VERSION_MAJOR < 7
+#include <hiptensor/hiptensor.hpp>
+#else
 #include <hiptensor/hiptensor.h>
+#endif
 #include <mpi.h>
 #include <rccl/rccl.h>
 
