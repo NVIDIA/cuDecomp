@@ -43,19 +43,12 @@ endif()
 
 project(HIPDECOMP LANGUAGES ${LANGS})
 
+# Set up HIP compute targets. Must be done before find_package(HIP). Default: native
+set(CMAKE_HIP_ARCHITECTURES ${CMAKE_HIP_ARCHITECUTRES} CACHE STRING "List of HIP compute targets")
+set(GPU_TARGETS ${CMAKE_HIP_ARCHITECTURES} CACHE STRING "List of HIP compute targets")
+
 # HIP
 find_package(HIP REQUIRED)
-
-# Set up HIP compute capabilities. Users can override defaults with HIPDECOMP_HIP_ARCH_LIST
-if (NOT HIPDECOMP_HIP_ARCH_LIST)
-  if (${HIP_VERSION} VERSION_GREATER_EQUAL 7.3.0)
-    set(HIPDECOMP_HIP_ARCH_LIST_DEFAULTS "gfx1100")
-  else()
-    set(HIPDECOMP_HIP_ARCH_LIST_DEFAULTS "gfx1100")
-  endif()
-
-  set(HIPDECOMP_HIP_ARCH_LIST ${HIPDECOMP_HIP_ARCH_LIST_DEFAULTS} CACHE STRING "List of CUDA compute capabilities to build HIPDECOMP for.")
-endif()
 
 # Detect if Cray compiler wrappers are available to assess if in Cray environment.
 # We do not use the Cray compiler wrappers directly for greater flexibility.
@@ -94,9 +87,6 @@ endif()
 # Building HIPDECOMP shared lib
 add_library(hipdecomp SHARED)
 set_target_properties(hipdecomp PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
-
-# Set compiler flags for requested compute capability
-set_target_properties(hipdecomp PROPERTIES HIP_ARCHITECTURES "${HIPDECOMP_HIP_ARCH_LIST}")
 
 target_sources(hipdecomp
   PRIVATE
