@@ -139,15 +139,15 @@ static void localPermute(const cudecompHandle_t handle, const std::array<int64_t
   auto strides_out_ptr = anyNonzeros(strides_out) ? strides_out.data() : nullptr;
 
   hiptensorTensorDescriptor_t desc_in;
-  CHECK_CUTENSOR(hiptensorInitTensorDescriptor(&handle->cutensor_handle, &desc_in, 3, extent_in.data(), strides_in_ptr,
+  CHECK_CUTENSOR(hiptensorInitTensorDescriptor(handle->cutensor_handle, &desc_in, 3, extent_in.data(), strides_in_ptr,
                                                cuda_type, HIPTENSOR_OP_IDENTITY));
 
   hiptensorTensorDescriptor_t desc_out;
-  CHECK_CUTENSOR(hiptensorInitTensorDescriptor(&handle->cutensor_handle, &desc_out, 3, extent_out.data(),
+  CHECK_CUTENSOR(hiptensorInitTensorDescriptor(handle->cutensor_handle, &desc_out, 3, extent_out.data(),
                                                strides_out_ptr, cuda_type, HIPTENSOR_OP_IDENTITY));
 
   T one(1);
-  CHECK_CUTENSOR(hiptensorPermutation(&handle->cutensor_handle, &one, input, &desc_in, order_in.data(), output,
+  CHECK_CUTENSOR(hiptensorPermutation(handle->cutensor_handle, &one, input, &desc_in, order_in.data(), output,
                                       &desc_out, order_out.data(), cuda_type, stream));
 }
 #endif

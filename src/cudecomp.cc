@@ -322,13 +322,10 @@ cudecompResult_t cudecompInit(cudecompHandle_t* handle_in, MPI_Comm mpi_comm) {
     initCuFunctionTable();
 
     // Initialize cuTENSOR library
-#if HIPTENSOR_MAJOR_VERSION >= 2
     CHECK_CUTENSOR(hiptensorCreate(&handle->cutensor_handle));
+#if HIPTENSOR_MAJOR_VERSION >= 2
     CHECK_CUTENSOR(hiptensorCreatePlanPreference(handle->cutensor_handle, &handle->cutensor_plan_pref,
                                                  HIPTENSOR_ALGO_DEFAULT, HIPTENSOR_JIT_MODE_NONE));
-#else
-    CHECK_CUTENSOR(hiptensorCreate(&handle->cutensor_handle_ptr));
-    handle->cutensor_handle = *handle->cutensor_handle_ptr;
 #endif
 
     // Gather cuDecomp environment variable settings
@@ -371,11 +368,9 @@ cudecompResult_t cudecompFinalize(cudecompHandle_t handle) {
 #endif
     CHECK_MPI(MPI_Comm_free(&handle->mpi_local_comm));
 
-#if HIPTENSOR_MAJOR_VERSION >= 2
     CHECK_CUTENSOR(hiptensorDestroy(handle->cutensor_handle));
+#if HIPTENSOR_MAJOR_VERSION >= 2
     CHECK_CUTENSOR(hiptensorDestroyPlanPreference(handle->cutensor_plan_pref));
-#else
-    CHECK_CUTENSOR(hiptensorDestroy(&handle->cutensor_handle));
 #endif
 
     handle = nullptr;
