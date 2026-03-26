@@ -80,11 +80,7 @@
 #define CHECK_NCCL(call)                                                                                               \
   do {                                                                                                                 \
     ncclResult_t err = call;                                                                                           \
-    if (ncclSuccess != err) {                                                                                          \
-      std::ostringstream os;                                                                                           \
-      os << "error code " << err;                                                                                      \
-      throw cudecomp::NcclError(__FILE__, __LINE__, os.str().c_str());                                                 \
-    }                                                                                                                  \
+    if (ncclSuccess != err) { throw cudecomp::NcclError(__FILE__, __LINE__, ncclGetErrorString(err)); }                \
   } while (false)
 
 #define CHECK_MPI(call)                                                                                                \
@@ -133,7 +129,7 @@
   } while (false)
 
 #define CHECK_MPI_EXIT(call)                                                                                           \
-  {                                                                                                                    \
+  do {                                                                                                                 \
     int err = call;                                                                                                    \
     if (0 != err) {                                                                                                    \
       char error_str[MPI_MAX_ERROR_STRING];                                                                            \
@@ -146,8 +142,7 @@
       }                                                                                                                \
       exit(EXIT_FAILURE);                                                                                              \
     }                                                                                                                  \
-  }                                                                                                                    \
-  while (false)
+  } while (false)
 
 #define CHECK_CUFFT_EXIT(call)                                                                                         \
   do {                                                                                                                 \

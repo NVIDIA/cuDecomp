@@ -12,16 +12,14 @@ option(HIPDECOMP_BUILD_FORTRAN "Build Fortran bindings" ON)
 #option(HIPDECOMP_ENABLE_NVTX "Enable NVTX ranges" ON)
 #option(HIPDECOMP_ENABLE_NVSHMEM "Enable NVSHMEM" OFF)
 option(HIPDECOMP_BUILD_EXTRAS "Build benchmark, examples, and tests" OFF)
-#set(HIPDECOMP_NCCL_HOME CACHE STRING "Path to search for NCCL installation. Use to override NVHPC provided NCCL version.")
-#set(HIPDECOMP_NVSHMEM_HOME CACHE STRING "Path to search for NVSHMEM installation. Use to override NVHPC provided NVSHMEM version.")
 
 # Use AMD Clang compilers by default
 find_program(CMAKE_CXX_COMPILER "amdclang++" REQUIRED)
 
-# if (HIPDECOMP_BUILD_FORTRAN)
-#   find_program(NVHPC_Fortran_BIN "nvfortran" REQUIRED)
-#   set(CMAKE_Fortran_COMPILER ${NVHPC_Fortran_BIN})
-# endif()
+if (HIPDECOMP_BUILD_FORTRAN)
+  find_program(HIP_Fortran_BIN "amdflang" REQUIRED)
+  set(CMAKE_Fortran_COMPILER ${HIP_Fortran_BIN})
+endif()
 
 # Locate and use HIP CMake configuration
 find_program(HIPCC "hipcc" REQUIRED)
@@ -180,35 +178,26 @@ install(
 )
 
 # Building Fortran shared lib and module
-# if (HIPDECOMP_BUILD_FORTRAN)
-#   # Creating -gpu argument string for Fortran files
-#   foreach(CUDA_CC ${HIPDECOMP_CUDA_CC_LIST})
-#     list(APPEND CUF_GPU_ARG "cc${CUDA_CC}")
-#   endforeach()
-#   list(APPEND CUF_GPU_ARG "cuda${NVHPC_CUDA_VERSION}")
-#   list(JOIN CUF_GPU_ARG "," CUF_GPU_ARG)
+if (HIPDECOMP_BUILD_FORTRAN)
+  add_library(hipdecomp_fort SHARED)
+  set_target_properties(hipdecomp_fort PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+  set_target_properties(hipdecomp_fort PROPERTIES Fortran_MODULE_DIRECTORY ${CMAKE_BINARY_DIR}/include)
+  set_target_properties(hipdecomp_fort PROPERTIES LINKER_LANGUAGE Fortran)
+  target_compile_options(hipdecomp_fort PRIVATE $<$<COMPILE_LANGUAGE:Fortran>:-cpp>)
+  target_sources(
+    hipdecomp_fort
+    PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/cudecomp_m.f90
+  )
+  set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/src/cudecomp_m.f90 PROPERTIES LANGUAGE Fortran)
 
-#   add_library(hipdecomp_fort SHARED)
-#   set_target_properties(hipdecomp_fort PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
-#   set_target_properties(hipdecomp_fort PROPERTIES Fortran_MODULE_DIRECTORY ${CMAKE_BINARY_DIR}/include)
-#   set_target_properties(hipdecomp_fort PROPERTIES LINKER_LANGUAGE Fortran)
-#   target_compile_options(hipdecomp_fort PRIVATE $<$<COMPILE_LANGUAGE:Fortran>:-cpp -cuda -gpu=${CUF_GPU_ARG}>)
-#   target_sources(
-#     hipdecomp_fort
-#     PRIVATE
-#     ${CMAKE_CURRENT_SOURCE_DIR}/src/hipdecomp_m.cuf
-#   )
-#   set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/src/hipdecomp_m.cuf PROPERTIES LANGUAGE Fortran)
-
-#   target_link_libraries(hipdecomp_fort PUBLIC MPI::MPI_Fortran)
-
-#   install(
-#     TARGETS hipdecomp_fort
-#     LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/lib
-#    )
-#    # Install hipDecomp module
-#    install(FILES ${CMAKE_BINARY_DIR}/include/hipdecomp.mod DESTINATION ${CMAKE_INSTALL_PREFIX}/include)
-# endif()
+  install(
+    TARGETS hipdecomp_fort
+    LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/lib
+   )
+   # Install hipDecomp module
+   install(FILES ${CMAKE_BINARY_DIR}/include/hipdecomp.mod DESTINATION ${CMAKE_INSTALL_PREFIX}/include)
+endif()
 
 if (HIPDECOMP_BUILD_EXTRAS)
   # add_subdirectory(benchmark)
@@ -217,10 +206,11 @@ if (HIPDECOMP_BUILD_EXTRAS)
   add_subdirectory(examples/cc/basic_usage)
   add_subdirectory(examples/cc/taylor_green)
 
-#   if (HIPDECOMP_BUILD_FORTRAN)
-#     add_subdirectory(tests/fortran)
+   if (HIPDECOMP_BUILD_FORTRAN)
+     find_package(hipfort REQUIRED COMPONENTS hip)
+     add_subdirectory(tests/fortran)
 #     add_subdirectory(examples/fortran/basic_usage)
 #     add_subdirectory(examples/fortran/poisson)
 #     add_subdirectory(examples/fortran/taylor_green)
-#   endif()
+   endif()
 endif()

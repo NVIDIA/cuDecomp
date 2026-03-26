@@ -66,7 +66,7 @@
   } while (false)
 
 #define CHECK_MPI_EXIT(call)                                                                                           \
-  {                                                                                                                    \
+  do {                                                                                                                 \
     int err = call;                                                                                                    \
     if (0 != err) {                                                                                                    \
       char error_str[MPI_MAX_ERROR_STRING];                                                                            \
@@ -79,8 +79,7 @@
       }                                                                                                                \
       exit(EXIT_FAILURE);                                                                                              \
     }                                                                                                                  \
-  }                                                                                                                    \
-  while (false)
+  } while (false)
 
 #define CHECK_CUFFT_EXIT(call)                                                                                         \
   do {                                                                                                                 \

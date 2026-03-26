@@ -568,7 +568,10 @@ int main(int argc, char** argv) {
   MPI_Comm_split_type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL, &local_comm);
   int local_rank;
   MPI_Comm_rank(local_comm, &local_rank);
-  CHECK_CUDA_EXIT(hipSetDevice(local_rank));
+
+  int device_count;
+  CHECK_CUDA_EXIT(hipGetDeviceCount(&device_count));
+  CHECK_CUDA_EXIT(hipSetDevice(local_rank % device_count));
 
   // Check if test file was provided
   std::string testfile;

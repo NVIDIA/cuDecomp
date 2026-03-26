@@ -49,7 +49,7 @@
   } while (false)
 
 #define CHECK_MPI_EXIT(call)                                                                                           \
-  {                                                                                                                    \
+  do {                                                                                                                 \
     int err = call;                                                                                                    \
     if (0 != err) {                                                                                                    \
       char error_str[MPI_MAX_ERROR_STRING];                                                                            \
@@ -62,8 +62,7 @@
       }                                                                                                                \
       exit(EXIT_FAILURE);                                                                                              \
     }                                                                                                                  \
-  }                                                                                                                    \
-  while (false)
+  } while (false)
 
 // CUDA kernel to demonstrate pencil data access on device.
 __global__ void initialize_pencil(double* data, cudecompPencilInfo_t pinfo) {

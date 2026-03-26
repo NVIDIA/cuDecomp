@@ -30,7 +30,7 @@ namespace cudecomp {
 graphCache::graphCache() { CHECK_CUDA(hipStreamCreateWithFlags(&graph_stream_, hipStreamNonBlocking)); }
 
 graphCache::~graphCache() {
-  CHECK_CUDA(hipStreamDestroy(graph_stream_));
+  std::ignore = hipStreamDestroy(graph_stream_);
   this->clear();
 }
 

@@ -15,7 +15,7 @@
 
 #define CHECK_CUDECOMP_EXIT(f) if (f /= CUDECOMP_RESULT_SUCCESS) call exit(1)
 #define CHECK_CUDECOMP(f) if (f /= CUDECOMP_RESULT_SUCCESS) then; res = 1; return; endif
-#define CHECK_CUDA_EXIT(f) if (f /= cudaSuccess) call exit(1)
+#define CHECK_CUDA_EXIT(f) if (f /= hipSuccess) call exit(1)
 
 #ifdef R32
 #define ARRTYPE real(real32)
@@ -42,7 +42,7 @@ module transpose_CUDECOMP_DOUBLE_COMPLEX_mod
 #endif
 
   use, intrinsic :: iso_fortran_env, only: real32, real64
-  use cudafor
+  use hipfort, only : hipSuccess,hipSetDevice
   use cudecomp
   use mpi
 
@@ -50,7 +50,7 @@ module transpose_CUDECOMP_DOUBLE_COMPLEX_mod
   integer :: rank, nranks
   type(cudecompGridDesc) :: grid_desc_cache(7)
   logical :: grid_desc_cache_set(7) = .false.
-  ARRTYPE, pointer, device, contiguous :: work_d(:)
+  ARRTYPE, pointer, contiguous :: work_d(:)
   integer :: work_backend = -1
 
   contains
@@ -105,7 +105,7 @@ module transpose_CUDECOMP_DOUBLE_COMPLEX_mod
   subroutine flat_copy(src, dst, count)
     implicit none
     ARRTYPE :: src(*)
-    ARRTYPE, device :: dst(*)
+    ARRTYPE :: dst(*)
     integer(8) :: count
 
     dst(1:count) = src(1:count)
@@ -121,7 +121,7 @@ module transpose_CUDECOMP_DOUBLE_COMPLEX_mod
     ! Count number of cases in file
     ncases = 0
     open(42, file=trim(filename), status='old')
-    do while (1)
+    do while (.true.)
       read(42, '(A)', iostat=stat)
       if (stat < 0) exit
       ncases = ncases + 1
@@ -184,9 +184,9 @@ module transpose_CUDECOMP_DOUBLE_COMPLEX_mod
 
     ! data
     ARRTYPE, allocatable :: xref(:, :, :), yref(:, :, :), zref(:, :, :), data(:)
-    ARRTYPE, allocatable, device, target:: data_d(:), data_2_d(:)
-    ARRTYPE, allocatable, managed, target:: data_m(:), data_2_m(:)
-    ARRTYPE, pointer, device:: input(:), output(:)
+    ARRTYPE, allocatable, target:: data_d(:), data_2_d(:)
+    ARRTYPE, allocatable, target:: data_m(:), data_2_m(:)
+    ARRTYPE, pointer:: input(:), output(:)
     integer :: dtype = DTYPE
 
     integer :: i, j, k, l, idt, iarg
@@ -565,7 +565,7 @@ program main
 
   call MPI_Comm_split_Type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL, local_comm, ierr)
   call MPI_Comm_rank(local_comm, local_rank, ierr)
-  CHECK_CUDA_EXIT(cudaSetDevice(local_rank))
+  CHECK_CUDA_EXIT(hipSetDevice(local_rank))
 
   using_testfile = .false.
   do i = 1, command_argument_count()

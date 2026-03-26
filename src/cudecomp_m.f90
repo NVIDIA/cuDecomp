@@ -16,8 +16,6 @@
 module cudecomp
   use, intrinsic :: iso_c_binding
   use, intrinsic :: iso_fortran_env, only: int64, real32, real64
-  use cudafor
-  private :: cudafor
 
   ! enumerators
 
@@ -273,7 +271,7 @@ module cudecomp
       import
       type(cudecompHandle), value :: handle
       type(cudecompGridDesc), value :: grid_desc
-      type(c_devptr) :: buffer
+      type(c_ptr) :: buffer
       integer(c_size_t), value :: buffer_size_bytes
       integer(c_int) :: res
     end function cudecompMallocC
@@ -289,7 +287,7 @@ module cudecomp
       import
       type(cudecompHandle), value :: handle
       type(cudecompGridDesc), value :: grid_desc
-      type(c_devptr), value :: buffer
+      type(c_ptr), value :: buffer
       integer(c_int) :: res
     end function cudecompFreeC
   end interface
@@ -349,11 +347,11 @@ module cudecomp
       type(cudecompHandle), value :: handle
       type(cudecompGridDesc), value :: grid_desc
       !dir$ ignore_tkr input, output, work
-      real(c_float), device :: input(*), output(*), work(*)
+      real(c_float) :: input(*), output(*), work(*)
       integer(c_int), value :: dtype
       integer(c_int32_t) :: input_halo_extents(3), output_halo_extents(3)
       integer(c_int32_t) :: input_padding(3), output_padding(3)
-      integer(cuda_stream_kind), value :: stream
+      integer(c_intptr_t), value :: stream
       integer(c_int) :: res
     end function cudecompTransposeXToY_C
   end interface
@@ -367,11 +365,11 @@ module cudecomp
       type(cudecompHandle), value :: handle
       type(cudecompGridDesc), value :: grid_desc
       !dir$ ignore_tkr input, output, work
-      real(c_float), device :: input(*), output(*), work(*)
+      real(c_float) :: input(*), output(*), work(*)
       integer(c_int), value :: dtype
       integer(c_int32_t) :: input_halo_extents(3), output_halo_extents(3)
       integer(c_int32_t) :: input_padding(3), output_padding(3)
-      integer(cuda_stream_kind), value :: stream
+      integer(c_intptr_t), value :: stream
       integer(c_int) :: res
     end function cudecompTransposeYToZ_C
   end interface
@@ -385,11 +383,11 @@ module cudecomp
       type(cudecompHandle), value :: handle
       type(cudecompGridDesc), value :: grid_desc
       !dir$ ignore_tkr input, output, work
-      real(c_float), device :: input(*), output(*), work(*)
+      real(c_float) :: input(*), output(*), work(*)
       integer(c_int), value :: dtype
       integer(c_int32_t) :: input_halo_extents(3), output_halo_extents(3)
       integer(c_int32_t) :: input_padding(3), output_padding(3)
-      integer(cuda_stream_kind), value :: stream
+      integer(c_intptr_t), value :: stream
       integer(c_int) :: res
     end function cudecompTransposeZToY_C
   end interface
@@ -403,11 +401,11 @@ module cudecomp
       type(cudecompHandle), value :: handle
       type(cudecompGridDesc), value :: grid_desc
       !dir$ ignore_tkr input, output, work
-      real(c_float), device :: input(*), output(*), work(*)
+      real(c_float) :: input(*), output(*), work(*)
       integer(c_int), value :: dtype
       integer(c_int32_t) :: input_halo_extents(3), output_halo_extents(3)
       integer(c_int32_t) :: input_padding(3), output_padding(3)
-      integer(cuda_stream_kind), value :: stream
+      integer(c_intptr_t), value :: stream
       integer(c_int) :: res
     end function cudecompTransposeYToX_C
   end interface
@@ -421,13 +419,13 @@ module cudecomp
       type(cudecompHandle), value :: handle
       type(cudecompGridDesc), value :: grid_desc
       !dir$ ignore_tkr input, work
-      real(c_float), device :: input(*), work(*)
+      real(c_float) :: input(*), work(*)
       integer(c_int), value :: dtype
       integer(c_int32_t) :: halo_extents(3)
       logical(c_bool) :: halo_periods(3)
       integer(c_int32_t), value :: dim
       integer(c_int32_t) :: padding(3)
-      integer(cuda_stream_kind), value :: stream
+      integer(c_intptr_t), value :: stream
       integer(c_int) :: res
     end function cudecompUpdateHalosX_C
   end interface
@@ -440,13 +438,13 @@ module cudecomp
       type(cudecompHandle), value :: handle
       type(cudecompGridDesc), value :: grid_desc
       !dir$ ignore_tkr input, work
-      real(c_float), device :: input(*), work(*)
+      real(c_float) :: input(*), work(*)
       integer(c_int), value :: dtype
       integer(c_int32_t) :: halo_extents(3)
       logical(c_bool) :: halo_periods(3)
       integer(c_int32_t), value :: dim
       integer(c_int32_t) :: padding(3)
-      integer(cuda_stream_kind), value :: stream
+      integer(c_intptr_t), value :: stream
       integer(c_int) :: res
     end function cudecompUpdateHalosY_C
   end interface
@@ -459,13 +457,13 @@ module cudecomp
       type(cudecompHandle), value :: handle
       type(cudecompGridDesc), value :: grid_desc
       !dir$ ignore_tkr input, work
-      real(c_float), device :: input(*), work(*)
+      real(c_float) :: input(*), work(*)
       integer(c_int), value :: dtype
       integer(c_int32_t) :: halo_extents(3)
       logical(c_bool) :: halo_periods(3)
       integer(c_int32_t), value :: dim
       integer(c_int32_t) :: padding(3)
-      integer(cuda_stream_kind), value :: stream
+      integer(c_intptr_t), value :: stream
       integer(c_int) :: res
     end function cudecompUpdateHalosZ_C
   end interface
@@ -597,11 +595,11 @@ contains
     implicit none
     type(cudecompHandle) :: handle
     type(cudecompGridDesc) :: grid_desc
-    real(real32), pointer, device, contiguous :: buffer(:)
+    real(real32), pointer, contiguous :: buffer(:)
     integer(int64) :: buffer_size
     integer(c_int) :: res
 
-    type(c_devptr) :: buffer_c
+    type(c_ptr) :: buffer_c
 
     res = cudecompMallocC(handle, grid_desc, buffer_c, buffer_size * 4)
     call c_f_pointer(buffer_c, buffer, [buffer_size])
@@ -611,11 +609,11 @@ contains
     implicit none
     type(cudecompHandle) :: handle
     type(cudecompGridDesc) :: grid_desc
-    real(real64), pointer, device, contiguous :: buffer(:)
+    real(real64), pointer, contiguous :: buffer(:)
     integer(int64) :: buffer_size
     integer(c_int) :: res
 
-    type(c_devptr) :: buffer_c
+    type(c_ptr) :: buffer_c
 
     res = cudecompMallocC(handle, grid_desc, buffer_c, buffer_size * 8)
     call c_f_pointer(buffer_c, buffer, [buffer_size])
@@ -625,11 +623,11 @@ contains
     implicit none
     type(cudecompHandle) :: handle
     type(cudecompGridDesc) :: grid_desc
-    complex(real32), pointer, device, contiguous :: buffer(:)
+    complex(real32), pointer, contiguous :: buffer(:)
     integer(int64) :: buffer_size
     integer(c_int) :: res
 
-    type(c_devptr) :: buffer_c
+    type(c_ptr) :: buffer_c
 
     res = cudecompMallocC(handle, grid_desc, buffer_c, buffer_size * 8)
     call c_f_pointer(buffer_c, buffer, [buffer_size])
@@ -639,11 +637,11 @@ contains
     implicit none
     type(cudecompHandle) :: handle
     type(cudecompGridDesc) :: grid_desc
-    complex(real64), pointer, device, contiguous :: buffer(:)
+    complex(real64), pointer, contiguous :: buffer(:)
     integer(int64) :: buffer_size
     integer(c_int) :: res
 
-    type(c_devptr) :: buffer_c
+    type(c_ptr) :: buffer_c
 
     res = cudecompMallocC(handle, grid_desc, buffer_c, buffer_size * 16)
     call c_f_pointer(buffer_c, buffer, [buffer_size])
@@ -653,12 +651,12 @@ contains
     implicit none
     type(cudecompHandle) :: handle
     type(cudecompGridDesc) :: grid_desc
-    real(real32), pointer, device, contiguous :: buffer(:)
+    real(real32), pointer, contiguous :: buffer(:)
     integer(c_int) :: res
 
-    type(c_devptr) :: buffer_c
+    type(c_ptr) :: buffer_c
 
-    buffer_c = c_devloc(buffer)
+    buffer_c = c_loc(buffer)
     res = cudecompFreeC(handle, grid_desc, buffer_c)
   end function cudecompFreeR4
 
@@ -666,12 +664,12 @@ contains
     implicit none
     type(cudecompHandle) :: handle
     type(cudecompGridDesc) :: grid_desc
-    real(real64), pointer, device, contiguous :: buffer(:)
+    real(real64), pointer, contiguous :: buffer(:)
     integer(c_int) :: res
 
-    type(c_devptr) :: buffer_c
+    type(c_ptr) :: buffer_c
 
-    buffer_c = c_devloc(buffer)
+    buffer_c = c_loc(buffer)
     res = cudecompFreeC(handle, grid_desc, buffer_c)
   end function cudecompFreeR8
 
@@ -679,12 +677,12 @@ contains
     implicit none
     type(cudecompHandle) :: handle
     type(cudecompGridDesc) :: grid_desc
-    complex(real32), pointer, device, contiguous :: buffer(:)
+    complex(real32), pointer, contiguous :: buffer(:)
     integer(c_int) :: res
 
-    type(c_devptr) :: buffer_c
+    type(c_ptr) :: buffer_c
 
-    buffer_c = c_devloc(buffer)
+    buffer_c = c_loc(buffer)
     res = cudecompFreeC(handle, grid_desc, buffer_c)
   end function cudecompFreeC4
 
@@ -692,12 +690,12 @@ contains
     implicit none
     type(cudecompHandle) :: handle
     type(cudecompGridDesc) :: grid_desc
-    complex(real64), pointer, device, contiguous :: buffer(:)
+    complex(real64), pointer, contiguous :: buffer(:)
     integer(c_int) :: res
 
-    type(c_devptr) :: buffer_c
+    type(c_ptr) :: buffer_c
 
-    buffer_c = c_devloc(buffer)
+    buffer_c = c_loc(buffer)
     res = cudecompFreeC(handle, grid_desc, buffer_c)
   end function cudecompFreeC8
 
@@ -746,16 +744,16 @@ contains
     type(cudecompHandle) :: handle
     type(cudecompGridDesc) :: grid_desc
     !dir$ ignore_tkr input, output, work
-    real(c_float), device :: input(*), output(*), work(*)
+    real(c_float) :: input(*), output(*), work(*)
     integer :: dtype
-    integer(cuda_stream_kind), optional :: stream
+    integer(c_intptr_t), optional :: stream
     integer, optional :: input_halo_extents(3)
     integer, optional :: output_halo_extents(3)
     integer, optional :: input_padding(3)
     integer, optional :: output_padding(3)
     integer(c_int) :: res
 
-    integer(cuda_stream_kind) :: stream_
+    integer(c_intptr_t) :: stream_
     integer :: input_halo_extents_(3)
     integer :: output_halo_extents_(3)
     integer :: input_padding_(3)
@@ -783,16 +781,16 @@ contains
     type(cudecompHandle) :: handle
     type(cudecompGridDesc) :: grid_desc
     !dir$ ignore_tkr input, output, work
-    real(c_float), device :: input(*), output(*), work(*)
+    real(c_float) :: input(*), output(*), work(*)
     integer :: dtype
-    integer(cuda_stream_kind), optional :: stream
+    integer(c_intptr_t), optional :: stream
     integer, optional :: input_halo_extents(3)
     integer, optional :: output_halo_extents(3)
     integer, optional :: input_padding(3)
     integer, optional :: output_padding(3)
     integer(c_int) :: res
 
-    integer(cuda_stream_kind) :: stream_
+    integer(c_intptr_t) :: stream_
     integer :: input_halo_extents_(3)
     integer :: output_halo_extents_(3)
     integer :: input_padding_(3)
@@ -820,16 +818,16 @@ contains
     type(cudecompHandle) :: handle
     type(cudecompGridDesc) :: grid_desc
     !dir$ ignore_tkr input, output, work
-    real(c_float), device :: input(*), output(*), work(*)
+    real(c_float) :: input(*), output(*), work(*)
     integer :: dtype
-    integer(cuda_stream_kind), optional :: stream
+    integer(c_intptr_t), optional :: stream
     integer, optional :: input_halo_extents(3)
     integer, optional :: output_halo_extents(3)
     integer, optional :: input_padding(3)
     integer, optional :: output_padding(3)
     integer(c_int) :: res
 
-    integer(cuda_stream_kind) :: stream_
+    integer(c_intptr_t) :: stream_
     integer :: input_halo_extents_(3)
     integer :: output_halo_extents_(3)
     integer :: input_padding_(3)
@@ -857,16 +855,16 @@ contains
     type(cudecompHandle) :: handle
     type(cudecompGridDesc) :: grid_desc
     !dir$ ignore_tkr input, output, work
-    real(c_float), device :: input(*), output(*), work(*)
+    real(c_float) :: input(*), output(*), work(*)
     integer :: dtype
-    integer(cuda_stream_kind), optional :: stream
+    integer(c_intptr_t), optional :: stream
     integer, optional :: input_halo_extents(3)
     integer, optional :: output_halo_extents(3)
     integer, optional :: input_padding(3)
     integer, optional :: output_padding(3)
     integer(c_int) :: res
 
-    integer(cuda_stream_kind) :: stream_
+    integer(c_intptr_t) :: stream_
     integer :: input_halo_extents_(3)
     integer :: output_halo_extents_(3)
     integer :: input_padding_(3)
@@ -895,16 +893,16 @@ contains
     type(cudecompHandle) :: handle
     type(cudecompGridDesc) :: grid_desc
     !dir$ ignore_tkr input, work
-    real(c_float), device :: input(*), work(*)
+    real(c_float) :: input(*), work(*)
     integer :: dtype
     integer :: halo_extents(3)
     logical :: halo_periods(3)
     integer :: dim
     integer, optional :: padding(3)
-    integer(cuda_stream_kind), optional :: stream
+    integer(c_intptr_t), optional :: stream
     integer(c_int) :: res
 
-    integer(cuda_stream_kind) :: stream_
+    integer(c_intptr_t) :: stream_
     logical(c_bool) :: halo_periods_c(3)
     integer :: padding_(3)
 
@@ -926,16 +924,16 @@ contains
     type(cudecompHandle) :: handle
     type(cudecompGridDesc) :: grid_desc
     !dir$ ignore_tkr input, work
-    real(c_float), device :: input(*), work(*)
+    real(c_float) :: input(*), work(*)
     integer :: dtype
     integer :: halo_extents(3)
     logical :: halo_periods(3)
     integer :: dim
     integer, optional :: padding(3)
-    integer(cuda_stream_kind), optional :: stream
+    integer(c_intptr_t), optional :: stream
     integer(c_int) :: res
 
-    integer(cuda_stream_kind) :: stream_
+    integer(c_intptr_t) :: stream_
     logical(c_bool) :: halo_periods_c(3)
     integer :: padding_(3)
 
@@ -957,16 +955,16 @@ contains
     type(cudecompHandle) :: handle
     type(cudecompGridDesc) :: grid_desc
     !dir$ ignore_tkr input, work
-    real(c_float), device :: input(*), work(*)
+    real(c_float) :: input(*), work(*)
     integer :: dtype
     integer :: halo_extents(3)
     logical :: halo_periods(3)
     integer :: dim
     integer, optional :: padding(3)
-    integer(cuda_stream_kind), optional :: stream
+    integer(c_intptr_t), optional :: stream
     integer(c_int) :: res
 
-    integer(cuda_stream_kind) :: stream_
+    integer(c_intptr_t) :: stream_
     logical(c_bool) :: halo_periods_c(3)
     integer :: padding_(3)
 
