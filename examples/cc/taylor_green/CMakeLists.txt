@@ -7,7 +7,7 @@ target_sources(tg
   tg.cc
 )
 
-set_target_properties(tg PROPERTIES HIP_ARCHITECTURES "${CUDECOMP_HIP_ARCH_LIST}")
+set_target_properties(tg PROPERTIES HIP_ARCHITECTURES "${HIPDECOMP_HIP_ARCH_LIST}")
 
 target_include_directories(tg
   PRIVATE

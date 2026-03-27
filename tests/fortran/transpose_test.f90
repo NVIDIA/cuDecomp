@@ -13,42 +13,42 @@
 ! See the License for the specific language governing permissions and
 ! limitations under the License.
 
-#define CHECK_CUDECOMP_EXIT(f) if (f /= CUDECOMP_RESULT_SUCCESS) call exit(1)
-#define CHECK_CUDECOMP(f) if (f /= CUDECOMP_RESULT_SUCCESS) then; res = 1; return; endif
-#define CHECK_CUDA_EXIT(f) if (f /= hipSuccess) call exit(1)
+#define CHECK_HIPDECOMP_EXIT(f) if (f /= HIPDECOMP_RESULT_SUCCESS) call exit(1)
+#define CHECK_HIPDECOMP(f) if (f /= HIPDECOMP_RESULT_SUCCESS) then; res = 1; return; endif
+#define CHECK_HIP_EXIT(f) if (f /= hipSuccess) call exit(1)
 
 #ifdef R32
 #define ARRTYPE real(real32)
-#define DTYPE CUDECOMP_FLOAT
-module transpose_CUDECOMP_FLOAT_mod
+#define DTYPE HIPDECOMP_FLOAT
+module transpose_HIPDECOMP_FLOAT_mod
 #endif
 
 #ifdef R64
 #define ARRTYPE real(real64)
-#define DTYPE CUDECOMP_DOUBLE
-module transpose_CUDECOMP_DOUBLE_mod
+#define DTYPE HIPDECOMP_DOUBLE
+module transpose_HIPDECOMP_DOUBLE_mod
 #endif
 
 #ifdef C32
 #define ARRTYPE complex(real32)
-#define DTYPE CUDECOMP_FLOAT_COMPLEX
-module transpose_CUDECOMP_FLOAT_COMPLEX_mod
+#define DTYPE HIPDECOMP_FLOAT_COMPLEX
+module transpose_HIPDECOMP_FLOAT_COMPLEX_mod
 #endif
 
 #ifdef C64
 #define ARRTYPE complex(real64)
-#define DTYPE CUDECOMP_DOUBLE_COMPLEX
-module transpose_CUDECOMP_DOUBLE_COMPLEX_mod
+#define DTYPE HIPDECOMP_DOUBLE_COMPLEX
+module transpose_HIPDECOMP_DOUBLE_COMPLEX_mod
 #endif
 
   use, intrinsic :: iso_fortran_env, only: real32, real64
   use hipfort, only : hipSuccess,hipSetDevice
-  use cudecomp
+  use hipdecomp
   use mpi
 
-  type(cudecompHandle) :: handle
+  type(hipdecompHandle) :: handle
   integer :: rank, nranks
-  type(cudecompGridDesc) :: grid_desc_cache(7)
+  type(hipdecompGridDesc) :: grid_desc_cache(7)
   logical :: grid_desc_cache_set(7) = .false.
   ARRTYPE, pointer, contiguous :: work_d(:)
   integer :: work_backend = -1
@@ -56,7 +56,7 @@ module transpose_CUDECOMP_DOUBLE_COMPLEX_mod
   contains
   function compare_pencils(ref, res, pinfo) result(mismatch)
     implicit none
-    type(cudecompPencilInfo) :: pinfo
+    type(hipdecompPencilInfo) :: pinfo
     ARRTYPE :: ref(pinfo%lo(1) - pinfo%halo_extents(pinfo%order(1)): pinfo%hi(1) + pinfo%halo_extents(pinfo%order(1)) + pinfo%padding(pinfo%order(1)), &
                    pinfo%lo(2) - pinfo%halo_extents(pinfo%order(2)): pinfo%hi(2) + pinfo%halo_extents(pinfo%order(2)) + pinfo%padding(pinfo%order(2)), &
                    pinfo%lo(3) - pinfo%halo_extents(pinfo%order(3)): pinfo%hi(3) + pinfo%halo_extents(pinfo%order(3)) + pinfo%padding(pinfo%order(3)))
@@ -73,7 +73,7 @@ module transpose_CUDECOMP_DOUBLE_COMPLEX_mod
     implicit none
     ARRTYPE, allocatable :: ref(:,:,:)
 
-    type(cudecompPencilInfo) :: pinfo
+    type(hipdecompPencilInfo) :: pinfo
     integer :: i, j, k
     integer :: gdims(3)
     integer :: gx(3)
@@ -139,11 +139,11 @@ module transpose_CUDECOMP_DOUBLE_COMPLEX_mod
 
   subroutine cache_grid_desc(grid_desc, backend)
     implicit none
-    type(cudecompGridDesc) :: grid_desc
+    type(hipdecompGridDesc) :: grid_desc
     integer :: backend
 
     if (grid_desc_cache_set(backend)) then
-      CHECK_CUDECOMP_EXIT(cudecompGridDescDestroy(handle, grid_desc_cache(backend)))
+      CHECK_HIPDECOMP_EXIT(hipdecompGridDescDestroy(handle, grid_desc_cache(backend)))
     endif
 
     grid_desc_cache(backend) = grid_desc
@@ -172,11 +172,11 @@ module transpose_CUDECOMP_DOUBLE_COMPLEX_mod
     integer :: local_rank, ierr
     integer :: local_comm
 
-    ! cudecomp
-    type(cudecompGridDescConfig) :: config
-    type(cudecompGridDescAutotuneOptions) :: options
-    type(cudecompGridDesc) :: grid_desc
-    type(cudecompPencilInfo) :: pinfo_x, pinfo_y, pinfo_z
+    ! hipdecomp
+    type(hipdecompGridDescConfig) :: config
+    type(hipdecompGridDescAutotuneOptions) :: options
+    type(hipdecompGridDesc) :: grid_desc
+    type(hipdecompPencilInfo) :: pinfo_x, pinfo_y, pinfo_z
 
     integer :: pdims(2)
     integer :: gdims(3)
@@ -351,7 +351,7 @@ module transpose_CUDECOMP_DOUBLE_COMPLEX_mod
     endif
 
     ! Setup grid descriptor
-    CHECK_CUDECOMP(cudecompGridDescConfigSetDefaults(config))
+    CHECK_HIPDECOMP(hipdecompGridDescConfigSetDefaults(config))
     config%pdims = pdims
     gdims = [gx, gy, gz]
     config%gdims = gdims
@@ -359,7 +359,7 @@ module transpose_CUDECOMP_DOUBLE_COMPLEX_mod
     config%transpose_axis_contiguous = axis_contiguous
     config%transpose_mem_order = mem_order
 
-    CHECK_CUDECOMP(cudecompGridDescAutotuneOptionsSetDefaults(options))
+    CHECK_HIPDECOMP(hipdecompGridDescAutotuneOptionsSetDefaults(options))
     options%dtype = dtype
     options%transpose_use_inplace_buffers = .not. out_of_place
 
@@ -369,26 +369,26 @@ module transpose_CUDECOMP_DOUBLE_COMPLEX_mod
       options%autotune_transpose_backend = .true.
     endif
 
-    CHECK_CUDECOMP(cudecompGridDescCreate(handle, grid_desc, config, options))
+    CHECK_HIPDECOMP(hipdecompGridDescCreate(handle, grid_desc, config, options))
     call cache_grid_desc(grid_desc, config%transpose_comm_backend)
 
     if (.not. silent .and. rank == 0) then
        write(*,"('running on ', i0, ' x ', i0, ' process grid ...')") config%pdims(1), config%pdims(2)
        write(*,"('running using ', a, ' transpose backend ...')") &
-                 cudecompTransposeCommBackendToString(config%transpose_comm_backend)
+                 hipdecompTransposeCommBackendToString(config%transpose_comm_backend)
     endif
 
     ! Get x-pencil information
-    CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, pinfo_x, 1, halo_extents_x, padding_x))
+    CHECK_HIPDECOMP(hipdecompGetPencilInfo(handle, grid_desc, pinfo_x, 1, halo_extents_x, padding_x))
 
     ! Get y-pencil information
-    CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, pinfo_y, 2, halo_extents_y, padding_y))
+    CHECK_HIPDECOMP(hipdecompGetPencilInfo(handle, grid_desc, pinfo_y, 2, halo_extents_y, padding_y))
 
     ! Get z-pencil information
-    CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, pinfo_z, 3, halo_extents_z, padding_z))
+    CHECK_HIPDECOMP(hipdecompGetPencilInfo(handle, grid_desc, pinfo_z, 3, halo_extents_z, padding_z))
 
     ! Get workspace size
-    CHECK_CUDECOMP(cudecompGetTransposeWorkspaceSize(handle, grid_desc, workspace_num_elements))
+    CHECK_HIPDECOMP(hipdecompGetTransposeWorkspaceSize(handle, grid_desc, workspace_num_elements))
 
     ! Allocate data arrays
     data_num_elements = max(pinfo_x%size, pinfo_y%size, pinfo_z%size)
@@ -408,15 +408,15 @@ module transpose_CUDECOMP_DOUBLE_COMPLEX_mod
     ! Allocate workspace (reuse exising workspace if able)
     if (work_backend == config%transpose_comm_backend) then
       if (size(work_d) < workspace_num_elements) then
-        CHECK_CUDECOMP(cudecompFree(handle, grid_desc, work_d))
-        CHECK_CUDECOMP(cudecompMalloc(handle, grid_desc, work_d, workspace_num_elements))
+        CHECK_HIPDECOMP(hipdecompFree(handle, grid_desc, work_d))
+        CHECK_HIPDECOMP(hipdecompMalloc(handle, grid_desc, work_d, workspace_num_elements))
       endif
     elseif (work_backend > 0 .and. work_backend /= config%transpose_comm_backend) then
-      CHECK_CUDECOMP(cudecompFree(handle, grid_desc_cache(work_backend), work_d))
-      CHECK_CUDECOMP(cudecompMalloc(handle, grid_desc, work_d, workspace_num_elements))
+      CHECK_HIPDECOMP(hipdecompFree(handle, grid_desc_cache(work_backend), work_d))
+      CHECK_HIPDECOMP(hipdecompMalloc(handle, grid_desc, work_d, workspace_num_elements))
       work_backend = config%transpose_comm_backend;
     else
-      CHECK_CUDECOMP(cudecompMalloc(handle, grid_desc, work_d, workspace_num_elements))
+      CHECK_HIPDECOMP(hipdecompMalloc(handle, grid_desc, work_d, workspace_num_elements))
       work_backend = config%transpose_comm_backend;
     endif
 
@@ -449,10 +449,10 @@ module transpose_CUDECOMP_DOUBLE_COMPLEX_mod
     endif
 
     work_d = 0
-    CHECK_CUDECOMP(cudecompTransposeXToY(handle, grid_desc, input, output, work_d, dtype, pinfo_x%halo_extents, pinfo_y%halo_extents, pinfo_x%padding, pinfo_y%padding))
+    CHECK_HIPDECOMP(hipdecompTransposeXToY(handle, grid_desc, input, output, work_d, dtype, pinfo_x%halo_extents, pinfo_y%halo_extents, pinfo_x%padding, pinfo_y%padding))
     data = output
     if (compare_pencils(yref, data, pinfo_y)) then
-      print*, "FAILED cudecompTranposeXToY"
+      print*, "FAILED hipdecompTranposeXToY"
       res = 1
       return
     endif
@@ -468,10 +468,10 @@ module transpose_CUDECOMP_DOUBLE_COMPLEX_mod
     endif
 
     work_d = 0
-    CHECK_CUDECOMP(cudecompTransposeYToZ(handle, grid_desc, input, output, work_d, dtype, pinfo_y%halo_extents, pinfo_z%halo_extents, pinfo_y%padding, pinfo_z%padding))
+    CHECK_HIPDECOMP(hipdecompTransposeYToZ(handle, grid_desc, input, output, work_d, dtype, pinfo_y%halo_extents, pinfo_z%halo_extents, pinfo_y%padding, pinfo_z%padding))
     data = output
     if (compare_pencils(zref, data, pinfo_z)) then
-      print*, "FAILED cudecompTranposeYToZ"
+      print*, "FAILED hipdecompTranposeYToZ"
       res = 1
       return
     endif
@@ -487,10 +487,10 @@ module transpose_CUDECOMP_DOUBLE_COMPLEX_mod
     endif
 
     work_d = 0
-    CHECK_CUDECOMP(cudecompTransposeZToY(handle, grid_desc, input, output, work_d, dtype, pinfo_z%halo_extents, pinfo_y%halo_extents, pinfo_z%padding, pinfo_y%padding))
+    CHECK_HIPDECOMP(hipdecompTransposeZToY(handle, grid_desc, input, output, work_d, dtype, pinfo_z%halo_extents, pinfo_y%halo_extents, pinfo_z%padding, pinfo_y%padding))
     data = output
     if (compare_pencils(yref, data, pinfo_y)) then
-      print*, "FAILED cudecompTranposeZToY"
+      print*, "FAILED hipdecompTranposeZToY"
       res = 1
       return
     endif
@@ -506,10 +506,10 @@ module transpose_CUDECOMP_DOUBLE_COMPLEX_mod
     endif
 
     work_d = 0
-    CHECK_CUDECOMP(cudecompTransposeYToX(handle, grid_desc, input, output, work_d, dtype, pinfo_y%halo_extents, pinfo_x%halo_extents, pinfo_y%padding, pinfo_x%padding))
+    CHECK_HIPDECOMP(hipdecompTransposeYToX(handle, grid_desc, input, output, work_d, dtype, pinfo_y%halo_extents, pinfo_x%halo_extents, pinfo_y%padding, pinfo_x%padding))
     data = output
     if (compare_pencils(xref, data, pinfo_x)) then
-      print*, "FAILED cudecompTranposeYToX"
+      print*, "FAILED hipdecompTranposeYToX"
       res = 1
       return
     endif
@@ -529,19 +529,19 @@ program main
   use, intrinsic :: iso_fortran_env, only: real32, real64
 
 #ifdef R32
-  use transpose_CUDECOMP_FLOAT_mod
+  use transpose_HIPDECOMP_FLOAT_mod
 #endif
 
 #ifdef R64
-  use transpose_CUDECOMP_DOUBLE_mod
+  use transpose_HIPDECOMP_DOUBLE_mod
 #endif
 
 #ifdef C32
-  use transpose_CUDECOMP_FLOAT_COMPLEX_mod
+  use transpose_HIPDECOMP_FLOAT_COMPLEX_mod
 #endif
 
 #ifdef C64
-  use transpose_CUDECOMP_DOUBLE_COMPLEX_mod
+  use transpose_HIPDECOMP_DOUBLE_COMPLEX_mod
 #endif
 
   implicit none
@@ -565,7 +565,7 @@ program main
 
   call MPI_Comm_split_Type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL, local_comm, ierr)
   call MPI_Comm_rank(local_comm, local_rank, ierr)
-  CHECK_CUDA_EXIT(hipSetDevice(local_rank))
+  CHECK_HIP_EXIT(hipSetDevice(local_rank))
 
   using_testfile = .false.
   do i = 1, command_argument_count()
@@ -577,8 +577,8 @@ program main
     endif
   enddo
 
-  ! Initialize cuDecomp
-  CHECK_CUDECOMP_EXIT(cudecompInit(handle, MPI_COMM_WORLD))
+  ! Initialize hipDecomp
+  CHECK_HIPDECOMP_EXIT(hipdecompInit(handle, MPI_COMM_WORLD))
 
   if (.not. using_testfile) then
     allocate(testcases(1))
@@ -646,13 +646,13 @@ program main
     if (grid_desc_cache_set(i)) then
       ! Free workspace with correct grid descriptor
       if (work_backend == i) then
-        CHECK_CUDECOMP_EXIT(cudecompFree(handle, grid_desc_cache(i), work_d))
+        CHECK_HIPDECOMP_EXIT(hipdecompFree(handle, grid_desc_cache(i), work_d))
       endif
-      CHECK_CUDECOMP_EXIT(cudecompGridDescDestroy(handle, grid_desc_cache(i)))
+      CHECK_HIPDECOMP_EXIT(hipdecompGridDescDestroy(handle, grid_desc_cache(i)))
     endif
   end do
 
-  CHECK_CUDECOMP_EXIT(cudecompFinalize(handle))
+  CHECK_HIPDECOMP_EXIT(hipdecompFinalize(handle))
   call MPI_Finalize(ierr)
 
   call exit(retcode)

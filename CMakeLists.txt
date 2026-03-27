@@ -89,10 +89,9 @@ set_target_properties(hipdecomp PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINA
 target_sources(hipdecomp
   PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/src/autotune.cc
-  ${CMAKE_CURRENT_SOURCE_DIR}/src/cuda_wrap.cc
-  ${CMAKE_CURRENT_SOURCE_DIR}/src/cudecomp_kernels.hip
-  ${CMAKE_CURRENT_SOURCE_DIR}/src/cudecomp_kernels_rdc.hip
-  ${CMAKE_CURRENT_SOURCE_DIR}/src/cudecomp.cc
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/hipdecomp_kernels.hip
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/hipdecomp_kernels_rdc.hip
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/hipdecomp.cc
   ${CMAKE_CURRENT_SOURCE_DIR}/src/graph.cc
   ${CMAKE_CURRENT_SOURCE_DIR}/src/performance.cc
 )
@@ -168,8 +167,8 @@ endif()
 #   endif()
 # endif()
 
-set_target_properties(hipdecomp PROPERTIES PUBLIC_HEADER ${CMAKE_CURRENT_SOURCE_DIR}/include/cudecomp.h)
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/include/cudecomp.h ${CMAKE_BINARY_DIR}/include/cudecomp.h)
+set_target_properties(hipdecomp PROPERTIES PUBLIC_HEADER ${CMAKE_CURRENT_SOURCE_DIR}/include/hipdecomp.h)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/include/hipdecomp.h ${CMAKE_BINARY_DIR}/include/hipdecomp.h)
 
 install(
   TARGETS hipdecomp
@@ -187,9 +186,9 @@ if (HIPDECOMP_BUILD_FORTRAN)
   target_sources(
     hipdecomp_fort
     PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/cudecomp_m.f90
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/hipdecomp_m.f90
   )
-  set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/src/cudecomp_m.f90 PROPERTIES LANGUAGE Fortran)
+  set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/src/hipdecomp_m.f90 PROPERTIES LANGUAGE Fortran)
 
   install(
     TARGETS hipdecomp_fort

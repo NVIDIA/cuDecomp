@@ -1,5 +1,6 @@
 /*
  * SPDX-FileCopyrightText: Copyright (c) 2022-2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2026 The Authors.
  * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,23 +16,24 @@
  * limitations under the License.
  */
 
-#ifndef CUDECOMP_GRAPH_H
-#define CUDECOMP_GRAPH_H
+#ifndef HIPDECOMP_GRAPH_H
+#define HIPDECOMP_GRAPH_H
 
 #include <tuple>
 #include <unordered_map>
 
 #include <hip/hip_runtime.h>
 
-#include "cudecomp.h"
+#include "hipdecomp.h"
 #include "internal/checks.h"
 #include "internal/hashes.h"
 #include "internal/utils.h"
 
-namespace cudecomp {
+namespace hipdecomp {
 
 class graphCache {
-  using key_type = std::tuple<void*, void*, int, int, cudecompPencilInfo_t, cudecompPencilInfo_t, cudecompDataType_t>;
+  using key_type =
+      std::tuple<void*, void*, int, int, hipdecompPencilInfo_t, hipdecompPencilInfo_t, hipdecompDataType_t>;
 
 public:
   graphCache();
@@ -47,6 +49,6 @@ private:
   hipStream_t graph_stream_;
 };
 
-} // namespace cudecomp
+} // namespace hipdecomp
 
-#endif // CUDECOMP_GRAPH_H
+#endif // HIPDECOMP_GRAPH_H

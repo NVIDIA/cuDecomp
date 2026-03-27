@@ -1,7 +1,7 @@
 # Tests
-This subdirectory contains tests for both the transpose and halo communication routines in cuDecomp, in both C++ and Fortran.
+This subdirectory contains tests for both the transpose and halo communication routines in hipDecomp, in both C++ and Fortran.
 The testing executables accept a number of flags to control the configuration of the test (run `cc/transpose_test -h` or
-`cc/halo_test -h` for a listing of available options). You can use these binaries to test particular configurations of cuDecomp (i.e.
+`cc/halo_test -h` for a listing of available options). You can use these binaries to test particular configurations of hipDecomp (i.e.
 global grid, process grid, communication backends, datatype, etc.) to verify functionality.
 
 There is a [`test_runner.py`](test_runner.py) script that runs sweeps of these tests across a number of different configurations, defined

@@ -1,5 +1,6 @@
 /*
  * SPDX-FileCopyrightText: Copyright (c) 2022-2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2026 The Authors.
  * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -28,17 +29,17 @@
 
 #include <mpi.h>
 
-#include "cudecomp.h"
+#include "hipdecomp.h"
 #include "internal/checks.h"
 #include "internal/performance.h"
 
-namespace cudecomp {
+namespace hipdecomp {
 
 // Helper function to create file name with grid descriptor information
 std::filesystem::path createPerformanceReportFileName(const std::string& write_dir, const std::string& table_type,
-                                                      const cudecompGridDesc_t grid_desc) {
+                                                      const hipdecompGridDesc_t grid_desc) {
   std::ostringstream filename;
-  filename << "cudecomp-perf-report-" << table_type << "-";
+  filename << "hipdecomp-perf-report-" << table_type << "-";
   filename << "tcomm_" << grid_desc->config.transpose_comm_backend << "-";
   filename << "hcomm_" << grid_desc->config.halo_comm_backend << "-";
   filename << "pdims_" << grid_desc->config.pdims[0] << "x" << grid_desc->config.pdims[1] << "-";
@@ -55,10 +56,10 @@ std::filesystem::path createPerformanceReportFileName(const std::string& write_d
 }
 
 // Helper function to write CSV header comment with grid configuration information
-void writeCSVHeader(std::ofstream& file, const cudecompGridDesc_t grid_desc) {
-  file << "# Transpose backend: " << cudecompTransposeCommBackendToString(grid_desc->config.transpose_comm_backend)
+void writeCSVHeader(std::ofstream& file, const hipdecompGridDesc_t grid_desc) {
+  file << "# Transpose backend: " << hipdecompTransposeCommBackendToString(grid_desc->config.transpose_comm_backend)
        << "\n";
-  file << "# Halo backend: " << cudecompHaloCommBackendToString(grid_desc->config.halo_comm_backend) << "\n";
+  file << "# Halo backend: " << hipdecompHaloCommBackendToString(grid_desc->config.halo_comm_backend) << "\n";
   file << "# Process grid: [" << grid_desc->config.pdims[0] << ", " << grid_desc->config.pdims[1] << "]\n";
   file << "# Global dimensions: [" << grid_desc->config.gdims[0] << ", " << grid_desc->config.gdims[1] << ", "
        << grid_desc->config.gdims[2] << "]\n";
@@ -74,13 +75,13 @@ void writeCSVHeader(std::ofstream& file, const cudecompGridDesc_t grid_desc) {
 
 // Write transpose performance table to CSV
 void writeTransposePerformanceTableCSV(const std::vector<TransposeConfigTimingData>& all_transpose_config_data,
-                                       const cudecompGridDesc_t grid_desc, const std::string& write_dir) {
+                                       const hipdecompGridDesc_t grid_desc, const std::string& write_dir) {
   if (all_transpose_config_data.empty()) return;
 
   std::filesystem::path filename = createPerformanceReportFileName(write_dir, "transpose-aggregated", grid_desc);
   std::ofstream file(filename);
   if (!file.is_open()) {
-    printf("CUDECOMP:WARN: Could not open file %s for writing\n", filename.string().c_str());
+    printf("HIPDECOMP:WARN: Could not open file %s for writing\n", filename.string().c_str());
     return;
   }
 
@@ -106,19 +107,19 @@ void writeTransposePerformanceTableCSV(const std::vector<TransposeConfigTimingDa
   }
 
   file.close();
-  printf("CUDECOMP:\n");
-  printf("CUDECOMP: Wrote transpose performance data to %s\n", filename.string().c_str());
+  printf("HIPDECOMP:\n");
+  printf("HIPDECOMP: Wrote transpose performance data to %s\n", filename.string().c_str());
 }
 
 // Write halo performance table to CSV
 void writeHaloPerformanceTableCSV(const std::vector<HaloConfigTimingData>& all_halo_config_data,
-                                  const cudecompGridDesc_t grid_desc, const std::string& write_dir) {
+                                  const hipdecompGridDesc_t grid_desc, const std::string& write_dir) {
   if (all_halo_config_data.empty()) return;
 
   std::filesystem::path filename = createPerformanceReportFileName(write_dir, "halo-aggregated", grid_desc);
   std::ofstream file(filename);
   if (!file.is_open()) {
-    printf("CUDECOMP:WARN: Could not open file %s for writing\n", filename.string().c_str());
+    printf("HIPDECOMP:WARN: Could not open file %s for writing\n", filename.string().c_str());
     return;
   }
 
@@ -142,16 +143,16 @@ void writeHaloPerformanceTableCSV(const std::vector<HaloConfigTimingData>& all_h
   }
 
   file.close();
-  printf("CUDECOMP:\n");
-  printf("CUDECOMP: Wrote halo performance data to %s\n", filename.string().c_str());
+  printf("HIPDECOMP:\n");
+  printf("HIPDECOMP: Wrote halo performance data to %s\n", filename.string().c_str());
 }
 
 // Helper function to create transpose configuration key
-cudecompTransposeConfigKey createTransposeConfig(int ax, int dir, void* input, void* output,
-                                                 const int32_t input_halo_extents_ptr[],
-                                                 const int32_t output_halo_extents_ptr[],
-                                                 const int32_t input_padding_ptr[], const int32_t output_padding_ptr[],
-                                                 cudecompDataType_t datatype) {
+hipdecompTransposeConfigKey createTransposeConfig(int ax, int dir, void* input, void* output,
+                                                  const int32_t input_halo_extents_ptr[],
+                                                  const int32_t output_halo_extents_ptr[],
+                                                  const int32_t input_padding_ptr[], const int32_t output_padding_ptr[],
+                                                  hipdecompDataType_t datatype) {
   std::array<int32_t, 3> input_halo_extents{0, 0, 0};
   std::array<int32_t, 3> output_halo_extents{0, 0, 0};
   std::array<int32_t, 3> input_padding{0, 0, 0};
@@ -174,9 +175,9 @@ cudecompTransposeConfigKey createTransposeConfig(int ax, int dir, void* input, v
 }
 
 // Helper function to create halo configuration key
-cudecompHaloConfigKey createHaloConfig(int ax, int dim, void* input, const int32_t halo_extents_ptr[],
-                                       const bool halo_periods_ptr[], const int32_t padding_ptr[],
-                                       cudecompDataType_t datatype) {
+hipdecompHaloConfigKey createHaloConfig(int ax, int dim, void* input, const int32_t halo_extents_ptr[],
+                                        const bool halo_periods_ptr[], const int32_t padding_ptr[],
+                                        hipdecompDataType_t datatype) {
   std::array<int32_t, 3> halo_extents{0, 0, 0};
   std::array<bool, 3> halo_periods{false, false, false};
   std::array<int32_t, 3> padding{0, 0, 0};
@@ -191,28 +192,28 @@ cudecompHaloConfigKey createHaloConfig(int ax, int dim, void* input, const int32
 }
 
 // Helper function to get or create transpose performance sample collection for a configuration
-cudecompTransposePerformanceSampleCollection&
-getOrCreateTransposePerformanceSamples(const cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
-                                       const cudecompTransposeConfigKey& config) {
+hipdecompTransposePerformanceSampleCollection&
+getOrCreateTransposePerformanceSamples(const hipdecompHandle_t handle, hipdecompGridDesc_t grid_desc,
+                                       const hipdecompTransposeConfigKey& config) {
   auto& samples_map = grid_desc->transpose_perf_samples_map;
 
   if (samples_map.find(config) == samples_map.end()) {
     // Create new sample collection for this configuration
-    cudecompTransposePerformanceSampleCollection collection;
+    hipdecompTransposePerformanceSampleCollection collection;
     collection.samples.resize(handle->performance_report_samples);
     collection.sample_idx = 0;
 
     // Create events for each sample
     for (auto& sample : collection.samples) {
-      CHECK_CUDA(hipEventCreate(&sample.transpose_start_event));
-      CHECK_CUDA(hipEventCreate(&sample.transpose_end_event));
+      CHECK_HIP(hipEventCreate(&sample.transpose_start_event));
+      CHECK_HIP(hipEventCreate(&sample.transpose_end_event));
       sample.alltoall_start_events.resize(handle->nranks);
       sample.alltoall_end_events.resize(handle->nranks);
       for (auto& event : sample.alltoall_start_events) {
-        CHECK_CUDA(hipEventCreate(&event));
+        CHECK_HIP(hipEventCreate(&event));
       }
       for (auto& event : sample.alltoall_end_events) {
-        CHECK_CUDA(hipEventCreate(&event));
+        CHECK_HIP(hipEventCreate(&event));
       }
       sample.valid = false;
     }
@@ -224,23 +225,23 @@ getOrCreateTransposePerformanceSamples(const cudecompHandle_t handle, cudecompGr
 }
 
 // Helper function to get or create halo performance sample collection for a configuration
-cudecompHaloPerformanceSampleCollection& getOrCreateHaloPerformanceSamples(const cudecompHandle_t handle,
-                                                                           cudecompGridDesc_t grid_desc,
-                                                                           const cudecompHaloConfigKey& config) {
+hipdecompHaloPerformanceSampleCollection& getOrCreateHaloPerformanceSamples(const hipdecompHandle_t handle,
+                                                                            hipdecompGridDesc_t grid_desc,
+                                                                            const hipdecompHaloConfigKey& config) {
   auto& samples_map = grid_desc->halo_perf_samples_map;
 
   if (samples_map.find(config) == samples_map.end()) {
     // Create new sample collection for this configuration
-    cudecompHaloPerformanceSampleCollection collection;
+    hipdecompHaloPerformanceSampleCollection collection;
     collection.samples.resize(handle->performance_report_samples);
     collection.sample_idx = 0;
 
     // Create events for each sample
     for (auto& sample : collection.samples) {
-      CHECK_CUDA(hipEventCreate(&sample.halo_start_event));
-      CHECK_CUDA(hipEventCreate(&sample.halo_end_event));
-      CHECK_CUDA(hipEventCreate(&sample.sendrecv_start_event));
-      CHECK_CUDA(hipEventCreate(&sample.sendrecv_end_event));
+      CHECK_HIP(hipEventCreate(&sample.halo_start_event));
+      CHECK_HIP(hipEventCreate(&sample.halo_end_event));
+      CHECK_HIP(hipEventCreate(&sample.sendrecv_start_event));
+      CHECK_HIP(hipEventCreate(&sample.sendrecv_end_event));
       sample.valid = false;
     }
 
@@ -265,7 +266,7 @@ std::string formatArray(const std::array<bool, 3>& arr) {
 }
 
 // Helper function to get operation name from transpose config
-std::string getTransposeOperationName(const cudecompTransposeConfigKey& config) {
+std::string getTransposeOperationName(const hipdecompTransposeConfigKey& config) {
   int ax = std::get<0>(config);
   int dir = std::get<1>(config);
 
@@ -282,7 +283,7 @@ std::string getTransposeOperationName(const cudecompTransposeConfigKey& config) 
 }
 
 // Helper function to get operation name from halo config
-std::string getHaloOperationName(const cudecompHaloConfigKey& config) {
+std::string getHaloOperationName(const hipdecompHaloConfigKey& config) {
   int ax = std::get<0>(config);
 
   if (ax == 0) {
@@ -296,12 +297,12 @@ std::string getHaloOperationName(const cudecompHaloConfigKey& config) {
 }
 
 // Helper function to convert datatype to string
-std::string getDatatypeString(cudecompDataType_t datatype) {
+std::string getDatatypeString(hipdecompDataType_t datatype) {
   switch (datatype) {
-  case CUDECOMP_FLOAT: return "S";
-  case CUDECOMP_DOUBLE: return "D";
-  case CUDECOMP_FLOAT_COMPLEX: return "C";
-  case CUDECOMP_DOUBLE_COMPLEX: return "Z";
+  case HIPDECOMP_FLOAT: return "S";
+  case HIPDECOMP_DOUBLE: return "D";
+  case HIPDECOMP_FLOAT_COMPLEX: return "C";
+  case HIPDECOMP_DOUBLE_COMPLEX: return "Z";
   default: return "unknown";
   }
 }
@@ -351,7 +352,7 @@ bool compareHaloConfigData(const HaloConfigTimingData& a, const HaloConfigTiming
 }
 
 // Function to compute average across ranks
-float computeGlobalAverage(const std::vector<float>& values, const cudecompHandle_t handle) {
+float computeGlobalAverage(const std::vector<float>& values, const hipdecompHandle_t handle) {
   if (values.size() == 0) { return 0.0f; }
 
   float value = std::accumulate(values.begin(), values.end(), 0.0f);
@@ -363,7 +364,7 @@ float computeGlobalAverage(const std::vector<float>& values, const cudecompHandl
 
 // Function to gather data from all ranks
 void gatherSampleData(const std::vector<float>& local_data, std::vector<float>& all_data,
-                      const cudecompHandle_t handle) {
+                      const hipdecompHandle_t handle) {
   int num_samples = local_data.size();
   if (handle->rank == 0) { all_data.resize(num_samples * handle->nranks); }
 
@@ -372,9 +373,9 @@ void gatherSampleData(const std::vector<float>& local_data, std::vector<float>& 
 }
 
 // Process transpose timing data from sample collections
-TransposeConfigTimingData processTransposeConfig(const cudecompTransposeConfigKey& config,
-                                                 const cudecompTransposePerformanceSampleCollection& collection,
-                                                 const cudecompHandle_t handle) {
+TransposeConfigTimingData processTransposeConfig(const hipdecompTransposeConfigKey& config,
+                                                 const hipdecompTransposePerformanceSampleCollection& collection,
+                                                 const hipdecompHandle_t handle) {
   TransposeConfigTimingData config_data;
 
   config_data.total_times.reserve(collection.samples.size());
@@ -390,12 +391,12 @@ TransposeConfigTimingData processTransposeConfig(const cudecompTransposeConfigKe
     float alltoall_timing_ms = 0.0f;
     for (int j = 0; j < sample.alltoall_timing_count; ++j) {
       float elapsed_time;
-      CHECK_CUDA(hipEventElapsedTime(&elapsed_time, sample.alltoall_start_events[j], sample.alltoall_end_events[j]));
+      CHECK_HIP(hipEventElapsedTime(&elapsed_time, sample.alltoall_start_events[j], sample.alltoall_end_events[j]));
       alltoall_timing_ms += elapsed_time;
     }
 
     float transpose_timing_ms;
-    CHECK_CUDA(hipEventElapsedTime(&transpose_timing_ms, sample.transpose_start_event, sample.transpose_end_event));
+    CHECK_HIP(hipEventElapsedTime(&transpose_timing_ms, sample.transpose_start_event, sample.transpose_end_event));
 
     config_data.total_times.push_back(transpose_timing_ms);
     config_data.alltoall_times.push_back(alltoall_timing_ms);
@@ -433,9 +434,9 @@ TransposeConfigTimingData processTransposeConfig(const cudecompTransposeConfigKe
 }
 
 // Process halo timing data from sample collections
-HaloConfigTimingData processHaloConfig(const cudecompHaloConfigKey& config,
-                                       const cudecompHaloPerformanceSampleCollection& collection,
-                                       const cudecompHandle_t handle) {
+HaloConfigTimingData processHaloConfig(const hipdecompHaloConfigKey& config,
+                                       const hipdecompHaloPerformanceSampleCollection& collection,
+                                       const hipdecompHandle_t handle) {
   HaloConfigTimingData config_data;
 
   config_data.total_times.reserve(collection.samples.size());
@@ -450,11 +451,11 @@ HaloConfigTimingData processHaloConfig(const cudecompHaloConfigKey& config,
 
     float sendrecv_timing_ms = 0.0f;
     if (sample.sendrecv_bytes > 0) {
-      CHECK_CUDA(hipEventElapsedTime(&sendrecv_timing_ms, sample.sendrecv_start_event, sample.sendrecv_end_event));
+      CHECK_HIP(hipEventElapsedTime(&sendrecv_timing_ms, sample.sendrecv_start_event, sample.sendrecv_end_event));
     }
 
     float halo_timing_ms;
-    CHECK_CUDA(hipEventElapsedTime(&halo_timing_ms, sample.halo_start_event, sample.halo_end_event));
+    CHECK_HIP(hipEventElapsedTime(&halo_timing_ms, sample.halo_start_event, sample.halo_end_event));
 
     config_data.total_times.push_back(halo_timing_ms);
     config_data.sendrecv_times.push_back(sendrecv_timing_ms);
@@ -491,41 +492,41 @@ HaloConfigTimingData processHaloConfig(const cudecompHaloConfigKey& config,
 }
 
 // Print grid configuration information
-void printGridConfiguration(const cudecompHandle_t handle, const cudecompGridDesc_t grid_desc) {
+void printGridConfiguration(const hipdecompHandle_t handle, const hipdecompGridDesc_t grid_desc) {
   if (handle->rank != 0) return;
 
-  printf("CUDECOMP:\n");
-  printf("CUDECOMP: ===== Performance Summary =====\n");
-  printf("CUDECOMP: Grid Configuration:\n");
-  printf("CUDECOMP:\tTranspose backend: %s\n",
-         cudecompTransposeCommBackendToString(grid_desc->config.transpose_comm_backend));
-  printf("CUDECOMP:\tHalo backend: %s\n", cudecompHaloCommBackendToString(grid_desc->config.halo_comm_backend));
-  printf("CUDECOMP:\tProcess grid: [%d, %d]\n", grid_desc->config.pdims[0], grid_desc->config.pdims[1]);
-  printf("CUDECOMP:\tGlobal dimensions: [%d, %d, %d]\n", grid_desc->config.gdims[0], grid_desc->config.gdims[1],
+  printf("HIPDECOMP:\n");
+  printf("HIPDECOMP: ===== Performance Summary =====\n");
+  printf("HIPDECOMP: Grid Configuration:\n");
+  printf("HIPDECOMP:\tTranspose backend: %s\n",
+         hipdecompTransposeCommBackendToString(grid_desc->config.transpose_comm_backend));
+  printf("HIPDECOMP:\tHalo backend: %s\n", hipdecompHaloCommBackendToString(grid_desc->config.halo_comm_backend));
+  printf("HIPDECOMP:\tProcess grid: [%d, %d]\n", grid_desc->config.pdims[0], grid_desc->config.pdims[1]);
+  printf("HIPDECOMP:\tGlobal dimensions: [%d, %d, %d]\n", grid_desc->config.gdims[0], grid_desc->config.gdims[1],
          grid_desc->config.gdims[2]);
 
   // Print memory ordering information
-  printf("CUDECOMP:\tMemory order: ");
+  printf("HIPDECOMP:\tMemory order: ");
   for (int axis = 0; axis < 3; ++axis) {
     printf("[%d,%d,%d]", grid_desc->config.transpose_mem_order[axis][0], grid_desc->config.transpose_mem_order[axis][1],
            grid_desc->config.transpose_mem_order[axis][2]);
     if (axis < 2) printf("; ");
   }
   printf("\n");
-  printf("CUDECOMP:\n");
+  printf("HIPDECOMP:\n");
 }
 
 // Print transpose performance table
 void printTransposePerformanceTable(const std::vector<TransposeConfigTimingData>& all_transpose_config_data) {
-  printf("CUDECOMP: Transpose Performance Data:\n");
-  printf("CUDECOMP:\n");
+  printf("HIPDECOMP: Transpose Performance Data:\n");
+  printf("HIPDECOMP:\n");
 
   // Print compact table header
-  printf("CUDECOMP: %-12s %-6s %-15s %-15s %-8s %-8s %-8s %-9s %-9s %-9s %-9s\n", "operation", "dtype", "halo extents",
+  printf("HIPDECOMP: %-12s %-6s %-15s %-15s %-8s %-8s %-8s %-9s %-9s %-9s %-9s\n", "operation", "dtype", "halo extents",
          "padding", "inplace", "managed", "samples", "total", "A2A", "local", "A2A BW");
-  printf("CUDECOMP: %-12s %-6s %-15s %-15s %-8s %-8s %-8s %-9s %-9s %-9s %-9s\n", "", "", "", "", "", "", "", "[ms]",
+  printf("HIPDECOMP: %-12s %-6s %-15s %-15s %-8s %-8s %-8s %-9s %-9s %-9s %-9s\n", "", "", "", "", "", "", "", "[ms]",
          "[ms]", "[ms]", "[GB/s]");
-  printf("CUDECOMP: ");
+  printf("HIPDECOMP: ");
   for (int i = 0; i < 120; ++i)
     printf("-");
   printf("\n");
@@ -534,7 +535,7 @@ void printTransposePerformanceTable(const std::vector<TransposeConfigTimingData>
   for (const auto& config_data : all_transpose_config_data) {
     const auto& stats = config_data.stats;
     if (stats.samples > 0) {
-      printf("CUDECOMP: %-12s %-6s %-7s/%-7s %-7s/%-7s %-8s %-8s %-8d %-9.3f %-9.3f %-9.3f %-9.3f\n",
+      printf("HIPDECOMP: %-12s %-6s %-7s/%-7s %-7s/%-7s %-8s %-8s %-8d %-9.3f %-9.3f %-9.3f %-9.3f\n",
              stats.operation.c_str(), stats.datatype.c_str(), stats.input_halos.c_str(), stats.output_halos.c_str(),
              stats.input_padding.c_str(), stats.output_padding.c_str(), stats.inplace.c_str(), stats.managed.c_str(),
              stats.samples, stats.total_time_avg, stats.alltoall_time_avg, stats.local_time_avg, stats.alltoall_bw_avg);
@@ -544,16 +545,16 @@ void printTransposePerformanceTable(const std::vector<TransposeConfigTimingData>
 
 // Print halo performance table
 void printHaloPerformanceTable(const std::vector<HaloConfigTimingData>& all_halo_config_data) {
-  printf("CUDECOMP:\n");
-  printf("CUDECOMP: Halo Performance Data:\n");
-  printf("CUDECOMP:\n");
+  printf("HIPDECOMP:\n");
+  printf("HIPDECOMP: Halo Performance Data:\n");
+  printf("HIPDECOMP:\n");
 
   // Print compact table header
-  printf("CUDECOMP: %-12s %-6s %-5s %-12s %-12s %-12s %-8s %-8s %-9s %-9s %-9s %-9s\n", "operation", "dtype", "dim",
+  printf("HIPDECOMP: %-12s %-6s %-5s %-12s %-12s %-12s %-8s %-8s %-9s %-9s %-9s %-9s\n", "operation", "dtype", "dim",
          "halo extent", "periods", "padding", "managed", "samples", "total", "SR", "local", "SR BW");
-  printf("CUDECOMP: %-12s %-6s %-5s %-12s %-12s %-12s %-8s %-8s %-9s %-9s %-9s %-9s\n", "", "", "", "", "", "", "", "",
+  printf("HIPDECOMP: %-12s %-6s %-5s %-12s %-12s %-12s %-8s %-8s %-9s %-9s %-9s %-9s\n", "", "", "", "", "", "", "", "",
          "[ms]", "[ms]", "[ms]", "[GB/s]");
-  printf("CUDECOMP: ");
+  printf("HIPDECOMP: ");
   for (int i = 0; i < 125; ++i)
     printf("-");
   printf("\n");
@@ -562,7 +563,7 @@ void printHaloPerformanceTable(const std::vector<HaloConfigTimingData>& all_halo
   for (const auto& config_data : all_halo_config_data) {
     const auto& stats = config_data.stats;
     if (stats.samples > 0) {
-      printf("CUDECOMP: %-12s %-6s %-5d %-12s %-12s %-12s %-8s %-8d %-9.3f %-9.3f %-9.3f %-9.3f\n",
+      printf("HIPDECOMP: %-12s %-6s %-5d %-12s %-12s %-12s %-8s %-8d %-9.3f %-9.3f %-9.3f %-9.3f\n",
              stats.operation.c_str(), stats.datatype.c_str(), stats.dim, stats.halos.c_str(), stats.periods.c_str(),
              stats.padding.c_str(), stats.managed.c_str(), stats.samples, stats.total_time_avg, stats.sendrecv_time_avg,
              stats.local_time_avg, stats.sendrecv_bw_avg);
@@ -572,7 +573,7 @@ void printHaloPerformanceTable(const std::vector<HaloConfigTimingData>& all_halo
 
 // Print per-sample transpose data for a single configuration
 void printTransposePerSampleDetailsForConfig(const TransposeConfigTimingData& config_data,
-                                             const cudecompHandle_t handle, int detail_level,
+                                             const hipdecompHandle_t handle, int detail_level,
                                              std::ofstream* csv_file = nullptr) {
   const auto& stats = config_data.stats;
   const auto& total_times = config_data.total_times;
@@ -604,17 +605,17 @@ void printTransposePerSampleDetailsForConfig(const TransposeConfigTimingData& co
     if (handle->rank != 0) return;
   }
 
-  printf("CUDECOMP: %s (dtype=%s, halo extents=%s/%s, padding=%s/%s, inplace=%s, managed=%s) samples:\n",
+  printf("HIPDECOMP: %s (dtype=%s, halo extents=%s/%s, padding=%s/%s, inplace=%s, managed=%s) samples:\n",
          stats.operation.c_str(), stats.datatype.c_str(), stats.input_halos.c_str(), stats.output_halos.c_str(),
          stats.input_padding.c_str(), stats.output_padding.c_str(), stats.inplace.c_str(), stats.managed.c_str());
 
-  printf("CUDECOMP: %-6s %-12s %-9s %-9s %-9s %-9s\n", "rank", "sample", "total", "A2A", "local", "A2A BW");
-  printf("CUDECOMP: %-6s %-12s %-9s %-9s %-9s %-9s\n", "", "", "[ms]", "[ms]", "[ms]", "[GB/s]");
+  printf("HIPDECOMP: %-6s %-12s %-9s %-9s %-9s %-9s\n", "rank", "sample", "total", "A2A", "local", "A2A BW");
+  printf("HIPDECOMP: %-6s %-12s %-9s %-9s %-9s %-9s\n", "", "", "[ms]", "[ms]", "[ms]", "[GB/s]");
 
   for (int r = 0; r < (detail_level == 1 ? 1 : handle->nranks); ++r) {
     for (int s = 0; s < num_samples; ++s) {
       int idx = r * num_samples + s;
-      printf("CUDECOMP: %-6d %-12d %-9.3f %-9.3f %-9.3f %-9.3f\n", r, s, all_total_times[idx], all_alltoall_times[idx],
+      printf("HIPDECOMP: %-6d %-12d %-9.3f %-9.3f %-9.3f %-9.3f\n", r, s, all_total_times[idx], all_alltoall_times[idx],
              all_local_times[idx], all_alltoall_bws[idx]);
 
       // Write to CSV if file is provided
@@ -630,11 +631,11 @@ void printTransposePerSampleDetailsForConfig(const TransposeConfigTimingData& co
       }
     }
   }
-  printf("CUDECOMP:\n");
+  printf("HIPDECOMP:\n");
 }
 
 // Print per-sample halo data for a single configuration
-void printHaloPerSampleDetailsForConfig(const HaloConfigTimingData& config_data, const cudecompHandle_t handle,
+void printHaloPerSampleDetailsForConfig(const HaloConfigTimingData& config_data, const hipdecompHandle_t handle,
                                         int detail_level, std::ofstream* csv_file = nullptr) {
   const auto& stats = config_data.stats;
   const auto& total_times = config_data.total_times;
@@ -666,17 +667,17 @@ void printHaloPerSampleDetailsForConfig(const HaloConfigTimingData& config_data,
     if (handle->rank != 0) return;
   }
 
-  printf("CUDECOMP: %s (dtype=%s, dim=%d, halos=%s, periods=%s, padding=%s, managed=%s) samples:\n",
+  printf("HIPDECOMP: %s (dtype=%s, dim=%d, halos=%s, periods=%s, padding=%s, managed=%s) samples:\n",
          stats.operation.c_str(), stats.datatype.c_str(), stats.dim, stats.halos.c_str(), stats.periods.c_str(),
          stats.padding.c_str(), stats.managed.c_str());
 
-  printf("CUDECOMP: %-6s %-12s %-9s %-9s %-9s %-9s\n", "rank", "sample", "total", "SR", "local", "SR BW");
-  printf("CUDECOMP: %-6s %-12s %-9s %-9s %-9s %-9s\n", "", "", "[ms]", "[ms]", "[ms]", "[GB/s]");
+  printf("HIPDECOMP: %-6s %-12s %-9s %-9s %-9s %-9s\n", "rank", "sample", "total", "SR", "local", "SR BW");
+  printf("HIPDECOMP: %-6s %-12s %-9s %-9s %-9s %-9s\n", "", "", "[ms]", "[ms]", "[ms]", "[GB/s]");
 
   for (int r = 0; r < (detail_level == 1 ? 1 : handle->nranks); ++r) {
     for (int s = 0; s < num_samples; ++s) {
       int idx = r * num_samples + s;
-      printf("CUDECOMP: %-6d %-12d %-9.3f %-9.3f %-9.3f %-9.3f\n", r, s, all_total_times[idx], all_sendrecv_times[idx],
+      printf("HIPDECOMP: %-6d %-12d %-9.3f %-9.3f %-9.3f %-9.3f\n", r, s, all_total_times[idx], all_sendrecv_times[idx],
              all_local_times[idx], all_sendrecv_bws[idx]);
 
       // Write to CSV if file is provided
@@ -691,12 +692,12 @@ void printHaloPerSampleDetailsForConfig(const HaloConfigTimingData& config_data,
       }
     }
   }
-  printf("CUDECOMP:\n");
+  printf("HIPDECOMP:\n");
 }
 
 // Print per-sample details for transpose configurations
 void printTransposePerSampleDetails(const std::vector<TransposeConfigTimingData>& all_transpose_config_data,
-                                    const cudecompHandle_t handle, const cudecompGridDesc_t grid_desc,
+                                    const hipdecompHandle_t handle, const hipdecompGridDesc_t grid_desc,
                                     const std::string& write_dir = "") {
   std::ofstream csv_file;
   bool csv_enabled = !write_dir.empty();
@@ -718,7 +719,7 @@ void printTransposePerSampleDetails(const std::vector<TransposeConfigTimingData>
       csv_file << "operation,dtype,input_halo_extents,output_halo_extents,input_padding,output_padding,inplace,managed,"
                   "rank,sample,total_ms,A2A_ms,local_ms,A2A_BW_GBps\n";
     } else {
-      printf("CUDECOMP: Warning: Could not open file %s for writing\n", filename.string().c_str());
+      printf("HIPDECOMP: Warning: Could not open file %s for writing\n", filename.string().c_str());
     }
   }
 
@@ -731,15 +732,15 @@ void printTransposePerSampleDetails(const std::vector<TransposeConfigTimingData>
 
   if (csv_file.is_open()) {
     csv_file.close();
-    printf("CUDECOMP:\n");
-    printf("CUDECOMP: Wrote per-sample transpose data to %s\n",
+    printf("HIPDECOMP:\n");
+    printf("HIPDECOMP: Wrote per-sample transpose data to %s\n",
            createPerformanceReportFileName(write_dir, "transpose-samples", grid_desc).string().c_str());
   }
 }
 
 // Print per-sample details for halo configurations
 void printHaloPerSampleDetails(const std::vector<HaloConfigTimingData>& all_halo_config_data,
-                               const cudecompHandle_t handle, const cudecompGridDesc_t grid_desc,
+                               const hipdecompHandle_t handle, const hipdecompGridDesc_t grid_desc,
                                const std::string& write_dir = "") {
   std::ofstream csv_file;
   bool csv_enabled = !write_dir.empty();
@@ -761,7 +762,7 @@ void printHaloPerSampleDetails(const std::vector<HaloConfigTimingData>& all_halo
       csv_file
           << "operation,dtype,dim,halo_extent,periods,padding,managed,rank,sample,total_ms,SR_ms,local_ms,SR_BW_GBps\n";
     } else {
-      printf("CUDECOMP: Warning: Could not open file %s for writing\n", filename.string().c_str());
+      printf("HIPDECOMP: Warning: Could not open file %s for writing\n", filename.string().c_str());
     }
   }
 
@@ -774,15 +775,15 @@ void printHaloPerSampleDetails(const std::vector<HaloConfigTimingData>& all_halo
 
   if (csv_file.is_open()) {
     csv_file.close();
-    printf("CUDECOMP:\n");
-    printf("CUDECOMP: Wrote per-sample halo data to %s\n",
+    printf("HIPDECOMP:\n");
+    printf("HIPDECOMP: Wrote per-sample halo data to %s\n",
            createPerformanceReportFileName(write_dir, "halo-samples", grid_desc).string().c_str());
   }
 }
 
-void printPerformanceReport(const cudecompHandle_t handle, const cudecompGridDesc_t grid_desc) {
+void printPerformanceReport(const hipdecompHandle_t handle, const hipdecompGridDesc_t grid_desc) {
   // Synchronize to ensure all events are recorded
-  CHECK_CUDA(hipDeviceSynchronize());
+  CHECK_HIP(hipDeviceSynchronize());
 
   // Collect all transpose statistics and timing data
   std::vector<TransposeConfigTimingData> all_transpose_config_data;
@@ -823,9 +824,9 @@ void printPerformanceReport(const cudecompHandle_t handle, const cudecompGridDes
 
   if (handle->rank == 0) {
     if (all_transpose_config_data.empty() && all_halo_config_data.empty()) {
-      printf("CUDECOMP: No performance data collected\n");
-      printf("CUDECOMP: ================================\n");
-      printf("CUDECOMP:\n");
+      printf("HIPDECOMP: No performance data collected\n");
+      printf("HIPDECOMP: ================================\n");
+      printf("HIPDECOMP:\n");
       return;
     }
 
@@ -849,9 +850,9 @@ void printPerformanceReport(const cudecompHandle_t handle, const cudecompGridDes
   // Print per-sample data if detail level > 0
   if (handle->performance_report_detail > 0) {
     if (handle->rank == 0) {
-      printf("CUDECOMP:\n");
-      printf("CUDECOMP: Per-Sample Details:\n");
-      printf("CUDECOMP:\n");
+      printf("HIPDECOMP:\n");
+      printf("HIPDECOMP: Per-Sample Details:\n");
+      printf("HIPDECOMP:\n");
     }
 
     // Print transpose per-sample details (and write CSV if enabled)
@@ -862,12 +863,12 @@ void printPerformanceReport(const cudecompHandle_t handle, const cudecompGridDes
   }
 
   if (handle->rank == 0) {
-    printf("CUDECOMP: ================================\n");
-    printf("CUDECOMP:\n");
+    printf("HIPDECOMP: ================================\n");
+    printf("HIPDECOMP:\n");
   }
 }
 
-void resetPerformanceSamples(const cudecompHandle_t handle, cudecompGridDesc_t grid_desc) {
+void resetPerformanceSamples(const hipdecompHandle_t handle, hipdecompGridDesc_t grid_desc) {
   if (!handle->performance_report_enable) return;
 
   // Reset all transpose sample collections in the map
@@ -899,8 +900,8 @@ void resetPerformanceSamples(const cudecompHandle_t handle, cudecompGridDesc_t g
 }
 
 // Helper function to advance transpose sample index with warmup handling
-void advanceTransposePerformanceSample(const cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
-                                       const cudecompTransposeConfigKey& config) {
+void advanceTransposePerformanceSample(const hipdecompHandle_t handle, hipdecompGridDesc_t grid_desc,
+                                       const hipdecompTransposeConfigKey& config) {
   if (!handle->performance_report_enable) return;
 
   auto& collection = getOrCreateTransposePerformanceSamples(handle, grid_desc, config);
@@ -917,8 +918,8 @@ void advanceTransposePerformanceSample(const cudecompHandle_t handle, cudecompGr
 }
 
 // Helper function to advance halo sample index with warmup handling
-void advanceHaloPerformanceSample(const cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
-                                  const cudecompHaloConfigKey& config) {
+void advanceHaloPerformanceSample(const hipdecompHandle_t handle, hipdecompGridDesc_t grid_desc,
+                                  const hipdecompHaloConfigKey& config) {
   if (!handle->performance_report_enable) return;
 
   auto& collection = getOrCreateHaloPerformanceSamples(handle, grid_desc, config);
@@ -934,4 +935,4 @@ void advanceHaloPerformanceSample(const cudecompHandle_t handle, cudecompGridDes
   }
 }
 
-} // namespace cudecomp
+} // namespace hipdecomp

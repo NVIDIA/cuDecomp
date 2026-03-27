@@ -1,5 +1,6 @@
 /*
  * SPDX-FileCopyrightText: Copyright (c) 2022-2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2026 The Authors.
  * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,8 +16,8 @@
  * limitations under the License.
  */
 
-#ifndef CUDECOMP_COMMON_H
-#define CUDECOMP_COMMON_H
+#ifndef HIPDECOMP_COMMON_H
+#define HIPDECOMP_COMMON_H
 
 #include <array>
 #include <complex>
@@ -37,17 +38,17 @@
 #include <nvshmemx.h>
 #endif
 
-#include "cudecomp.h"
+#include "hipdecomp.h"
 #include "internal/checks.h"
 #include "internal/graph.h"
 
-namespace cudecomp {
+namespace hipdecomp {
 typedef std::pair<std::array<unsigned char, 1>, unsigned int> mnnvl_info;
 typedef std::shared_ptr<ncclComm_t> ncclComm;
-} // namespace cudecomp
+} // namespace hipdecomp
 
-// cuDecomp handle containing general information
-struct cudecompHandle {
+// hipDecomp handle containing general information
+struct hipdecompHandle {
 
   MPI_Comm mpi_comm = MPI_COMM_NULL; // MPI communicator
   int32_t rank;                      // MPI rank
@@ -62,9 +63,9 @@ struct cudecompHandle {
   int32_t clique_nranks;                    // MPI size
 
   // Entries for NCCL management
-  cudecomp::ncclComm nccl_comm;       // NCCL communicator (global)
-  cudecomp::ncclComm nccl_local_comm; // NCCL communicator (intra-node, or intra-clique on MNNVL systems)
-  bool nccl_enable_ubr = false;       // Flag to control NCCL user buffer registration usage
+  hipdecomp::ncclComm nccl_comm;       // NCCL communicator (global)
+  hipdecomp::ncclComm nccl_local_comm; // NCCL communicator (intra-node, or intra-clique on MNNVL systems)
+  bool nccl_enable_ubr = false;        // Flag to control NCCL user buffer registration usage
   std::unordered_map<void*, std::vector<std::pair<ncclComm_t, void*>>>
       nccl_ubr_handles; // map of allocated buffer address to NCCL registration handle(s)
 
@@ -92,13 +93,13 @@ struct cudecompHandle {
   size_t nvshmem_allocation_size = 0;                    // Total of NVSHMEM allocations
 
   // Multi-node NVLINK (MNNVL)
-  bool cuda_cumem_enable = false; // Flag to control whether cuMem* APIs are used for cudecompMalloc/Free
-  std::vector<cudecomp::mnnvl_info> rank_to_mnnvl_info; // list of mnnvl information (clusterUuid, cliqueId) by rank
-  std::vector<unsigned int> rank_to_clique;             // list of rank to MNNVL clique mappings
-  std::vector<int> rank_to_clique_rank;                 // list of rank to MNNVL clique rank mappings
+  bool hip_cumem_enable = false; // Flag to control whether cuMem* APIs are used for hipdecompMalloc/Free
+  std::vector<hipdecomp::mnnvl_info> rank_to_mnnvl_info; // list of mnnvl information (clusterUuid, cliqueId) by rank
+  std::vector<unsigned int> rank_to_clique;              // list of rank to MNNVL clique mappings
+  std::vector<int> rank_to_clique_rank;                  // list of rank to MNNVL clique rank mappings
 
-  // CUDA graphs
-  bool cuda_graphs_enable = false; // Flag to control whether CUDA graphs are used
+  // HIP graphs
+  bool hip_graphs_enable = false; // Flag to control whether HIP graphs are used
 
   // Performance reporting related entries
   bool performance_report_enable = false; // flag to track if performance reporting is enabled
@@ -115,7 +116,7 @@ struct cudecompHandle {
 };
 
 // Structure with information about row/column communicator
-struct cudecompCommInfo {
+struct hipdecompCommInfo {
   MPI_Comm mpi_comm = MPI_COMM_NULL;
   int32_t rank;
   int32_t nranks;
@@ -129,7 +130,7 @@ struct cudecompCommInfo {
 };
 
 // Structure to contain data for transpose performance sample
-struct cudecompTransposePerformanceSample {
+struct hipdecompTransposePerformanceSample {
   hipEvent_t transpose_start_event;
   hipEvent_t transpose_end_event;
   std::vector<hipEvent_t> alltoall_start_events;
@@ -140,14 +141,14 @@ struct cudecompTransposePerformanceSample {
 };
 
 // Collection of transpose performance samples for a specific configuration
-struct cudecompTransposePerformanceSampleCollection {
-  std::vector<cudecompTransposePerformanceSample> samples;
+struct hipdecompTransposePerformanceSampleCollection {
+  std::vector<hipdecompTransposePerformanceSample> samples;
   int32_t sample_idx = 0;
   int32_t warmup_count = 0;
 };
 
 // Structure to contain data for halo performance sample
-struct cudecompHaloPerformanceSample {
+struct hipdecompHaloPerformanceSample {
   hipEvent_t halo_start_event;
   hipEvent_t halo_end_event;
   hipEvent_t sendrecv_start_event;
@@ -157,30 +158,30 @@ struct cudecompHaloPerformanceSample {
 };
 
 // Collection of halo performance samples for a specific configuration
-struct cudecompHaloPerformanceSampleCollection {
-  std::vector<cudecompHaloPerformanceSample> samples;
+struct hipdecompHaloPerformanceSampleCollection {
+  std::vector<hipdecompHaloPerformanceSample> samples;
   int32_t sample_idx = 0;
   int32_t warmup_count = 0;
 };
 
-// cuDecomp grid descriptor containing grid-specific information
-struct cudecompGridDesc {
-  cudecompGridDescConfig_t config;      // configuration struct
+// hipDecomp grid descriptor containing grid-specific information
+struct hipdecompGridDesc {
+  hipdecompGridDescConfig_t config;     // configuration struct
   bool gdims_dist_set = false;          // flag to record if gdims_dist was set to non-default values
   bool transpose_mem_order_set = false; // flag to record if transpose_mem_order was set to non-default values
 
   int32_t pidx[2]; // processor grid index;
 
-  cudecompCommInfo row_comm_info; // row communicator information
-  cudecompCommInfo col_comm_info; // column communicator information
+  hipdecompCommInfo row_comm_info; // row communicator information
+  hipdecompCommInfo col_comm_info; // column communicator information
 
-  std::vector<hipEvent_t> events{nullptr}; // CUDA events used for scheduling
+  std::vector<hipEvent_t> events{nullptr}; // HIP events used for scheduling
   hipEvent_t nvshmem_sync_event = nullptr; // NVSHMEM event used for synchronization
 
-  cudecomp::graphCache graph_cache; // CUDA graph cache
+  hipdecomp::graphCache graph_cache; // HIP graph cache
 
-  cudecomp::ncclComm nccl_comm; // NCCL communicator (global), shared from handle
-  cudecomp::ncclComm
+  hipdecomp::ncclComm nccl_comm; // NCCL communicator (global), shared from handle
+  hipdecomp::ncclComm
       nccl_local_comm; // NCCL communicator (intra-node, or intra-clique on MNNVL systems), shared from handle
 
   // Performance reporting related entries
@@ -191,40 +192,40 @@ struct cudecompGridDesc {
   hipEvent_t transpose_end_event;                // event for transpose timing
 
   std::unordered_map<std::tuple<int32_t, int32_t, std::array<int32_t, 3>, std::array<int32_t, 3>,
-                                std::array<int32_t, 3>, std::array<int32_t, 3>, bool, bool, cudecompDataType_t>,
-                     cudecompTransposePerformanceSampleCollection>
+                                std::array<int32_t, 3>, std::array<int32_t, 3>, bool, bool, hipdecompDataType_t>,
+                     hipdecompTransposePerformanceSampleCollection>
       transpose_perf_samples_map;
 
   std::unordered_map<std::tuple<int32_t, int32_t, std::array<int32_t, 3>, std::array<bool, 3>, std::array<int32_t, 3>,
-                                bool, cudecompDataType_t>,
-                     cudecompHaloPerformanceSampleCollection>
+                                bool, hipdecompDataType_t>,
+                     hipdecompHaloPerformanceSampleCollection>
       halo_perf_samples_map;
 
   bool initialized = false;
 };
 
-namespace cudecomp {
+namespace hipdecomp {
 
 using comm_count_t = int32_t;
 
-enum cudecompCommAxis { CUDECOMP_COMM_COL = 0, CUDECOMP_COMM_ROW = 1 };
+enum hipdecompCommAxis { HIPDECOMP_COMM_COL = 0, HIPDECOMP_COMM_ROW = 1 };
 
 // Helper function to convert row or column rank to global rank
-static inline int getGlobalRank(const cudecompHandle_t handle, const cudecompGridDesc_t grid_desc,
-                                cudecompCommAxis axis, int axis_rank) {
+static inline int getGlobalRank(const hipdecompHandle_t handle, const hipdecompGridDesc_t grid_desc,
+                                hipdecompCommAxis axis, int axis_rank) {
   if (handle->use_col_major_rank_order) {
     // Column-major rank order
-    return (axis == CUDECOMP_COMM_ROW) ? grid_desc->pidx[0] + axis_rank * grid_desc->config.pdims[0]
-                                       : grid_desc->config.pdims[0] * grid_desc->pidx[1] + axis_rank;
+    return (axis == HIPDECOMP_COMM_ROW) ? grid_desc->pidx[0] + axis_rank * grid_desc->config.pdims[0]
+                                        : grid_desc->config.pdims[0] * grid_desc->pidx[1] + axis_rank;
   } else {
     // Row-major rank order (default)
-    return (axis == CUDECOMP_COMM_ROW) ? grid_desc->config.pdims[1] * grid_desc->pidx[0] + axis_rank
-                                       : grid_desc->pidx[1] + axis_rank * grid_desc->config.pdims[1];
+    return (axis == HIPDECOMP_COMM_ROW) ? grid_desc->config.pdims[1] * grid_desc->pidx[0] + axis_rank
+                                        : grid_desc->pidx[1] + axis_rank * grid_desc->config.pdims[1];
   }
 }
 
 // Helper function to return maximum pencil size across all processes for a given axis
-static inline int64_t getGlobalMaxPencilSize(const cudecompHandle_t handle, const cudecompGridDesc_t grid_desc,
+static inline int64_t getGlobalMaxPencilSize(const hipdecompHandle_t handle, const hipdecompGridDesc_t grid_desc,
                                              int32_t axis) {
   int64_t size = 1;
   int j = 0;
@@ -244,13 +245,13 @@ static inline int64_t getGlobalMaxPencilSize(const cudecompHandle_t handle, cons
 }
 
 // Helper function to return pointer offset at local index lx (in global order)
-static size_t getPencilPtrOffset(const cudecompPencilInfo_t& pinfo, const std::array<int32_t, 3>& lx) {
+static size_t getPencilPtrOffset(const hipdecompPencilInfo_t& pinfo, const std::array<int32_t, 3>& lx) {
   return lx[pinfo.order[0]] + lx[pinfo.order[1]] * pinfo.shape[0] +
          lx[pinfo.order[2]] * pinfo.shape[0] * pinfo.shape[1];
 }
 
 // Helper function to return shape in global order
-static inline std::array<int32_t, 3> getShapeG(const cudecompPencilInfo_t& pinfo) {
+static inline std::array<int32_t, 3> getShapeG(const hipdecompPencilInfo_t& pinfo) {
   std::array<int32_t, 3> shape_g;
   for (int i = 0; i < 3; ++i) {
     shape_g[pinfo.order[i]] = pinfo.shape[i];
@@ -268,41 +269,41 @@ static inline int gcd(int a, int b) {
   return a;
 }
 
-static inline bool transposeBackendRequiresMpi(cudecompTransposeCommBackend_t comm_backend) {
-  return (comm_backend == CUDECOMP_TRANSPOSE_COMM_MPI_P2P || comm_backend == CUDECOMP_TRANSPOSE_COMM_MPI_A2A ||
-          comm_backend == CUDECOMP_TRANSPOSE_COMM_MPI_P2P_PL);
+static inline bool transposeBackendRequiresMpi(hipdecompTransposeCommBackend_t comm_backend) {
+  return (comm_backend == HIPDECOMP_TRANSPOSE_COMM_MPI_P2P || comm_backend == HIPDECOMP_TRANSPOSE_COMM_MPI_A2A ||
+          comm_backend == HIPDECOMP_TRANSPOSE_COMM_MPI_P2P_PL);
 }
 
-static inline bool haloBackendRequiresMpi(cudecompHaloCommBackend_t comm_backend) {
-  return (comm_backend == CUDECOMP_HALO_COMM_MPI || comm_backend == CUDECOMP_HALO_COMM_MPI_BLOCKING);
+static inline bool haloBackendRequiresMpi(hipdecompHaloCommBackend_t comm_backend) {
+  return (comm_backend == HIPDECOMP_HALO_COMM_MPI || comm_backend == HIPDECOMP_HALO_COMM_MPI_BLOCKING);
 }
 
-static inline bool transposeBackendRequiresNccl(cudecompTransposeCommBackend_t comm_backend) {
-  return (comm_backend == CUDECOMP_TRANSPOSE_COMM_NCCL || comm_backend == CUDECOMP_TRANSPOSE_COMM_NCCL_PL);
+static inline bool transposeBackendRequiresNccl(hipdecompTransposeCommBackend_t comm_backend) {
+  return (comm_backend == HIPDECOMP_TRANSPOSE_COMM_NCCL || comm_backend == HIPDECOMP_TRANSPOSE_COMM_NCCL_PL);
 }
 
-static inline bool haloBackendRequiresNccl(cudecompHaloCommBackend_t comm_backend) {
-  return (comm_backend == CUDECOMP_HALO_COMM_NCCL);
+static inline bool haloBackendRequiresNccl(hipdecompHaloCommBackend_t comm_backend) {
+  return (comm_backend == HIPDECOMP_HALO_COMM_NCCL);
 }
 
-static inline bool transposeBackendRequiresNvshmem(cudecompTransposeCommBackend_t comm_backend) {
-  return (comm_backend == CUDECOMP_TRANSPOSE_COMM_NVSHMEM || comm_backend == CUDECOMP_TRANSPOSE_COMM_NVSHMEM_PL);
+static inline bool transposeBackendRequiresNvshmem(hipdecompTransposeCommBackend_t comm_backend) {
+  return (comm_backend == HIPDECOMP_TRANSPOSE_COMM_NVSHMEM || comm_backend == HIPDECOMP_TRANSPOSE_COMM_NVSHMEM_PL);
 }
 
-static inline bool haloBackendRequiresNvshmem(cudecompHaloCommBackend_t comm_backend) {
-  return (comm_backend == CUDECOMP_HALO_COMM_NVSHMEM || comm_backend == CUDECOMP_HALO_COMM_NVSHMEM_BLOCKING);
+static inline bool haloBackendRequiresNvshmem(hipdecompHaloCommBackend_t comm_backend) {
+  return (comm_backend == HIPDECOMP_HALO_COMM_NVSHMEM || comm_backend == HIPDECOMP_HALO_COMM_NVSHMEM_BLOCKING);
 }
 
 static inline bool isManagedPointer(void* ptr) {
   // Check if input pointer is managed
   hipPointerAttribute_t attr;
-  CHECK_CUDA(hipPointerGetAttributes(&attr, ptr));
+  CHECK_HIP(hipPointerGetAttributes(&attr, ptr));
   return attr.type == hipMemoryTypeManaged;
 }
 
-static void setCommInfo(cudecompHandle_t& handle, cudecompGridDesc_t& grid_desc, MPI_Comm mpi_comm,
-                        cudecompCommAxis comm_axis) {
-  auto& info = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info : grid_desc->col_comm_info;
+static void setCommInfo(hipdecompHandle_t& handle, hipdecompGridDesc_t& grid_desc, MPI_Comm mpi_comm,
+                        hipdecompCommAxis comm_axis) {
+  auto& info = (comm_axis == HIPDECOMP_COMM_ROW) ? grid_desc->row_comm_info : grid_desc->col_comm_info;
 
   info.mpi_comm = mpi_comm;
   CHECK_MPI(MPI_Comm_rank(info.mpi_comm, &info.rank));
@@ -352,10 +353,10 @@ static void setCommInfo(cudecompHandle_t& handle, cudecompGridDesc_t& grid_desc,
   info.ngroups = info.nranks / info.npergroup;
 }
 
-static inline void getAlltoallPeerRanks(cudecompGridDesc_t grid_desc, cudecompCommAxis comm_axis, int iter,
+static inline void getAlltoallPeerRanks(hipdecompGridDesc_t grid_desc, hipdecompCommAxis comm_axis, int iter,
                                         int& src_rank, int& dst_rank) {
 
-  const auto& info = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info : grid_desc->col_comm_info;
+  const auto& info = (comm_axis == HIPDECOMP_COMM_ROW) ? grid_desc->row_comm_info : grid_desc->col_comm_info;
 
   // Quick return for single rank case
   if (info.nranks == 1) {
@@ -438,6 +439,6 @@ static inline ncclComm createNcclComm(ncclComm_t comm) {
   return std::shared_ptr<ncclComm_t>(new ncclComm_t(comm), ncclCommDeleter());
 }
 
-} // namespace cudecomp
+} // namespace hipdecomp
 
-#endif // CUDECOMP_COMMON_H
+#endif // HIPDECOMP_COMMON_H

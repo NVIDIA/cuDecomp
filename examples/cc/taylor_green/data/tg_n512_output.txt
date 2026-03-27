@@ -1,175 +1,175 @@
 running on 512 x 512 x 512 spatial grid...
-CUDECOMP: Running transpose autotuning...
-CUDECOMP:	grid: 1 x 8, backend: MPI_P2P 
-CUDECOMP:	Total time min/max/avg/std [ms]: 3.123299/3.514817/3.386298/0.135324
-CUDECOMP:	TransposeXY time min/max/avg/std [ms]: 0.185888/0.200096/0.190132/0.004248
-CUDECOMP:	TransposeYZ time min/max/avg/std [ms]: 1.012640/1.695456/1.393301/0.150258
-CUDECOMP:	TransposeZY time min/max/avg/std [ms]: 1.090080/1.969312/1.455558/0.184314
-CUDECOMP:	TransposeYX time min/max/avg/std [ms]: 0.170240/0.176672/0.172664/0.001342
-CUDECOMP:	grid: 1 x 8, backend: MPI_P2P (pipelined) 
-CUDECOMP:	Total time min/max/avg/std [ms]: 1.951440/1.989502/1.970092/0.012951
-CUDECOMP:	TransposeXY time min/max/avg/std [ms]: 0.187424/0.194208/0.190460/0.001778
-CUDECOMP:	TransposeYZ time min/max/avg/std [ms]: 0.778272/0.826240/0.795571/0.011214
-CUDECOMP:	TransposeZY time min/max/avg/std [ms]: 0.772288/0.799168/0.782530/0.006535
-CUDECOMP:	TransposeYX time min/max/avg/std [ms]: 0.170016/0.174272/0.172063/0.000881
-CUDECOMP:	grid: 1 x 8, backend: MPI_A2A 
-CUDECOMP:	Total time min/max/avg/std [ms]: 3.320421/3.594418/3.425306/0.103588
-CUDECOMP:	TransposeXY time min/max/avg/std [ms]: 0.186240/0.205856/0.191292/0.005191
-CUDECOMP:	TransposeYZ time min/max/avg/std [ms]: 0.862336/1.779040/1.482597/0.254218
-CUDECOMP:	TransposeZY time min/max/avg/std [ms]: 1.157216/1.847072/1.423755/0.159593
-CUDECOMP:	TransposeYX time min/max/avg/std [ms]: 0.170464/0.175200/0.172525/0.000928
-CUDECOMP:	grid: 1 x 8, backend: NCCL 
-CUDECOMP:	Total time min/max/avg/std [ms]: 2.297742/2.328831/2.315189/0.012636
-CUDECOMP:	TransposeXY time min/max/avg/std [ms]: 0.191840/0.202304/0.197108/0.002599
-CUDECOMP:	TransposeYZ time min/max/avg/std [ms]: 0.942464/0.980320/0.962316/0.009219
-CUDECOMP:	TransposeZY time min/max/avg/std [ms]: 0.928128/0.969120/0.948259/0.011119
-CUDECOMP:	TransposeYX time min/max/avg/std [ms]: 0.170976/0.178048/0.174253/0.001634
-CUDECOMP:	grid: 1 x 8, backend: NCCL (pipelined) 
-CUDECOMP:	Total time min/max/avg/std [ms]: 3.584901/3.651185/3.615120/0.025203
-CUDECOMP:	TransposeXY time min/max/avg/std [ms]: 0.186688/0.189984/0.188382/0.000708
-CUDECOMP:	TransposeYZ time min/max/avg/std [ms]: 1.549632/1.661024/1.591793/0.031904
-CUDECOMP:	TransposeZY time min/max/avg/std [ms]: 1.522816/1.692032/1.600634/0.033201
-CUDECOMP:	TransposeYX time min/max/avg/std [ms]: 0.170944/0.176192/0.172518/0.001182
-CUDECOMP:	grid: 1 x 8, backend: NVSHMEM 
-CUDECOMP:	Total time min/max/avg/std [ms]: 2.789952/2.876123/2.846967/0.031134
-CUDECOMP:	TransposeXY time min/max/avg/std [ms]: 0.191488/0.201728/0.195484/0.002285
-CUDECOMP:	TransposeYZ time min/max/avg/std [ms]: 1.207616/1.261568/1.245201/0.017391
-CUDECOMP:	TransposeZY time min/max/avg/std [ms]: 1.179584/1.236160/1.206845/0.021893
-CUDECOMP:	TransposeYX time min/max/avg/std [ms]: 0.169856/0.174400/0.171958/0.001144
-CUDECOMP:	grid: 1 x 8, backend: NVSHMEM (pipelined) 
-CUDECOMP:	Total time min/max/avg/std [ms]: 2.047280/2.072668/2.057898/0.009570
-CUDECOMP:	TransposeXY time min/max/avg/std [ms]: 0.185984/0.190080/0.187644/0.001110
-CUDECOMP:	TransposeYZ time min/max/avg/std [ms]: 0.821152/0.842592/0.833084/0.005887
-CUDECOMP:	TransposeZY time min/max/avg/std [ms]: 0.830272/0.844864/0.836205/0.004375
-CUDECOMP:	TransposeYX time min/max/avg/std [ms]: 0.171424/0.177600/0.173340/0.001256
-CUDECOMP:	grid: 2 x 4, backend: MPI_P2P 
-CUDECOMP:	Total time min/max/avg/std [ms]: 3.479271/3.584960/3.520012/0.035982
-CUDECOMP:	TransposeXY time min/max/avg/std [ms]: 0.644128/0.703520/0.665310/0.012146
-CUDECOMP:	TransposeYZ time min/max/avg/std [ms]: 0.762080/1.153088/1.023706/0.142090
-CUDECOMP:	TransposeZY time min/max/avg/std [ms]: 0.967584/1.223072/1.036440/0.061188
-CUDECOMP:	TransposeYX time min/max/avg/std [ms]: 0.638816/0.862944/0.678722/0.055627
-CUDECOMP:	grid: 2 x 4, backend: MPI_P2P (pipelined) 
-CUDECOMP:	Total time min/max/avg/std [ms]: 2.509842/2.593099/2.544714/0.027012
-CUDECOMP:	TransposeXY time min/max/avg/std [ms]: 0.564864/0.589312/0.573971/0.005321
-CUDECOMP:	TransposeYZ time min/max/avg/std [ms]: 0.669120/0.756256/0.687409/0.022368
-CUDECOMP:	TransposeZY time min/max/avg/std [ms]: 0.657920/0.677568/0.668207/0.005398
-CUDECOMP:	TransposeYX time min/max/avg/std [ms]: 0.560704/0.632480/0.581415/0.018227
-CUDECOMP:	grid: 2 x 4, backend: MPI_A2A 
-CUDECOMP:	Total time min/max/avg/std [ms]: 3.471085/3.584409/3.513763/0.037392
-CUDECOMP:	TransposeXY time min/max/avg/std [ms]: 0.645120/0.683008/0.663814/0.009821
-CUDECOMP:	TransposeYZ time min/max/avg/std [ms]: 0.772832/1.153952/1.022174/0.145849
-CUDECOMP:	TransposeZY time min/max/avg/std [ms]: 0.983136/1.231776/1.043230/0.077195
-CUDECOMP:	TransposeYX time min/max/avg/std [ms]: 0.637632/0.880640/0.690719/0.063124
-CUDECOMP:	grid: 2 x 4, backend: NCCL 
-CUDECOMP:	Total time min/max/avg/std [ms]: 3.974926/4.093980/4.023421/0.042518
-CUDECOMP:	TransposeXY time min/max/avg/std [ms]: 0.993536/1.101376/1.029014/0.027411
-CUDECOMP:	TransposeYZ time min/max/avg/std [ms]: 0.836160/0.996736/0.911676/0.042809
-CUDECOMP:	TransposeZY time min/max/avg/std [ms]: 0.848928/1.005952/0.902474/0.039529
-CUDECOMP:	TransposeYX time min/max/avg/std [ms]: 0.981152/1.268608/1.098668/0.097609
-CUDECOMP:	grid: 2 x 4, backend: NCCL (pipelined) 
-CUDECOMP:	Total time min/max/avg/std [ms]: 3.990294/4.062701/4.027388/0.028120
-CUDECOMP:	TransposeXY time min/max/avg/std [ms]: 0.786048/0.884128/0.836213/0.018734
-CUDECOMP:	TransposeYZ time min/max/avg/std [ms]: 1.002720/1.218080/1.122908/0.075486
-CUDECOMP:	TransposeZY time min/max/avg/std [ms]: 0.987584/1.194400/1.097140/0.070133
-CUDECOMP:	TransposeYX time min/max/avg/std [ms]: 0.737888/1.133856/0.911661/0.161830
-CUDECOMP:	grid: 2 x 4, backend: NVSHMEM 
-CUDECOMP:	Total time min/max/avg/std [ms]: 3.361269/3.386997/3.372764/0.008145
-CUDECOMP:	TransposeXY time min/max/avg/std [ms]: 0.664352/0.687392/0.677594/0.006668
-CUDECOMP:	TransposeYZ time min/max/avg/std [ms]: 0.986176/1.026720/1.006212/0.010573
-CUDECOMP:	TransposeZY time min/max/avg/std [ms]: 0.985728/1.012224/0.999424/0.009213
-CUDECOMP:	TransposeYX time min/max/avg/std [ms]: 0.636192/0.696928/0.657298/0.015811
-CUDECOMP:	grid: 2 x 4, backend: NVSHMEM (pipelined) 
-CUDECOMP:	Total time min/max/avg/std [ms]: 2.454198/2.482421/2.469861/0.008935
-CUDECOMP:	TransposeXY time min/max/avg/std [ms]: 0.537344/0.557952/0.547660/0.004796
-CUDECOMP:	TransposeYZ time min/max/avg/std [ms]: 0.660544/0.691200/0.673532/0.007541
-CUDECOMP:	TransposeZY time min/max/avg/std [ms]: 0.654208/0.679744/0.666821/0.005940
-CUDECOMP:	TransposeYX time min/max/avg/std [ms]: 0.533120/0.577440/0.548666/0.011354
-CUDECOMP:	grid: 4 x 2, backend: MPI_P2P 
-CUDECOMP:	Total time min/max/avg/std [ms]: 3.435679/3.631558/3.495452/0.069051
-CUDECOMP:	TransposeXY time min/max/avg/std [ms]: 0.777920/1.201408/1.011030/0.090087
-CUDECOMP:	TransposeYZ time min/max/avg/std [ms]: 0.628864/0.991456/0.676332/0.081285
-CUDECOMP:	TransposeZY time min/max/avg/std [ms]: 0.628640/0.662752/0.640029/0.008811
-CUDECOMP:	TransposeYX time min/max/avg/std [ms]: 0.767520/1.168864/1.034950/0.103241
-CUDECOMP:	grid: 4 x 2, backend: MPI_P2P (pipelined) 
-CUDECOMP:	Total time min/max/avg/std [ms]: 2.519290/2.555179/2.537954/0.012704
-CUDECOMP:	TransposeXY time min/max/avg/std [ms]: 0.668096/0.688928/0.677368/0.005961
-CUDECOMP:	TransposeYZ time min/max/avg/std [ms]: 0.548640/0.576256/0.560191/0.006626
-CUDECOMP:	TransposeZY time min/max/avg/std [ms]: 0.547616/0.566592/0.556873/0.005301
-CUDECOMP:	TransposeYX time min/max/avg/std [ms]: 0.691232/0.733728/0.712321/0.010736
-CUDECOMP:	grid: 4 x 2, backend: MPI_A2A 
-CUDECOMP:	Total time min/max/avg/std [ms]: 3.476555/3.604708/3.554155/0.044782
-CUDECOMP:	TransposeXY time min/max/avg/std [ms]: 0.775936/1.164864/1.039350/0.115743
-CUDECOMP:	TransposeYZ time min/max/avg/std [ms]: 0.625632/1.004576/0.702352/0.101414
-CUDECOMP:	TransposeZY time min/max/avg/std [ms]: 0.629952/0.668800/0.639583/0.007688
-CUDECOMP:	TransposeYX time min/max/avg/std [ms]: 0.776960/1.184768/1.028458/0.109376
-CUDECOMP:	grid: 4 x 2, backend: NCCL 
-CUDECOMP:	Total time min/max/avg/std [ms]: 4.027063/4.106674/4.056143/0.026269
-CUDECOMP:	TransposeXY time min/max/avg/std [ms]: 1.057408/1.229984/1.099782/0.051373
-CUDECOMP:	TransposeYZ time min/max/avg/std [ms]: 0.794048/0.936352/0.841519/0.032017
-CUDECOMP:	TransposeZY time min/max/avg/std [ms]: 0.792096/0.897152/0.839614/0.027566
-CUDECOMP:	TransposeYX time min/max/avg/std [ms]: 1.039360/1.325184/1.220576/0.101407
-CUDECOMP:	grid: 4 x 2, backend: NCCL (pipelined) 
-CUDECOMP:	Total time min/max/avg/std [ms]: 3.933637/4.007687/3.960421/0.024930
-CUDECOMP:	TransposeXY time min/max/avg/std [ms]: 1.087424/1.137856/1.111770/0.013896
-CUDECOMP:	TransposeYZ time min/max/avg/std [ms]: 0.760704/0.882336/0.818250/0.024048
-CUDECOMP:	TransposeZY time min/max/avg/std [ms]: 0.768032/0.857728/0.800342/0.023309
-CUDECOMP:	TransposeYX time min/max/avg/std [ms]: 1.081440/1.265824/1.175498/0.047480
-CUDECOMP:	grid: 4 x 2, backend: NVSHMEM 
-CUDECOMP:	Total time min/max/avg/std [ms]: 3.376938/3.423806/3.394909/0.015827
-CUDECOMP:	TransposeXY time min/max/avg/std [ms]: 1.018272/1.050496/1.031628/0.007499
-CUDECOMP:	TransposeYZ time min/max/avg/std [ms]: 0.628544/0.675392/0.645212/0.011327
-CUDECOMP:	TransposeZY time min/max/avg/std [ms]: 0.628672/0.663520/0.645922/0.010041
-CUDECOMP:	TransposeYX time min/max/avg/std [ms]: 1.015712/1.078432/1.041798/0.019209
-CUDECOMP:	grid: 4 x 2, backend: NVSHMEM (pipelined) 
-CUDECOMP:	Total time min/max/avg/std [ms]: 2.465569/2.496267/2.481156/0.009890
-CUDECOMP:	TransposeXY time min/max/avg/std [ms]: 0.678624/0.701184/0.686739/0.005360
-CUDECOMP:	TransposeYZ time min/max/avg/std [ms]: 0.518048/0.554176/0.532770/0.007355
-CUDECOMP:	TransposeZY time min/max/avg/std [ms]: 0.525440/0.547232/0.536663/0.005723
-CUDECOMP:	TransposeYX time min/max/avg/std [ms]: 0.667616/0.716800/0.693124/0.012399
-CUDECOMP:	grid: 8 x 1, backend: MPI_P2P 
-CUDECOMP:	Total time min/max/avg/std [ms]: 2.983256/3.234048/3.104322/0.102241
-CUDECOMP:	TransposeXY time min/max/avg/std [ms]: 1.073664/1.430368/1.232898/0.091450
-CUDECOMP:	TransposeYZ time min/max/avg/std [ms]: 0.159488/0.170080/0.162861/0.002304
-CUDECOMP:	TransposeZY time min/max/avg/std [ms]: 0.171648/0.182592/0.174987/0.002521
-CUDECOMP:	TransposeYX time min/max/avg/std [ms]: 0.993184/1.715840/1.366706/0.168254
-CUDECOMP:	grid: 8 x 1, backend: MPI_P2P (pipelined) 
-CUDECOMP:	Total time min/max/avg/std [ms]: 1.984011/2.007806/1.997472/0.007474
-CUDECOMP:	TransposeXY time min/max/avg/std [ms]: 0.773344/0.792640/0.781074/0.006238
-CUDECOMP:	TransposeYZ time min/max/avg/std [ms]: 0.159936/0.169408/0.162038/0.002339
-CUDECOMP:	TransposeZY time min/max/avg/std [ms]: 0.162848/0.175840/0.168183/0.002832
-CUDECOMP:	TransposeYX time min/max/avg/std [ms]: 0.828832/0.877056/0.852848/0.010757
-CUDECOMP:	grid: 8 x 1, backend: MPI_A2A 
-CUDECOMP:	Total time min/max/avg/std [ms]: 3.172492/3.595640/3.394821/0.172017
-CUDECOMP:	TransposeXY time min/max/avg/std [ms]: 0.992512/1.673536/1.416712/0.190916
-CUDECOMP:	TransposeYZ time min/max/avg/std [ms]: 0.158912/0.169728/0.163036/0.002202
-CUDECOMP:	TransposeZY time min/max/avg/std [ms]: 0.171872/0.183424/0.175423/0.002803
-CUDECOMP:	TransposeYX time min/max/avg/std [ms]: 1.030624/1.815552/1.441416/0.179184
-CUDECOMP:	grid: 8 x 1, backend: NCCL 
-CUDECOMP:	Total time min/max/avg/std [ms]: 2.563444/2.615602/2.593407/0.017460
-CUDECOMP:	TransposeXY time min/max/avg/std [ms]: 1.019904/1.114848/1.062634/0.019880
-CUDECOMP:	TransposeYZ time min/max/avg/std [ms]: 0.159680/0.169152/0.163707/0.002284
-CUDECOMP:	TransposeZY time min/max/avg/std [ms]: 0.172352/0.182464/0.176139/0.002372
-CUDECOMP:	TransposeYX time min/max/avg/std [ms]: 1.082976/1.206784/1.129276/0.030556
-CUDECOMP:	grid: 8 x 1, backend: NCCL (pipelined) 
-CUDECOMP:	Total time min/max/avg/std [ms]: 3.937074/4.016975/3.988774/0.031776
-CUDECOMP:	TransposeXY time min/max/avg/std [ms]: 1.716064/1.859616/1.788976/0.042462
-CUDECOMP:	TransposeYZ time min/max/avg/std [ms]: 0.159264/0.165920/0.161298/0.001785
-CUDECOMP:	TransposeZY time min/max/avg/std [ms]: 0.158368/0.169088/0.162572/0.002216
-CUDECOMP:	TransposeYX time min/max/avg/std [ms]: 1.709632/1.846848/1.795025/0.032935
-CUDECOMP:	grid: 8 x 1, backend: NVSHMEM 
-CUDECOMP:	Total time min/max/avg/std [ms]: 2.768901/2.836178/2.806997/0.023463
-CUDECOMP:	TransposeXY time min/max/avg/std [ms]: 1.158048/1.270400/1.215049/0.035016
-CUDECOMP:	TransposeYZ time min/max/avg/std [ms]: 0.160032/0.168480/0.162945/0.001964
-CUDECOMP:	TransposeZY time min/max/avg/std [ms]: 0.172256/0.182592/0.176288/0.002593
-CUDECOMP:	TransposeYX time min/max/avg/std [ms]: 1.178048/1.277632/1.223642/0.032469
-CUDECOMP:	grid: 8 x 1, backend: NVSHMEM (pipelined) 
-CUDECOMP:	Total time min/max/avg/std [ms]: 2.063791/2.118004/2.088248/0.018431
-CUDECOMP:	TransposeXY time min/max/avg/std [ms]: 0.841728/0.872128/0.853690/0.009737
-CUDECOMP:	TransposeYZ time min/max/avg/std [ms]: 0.160640/0.168576/0.162646/0.001898
-CUDECOMP:	TransposeZY time min/max/avg/std [ms]: 0.158176/0.169824/0.162418/0.002778
-CUDECOMP:	TransposeYX time min/max/avg/std [ms]: 0.858464/0.895072/0.878714/0.009138
-CUDECOMP: SELECTED: grid: 1 x 8, backend: MPI_P2P (pipelined), Avg. time 1.970092
-CUDECOMP: transpose autotuning time [s]: 16.312572
+HIPDECOMP: Running transpose autotuning...
+HIPDECOMP:	grid: 1 x 8, backend: MPI_P2P
+HIPDECOMP:	Total time min/max/avg/std [ms]: 3.123299/3.514817/3.386298/0.135324
+HIPDECOMP:	TransposeXY time min/max/avg/std [ms]: 0.185888/0.200096/0.190132/0.004248
+HIPDECOMP:	TransposeYZ time min/max/avg/std [ms]: 1.012640/1.695456/1.393301/0.150258
+HIPDECOMP:	TransposeZY time min/max/avg/std [ms]: 1.090080/1.969312/1.455558/0.184314
+HIPDECOMP:	TransposeYX time min/max/avg/std [ms]: 0.170240/0.176672/0.172664/0.001342
+HIPDECOMP:	grid: 1 x 8, backend: MPI_P2P (pipelined)
+HIPDECOMP:	Total time min/max/avg/std [ms]: 1.951440/1.989502/1.970092/0.012951
+HIPDECOMP:	TransposeXY time min/max/avg/std [ms]: 0.187424/0.194208/0.190460/0.001778
+HIPDECOMP:	TransposeYZ time min/max/avg/std [ms]: 0.778272/0.826240/0.795571/0.011214
+HIPDECOMP:	TransposeZY time min/max/avg/std [ms]: 0.772288/0.799168/0.782530/0.006535
+HIPDECOMP:	TransposeYX time min/max/avg/std [ms]: 0.170016/0.174272/0.172063/0.000881
+HIPDECOMP:	grid: 1 x 8, backend: MPI_A2A
+HIPDECOMP:	Total time min/max/avg/std [ms]: 3.320421/3.594418/3.425306/0.103588
+HIPDECOMP:	TransposeXY time min/max/avg/std [ms]: 0.186240/0.205856/0.191292/0.005191
+HIPDECOMP:	TransposeYZ time min/max/avg/std [ms]: 0.862336/1.779040/1.482597/0.254218
+HIPDECOMP:	TransposeZY time min/max/avg/std [ms]: 1.157216/1.847072/1.423755/0.159593
+HIPDECOMP:	TransposeYX time min/max/avg/std [ms]: 0.170464/0.175200/0.172525/0.000928
+HIPDECOMP:	grid: 1 x 8, backend: NCCL
+HIPDECOMP:	Total time min/max/avg/std [ms]: 2.297742/2.328831/2.315189/0.012636
+HIPDECOMP:	TransposeXY time min/max/avg/std [ms]: 0.191840/0.202304/0.197108/0.002599
+HIPDECOMP:	TransposeYZ time min/max/avg/std [ms]: 0.942464/0.980320/0.962316/0.009219
+HIPDECOMP:	TransposeZY time min/max/avg/std [ms]: 0.928128/0.969120/0.948259/0.011119
+HIPDECOMP:	TransposeYX time min/max/avg/std [ms]: 0.170976/0.178048/0.174253/0.001634
+HIPDECOMP:	grid: 1 x 8, backend: NCCL (pipelined)
+HIPDECOMP:	Total time min/max/avg/std [ms]: 3.584901/3.651185/3.615120/0.025203
+HIPDECOMP:	TransposeXY time min/max/avg/std [ms]: 0.186688/0.189984/0.188382/0.000708
+HIPDECOMP:	TransposeYZ time min/max/avg/std [ms]: 1.549632/1.661024/1.591793/0.031904
+HIPDECOMP:	TransposeZY time min/max/avg/std [ms]: 1.522816/1.692032/1.600634/0.033201
+HIPDECOMP:	TransposeYX time min/max/avg/std [ms]: 0.170944/0.176192/0.172518/0.001182
+HIPDECOMP:	grid: 1 x 8, backend: NVSHMEM
+HIPDECOMP:	Total time min/max/avg/std [ms]: 2.789952/2.876123/2.846967/0.031134
+HIPDECOMP:	TransposeXY time min/max/avg/std [ms]: 0.191488/0.201728/0.195484/0.002285
+HIPDECOMP:	TransposeYZ time min/max/avg/std [ms]: 1.207616/1.261568/1.245201/0.017391
+HIPDECOMP:	TransposeZY time min/max/avg/std [ms]: 1.179584/1.236160/1.206845/0.021893
+HIPDECOMP:	TransposeYX time min/max/avg/std [ms]: 0.169856/0.174400/0.171958/0.001144
+HIPDECOMP:	grid: 1 x 8, backend: NVSHMEM (pipelined)
+HIPDECOMP:	Total time min/max/avg/std [ms]: 2.047280/2.072668/2.057898/0.009570
+HIPDECOMP:	TransposeXY time min/max/avg/std [ms]: 0.185984/0.190080/0.187644/0.001110
+HIPDECOMP:	TransposeYZ time min/max/avg/std [ms]: 0.821152/0.842592/0.833084/0.005887
+HIPDECOMP:	TransposeZY time min/max/avg/std [ms]: 0.830272/0.844864/0.836205/0.004375
+HIPDECOMP:	TransposeYX time min/max/avg/std [ms]: 0.171424/0.177600/0.173340/0.001256
+HIPDECOMP:	grid: 2 x 4, backend: MPI_P2P
+HIPDECOMP:	Total time min/max/avg/std [ms]: 3.479271/3.584960/3.520012/0.035982
+HIPDECOMP:	TransposeXY time min/max/avg/std [ms]: 0.644128/0.703520/0.665310/0.012146
+HIPDECOMP:	TransposeYZ time min/max/avg/std [ms]: 0.762080/1.153088/1.023706/0.142090
+HIPDECOMP:	TransposeZY time min/max/avg/std [ms]: 0.967584/1.223072/1.036440/0.061188
+HIPDECOMP:	TransposeYX time min/max/avg/std [ms]: 0.638816/0.862944/0.678722/0.055627
+HIPDECOMP:	grid: 2 x 4, backend: MPI_P2P (pipelined)
+HIPDECOMP:	Total time min/max/avg/std [ms]: 2.509842/2.593099/2.544714/0.027012
+HIPDECOMP:	TransposeXY time min/max/avg/std [ms]: 0.564864/0.589312/0.573971/0.005321
+HIPDECOMP:	TransposeYZ time min/max/avg/std [ms]: 0.669120/0.756256/0.687409/0.022368
+HIPDECOMP:	TransposeZY time min/max/avg/std [ms]: 0.657920/0.677568/0.668207/0.005398
+HIPDECOMP:	TransposeYX time min/max/avg/std [ms]: 0.560704/0.632480/0.581415/0.018227
+HIPDECOMP:	grid: 2 x 4, backend: MPI_A2A
+HIPDECOMP:	Total time min/max/avg/std [ms]: 3.471085/3.584409/3.513763/0.037392
+HIPDECOMP:	TransposeXY time min/max/avg/std [ms]: 0.645120/0.683008/0.663814/0.009821
+HIPDECOMP:	TransposeYZ time min/max/avg/std [ms]: 0.772832/1.153952/1.022174/0.145849
+HIPDECOMP:	TransposeZY time min/max/avg/std [ms]: 0.983136/1.231776/1.043230/0.077195
+HIPDECOMP:	TransposeYX time min/max/avg/std [ms]: 0.637632/0.880640/0.690719/0.063124
+HIPDECOMP:	grid: 2 x 4, backend: NCCL
+HIPDECOMP:	Total time min/max/avg/std [ms]: 3.974926/4.093980/4.023421/0.042518
+HIPDECOMP:	TransposeXY time min/max/avg/std [ms]: 0.993536/1.101376/1.029014/0.027411
+HIPDECOMP:	TransposeYZ time min/max/avg/std [ms]: 0.836160/0.996736/0.911676/0.042809
+HIPDECOMP:	TransposeZY time min/max/avg/std [ms]: 0.848928/1.005952/0.902474/0.039529
+HIPDECOMP:	TransposeYX time min/max/avg/std [ms]: 0.981152/1.268608/1.098668/0.097609
+HIPDECOMP:	grid: 2 x 4, backend: NCCL (pipelined)
+HIPDECOMP:	Total time min/max/avg/std [ms]: 3.990294/4.062701/4.027388/0.028120
+HIPDECOMP:	TransposeXY time min/max/avg/std [ms]: 0.786048/0.884128/0.836213/0.018734
+HIPDECOMP:	TransposeYZ time min/max/avg/std [ms]: 1.002720/1.218080/1.122908/0.075486
+HIPDECOMP:	TransposeZY time min/max/avg/std [ms]: 0.987584/1.194400/1.097140/0.070133
+HIPDECOMP:	TransposeYX time min/max/avg/std [ms]: 0.737888/1.133856/0.911661/0.161830
+HIPDECOMP:	grid: 2 x 4, backend: NVSHMEM
+HIPDECOMP:	Total time min/max/avg/std [ms]: 3.361269/3.386997/3.372764/0.008145
+HIPDECOMP:	TransposeXY time min/max/avg/std [ms]: 0.664352/0.687392/0.677594/0.006668
+HIPDECOMP:	TransposeYZ time min/max/avg/std [ms]: 0.986176/1.026720/1.006212/0.010573
+HIPDECOMP:	TransposeZY time min/max/avg/std [ms]: 0.985728/1.012224/0.999424/0.009213
+HIPDECOMP:	TransposeYX time min/max/avg/std [ms]: 0.636192/0.696928/0.657298/0.015811
+HIPDECOMP:	grid: 2 x 4, backend: NVSHMEM (pipelined)
+HIPDECOMP:	Total time min/max/avg/std [ms]: 2.454198/2.482421/2.469861/0.008935
+HIPDECOMP:	TransposeXY time min/max/avg/std [ms]: 0.537344/0.557952/0.547660/0.004796
+HIPDECOMP:	TransposeYZ time min/max/avg/std [ms]: 0.660544/0.691200/0.673532/0.007541
+HIPDECOMP:	TransposeZY time min/max/avg/std [ms]: 0.654208/0.679744/0.666821/0.005940
+HIPDECOMP:	TransposeYX time min/max/avg/std [ms]: 0.533120/0.577440/0.548666/0.011354
+HIPDECOMP:	grid: 4 x 2, backend: MPI_P2P
+HIPDECOMP:	Total time min/max/avg/std [ms]: 3.435679/3.631558/3.495452/0.069051
+HIPDECOMP:	TransposeXY time min/max/avg/std [ms]: 0.777920/1.201408/1.011030/0.090087
+HIPDECOMP:	TransposeYZ time min/max/avg/std [ms]: 0.628864/0.991456/0.676332/0.081285
+HIPDECOMP:	TransposeZY time min/max/avg/std [ms]: 0.628640/0.662752/0.640029/0.008811
+HIPDECOMP:	TransposeYX time min/max/avg/std [ms]: 0.767520/1.168864/1.034950/0.103241
+HIPDECOMP:	grid: 4 x 2, backend: MPI_P2P (pipelined)
+HIPDECOMP:	Total time min/max/avg/std [ms]: 2.519290/2.555179/2.537954/0.012704
+HIPDECOMP:	TransposeXY time min/max/avg/std [ms]: 0.668096/0.688928/0.677368/0.005961
+HIPDECOMP:	TransposeYZ time min/max/avg/std [ms]: 0.548640/0.576256/0.560191/0.006626
+HIPDECOMP:	TransposeZY time min/max/avg/std [ms]: 0.547616/0.566592/0.556873/0.005301
+HIPDECOMP:	TransposeYX time min/max/avg/std [ms]: 0.691232/0.733728/0.712321/0.010736
+HIPDECOMP:	grid: 4 x 2, backend: MPI_A2A
+HIPDECOMP:	Total time min/max/avg/std [ms]: 3.476555/3.604708/3.554155/0.044782
+HIPDECOMP:	TransposeXY time min/max/avg/std [ms]: 0.775936/1.164864/1.039350/0.115743
+HIPDECOMP:	TransposeYZ time min/max/avg/std [ms]: 0.625632/1.004576/0.702352/0.101414
+HIPDECOMP:	TransposeZY time min/max/avg/std [ms]: 0.629952/0.668800/0.639583/0.007688
+HIPDECOMP:	TransposeYX time min/max/avg/std [ms]: 0.776960/1.184768/1.028458/0.109376
+HIPDECOMP:	grid: 4 x 2, backend: NCCL
+HIPDECOMP:	Total time min/max/avg/std [ms]: 4.027063/4.106674/4.056143/0.026269
+HIPDECOMP:	TransposeXY time min/max/avg/std [ms]: 1.057408/1.229984/1.099782/0.051373
+HIPDECOMP:	TransposeYZ time min/max/avg/std [ms]: 0.794048/0.936352/0.841519/0.032017
+HIPDECOMP:	TransposeZY time min/max/avg/std [ms]: 0.792096/0.897152/0.839614/0.027566
+HIPDECOMP:	TransposeYX time min/max/avg/std [ms]: 1.039360/1.325184/1.220576/0.101407
+HIPDECOMP:	grid: 4 x 2, backend: NCCL (pipelined)
+HIPDECOMP:	Total time min/max/avg/std [ms]: 3.933637/4.007687/3.960421/0.024930
+HIPDECOMP:	TransposeXY time min/max/avg/std [ms]: 1.087424/1.137856/1.111770/0.013896
+HIPDECOMP:	TransposeYZ time min/max/avg/std [ms]: 0.760704/0.882336/0.818250/0.024048
+HIPDECOMP:	TransposeZY time min/max/avg/std [ms]: 0.768032/0.857728/0.800342/0.023309
+HIPDECOMP:	TransposeYX time min/max/avg/std [ms]: 1.081440/1.265824/1.175498/0.047480
+HIPDECOMP:	grid: 4 x 2, backend: NVSHMEM
+HIPDECOMP:	Total time min/max/avg/std [ms]: 3.376938/3.423806/3.394909/0.015827
+HIPDECOMP:	TransposeXY time min/max/avg/std [ms]: 1.018272/1.050496/1.031628/0.007499
+HIPDECOMP:	TransposeYZ time min/max/avg/std [ms]: 0.628544/0.675392/0.645212/0.011327
+HIPDECOMP:	TransposeZY time min/max/avg/std [ms]: 0.628672/0.663520/0.645922/0.010041
+HIPDECOMP:	TransposeYX time min/max/avg/std [ms]: 1.015712/1.078432/1.041798/0.019209
+HIPDECOMP:	grid: 4 x 2, backend: NVSHMEM (pipelined)
+HIPDECOMP:	Total time min/max/avg/std [ms]: 2.465569/2.496267/2.481156/0.009890
+HIPDECOMP:	TransposeXY time min/max/avg/std [ms]: 0.678624/0.701184/0.686739/0.005360
+HIPDECOMP:	TransposeYZ time min/max/avg/std [ms]: 0.518048/0.554176/0.532770/0.007355
+HIPDECOMP:	TransposeZY time min/max/avg/std [ms]: 0.525440/0.547232/0.536663/0.005723
+HIPDECOMP:	TransposeYX time min/max/avg/std [ms]: 0.667616/0.716800/0.693124/0.012399
+HIPDECOMP:	grid: 8 x 1, backend: MPI_P2P
+HIPDECOMP:	Total time min/max/avg/std [ms]: 2.983256/3.234048/3.104322/0.102241
+HIPDECOMP:	TransposeXY time min/max/avg/std [ms]: 1.073664/1.430368/1.232898/0.091450
+HIPDECOMP:	TransposeYZ time min/max/avg/std [ms]: 0.159488/0.170080/0.162861/0.002304
+HIPDECOMP:	TransposeZY time min/max/avg/std [ms]: 0.171648/0.182592/0.174987/0.002521
+HIPDECOMP:	TransposeYX time min/max/avg/std [ms]: 0.993184/1.715840/1.366706/0.168254
+HIPDECOMP:	grid: 8 x 1, backend: MPI_P2P (pipelined)
+HIPDECOMP:	Total time min/max/avg/std [ms]: 1.984011/2.007806/1.997472/0.007474
+HIPDECOMP:	TransposeXY time min/max/avg/std [ms]: 0.773344/0.792640/0.781074/0.006238
+HIPDECOMP:	TransposeYZ time min/max/avg/std [ms]: 0.159936/0.169408/0.162038/0.002339
+HIPDECOMP:	TransposeZY time min/max/avg/std [ms]: 0.162848/0.175840/0.168183/0.002832
+HIPDECOMP:	TransposeYX time min/max/avg/std [ms]: 0.828832/0.877056/0.852848/0.010757
+HIPDECOMP:	grid: 8 x 1, backend: MPI_A2A
+HIPDECOMP:	Total time min/max/avg/std [ms]: 3.172492/3.595640/3.394821/0.172017
+HIPDECOMP:	TransposeXY time min/max/avg/std [ms]: 0.992512/1.673536/1.416712/0.190916
+HIPDECOMP:	TransposeYZ time min/max/avg/std [ms]: 0.158912/0.169728/0.163036/0.002202
+HIPDECOMP:	TransposeZY time min/max/avg/std [ms]: 0.171872/0.183424/0.175423/0.002803
+HIPDECOMP:	TransposeYX time min/max/avg/std [ms]: 1.030624/1.815552/1.441416/0.179184
+HIPDECOMP:	grid: 8 x 1, backend: NCCL
+HIPDECOMP:	Total time min/max/avg/std [ms]: 2.563444/2.615602/2.593407/0.017460
+HIPDECOMP:	TransposeXY time min/max/avg/std [ms]: 1.019904/1.114848/1.062634/0.019880
+HIPDECOMP:	TransposeYZ time min/max/avg/std [ms]: 0.159680/0.169152/0.163707/0.002284
+HIPDECOMP:	TransposeZY time min/max/avg/std [ms]: 0.172352/0.182464/0.176139/0.002372
+HIPDECOMP:	TransposeYX time min/max/avg/std [ms]: 1.082976/1.206784/1.129276/0.030556
+HIPDECOMP:	grid: 8 x 1, backend: NCCL (pipelined)
+HIPDECOMP:	Total time min/max/avg/std [ms]: 3.937074/4.016975/3.988774/0.031776
+HIPDECOMP:	TransposeXY time min/max/avg/std [ms]: 1.716064/1.859616/1.788976/0.042462
+HIPDECOMP:	TransposeYZ time min/max/avg/std [ms]: 0.159264/0.165920/0.161298/0.001785
+HIPDECOMP:	TransposeZY time min/max/avg/std [ms]: 0.158368/0.169088/0.162572/0.002216
+HIPDECOMP:	TransposeYX time min/max/avg/std [ms]: 1.709632/1.846848/1.795025/0.032935
+HIPDECOMP:	grid: 8 x 1, backend: NVSHMEM
+HIPDECOMP:	Total time min/max/avg/std [ms]: 2.768901/2.836178/2.806997/0.023463
+HIPDECOMP:	TransposeXY time min/max/avg/std [ms]: 1.158048/1.270400/1.215049/0.035016
+HIPDECOMP:	TransposeYZ time min/max/avg/std [ms]: 0.160032/0.168480/0.162945/0.001964
+HIPDECOMP:	TransposeZY time min/max/avg/std [ms]: 0.172256/0.182592/0.176288/0.002593
+HIPDECOMP:	TransposeYX time min/max/avg/std [ms]: 1.178048/1.277632/1.223642/0.032469
+HIPDECOMP:	grid: 8 x 1, backend: NVSHMEM (pipelined)
+HIPDECOMP:	Total time min/max/avg/std [ms]: 2.063791/2.118004/2.088248/0.018431
+HIPDECOMP:	TransposeXY time min/max/avg/std [ms]: 0.841728/0.872128/0.853690/0.009737
+HIPDECOMP:	TransposeYZ time min/max/avg/std [ms]: 0.160640/0.168576/0.162646/0.001898
+HIPDECOMP:	TransposeZY time min/max/avg/std [ms]: 0.158176/0.169824/0.162418/0.002778
+HIPDECOMP:	TransposeYX time min/max/avg/std [ms]: 0.858464/0.895072/0.878714/0.009138
+HIPDECOMP: SELECTED: grid: 1 x 8, backend: MPI_P2P (pipelined), Avg. time 1.970092
+HIPDECOMP: transpose autotuning time [s]: 16.312572
 flow time: 0.00000  ke: 0.12500000000000  enstrophy: 0.37500000000000
 Average iteration time: 74.362178 ms
 flow time: 0.10000  ke: 0.12495311751674  enstrophy: 0.37524993111414

@@ -1,5 +1,6 @@
 /*
  * SPDX-FileCopyrightText: Copyright (c) 2022-2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2026 The Authors.
  * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,8 +16,8 @@
  * limitations under the License.
  */
 
-#ifndef CUDECOMP_CHECKS_H
-#define CUDECOMP_CHECKS_H
+#ifndef HIPDECOMP_CHECKS_H
+#define HIPDECOMP_CHECKS_H
 
 #include <cstdio>
 #include <iostream>
@@ -37,50 +38,50 @@
 
 // Checks with exception throwing (internal usage)
 
-#define CHECK_CUDECOMP(call)                                                                                           \
+#define CHECK_HIPDECOMP(call)                                                                                          \
   do {                                                                                                                 \
-    cudecompResult_t err = call;                                                                                       \
-    if (CUDECOMP_RESULT_SUCCESS != err) {                                                                              \
+    hipdecompResult_t err = call;                                                                                      \
+    if (HIPDECOMP_RESULT_SUCCESS != err) {                                                                             \
       std::ostringstream os;                                                                                           \
       os << "error code " << err;                                                                                      \
-      throw cudecomp::InternalError(__FILE__, __LINE__, os.str().c_str());                                             \
+      throw hipdecomp::InternalError(__FILE__, __LINE__, os.str().c_str());                                            \
     }                                                                                                                  \
   } while (false)
 
-#define CHECK_CUDA(call)                                                                                               \
+#define CHECK_HIP(call)                                                                                                \
   do {                                                                                                                 \
     hipError_t err = call;                                                                                             \
-    if (hipSuccess != err) { throw cudecomp::CudaError(__FILE__, __LINE__, hipGetErrorString(err)); }                  \
+    if (hipSuccess != err) { throw hipdecomp::CudaError(__FILE__, __LINE__, hipGetErrorString(err)); }                 \
   } while (false)
 
-#define CHECK_CUDA_DRV(call)                                                                                           \
+#define CHECK_HIP_DRV(call)                                                                                            \
   do {                                                                                                                 \
     hipError_t err = cuFnTable.pfn_##call;                                                                             \
     if (hipSuccess != err) {                                                                                           \
       const char* error_str;                                                                                           \
       cuFnTable.pfn_cuGetErrorString(err, &error_str);                                                                 \
-      throw cudecomp::CudaError(__FILE__, __LINE__, error_str);                                                        \
+      throw hipdecomp::CudaError(__FILE__, __LINE__, error_str);                                                       \
     }                                                                                                                  \
   } while (false)
 
-#define CHECK_CUDA_LAUNCH()                                                                                            \
+#define CHECK_HIP_LAUNCH()                                                                                             \
   do {                                                                                                                 \
     hipError_t err = hipGetLastError();                                                                                \
-    if (hipSuccess != err) { throw cudecomp::CudaError(__FILE__, __LINE__, hipGetErrorString(err)); }                  \
+    if (hipSuccess != err) { throw hipdecomp::CudaError(__FILE__, __LINE__, hipGetErrorString(err)); }                 \
   } while (false)
 
 #define CHECK_CUTENSOR(call)                                                                                           \
   do {                                                                                                                 \
     hiptensorStatus_t err = call;                                                                                      \
     if (HIPTENSOR_STATUS_SUCCESS != err) {                                                                             \
-      throw cudecomp::CutensorError(__FILE__, __LINE__, hiptensorGetErrorString(err));                                 \
+      throw hipdecomp::CutensorError(__FILE__, __LINE__, hiptensorGetErrorString(err));                                \
     }                                                                                                                  \
   } while (false)
 
 #define CHECK_NCCL(call)                                                                                               \
   do {                                                                                                                 \
     ncclResult_t err = call;                                                                                           \
-    if (ncclSuccess != err) { throw cudecomp::NcclError(__FILE__, __LINE__, ncclGetErrorString(err)); }                \
+    if (ncclSuccess != err) { throw hipdecomp::NcclError(__FILE__, __LINE__, ncclGetErrorString(err)); }               \
   } while (false)
 
 #define CHECK_MPI(call)                                                                                                \
@@ -91,26 +92,26 @@
       int len;                                                                                                         \
       MPI_Error_string(err, error_str, &len);                                                                          \
       if (error_str) {                                                                                                 \
-        throw cudecomp::MpiError(__FILE__, __LINE__, error_str);                                                       \
+        throw hipdecomp::MpiError(__FILE__, __LINE__, error_str);                                                      \
       } else {                                                                                                         \
         std::ostringstream os;                                                                                         \
         os << "error code " << err;                                                                                    \
-        throw cudecomp::MpiError(__FILE__, __LINE__, os.str().c_str());                                                \
+        throw hipdecomp::MpiError(__FILE__, __LINE__, os.str().c_str());                                               \
       }                                                                                                                \
     }                                                                                                                  \
   } while (false)
 
 // Checks with exit (test usage)
-#define CHECK_CUDECOMP_EXIT(call)                                                                                      \
+#define CHECK_HIPDECOMP_EXIT(call)                                                                                     \
   do {                                                                                                                 \
-    cudecompResult_t err = call;                                                                                       \
-    if (CUDECOMP_RESULT_SUCCESS != err) {                                                                              \
-      fprintf(stderr, "%s:%d CUDECOMP error. (error code %d)\n", __FILE__, __LINE__, err);                             \
+    hipdecompResult_t err = call;                                                                                      \
+    if (HIPDECOMP_RESULT_SUCCESS != err) {                                                                             \
+      fprintf(stderr, "%s:%d HIPDECOMP error. (error code %d)\n", __FILE__, __LINE__, err);                            \
       exit(EXIT_FAILURE);                                                                                              \
     }                                                                                                                  \
   } while (false)
 
-#define CHECK_CUDA_EXIT(call)                                                                                          \
+#define CHECK_HIP_EXIT(call)                                                                                           \
   do {                                                                                                                 \
     hipError_t err = call;                                                                                             \
     if (hipSuccess != err) {                                                                                           \
@@ -119,7 +120,7 @@
     }                                                                                                                  \
   } while (false)
 
-#define CHECK_CUDA_LAUNCH_EXIT()                                                                                       \
+#define CHECK_HIP_LAUNCH_EXIT()                                                                                        \
   do {                                                                                                                 \
     hipError_t err = hipGetLastError();                                                                                \
     if (hipSuccess != err) {                                                                                           \
@@ -144,7 +145,7 @@
     }                                                                                                                  \
   } while (false)
 
-#define CHECK_CUFFT_EXIT(call)                                                                                         \
+#define CHECK_HIPFFT_EXIT(call)                                                                                        \
   do {                                                                                                                 \
     hipfftResult_t err = call;                                                                                         \
     if (HIPFFT_SUCCESS != err) {                                                                                       \
@@ -153,4 +154,4 @@
     }                                                                                                                  \
   } while (false)
 
-#endif // CUDECOMP_CHECKS_H
+#endif // HIPDECOMP_CHECKS_H

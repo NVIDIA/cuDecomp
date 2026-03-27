@@ -1,5 +1,6 @@
 /*
  * SPDX-FileCopyrightText: Copyright (c) 2022-2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2026 The Authors.
  * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -32,24 +33,24 @@
 
 #include <hip/hip_runtime.h>
 
-#include "cudecomp.h"
+#include "hipdecomp.h"
 #include "internal/checks.h"
 
 #if defined(R32)
 using real_t = float;
-static cudecompDataType_t get_cudecomp_datatype(float) { return CUDECOMP_FLOAT; }
+static hipdecompDataType_t get_hipdecomp_datatype(float) { return HIPDECOMP_FLOAT; }
 #elif defined(R64)
 using real_t = double;
-static cudecompDataType_t get_cudecomp_datatype(double) { return CUDECOMP_DOUBLE; }
+static hipdecompDataType_t get_hipdecomp_datatype(double) { return HIPDECOMP_DOUBLE; }
 #elif defined(C32)
 using real_t = std::complex<float>;
-static cudecompDataType_t get_cudecomp_datatype(std::complex<float>) { return CUDECOMP_FLOAT_COMPLEX; }
+static hipdecompDataType_t get_hipdecomp_datatype(std::complex<float>) { return HIPDECOMP_FLOAT_COMPLEX; }
 #elif defined(C64)
 using real_t = std::complex<double>;
-static cudecompDataType_t get_cudecomp_datatype(std::complex<double>) { return CUDECOMP_DOUBLE_COMPLEX; }
+static hipdecompDataType_t get_hipdecomp_datatype(std::complex<double>) { return HIPDECOMP_DOUBLE_COMPLEX; }
 #else
 using real_t = float;
-static cudecompDataType_t get_cudecomp_datatype(float) { return CUDECOMP_FLOAT; }
+static hipdecompDataType_t get_hipdecomp_datatype(float) { return HIPDECOMP_FLOAT; }
 #endif
 
 // Helper function to convert string into equivalent argc/argv input
@@ -100,13 +101,13 @@ static std::vector<std::string> read_testfile(const std::string& filename) {
 }
 
 static bool compare_pencils(const std::vector<real_t>& ref, const std::vector<real_t>& res,
-                            const cudecompPencilInfo_t& pinfo) {
+                            const hipdecompPencilInfo_t& pinfo) {
   for (int64_t i = 0; i < ref.size(); ++i) {
     if (ref[i] != res[i]) return false;
   }
   return true;
 }
-static void initialize_pencil(std::vector<real_t>& ref, const cudecompPencilInfo_t& pinfo,
+static void initialize_pencil(std::vector<real_t>& ref, const hipdecompPencilInfo_t& pinfo,
                               const std::array<int32_t, 3>& gdims) {
   for (int64_t i = 0; i < ref.size(); ++i) {
     // Compute pencil local coordinate
@@ -136,7 +137,7 @@ static void initialize_pencil(std::vector<real_t>& ref, const cudecompPencilInfo
   }
 }
 
-static void initialize_reference(std::vector<real_t>& ref, const cudecompPencilInfo_t& pinfo,
+static void initialize_reference(std::vector<real_t>& ref, const hipdecompPencilInfo_t& pinfo,
                                  const std::array<int32_t, 3>& gdims, const std::array<bool, 3>& halo_periods) {
   for (int64_t i = 0; i < ref.size(); ++i) {
     // Compute pencil local coordinate
@@ -232,7 +233,7 @@ struct haloTestArgs {
   int gz = 256;
   int pr = 0;
   int pc = 0;
-  cudecompHaloCommBackend_t comm_backend = static_cast<cudecompHaloCommBackend_t>(0);
+  hipdecompHaloCommBackend_t comm_backend = static_cast<hipdecompHaloCommBackend_t>(0);
   bool axis_contiguous;
   std::array<int, 3> gdims_dist{};
   std::array<int, 3> halo_extents{1, 1, 1};
@@ -285,7 +286,7 @@ static haloTestArgs parse_arguments(const std::string& arguments) {
     case 'x': args.gx = atoi(optarg); break;
     case 'y': args.gy = atoi(optarg); break;
     case 'z': args.gz = atoi(optarg); break;
-    case 'b': args.comm_backend = static_cast<cudecompHaloCommBackend_t>(atoi(optarg)); break;
+    case 'b': args.comm_backend = static_cast<hipdecompHaloCommBackend_t>(atoi(optarg)); break;
     case 'r': args.pr = atoi(optarg); break;
     case 'c': args.pc = atoi(optarg); break;
     case '3': args.axis_contiguous = atoi(optarg); break;
@@ -331,15 +332,15 @@ static haloTestArgs parse_arguments(const std::string& arguments) {
 }
 
 int rank, nranks;
-cudecompHandle_t handle;
-std::unordered_map<cudecompHaloCommBackend_t, cudecompGridDesc_t> grid_desc_cache;
+hipdecompHandle_t handle;
+std::unordered_map<hipdecompHaloCommBackend_t, hipdecompGridDesc_t> grid_desc_cache;
 std::tuple<int, real_t*, size_t> workspace{-1, nullptr, 0};
 
 // Cache a single grid descriptor per backend type. This keeps NCCL/NVSHMEM initialized between tests for
 // better throughput.
-static void cache_grid_desc(const cudecompGridDesc_t& grid_desc, cudecompHaloCommBackend_t backend) {
+static void cache_grid_desc(const hipdecompGridDesc_t& grid_desc, hipdecompHaloCommBackend_t backend) {
   if (grid_desc_cache.count(backend) != 0) {
-    CHECK_CUDECOMP(cudecompGridDescDestroy(handle, grid_desc_cache[backend]));
+    CHECK_HIPDECOMP(hipdecompGridDescDestroy(handle, grid_desc_cache[backend]));
   }
   grid_desc_cache[backend] = grid_desc;
 }
@@ -356,9 +357,9 @@ static int run_test(const std::string& arguments, bool silent) {
 
     // Setup grid descriptor
     std::array<int32_t, 3> gdims{args.gx, args.gy, args.gz};
-    cudecompGridDesc_t grid_desc;
-    cudecompGridDescConfig_t config;
-    CHECK_CUDECOMP(cudecompGridDescConfigSetDefaults(&config));
+    hipdecompGridDesc_t grid_desc;
+    hipdecompGridDescConfig_t config;
+    CHECK_HIPDECOMP(hipdecompGridDescConfigSetDefaults(&config));
     config.pdims[0] = pdims[0];
     config.pdims[1] = pdims[1];
     config.gdims[0] = gdims[0];
@@ -376,8 +377,8 @@ static int run_test(const std::string& arguments, bool silent) {
       }
     }
 
-    cudecompGridDescAutotuneOptions_t options;
-    CHECK_CUDECOMP(cudecompGridDescAutotuneOptionsSetDefaults(&options));
+    hipdecompGridDescAutotuneOptions_t options;
+    CHECK_HIPDECOMP(hipdecompGridDescAutotuneOptionsSetDefaults(&options));
     options.halo_extents[0] = args.halo_extents[0];
     options.halo_extents[1] = args.halo_extents[1];
     options.halo_extents[2] = args.halo_extents[2];
@@ -385,8 +386,8 @@ static int run_test(const std::string& arguments, bool silent) {
     options.halo_periods[1] = args.halo_periods[1];
     options.halo_periods[2] = args.halo_periods[2];
     options.halo_axis = args.axis;
-    options.dtype = get_cudecomp_datatype(real_t(0));
-    options.grid_mode = CUDECOMP_AUTOTUNE_GRID_HALO;
+    options.dtype = get_hipdecomp_datatype(real_t(0));
+    options.grid_mode = HIPDECOMP_AUTOTUNE_GRID_HALO;
 
     if (args.comm_backend != 0) {
       config.halo_comm_backend = args.comm_backend;
@@ -394,23 +395,23 @@ static int run_test(const std::string& arguments, bool silent) {
       options.autotune_halo_backend = true;
     }
 
-    CHECK_CUDECOMP(cudecompGridDescCreate(handle, &grid_desc, &config, &options));
+    CHECK_HIPDECOMP(hipdecompGridDescCreate(handle, &grid_desc, &config, &options));
     cache_grid_desc(grid_desc, config.halo_comm_backend);
 
     if (!silent && rank == 0) {
       printf("running on %d x %d process grid...\n", config.pdims[0], config.pdims[1]);
-      printf("running using %s halo backend...\n", cudecompHaloCommBackendToString(config.halo_comm_backend));
+      printf("running using %s halo backend...\n", hipdecompHaloCommBackendToString(config.halo_comm_backend));
     }
 
     // Get pencil information
-    cudecompPencilInfo_t pinfo;
-    CHECK_CUDECOMP_EXIT(
-        cudecompGetPencilInfo(handle, grid_desc, &pinfo, args.axis, args.halo_extents.data(), args.padding.data()));
+    hipdecompPencilInfo_t pinfo;
+    CHECK_HIPDECOMP_EXIT(
+        hipdecompGetPencilInfo(handle, grid_desc, &pinfo, args.axis, args.halo_extents.data(), args.padding.data()));
 
     // Get workspace size
     int64_t workspace_num_elements;
-    CHECK_CUDECOMP(
-        cudecompGetHaloWorkspaceSize(handle, grid_desc, args.axis, args.halo_extents.data(), &workspace_num_elements));
+    CHECK_HIPDECOMP(
+        hipdecompGetHaloWorkspaceSize(handle, grid_desc, args.axis, args.halo_extents.data(), &workspace_num_elements));
 
     // Allocate data arrays
     int64_t data_num_elements = pinfo.size;
@@ -426,35 +427,35 @@ static int run_test(const std::string& arguments, bool silent) {
 
     real_t *data_d, *work_d;
     if (args.use_managed_memory) {
-      CHECK_CUDA(hipMallocManaged(&data_d, data.size() * sizeof(*data_d)));
+      CHECK_HIP(hipMallocManaged(&data_d, data.size() * sizeof(*data_d)));
     } else {
-      CHECK_CUDA(hipMalloc(&data_d, data.size() * sizeof(*data_d)));
+      CHECK_HIP(hipMalloc(&data_d, data.size() * sizeof(*data_d)));
     }
     int64_t dtype_size;
-    CHECK_CUDECOMP(cudecompGetDataTypeSize(get_cudecomp_datatype(real_t(0)), &dtype_size));
+    CHECK_HIPDECOMP(hipdecompGetDataTypeSize(get_hipdecomp_datatype(real_t(0)), &dtype_size));
 
     // Allocate workspace (reuse exising workspace if able)
     if (std::get<0>(workspace) == static_cast<int>(config.halo_comm_backend)) {
       work_d = std::get<1>(workspace);
       if (std::get<2>(workspace) < workspace_num_elements * dtype_size) {
-        CHECK_CUDECOMP(cudecompFree(handle, grid_desc, work_d));
-        CHECK_CUDECOMP(
-            cudecompMalloc(handle, grid_desc, reinterpret_cast<void**>(&work_d), workspace_num_elements * dtype_size));
+        CHECK_HIPDECOMP(hipdecompFree(handle, grid_desc, work_d));
+        CHECK_HIPDECOMP(
+            hipdecompMalloc(handle, grid_desc, reinterpret_cast<void**>(&work_d), workspace_num_elements * dtype_size));
         std::get<1>(workspace) = work_d;
         std::get<2>(workspace) = workspace_num_elements * dtype_size;
       }
     } else if (std::get<0>(workspace) > 0 && std::get<0>(workspace) != static_cast<int>(config.halo_comm_backend)) {
-      CHECK_CUDECOMP(cudecompFree(handle,
-                                  grid_desc_cache[static_cast<cudecompHaloCommBackend_t>(std::get<0>(workspace))],
+      CHECK_HIPDECOMP(hipdecompFree(handle,
+                                  grid_desc_cache[static_cast<hipdecompHaloCommBackend_t>(std::get<0>(workspace))],
                                   std::get<1>(workspace)));
-      CHECK_CUDECOMP(
-          cudecompMalloc(handle, grid_desc, reinterpret_cast<void**>(&work_d), workspace_num_elements * dtype_size));
+      CHECK_HIPDECOMP(
+          hipdecompMalloc(handle, grid_desc, reinterpret_cast<void**>(&work_d), workspace_num_elements * dtype_size));
       std::get<0>(workspace) = static_cast<int>(config.halo_comm_backend);
       std::get<1>(workspace) = work_d;
       std::get<2>(workspace) = workspace_num_elements * dtype_size;
     } else {
-      CHECK_CUDECOMP(
-          cudecompMalloc(handle, grid_desc, reinterpret_cast<void**>(&work_d), workspace_num_elements * dtype_size));
+      CHECK_HIPDECOMP(
+          hipdecompMalloc(handle, grid_desc, reinterpret_cast<void**>(&work_d), workspace_num_elements * dtype_size));
       std::get<0>(workspace) = static_cast<int>(config.halo_comm_backend);
       std::get<1>(workspace) = work_d;
       std::get<2>(workspace) = workspace_num_elements * dtype_size;
@@ -463,33 +464,33 @@ static int run_test(const std::string& arguments, bool silent) {
     // Running correctness tests
     if (!silent && rank == 0) printf("running correctness tests...\n");
     // Initialize data to initial pencil data
-    CHECK_CUDA(hipMemcpy(data_d, init.data(), init.size() * sizeof(*data_d), hipMemcpyHostToDevice));
+    CHECK_HIP(hipMemcpy(data_d, init.data(), init.size() * sizeof(*data_d), hipMemcpyHostToDevice));
 
     real_t* input = data_d;
     for (int i = 0; i < 3; ++i) {
       switch (args.axis) {
       case 0:
-        CHECK_CUDECOMP(cudecompUpdateHalosX(handle, grid_desc, input, work_d, get_cudecomp_datatype(real_t(0)),
+        CHECK_HIPDECOMP(hipdecompUpdateHalosX(handle, grid_desc, input, work_d, get_hipdecomp_datatype(real_t(0)),
                                             pinfo.halo_extents, args.halo_periods.data(), i, pinfo.padding, 0));
         break;
       case 1:
-        CHECK_CUDECOMP(cudecompUpdateHalosY(handle, grid_desc, input, work_d, get_cudecomp_datatype(real_t(0)),
+        CHECK_HIPDECOMP(hipdecompUpdateHalosY(handle, grid_desc, input, work_d, get_hipdecomp_datatype(real_t(0)),
                                             pinfo.halo_extents, args.halo_periods.data(), i, pinfo.padding, 0));
         break;
       case 2:
-        CHECK_CUDECOMP(cudecompUpdateHalosZ(handle, grid_desc, input, work_d, get_cudecomp_datatype(real_t(0)),
+        CHECK_HIPDECOMP(hipdecompUpdateHalosZ(handle, grid_desc, input, work_d, get_hipdecomp_datatype(real_t(0)),
                                             pinfo.halo_extents, args.halo_periods.data(), i, pinfo.padding, 0));
         break;
       }
     }
 
-    CHECK_CUDA(hipMemcpy(data.data(), data_d, data.size() * sizeof(*data_d), hipMemcpyDeviceToHost));
+    CHECK_HIP(hipMemcpy(data.data(), data_d, data.size() * sizeof(*data_d), hipMemcpyDeviceToHost));
     if (!compare_pencils(ref, data, pinfo)) {
-      fprintf(stderr, "FAILED cudecompUpdateHalos\n");
+      fprintf(stderr, "FAILED hipdecompUpdateHalos\n");
       return 1;
     }
 
-    CHECK_CUDA(hipFree(data_d));
+    CHECK_HIP(hipFree(data_d));
   } catch (const std::exception& e) { return 1; }
 
   return 0;
@@ -506,8 +507,8 @@ int main(int argc, char** argv) {
   MPI_Comm_rank(local_comm, &local_rank);
 
   int device_count;
-  CHECK_CUDA_EXIT(hipGetDeviceCount(&device_count));
-  CHECK_CUDA_EXIT(hipSetDevice(local_rank % device_count));
+  CHECK_HIP_EXIT(hipGetDeviceCount(&device_count));
+  CHECK_HIP_EXIT(hipSetDevice(local_rank % device_count));
 
   // Check if test file was provided
   std::string testfile;
@@ -520,8 +521,8 @@ int main(int argc, char** argv) {
     }
   }
 
-  // Initialize cuDecomp
-  CHECK_CUDECOMP_EXIT(cudecompInit(&handle, MPI_COMM_WORLD));
+  // Initialize hipDecomp
+  CHECK_HIPDECOMP_EXIT(hipdecompInit(&handle, MPI_COMM_WORLD));
 
   std::vector<std::string> testcases;
   if (!using_testfile) {
@@ -583,16 +584,16 @@ int main(int argc, char** argv) {
     auto& grid_desc = entry.second;
     // If backend matches workspace, free workspace
     if (std::get<0>(workspace) == static_cast<int>(backend)) {
-      CHECK_CUDECOMP(cudecompFree(handle, grid_desc, std::get<1>(workspace)));
+      CHECK_HIPDECOMP(hipdecompFree(handle, grid_desc, std::get<1>(workspace)));
       std::get<0>(workspace) = -1;
       std::get<1>(workspace) = nullptr;
       std::get<2>(workspace) = 0;
     }
-    CHECK_CUDECOMP(cudecompGridDescDestroy(handle, grid_desc));
+    CHECK_HIPDECOMP(hipdecompGridDescDestroy(handle, grid_desc));
   }
   grid_desc_cache.clear();
 
-  CHECK_CUDECOMP_EXIT(cudecompFinalize(handle));
+  CHECK_HIPDECOMP_EXIT(hipdecompFinalize(handle));
   CHECK_MPI_EXIT(MPI_Finalize());
 
   return retcode;

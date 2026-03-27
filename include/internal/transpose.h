@@ -1,5 +1,6 @@
 /*
  * SPDX-FileCopyrightText: Copyright (c) 2022-2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2026 The Authors.
  * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -34,19 +35,19 @@
 
 #include "internal/checks.h"
 #include "internal/comm_routines.h"
-#include "internal/cudecomp_kernels.h"
+#include "internal/hipdecomp_kernels.h"
 #include "internal/nvtx.h"
 #include "internal/performance.h"
 #include "internal/utils.h"
 
-namespace cudecomp {
+namespace hipdecomp {
 
-static inline bool isTransposeCommPipelined(cudecompTransposeCommBackend_t commType) {
-  return (commType == CUDECOMP_TRANSPOSE_COMM_NCCL_PL ||
+static inline bool isTransposeCommPipelined(hipdecompTransposeCommBackend_t commType) {
+  return (commType == HIPDECOMP_TRANSPOSE_COMM_NCCL_PL ||
 #ifdef ENABLE_NVSHMEM
-          commType == CUDECOMP_TRANSPOSE_COMM_NVSHMEM_PL ||
+          commType == HIPDECOMP_TRANSPOSE_COMM_NVSHMEM_PL ||
 #endif
-          commType == CUDECOMP_TRANSPOSE_COMM_MPI_P2P_PL);
+          commType == HIPDECOMP_TRANSPOSE_COMM_MPI_P2P_PL);
 }
 
 #if HIPTENSOR_MAJOR_VERSION >= 2
@@ -75,7 +76,7 @@ template <typename T> static inline uint32_t getAlignment(const T* ptr) {
 }
 
 template <typename T>
-static void localPermute(const cudecompHandle_t handle, const std::array<int64_t, 3>& extent_in,
+static void localPermute(const hipdecompHandle_t handle, const std::array<int64_t, 3>& extent_in,
                          const std::array<int32_t, 3>& order_out, const std::array<int64_t, 3>& strides_in,
                          const std::array<int64_t, 3>& strides_out, T* input, T* output, hipStream_t stream) {
   hiptensorDataType_t cutensor_type = getCutensorDataType<T>();
@@ -123,10 +124,10 @@ static inline hipDataType getCudaDataType(std::complex<double>) { return HIP_C_6
 template <typename T> static inline hipDataType getCudaDataType() { return getCudaDataType(T(0)); }
 
 template <typename T>
-static void localPermute(const cudecompHandle_t handle, const std::array<int64_t, 3>& extent_in,
+static void localPermute(const hipdecompHandle_t handle, const std::array<int64_t, 3>& extent_in,
                          const std::array<int32_t, 3>& order_out, const std::array<int64_t, 3>& strides_in,
                          const std::array<int64_t, 3>& strides_out, T* input, T* output, hipStream_t stream) {
-  hipDataType cuda_type = getCudaDataType<T>();
+  hipDataType hip_type = getCudaDataType<T>();
 
   std::array<int32_t, 3> order_in{0, 1, 2};
   std::array<int64_t, 3> extent_out;
@@ -140,24 +141,24 @@ static void localPermute(const cudecompHandle_t handle, const std::array<int64_t
 
   hiptensorTensorDescriptor_t desc_in;
   CHECK_CUTENSOR(hiptensorInitTensorDescriptor(handle->cutensor_handle, &desc_in, 3, extent_in.data(), strides_in_ptr,
-                                               cuda_type, HIPTENSOR_OP_IDENTITY));
+                                               hip_type, HIPTENSOR_OP_IDENTITY));
 
   hiptensorTensorDescriptor_t desc_out;
   CHECK_CUTENSOR(hiptensorInitTensorDescriptor(handle->cutensor_handle, &desc_out, 3, extent_out.data(),
-                                               strides_out_ptr, cuda_type, HIPTENSOR_OP_IDENTITY));
+                                               strides_out_ptr, hip_type, HIPTENSOR_OP_IDENTITY));
 
   T one(1);
   CHECK_CUTENSOR(hiptensorPermutation(handle->cutensor_handle, &one, input, &desc_in, order_in.data(), output,
-                                      &desc_out, order_out.data(), cuda_type, stream));
+                                      &desc_out, order_out.data(), hip_type, stream));
 }
 #endif
 
 template <typename T>
-static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, const cudecompGridDesc_t grid_desc,
-                               T* input, T* output, T* work, const int32_t input_halo_extents_ptr[] = nullptr,
-                               const int32_t output_halo_extents_ptr[] = nullptr,
-                               const int32_t input_padding_ptr[] = nullptr,
-                               const int32_t output_padding_ptr[] = nullptr, hipStream_t stream = 0) {
+static void hipdecompTranspose_(int ax, int dir, const hipdecompHandle_t handle, const hipdecompGridDesc_t grid_desc,
+                                T* input, T* output, T* work, const int32_t input_halo_extents_ptr[] = nullptr,
+                                const int32_t output_halo_extents_ptr[] = nullptr,
+                                const int32_t input_padding_ptr[] = nullptr,
+                                const int32_t output_padding_ptr[] = nullptr, hipStream_t stream = 0) {
 
   std::array<int32_t, 3> input_halo_extents{};
   std::array<int32_t, 3> output_halo_extents{};
@@ -176,23 +177,23 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
   bool input_has_halos_padding = anyNonzeros(input_halo_extents) || anyNonzeros(input_padding);
   bool output_has_halos_padding = anyNonzeros(output_halo_extents) || anyNonzeros(output_padding);
   bool pipelined = isTransposeCommPipelined(grid_desc->config.transpose_comm_backend);
-  int memcpy_limit = pipelined ? 1 : CUDECOMP_BATCHED_D2D_3D_PARAM_CAPACITY;
+  int memcpy_limit = pipelined ? 1 : HIPDECOMP_BATCHED_D2D_3D_PARAM_CAPACITY;
 
   // Set axis values
   int ax_a = ax;
   int ax_b = (fwd ? ax_a + 1 : ax_a + 2) % 3;
   int ax_c = (fwd ? ax_a + 2 : ax_a + 1) % 3;
 
-  auto comm_axis = (ax_a == 2 || ax_b == 2) ? CUDECOMP_COMM_ROW : CUDECOMP_COMM_COL;
-  const auto& comm_info = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info : grid_desc->col_comm_info;
+  auto comm_axis = (ax_a == 2 || ax_b == 2) ? HIPDECOMP_COMM_ROW : HIPDECOMP_COMM_COL;
+  const auto& comm_info = (comm_axis == HIPDECOMP_COMM_ROW) ? grid_desc->row_comm_info : grid_desc->col_comm_info;
   int comm_rank = comm_info.rank;
 
   // Get splits
   auto splits_a =
-      getSplits(grid_desc->config.gdims_dist[ax_a], grid_desc->config.pdims[comm_axis == CUDECOMP_COMM_COL ? 0 : 1],
+      getSplits(grid_desc->config.gdims_dist[ax_a], grid_desc->config.pdims[comm_axis == HIPDECOMP_COMM_COL ? 0 : 1],
                 grid_desc->config.gdims[ax_a] - grid_desc->config.gdims_dist[ax_a]);
   auto splits_b =
-      getSplits(grid_desc->config.gdims_dist[ax_b], grid_desc->config.pdims[comm_axis == CUDECOMP_COMM_COL ? 0 : 1],
+      getSplits(grid_desc->config.gdims_dist[ax_b], grid_desc->config.pdims[comm_axis == HIPDECOMP_COMM_COL ? 0 : 1],
                 grid_desc->config.gdims[ax_b] - grid_desc->config.gdims_dist[ax_b]);
 
   // Set offsets
@@ -204,14 +205,14 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
   }
 
   // Get pencil info
-  cudecompPencilInfo_t pinfo_a, pinfo_a_h;
-  CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_a, ax_a, nullptr, nullptr));
-  CHECK_CUDECOMP(
-      cudecompGetPencilInfo(handle, grid_desc, &pinfo_a_h, ax_a, input_halo_extents.data(), input_padding.data()));
-  cudecompPencilInfo_t pinfo_b, pinfo_b_h;
-  CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_b, ax_b, nullptr, nullptr));
-  CHECK_CUDECOMP(
-      cudecompGetPencilInfo(handle, grid_desc, &pinfo_b_h, ax_b, output_halo_extents.data(), output_padding.data()));
+  hipdecompPencilInfo_t pinfo_a, pinfo_a_h;
+  CHECK_HIPDECOMP(hipdecompGetPencilInfo(handle, grid_desc, &pinfo_a, ax_a, nullptr, nullptr));
+  CHECK_HIPDECOMP(
+      hipdecompGetPencilInfo(handle, grid_desc, &pinfo_a_h, ax_a, input_halo_extents.data(), input_padding.data()));
+  hipdecompPencilInfo_t pinfo_b, pinfo_b_h;
+  CHECK_HIPDECOMP(hipdecompGetPencilInfo(handle, grid_desc, &pinfo_b, ax_b, nullptr, nullptr));
+  CHECK_HIPDECOMP(
+      hipdecompGetPencilInfo(handle, grid_desc, &pinfo_b_h, ax_b, output_halo_extents.data(), output_padding.data()));
 
   // Check if input and output orders are the same
   bool orders_equal = true;
@@ -242,23 +243,23 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
     auto max_pencil_size_a = getGlobalMaxPencilSize(handle, grid_desc, ax_a);
     o2 = work + max_pencil_size_a;
     // Record event at start of transpose op for NVSHMEM team synchronization
-    CHECK_CUDA(hipEventRecord(grid_desc->nvshmem_sync_event, stream));
+    CHECK_HIP(hipEventRecord(grid_desc->nvshmem_sync_event, stream));
   }
 
-  cudecompTransposePerformanceSample* current_sample = nullptr;
+  hipdecompTransposePerformanceSample* current_sample = nullptr;
   if (handle->performance_report_enable) {
     auto& samples =
         getOrCreateTransposePerformanceSamples(handle, grid_desc,
                                                createTransposeConfig(ax, dir, input, output, input_halo_extents.data(),
                                                                      output_halo_extents.data(), input_padding.data(),
-                                                                     output_padding.data(), getCudecompDataType<T>()));
+                                                                     output_padding.data(), getHipdecompDataType<T>()));
     current_sample = &samples.samples[samples.sample_idx];
     current_sample->alltoall_timing_count = 0;
     current_sample->alltoall_bytes = pinfo_a.size * sizeof(T);
     current_sample->valid = true;
 
     // Record start event
-    CHECK_CUDA(hipEventRecord(current_sample->transpose_start_event, stream));
+    CHECK_HIP(hipEventRecord(current_sample->transpose_start_event, stream));
   }
 
   // Adjust pointers to handle special cases
@@ -272,11 +273,11 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
           // Single rank, in place, Pack -> Unpack: No transpose necessary.
           if (handle->performance_report_enable) {
             // Record performance data
-            CHECK_CUDA(hipEventRecord(current_sample->transpose_end_event, stream));
+            CHECK_HIP(hipEventRecord(current_sample->transpose_end_event, stream));
             advanceTransposePerformanceSample(handle, grid_desc,
                                               createTransposeConfig(ax, dir, input, output, input_halo_extents.data(),
                                                                     output_halo_extents.data(), input_padding.data(),
-                                                                    output_padding.data(), getCudecompDataType<T>()));
+                                                                    output_padding.data(), getHipdecompDataType<T>()));
           }
           return;
         }
@@ -387,14 +388,14 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
       }
 
       if (pipelined) {
-        auto dtype = getCudecompDataType<T>();
+        auto dtype = getHipdecompDataType<T>();
         auto key = std::tie(i1, o1, ax, dir, pinfo_a_h, pinfo_b_h, dtype);
 
-        if (handle->cuda_graphs_enable && grid_desc->graph_cache.cached(key)) {
+        if (handle->hip_graphs_enable && grid_desc->graph_cache.cached(key)) {
           grid_desc->graph_cache.replay(key, stream);
         } else {
           hipStream_t graph_stream = stream;
-          if (handle->cuda_graphs_enable && splits_a.size() > 1) {
+          if (handle->hip_graphs_enable && splits_a.size() > 1) {
             graph_stream = grid_desc->graph_cache.startCapture(key, stream);
           }
 
@@ -429,17 +430,17 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
 
             localPermute(handle, extents, order, strides_in, strides_out, src, dst, graph_stream);
             hipStreamCaptureStatus capture_status;
-            CHECK_CUDA(hipStreamIsCapturing(graph_stream, &capture_status));
+            CHECK_HIP(hipStreamIsCapturing(graph_stream, &capture_status));
 #if (HIP_VERSION_MAJOR >= 7) || (HIP_VERSION_MAJOR == 6 && HIP_VERSION_MINOR >= 4)
-            CHECK_CUDA(hipEventRecordWithFlags(grid_desc->events[dst_rank], graph_stream,
-                                               capture_status == hipStreamCaptureStatusActive ? hipEventRecordExternal
-                                                                                              : hipEventRecordDefault));
+            CHECK_HIP(hipEventRecordWithFlags(grid_desc->events[dst_rank], graph_stream,
+                                              capture_status == hipStreamCaptureStatusActive ? hipEventRecordExternal
+                                                                                             : hipEventRecordDefault));
 #else
-            CHECK_CUDA(hipEventRecord(grid_desc->events[dst_rank], graph_stream));
+            CHECK_HIP(hipEventRecord(grid_desc->events[dst_rank], graph_stream));
 #endif
           }
 
-          if (handle->cuda_graphs_enable && splits_a.size() > 1) {
+          if (handle->hip_graphs_enable && splits_a.size() > 1) {
             grid_desc->graph_cache.endCapture(key);
             grid_desc->graph_cache.replay(key, stream);
           }
@@ -460,16 +461,16 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
     } else {
       // Pack
       int memcpy_count = 0;
-      cudecompBatchedD2DMemcpy3DParams<T> memcpy_params;
+      hipdecompBatchedD2DMemcpy3DParams<T> memcpy_params;
 
-      auto dtype = getCudecompDataType<T>();
+      auto dtype = getHipdecompDataType<T>();
       auto key = std::tie(i1, o1, ax, dir, pinfo_a_h, pinfo_b_h, dtype);
 
-      if (handle->cuda_graphs_enable && grid_desc->graph_cache.cached(key)) {
+      if (handle->hip_graphs_enable && grid_desc->graph_cache.cached(key)) {
         grid_desc->graph_cache.replay(key, stream);
       } else {
         hipStream_t graph_stream = stream;
-        if (handle->cuda_graphs_enable && pipelined && splits_a.size() > 1) {
+        if (handle->hip_graphs_enable && pipelined && splits_a.size() > 1) {
           graph_stream = grid_desc->graph_cache.startCapture(key, stream);
         }
 
@@ -517,22 +518,22 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
           memcpy_count++;
           if (memcpy_count == memcpy_limit || j == splits_a.size()) {
             memcpy_params.ncopies = memcpy_count;
-            cudecomp_batched_d2d_memcpy_3d(memcpy_params, graph_stream);
+            hipdecomp_batched_d2d_memcpy_3d(memcpy_params, graph_stream);
             memcpy_count = 0;
           }
           if (pipelined) {
             hipStreamCaptureStatus capture_status;
-            CHECK_CUDA(hipStreamIsCapturing(graph_stream, &capture_status));
+            CHECK_HIP(hipStreamIsCapturing(graph_stream, &capture_status));
 #if (HIP_VERSION_MAJOR >= 7) || (HIP_VERSION_MAJOR == 6 && HIP_VERSION_MINOR >= 4)
-            CHECK_CUDA(hipEventRecordWithFlags(grid_desc->events[dst_rank], graph_stream,
-                                               capture_status == hipStreamCaptureStatusActive ? hipEventRecordExternal
-                                                                                              : hipEventRecordDefault));
+            CHECK_HIP(hipEventRecordWithFlags(grid_desc->events[dst_rank], graph_stream,
+                                              capture_status == hipStreamCaptureStatusActive ? hipEventRecordExternal
+                                                                                             : hipEventRecordDefault));
 #else
-            CHECK_CUDA(hipEventRecord(grid_desc->events[dst_rank], graph_stream));
+            CHECK_HIP(hipEventRecord(grid_desc->events[dst_rank], graph_stream));
 #endif
           }
         }
-        if (handle->cuda_graphs_enable && pipelined && splits_a.size() > 1) {
+        if (handle->hip_graphs_enable && pipelined && splits_a.size() > 1) {
           grid_desc->graph_cache.endCapture(key);
           grid_desc->graph_cache.replay(key, stream);
         }
@@ -542,11 +543,11 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
     if (o1 == output) {
       // o1 is output. Return.
       if (handle->performance_report_enable) {
-        CHECK_CUDA(hipEventRecord(current_sample->transpose_end_event, stream));
+        CHECK_HIP(hipEventRecord(current_sample->transpose_end_event, stream));
         advanceTransposePerformanceSample(handle, grid_desc,
                                           createTransposeConfig(ax, dir, input, output, input_halo_extents.data(),
                                                                 output_halo_extents.data(), input_padding.data(),
-                                                                output_padding.data(), getCudecompDataType<T>()));
+                                                                output_padding.data(), getHipdecompDataType<T>()));
       }
       return;
     }
@@ -555,7 +556,7 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
     // enforce input data dependency
     if (pipelined) {
       for (int j = 0; j < splits_a.size(); ++j) {
-        CHECK_CUDA(hipEventRecord(grid_desc->events[j], stream));
+        CHECK_HIP(hipEventRecord(grid_desc->events[j], stream));
       }
     }
   }
@@ -563,8 +564,8 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
   // Communicate
   if (splits_a.size() > 1) {
     if (!pipelined) {
-      cudecompAlltoall(handle, grid_desc, o1, send_counts, send_offsets, o2, recv_counts, recv_offsets,
-                       recv_offsets_nvshmem, comm_axis, stream, current_sample);
+      hipdecompAlltoall(handle, grid_desc, o1, send_counts, send_offsets, o2, recv_counts, recv_offsets,
+                        recv_offsets_nvshmem, comm_axis, stream, current_sample);
     }
   } else {
     o2 = o1;
@@ -633,9 +634,9 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
           }
 
           if (o2 != o1) {
-            cudecompAlltoallPipelined(handle, grid_desc, o1, send_counts, send_offsets, o2, recv_counts, recv_offsets,
-                                      recv_offsets_nvshmem, comm_axis, src_ranks, dst_ranks, stream, nvshmem_synced,
-                                      current_sample);
+            hipdecompAlltoallPipelined(handle, grid_desc, o1, send_counts, send_offsets, o2, recv_counts, recv_offsets,
+                                       recv_offsets_nvshmem, comm_axis, src_ranks, dst_ranks, stream, nvshmem_synced,
+                                       current_sample);
           }
 
           if (o2 != o3) {
@@ -729,9 +730,9 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
           }
 
           if (o2 != o1) {
-            cudecompAlltoallPipelined(handle, grid_desc, o1, send_counts, send_offsets, o2, recv_counts, recv_offsets,
-                                      recv_offsets_nvshmem, comm_axis, src_ranks, dst_ranks, stream, nvshmem_synced,
-                                      current_sample);
+            hipdecompAlltoallPipelined(handle, grid_desc, o1, send_counts, send_offsets, o2, recv_counts, recv_offsets,
+                                       recv_offsets_nvshmem, comm_axis, src_ranks, dst_ranks, stream, nvshmem_synced,
+                                       current_sample);
           }
         }
 
@@ -757,7 +758,7 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
     // Unpack
     bool nvshmem_synced = false;
     int memcpy_count = 0;
-    cudecompBatchedD2DMemcpy3DParams<T> memcpy_params;
+    hipdecompBatchedD2DMemcpy3DParams<T> memcpy_params;
     for (int j = 0; j < splits_a.size(); ++j) {
       int src_rank, dst_rank;
       getAlltoallPeerRanks(grid_desc, comm_axis, j, src_rank, dst_rank);
@@ -787,9 +788,9 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
         }
 
         if (o2 != o1) {
-          cudecompAlltoallPipelined(handle, grid_desc, o1, send_counts, send_offsets, o2, recv_counts, recv_offsets,
-                                    recv_offsets_nvshmem, comm_axis, src_ranks, dst_ranks, stream, nvshmem_synced,
-                                    current_sample);
+          hipdecompAlltoallPipelined(handle, grid_desc, o1, send_counts, send_offsets, o2, recv_counts, recv_offsets,
+                                     recv_offsets_nvshmem, comm_axis, src_ranks, dst_ranks, stream, nvshmem_synced,
+                                     current_sample);
         }
       }
 
@@ -816,7 +817,7 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
         memcpy_count++;
         if (memcpy_count == memcpy_limit || j == splits_a.size() - 1) {
           memcpy_params.ncopies = memcpy_count;
-          cudecomp_batched_d2d_memcpy_3d(memcpy_params, stream);
+          hipdecomp_batched_d2d_memcpy_3d(memcpy_params, stream);
           memcpy_count = 0;
         }
       }
@@ -825,62 +826,62 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
 
   if (handle->performance_report_enable) {
     // Record performance data
-    CHECK_CUDA(hipEventRecord(current_sample->transpose_end_event, stream));
+    CHECK_HIP(hipEventRecord(current_sample->transpose_end_event, stream));
     advanceTransposePerformanceSample(handle, grid_desc,
                                       createTransposeConfig(ax, dir, input, output, input_halo_extents.data(),
                                                             output_halo_extents.data(), input_padding.data(),
-                                                            output_padding.data(), getCudecompDataType<T>()));
+                                                            output_padding.data(), getHipdecompDataType<T>()));
   }
 }
 
 template <typename T>
-void cudecompTransposeXToY(const cudecompHandle_t handle, const cudecompGridDesc_t grid_desc, T* input, T* output,
-                           T* work, const int32_t input_halo_extents_ptr[] = nullptr,
-                           const int32_t output_halo_extents_ptr[] = nullptr,
-                           const int32_t input_padding_ptr[] = nullptr, const int32_t output_padding_ptr[] = nullptr,
-                           hipStream_t stream = 0) {
-  nvtx::rangePush("cudecompTransposeXToY");
-  cudecompTranspose_(0, 1, handle, grid_desc, input, output, work, input_halo_extents_ptr, output_halo_extents_ptr,
-                     input_padding_ptr, output_padding_ptr, stream);
+void hipdecompTransposeXToY(const hipdecompHandle_t handle, const hipdecompGridDesc_t grid_desc, T* input, T* output,
+                            T* work, const int32_t input_halo_extents_ptr[] = nullptr,
+                            const int32_t output_halo_extents_ptr[] = nullptr,
+                            const int32_t input_padding_ptr[] = nullptr, const int32_t output_padding_ptr[] = nullptr,
+                            hipStream_t stream = 0) {
+  nvtx::rangePush("hipdecompTransposeXToY");
+  hipdecompTranspose_(0, 1, handle, grid_desc, input, output, work, input_halo_extents_ptr, output_halo_extents_ptr,
+                      input_padding_ptr, output_padding_ptr, stream);
   nvtx::rangePop();
 }
 
 template <typename T>
-void cudecompTransposeYToZ(const cudecompHandle_t handle, const cudecompGridDesc_t grid_desc, T* input, T* output,
-                           T* work, const int32_t input_halo_extents_ptr[] = nullptr,
-                           const int32_t output_halo_extents_ptr[] = nullptr,
-                           const int32_t input_padding_ptr[] = nullptr, const int32_t output_padding_ptr[] = nullptr,
-                           hipStream_t stream = 0) {
-  nvtx::rangePush("cudecompTransposeYToZ");
-  cudecompTranspose_(1, 1, handle, grid_desc, input, output, work, input_halo_extents_ptr, output_halo_extents_ptr,
-                     input_padding_ptr, output_padding_ptr, stream);
+void hipdecompTransposeYToZ(const hipdecompHandle_t handle, const hipdecompGridDesc_t grid_desc, T* input, T* output,
+                            T* work, const int32_t input_halo_extents_ptr[] = nullptr,
+                            const int32_t output_halo_extents_ptr[] = nullptr,
+                            const int32_t input_padding_ptr[] = nullptr, const int32_t output_padding_ptr[] = nullptr,
+                            hipStream_t stream = 0) {
+  nvtx::rangePush("hipdecompTransposeYToZ");
+  hipdecompTranspose_(1, 1, handle, grid_desc, input, output, work, input_halo_extents_ptr, output_halo_extents_ptr,
+                      input_padding_ptr, output_padding_ptr, stream);
   nvtx::rangePop();
 }
 
 template <typename T>
-void cudecompTransposeZToY(const cudecompHandle_t handle, const cudecompGridDesc_t grid_desc, T* input, T* output,
-                           T* work, const int32_t input_halo_extents_ptr[] = nullptr,
-                           const int32_t output_halo_extents_ptr[] = nullptr,
-                           const int32_t input_padding_ptr[] = nullptr, const int32_t output_padding_ptr[] = nullptr,
-                           hipStream_t stream = 0) {
-  nvtx::rangePush("cudecompTransposeZToY");
-  cudecompTranspose_(2, -1, handle, grid_desc, input, output, work, input_halo_extents_ptr, output_halo_extents_ptr,
-                     input_padding_ptr, output_padding_ptr, stream);
+void hipdecompTransposeZToY(const hipdecompHandle_t handle, const hipdecompGridDesc_t grid_desc, T* input, T* output,
+                            T* work, const int32_t input_halo_extents_ptr[] = nullptr,
+                            const int32_t output_halo_extents_ptr[] = nullptr,
+                            const int32_t input_padding_ptr[] = nullptr, const int32_t output_padding_ptr[] = nullptr,
+                            hipStream_t stream = 0) {
+  nvtx::rangePush("hipdecompTransposeZToY");
+  hipdecompTranspose_(2, -1, handle, grid_desc, input, output, work, input_halo_extents_ptr, output_halo_extents_ptr,
+                      input_padding_ptr, output_padding_ptr, stream);
   nvtx::rangePop();
 }
 
 template <typename T>
-void cudecompTransposeYToX(const cudecompHandle_t handle, const cudecompGridDesc_t grid_desc, T* input, T* output,
-                           T* work, const int32_t input_halo_extents_ptr[] = nullptr,
-                           const int32_t output_halo_extents_ptr[] = nullptr,
-                           const int32_t input_padding_ptr[] = nullptr, const int32_t output_padding_ptr[] = nullptr,
-                           hipStream_t stream = 0) {
-  nvtx::rangePush("cudecompTransposeYToX");
-  cudecompTranspose_(1, -1, handle, grid_desc, input, output, work, input_halo_extents_ptr, output_halo_extents_ptr,
-                     input_padding_ptr, output_padding_ptr, stream);
+void hipdecompTransposeYToX(const hipdecompHandle_t handle, const hipdecompGridDesc_t grid_desc, T* input, T* output,
+                            T* work, const int32_t input_halo_extents_ptr[] = nullptr,
+                            const int32_t output_halo_extents_ptr[] = nullptr,
+                            const int32_t input_padding_ptr[] = nullptr, const int32_t output_padding_ptr[] = nullptr,
+                            hipStream_t stream = 0) {
+  nvtx::rangePush("hipdecompTransposeYToX");
+  hipdecompTranspose_(1, -1, handle, grid_desc, input, output, work, input_halo_extents_ptr, output_halo_extents_ptr,
+                      input_padding_ptr, output_padding_ptr, stream);
   nvtx::rangePop();
 }
 
-} // namespace cudecomp
+} // namespace hipdecomp
 
 #endif // TRANSPOSE_H

@@ -1,5 +1,6 @@
 /*
  * SPDX-FileCopyrightText: Copyright (c) 2022-2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2026 The Authors.
  * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,17 +27,17 @@
 
 #include "internal/checks.h"
 #include "internal/comm_routines.h"
-#include "internal/cudecomp_kernels.h"
+#include "internal/hipdecomp_kernels.h"
 #include "internal/nvtx.h"
 #include "internal/performance.h"
 #include "internal/utils.h"
 
-namespace cudecomp {
+namespace hipdecomp {
 
 template <typename T>
-void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompGridDesc_t grid_desc, T* input, T* work,
-                          const int32_t halo_extents_ptr[], const bool halo_periods_ptr[], int32_t dim,
-                          const int32_t padding_ptr[], hipStream_t stream) {
+void hipdecompUpdateHalos_(int ax, const hipdecompHandle_t handle, const hipdecompGridDesc_t grid_desc, T* input,
+                           T* work, const int32_t halo_extents_ptr[], const bool halo_periods_ptr[], int32_t dim,
+                           const int32_t padding_ptr[], hipStream_t stream) {
   std::array<int32_t, 3> halo_extents{};
   if (halo_extents_ptr) std::copy(halo_extents_ptr, halo_extents_ptr + 3, halo_extents.begin());
   std::array<bool, 3> halo_periods{};
@@ -45,10 +46,10 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
   if (padding_ptr) std::copy(padding_ptr, padding_ptr + 3, padding.begin());
 
   // Get pencil info
-  cudecompPencilInfo_t pinfo_h;
-  CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_h, ax, halo_extents.data(), nullptr));
-  cudecompPencilInfo_t pinfo_h_p; // with padding
-  CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, &pinfo_h_p, ax, halo_extents.data(), padding.data()));
+  hipdecompPencilInfo_t pinfo_h;
+  CHECK_HIPDECOMP(hipdecompGetPencilInfo(handle, grid_desc, &pinfo_h, ax, halo_extents.data(), nullptr));
+  hipdecompPencilInfo_t pinfo_h_p; // with padding
+  CHECK_HIPDECOMP(hipdecompGetPencilInfo(handle, grid_desc, &pinfo_h_p, ax, halo_extents.data(), padding.data()));
 
   // Get global ordered shapes
   auto shape_g_h = getShapeG(pinfo_h);
@@ -56,24 +57,24 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
 
   // Get neighbors
   std::array<int32_t, 2> neighbors;
-  CHECK_CUDECOMP(cudecompGetShiftedRank(handle, grid_desc, ax, dim, -1, halo_periods[dim], &neighbors[0]));
-  CHECK_CUDECOMP(cudecompGetShiftedRank(handle, grid_desc, ax, dim, 1, halo_periods[dim], &neighbors[1]));
+  CHECK_HIPDECOMP(hipdecompGetShiftedRank(handle, grid_desc, ax, dim, -1, halo_periods[dim], &neighbors[0]));
+  CHECK_HIPDECOMP(hipdecompGetShiftedRank(handle, grid_desc, ax, dim, 1, halo_periods[dim], &neighbors[1]));
 
   // Quick return if no halos
   if (halo_extents[dim] == 0) { return; }
 
-  cudecompHaloPerformanceSample* current_sample = nullptr;
+  hipdecompHaloPerformanceSample* current_sample = nullptr;
   if (handle->performance_report_enable) {
     auto& samples =
         getOrCreateHaloPerformanceSamples(handle, grid_desc,
                                           createHaloConfig(ax, dim, input, halo_extents.data(), halo_periods.data(),
-                                                           padding.data(), getCudecompDataType<T>()));
+                                                           padding.data(), getHipdecompDataType<T>()));
     current_sample = &samples.samples[samples.sample_idx];
     current_sample->sendrecv_bytes = 0;
     current_sample->valid = true;
 
     // Record start event
-    CHECK_CUDA(hipEventRecord(current_sample->halo_start_event, stream));
+    CHECK_HIP(hipEventRecord(current_sample->halo_start_event, stream));
   }
 
   // Check if halos include more than one process (unsupported currently).
@@ -84,11 +85,11 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
     count++;
   }
 
-  auto comm_axis = (count == 0) ? CUDECOMP_COMM_COL : CUDECOMP_COMM_ROW;
-  int comm_rank = (comm_axis == CUDECOMP_COMM_COL) ? grid_desc->col_comm_info.rank : grid_desc->row_comm_info.rank;
+  auto comm_axis = (count == 0) ? HIPDECOMP_COMM_COL : HIPDECOMP_COMM_ROW;
+  int comm_rank = (comm_axis == HIPDECOMP_COMM_COL) ? grid_desc->col_comm_info.rank : grid_desc->row_comm_info.rank;
 
   auto splits =
-      getSplits(grid_desc->config.gdims_dist[dim], grid_desc->config.pdims[comm_axis == CUDECOMP_COMM_COL ? 0 : 1],
+      getSplits(grid_desc->config.gdims_dist[dim], grid_desc->config.pdims[comm_axis == HIPDECOMP_COMM_COL ? 0 : 1],
                 grid_desc->config.gdims[dim] - grid_desc->config.gdims_dist[dim]);
 
   int comm_rank_l = comm_rank - 1;
@@ -125,10 +126,10 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
     // Single rank in this dimension and not periodic. Return.
     if (handle->performance_report_enable && current_sample) {
       // Record end event and advance sample even for early return
-      CHECK_CUDA(hipEventRecord(current_sample->halo_end_event, stream));
+      CHECK_HIP(hipEventRecord(current_sample->halo_end_event, stream));
       advanceHaloPerformanceSample(handle, grid_desc,
                                    createHaloConfig(ax, dim, input, halo_extents.data(), halo_periods.data(),
-                                                    padding.data(), getCudecompDataType<T>()));
+                                                    padding.data(), getHipdecompDataType<T>()));
     }
     return;
   }
@@ -148,7 +149,7 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
   switch (c) {
   case 0: {
     // Periodic self-copy case
-    cudecompBatchedD2DMemcpy3DParams<T> memcpy_params;
+    hipdecompBatchedD2DMemcpy3DParams<T> memcpy_params;
     std::array<int32_t, 3> lx{};
 
     // Left
@@ -173,12 +174,12 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
     }
 
     memcpy_params.ncopies = 2;
-    cudecomp_batched_d2d_memcpy_3d(memcpy_params, stream);
+    hipdecomp_batched_d2d_memcpy_3d(memcpy_params, stream);
   } break;
 
   case 1: {
     // Strided halo (pack, send/recv, unpack)
-    cudecompBatchedD2DMemcpy3DParams<T> memcpy_params;
+    hipdecompBatchedD2DMemcpy3DParams<T> memcpy_params;
     std::array<int32_t, 3> lx{};
 
     size_t halo_size = shape_g_h[(dim + 1) % 3] * shape_g_h[(dim + 2) % 3] * halo_extents[dim];
@@ -208,7 +209,7 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
     }
 
     memcpy_params.ncopies = 2;
-    cudecomp_batched_d2d_memcpy_3d(memcpy_params, stream);
+    hipdecomp_batched_d2d_memcpy_3d(memcpy_params, stream);
 
     std::array<comm_count_t, 2> counts{static_cast<comm_count_t>(halo_size), static_cast<comm_count_t>(halo_size)};
     std::array<size_t, 2> offsets{};
@@ -220,8 +221,8 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
         if (neighbors[i] != -1) { current_sample->sendrecv_bytes += halo_size * sizeof(T); }
       }
     }
-    cudecompSendRecvPair(handle, grid_desc, neighbors, send_buff, counts, offsets, recv_buff, counts, offsets, stream,
-                         current_sample);
+    hipdecompSendRecvPair(handle, grid_desc, neighbors, send_buff, counts, offsets, recv_buff, counts, offsets, stream,
+                          current_sample);
 
     // Unpack
     // Left
@@ -256,7 +257,7 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
       memcpy_params.ncopies = 2;
     }
 
-    cudecomp_batched_d2d_memcpy_3d(memcpy_params, stream);
+    hipdecomp_batched_d2d_memcpy_3d(memcpy_params, stream);
   } break;
 
   case 2: {
@@ -284,53 +285,56 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
         if (neighbors[i] != -1) { current_sample->sendrecv_bytes += halo_size * sizeof(T); }
       }
     }
-    cudecompSendRecvPair(handle, grid_desc, neighbors, input, counts, send_offsets, input, counts, recv_offsets, stream,
-                         current_sample);
+    hipdecompSendRecvPair(handle, grid_desc, neighbors, input, counts, send_offsets, input, counts, recv_offsets,
+                          stream, current_sample);
   } break;
   }
 
   if (handle->performance_report_enable && current_sample) {
     // Record end event
-    CHECK_CUDA(hipEventRecord(current_sample->halo_end_event, stream));
+    CHECK_HIP(hipEventRecord(current_sample->halo_end_event, stream));
     advanceHaloPerformanceSample(handle, grid_desc,
                                  createHaloConfig(ax, dim, input, halo_extents.data(), halo_periods.data(),
-                                                  padding.data(), getCudecompDataType<T>()));
+                                                  padding.data(), getHipdecompDataType<T>()));
   }
 }
 
 template <typename T>
-void cudecompUpdateHalosX(const cudecompHandle_t handle, const cudecompGridDesc_t grid_desc, T* input, T* work,
-                          const int32_t halo_extents_ptr[], const bool halo_periods_ptr[], int32_t dim,
-                          const int32_t padding_ptr[], hipStream_t stream) {
+void hipdecompUpdateHalosX(const hipdecompHandle_t handle, const hipdecompGridDesc_t grid_desc, T* input, T* work,
+                           const int32_t halo_extents_ptr[], const bool halo_periods_ptr[], int32_t dim,
+                           const int32_t padding_ptr[], hipStream_t stream) {
   std::stringstream os;
-  os << "cudecompUpdateHalosX_" << dim;
+  os << "hipdecompUpdateHalosX_" << dim;
   nvtx::rangePush(os.str());
-  cudecompUpdateHalos_(0, handle, grid_desc, input, work, halo_extents_ptr, halo_periods_ptr, dim, padding_ptr, stream);
+  hipdecompUpdateHalos_(0, handle, grid_desc, input, work, halo_extents_ptr, halo_periods_ptr, dim, padding_ptr,
+                        stream);
   nvtx::rangePop();
 }
 
 template <typename T>
-void cudecompUpdateHalosY(const cudecompHandle_t handle, const cudecompGridDesc_t grid_desc, T* input, T* work,
-                          const int32_t halo_extents_ptr[], const bool halo_periods_ptr[], int32_t dim,
-                          const int32_t padding_ptr[], hipStream_t stream) {
+void hipdecompUpdateHalosY(const hipdecompHandle_t handle, const hipdecompGridDesc_t grid_desc, T* input, T* work,
+                           const int32_t halo_extents_ptr[], const bool halo_periods_ptr[], int32_t dim,
+                           const int32_t padding_ptr[], hipStream_t stream) {
   std::stringstream os;
-  os << "cudecompUpdateHalosY_" << dim;
+  os << "hipdecompUpdateHalosY_" << dim;
   nvtx::rangePush(os.str());
-  cudecompUpdateHalos_(1, handle, grid_desc, input, work, halo_extents_ptr, halo_periods_ptr, dim, padding_ptr, stream);
+  hipdecompUpdateHalos_(1, handle, grid_desc, input, work, halo_extents_ptr, halo_periods_ptr, dim, padding_ptr,
+                        stream);
   nvtx::rangePop();
 }
 
 template <typename T>
-void cudecompUpdateHalosZ(const cudecompHandle_t handle, const cudecompGridDesc_t grid_desc, T* input, T* work,
-                          const int32_t halo_extents_ptr[], const bool halo_periods_ptr[], int32_t dim,
-                          const int32_t padding_ptr[], hipStream_t stream) {
+void hipdecompUpdateHalosZ(const hipdecompHandle_t handle, const hipdecompGridDesc_t grid_desc, T* input, T* work,
+                           const int32_t halo_extents_ptr[], const bool halo_periods_ptr[], int32_t dim,
+                           const int32_t padding_ptr[], hipStream_t stream) {
   std::stringstream os;
-  os << "cudecompUpdateHalosZ_" << dim;
+  os << "hipdecompUpdateHalosZ_" << dim;
   nvtx::rangePush(os.str());
-  cudecompUpdateHalos_(2, handle, grid_desc, input, work, halo_extents_ptr, halo_periods_ptr, dim, padding_ptr, stream);
+  hipdecompUpdateHalos_(2, handle, grid_desc, input, work, halo_extents_ptr, halo_periods_ptr, dim, padding_ptr,
+                        stream);
   nvtx::rangePop();
 }
 
-} // namespace cudecomp
+} // namespace hipdecomp
 
 #endif // HALO_H

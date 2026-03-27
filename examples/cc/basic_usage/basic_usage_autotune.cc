@@ -1,5 +1,6 @@
 /*
  * SPDX-FileCopyrightText: Copyright (c) 2022-2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2026 The Authors.
  * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -27,19 +28,19 @@
 
 #include <hip/hip_runtime.h>
 
-#include "cudecomp.h"
+#include "hipdecomp.h"
 
 // Error checking macros
-#define CHECK_CUDECOMP_EXIT(call)                                                                                      \
+#define CHECK_HIPDECOMP_EXIT(call)                                                                                     \
   do {                                                                                                                 \
-    cudecompResult_t err = call;                                                                                       \
-    if (CUDECOMP_RESULT_SUCCESS != err) {                                                                              \
-      fprintf(stderr, "%s:%d CUDECOMP error. (error code %d)\n", __FILE__, __LINE__, err);                             \
+    hipdecompResult_t err = call;                                                                                      \
+    if (HIPDECOMP_RESULT_SUCCESS != err) {                                                                             \
+      fprintf(stderr, "%s:%d HIPDECOMP error. (error code %d)\n", __FILE__, __LINE__, err);                            \
       exit(EXIT_FAILURE);                                                                                              \
     }                                                                                                                  \
   } while (false)
 
-#define CHECK_CUDA_EXIT(call)                                                                                          \
+#define CHECK_HIP_EXIT(call)                                                                                           \
   do {                                                                                                                 \
     hipError_t err = call;                                                                                             \
     if (hipSuccess != err) {                                                                                           \
@@ -65,7 +66,7 @@
   } while (false)
 
 // CUDA kernel to demonstrate pencil data access on device.
-__global__ void initialize_pencil(double* data, cudecompPencilInfo_t pinfo) {
+__global__ void initialize_pencil(double* data, hipdecompPencilInfo_t pinfo) {
 
   int64_t l = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -89,7 +90,7 @@ __global__ void initialize_pencil(double* data, cudecompPencilInfo_t pinfo) {
 
 int main(int argc, char** argv) {
 
-  // Initialize MPI and start up cuDecomp
+  // Initialize MPI and start up hipDecomp
   CHECK_MPI_EXIT(MPI_Init(nullptr, nullptr));
   int rank, nranks;
   CHECK_MPI_EXIT(MPI_Comm_rank(MPI_COMM_WORLD, &rank));
@@ -101,15 +102,15 @@ int main(int argc, char** argv) {
   MPI_Comm_rank(local_comm, &local_rank);
 
   int device_count;
-  CHECK_CUDA_EXIT(hipGetDeviceCount(&device_count));
-  CHECK_CUDA_EXIT(hipSetDevice(local_rank % device_count));
+  CHECK_HIP_EXIT(hipGetDeviceCount(&device_count));
+  CHECK_HIP_EXIT(hipSetDevice(local_rank % device_count));
 
-  cudecompHandle_t handle;
-  CHECK_CUDECOMP_EXIT(cudecompInit(&handle, MPI_COMM_WORLD));
+  hipdecompHandle_t handle;
+  CHECK_HIPDECOMP_EXIT(hipdecompInit(&handle, MPI_COMM_WORLD));
 
-  // Create cuDecomp grid descriptor (with autotuning enabled)
-  cudecompGridDescConfig_t config;
-  CHECK_CUDECOMP_EXIT(cudecompGridDescConfigSetDefaults(&config));
+  // Create hipDecomp grid descriptor (with autotuning enabled)
+  hipdecompGridDescConfig_t config;
+  CHECK_HIPDECOMP_EXIT(hipdecompGridDescConfigSetDefaults(&config));
 
   // Set pdims entries to 0 to enable process grid autotuning
   config.pdims[0] = 0; // P_rows
@@ -124,19 +125,19 @@ int main(int argc, char** argv) {
   config.transpose_axis_contiguous[2] = true;
 
   // Set up autotune options structure
-  cudecompGridDescAutotuneOptions_t options;
-  CHECK_CUDECOMP_EXIT(cudecompGridDescAutotuneOptionsSetDefaults(&options));
+  hipdecompGridDescAutotuneOptions_t options;
+  CHECK_HIPDECOMP_EXIT(hipdecompGridDescAutotuneOptionsSetDefaults(&options));
 
   // General options
   options.n_warmup_trials = 3;
   options.n_trials = 5;
-  options.dtype = CUDECOMP_DOUBLE;
+  options.dtype = HIPDECOMP_DOUBLE;
   options.disable_nccl_backends = false;
   options.disable_nvshmem_backends = false;
   options.skip_threshold = 0.0;
 
   // Process grid autotuning options
-  options.grid_mode = CUDECOMP_AUTOTUNE_GRID_TRANSPOSE;
+  options.grid_mode = HIPDECOMP_AUTOTUNE_GRID_TRANSPOSE;
   options.allow_uneven_decompositions = true;
 
   // Transpose communication backend autotuning options
@@ -169,38 +170,38 @@ int main(int argc, char** argv) {
   options.halo_periods[1] = true;
   options.halo_periods[2] = true;
 
-  cudecompGridDesc_t grid_desc;
-  CHECK_CUDECOMP_EXIT(cudecompGridDescCreate(handle, &grid_desc, &config, &options));
+  hipdecompGridDesc_t grid_desc;
+  CHECK_HIPDECOMP_EXIT(hipdecompGridDescCreate(handle, &grid_desc, &config, &options));
 
   // Print information on configuration (updated by autotuner)
   if (rank == 0) {
     printf("running on %d x %d process grid...\n", config.pdims[0], config.pdims[1]);
     printf("running using %s transpose backend...\n",
-           cudecompTransposeCommBackendToString(config.transpose_comm_backend));
-    printf("running using %s halo backend...\n", cudecompHaloCommBackendToString(config.halo_comm_backend));
+           hipdecompTransposeCommBackendToString(config.transpose_comm_backend));
+    printf("running using %s halo backend...\n", hipdecompHaloCommBackendToString(config.halo_comm_backend));
   }
 
   // Allocating pencil memory
 
   // Get X-pencil information (with halo elements).
-  cudecompPencilInfo_t pinfo_x;
+  hipdecompPencilInfo_t pinfo_x;
   int32_t halo_extents_x[3]{1, 1, 1};
-  CHECK_CUDECOMP_EXIT(cudecompGetPencilInfo(handle, grid_desc, &pinfo_x, 0, halo_extents_x, nullptr));
+  CHECK_HIPDECOMP_EXIT(hipdecompGetPencilInfo(handle, grid_desc, &pinfo_x, 0, halo_extents_x, nullptr));
 
   // Get Y-pencil information
-  cudecompPencilInfo_t pinfo_y;
-  CHECK_CUDECOMP_EXIT(cudecompGetPencilInfo(handle, grid_desc, &pinfo_y, 1, nullptr, nullptr));
+  hipdecompPencilInfo_t pinfo_y;
+  CHECK_HIPDECOMP_EXIT(hipdecompGetPencilInfo(handle, grid_desc, &pinfo_y, 1, nullptr, nullptr));
 
   // Get Z-pencil information
-  cudecompPencilInfo_t pinfo_z;
-  CHECK_CUDECOMP_EXIT(cudecompGetPencilInfo(handle, grid_desc, &pinfo_z, 2, nullptr, nullptr));
+  hipdecompPencilInfo_t pinfo_z;
+  CHECK_HIPDECOMP_EXIT(hipdecompGetPencilInfo(handle, grid_desc, &pinfo_z, 2, nullptr, nullptr));
 
   // Allocate pencil memory
   int64_t data_num_elements = std::max(std::max(pinfo_x.size, pinfo_y.size), pinfo_z.size);
 
   // Allocate device buffer
   double* data_d;
-  CHECK_CUDA_EXIT(hipMalloc(&data_d, data_num_elements * sizeof(*data_d)));
+  CHECK_HIP_EXIT(hipMalloc(&data_d, data_num_elements * sizeof(*data_d)));
 
   // Allocate host buffer
   double* data = reinterpret_cast<double*>(malloc(data_num_elements * sizeof(*data)));
@@ -210,45 +211,45 @@ int main(int argc, char** argv) {
   int nblocks = (pinfo_x.size + threads_per_block - 1) / threads_per_block;
   initialize_pencil<<<nblocks, threads_per_block>>>(data_d, pinfo_x);
 
-  // Allocating cuDecomp workspace
+  // Allocating hipDecomp workspace
 
   // Get workspace sizes
   int64_t transpose_work_num_elements;
-  CHECK_CUDECOMP_EXIT(cudecompGetTransposeWorkspaceSize(handle, grid_desc, &transpose_work_num_elements));
+  CHECK_HIPDECOMP_EXIT(hipdecompGetTransposeWorkspaceSize(handle, grid_desc, &transpose_work_num_elements));
 
   int64_t halo_work_num_elements;
-  CHECK_CUDECOMP_EXIT(
-      cudecompGetHaloWorkspaceSize(handle, grid_desc, 0, pinfo_x.halo_extents, &halo_work_num_elements));
+  CHECK_HIPDECOMP_EXIT(
+      hipdecompGetHaloWorkspaceSize(handle, grid_desc, 0, pinfo_x.halo_extents, &halo_work_num_elements));
 
-  // Allocate using cudecompMalloc
+  // Allocate using hipdecompMalloc
   int64_t dtype_size;
-  CHECK_CUDECOMP_EXIT(cudecompGetDataTypeSize(CUDECOMP_DOUBLE, &dtype_size));
+  CHECK_HIPDECOMP_EXIT(hipdecompGetDataTypeSize(HIPDECOMP_DOUBLE, &dtype_size));
 
   double* transpose_work_d;
-  CHECK_CUDECOMP_EXIT(cudecompMalloc(handle, grid_desc, reinterpret_cast<void**>(&transpose_work_d),
-                                     transpose_work_num_elements * dtype_size));
+  CHECK_HIPDECOMP_EXIT(hipdecompMalloc(handle, grid_desc, reinterpret_cast<void**>(&transpose_work_d),
+                                       transpose_work_num_elements * dtype_size));
 
   double* halo_work_d;
-  CHECK_CUDECOMP_EXIT(
-      cudecompMalloc(handle, grid_desc, reinterpret_cast<void**>(&halo_work_d), halo_work_num_elements * dtype_size));
+  CHECK_HIPDECOMP_EXIT(
+      hipdecompMalloc(handle, grid_desc, reinterpret_cast<void**>(&halo_work_d), halo_work_num_elements * dtype_size));
 
   // Transposing data
 
   // Transpose from X-pencils to Y-pencils.
-  CHECK_CUDECOMP_EXIT(cudecompTransposeXToY(handle, grid_desc, data_d, data_d, transpose_work_d, CUDECOMP_DOUBLE,
-                                            pinfo_x.halo_extents, nullptr, nullptr, nullptr, 0));
+  CHECK_HIPDECOMP_EXIT(hipdecompTransposeXToY(handle, grid_desc, data_d, data_d, transpose_work_d, HIPDECOMP_DOUBLE,
+                                              pinfo_x.halo_extents, nullptr, nullptr, nullptr, 0));
 
   // Transpose from Y-pencils to Z-pencils.
-  CHECK_CUDECOMP_EXIT(cudecompTransposeYToZ(handle, grid_desc, data_d, data_d, transpose_work_d, CUDECOMP_DOUBLE,
-                                            nullptr, nullptr, nullptr, nullptr, 0));
+  CHECK_HIPDECOMP_EXIT(hipdecompTransposeYToZ(handle, grid_desc, data_d, data_d, transpose_work_d, HIPDECOMP_DOUBLE,
+                                              nullptr, nullptr, nullptr, nullptr, 0));
 
   // Transpose from Z-pencils to Y-pencils.
-  CHECK_CUDECOMP_EXIT(cudecompTransposeZToY(handle, grid_desc, data_d, data_d, transpose_work_d, CUDECOMP_DOUBLE,
-                                            nullptr, nullptr, nullptr, nullptr, 0));
+  CHECK_HIPDECOMP_EXIT(hipdecompTransposeZToY(handle, grid_desc, data_d, data_d, transpose_work_d, HIPDECOMP_DOUBLE,
+                                              nullptr, nullptr, nullptr, nullptr, 0));
 
   // Transpose from Y-pencils to X-pencils.
-  CHECK_CUDECOMP_EXIT(cudecompTransposeYToX(handle, grid_desc, data_d, data_d, transpose_work_d, CUDECOMP_DOUBLE,
-                                            nullptr, pinfo_x.halo_extents, nullptr, nullptr, 0));
+  CHECK_HIPDECOMP_EXIT(hipdecompTransposeYToX(handle, grid_desc, data_d, data_d, transpose_work_d, HIPDECOMP_DOUBLE,
+                                              nullptr, pinfo_x.halo_extents, nullptr, nullptr, 0));
 
   // Updating halos
 
@@ -256,24 +257,24 @@ int main(int argc, char** argv) {
   bool halo_periods[3]{true, true, true};
 
   // Update X-pencil halos in X direction
-  CHECK_CUDECOMP_EXIT(cudecompUpdateHalosX(handle, grid_desc, data_d, halo_work_d, CUDECOMP_DOUBLE,
-                                           pinfo_x.halo_extents, halo_periods, 0, nullptr, 0));
+  CHECK_HIPDECOMP_EXIT(hipdecompUpdateHalosX(handle, grid_desc, data_d, halo_work_d, HIPDECOMP_DOUBLE,
+                                             pinfo_x.halo_extents, halo_periods, 0, nullptr, 0));
 
   // Update X-pencil halos in Y direction
-  CHECK_CUDECOMP_EXIT(cudecompUpdateHalosX(handle, grid_desc, data_d, halo_work_d, CUDECOMP_DOUBLE,
-                                           pinfo_x.halo_extents, halo_periods, 1, nullptr, 0));
+  CHECK_HIPDECOMP_EXIT(hipdecompUpdateHalosX(handle, grid_desc, data_d, halo_work_d, HIPDECOMP_DOUBLE,
+                                             pinfo_x.halo_extents, halo_periods, 1, nullptr, 0));
 
   // Update X-pencil halos in Z direction
-  CHECK_CUDECOMP_EXIT(cudecompUpdateHalosX(handle, grid_desc, data_d, halo_work_d, CUDECOMP_DOUBLE,
-                                           pinfo_x.halo_extents, halo_periods, 2, nullptr, 0));
+  CHECK_HIPDECOMP_EXIT(hipdecompUpdateHalosX(handle, grid_desc, data_d, halo_work_d, HIPDECOMP_DOUBLE,
+                                             pinfo_x.halo_extents, halo_periods, 2, nullptr, 0));
 
   // Cleanup resources
   free(data);
-  CHECK_CUDA_EXIT(hipFree(data_d));
-  CHECK_CUDECOMP_EXIT(cudecompFree(handle, grid_desc, transpose_work_d));
-  CHECK_CUDECOMP_EXIT(cudecompFree(handle, grid_desc, halo_work_d));
-  CHECK_CUDECOMP_EXIT(cudecompGridDescDestroy(handle, grid_desc));
-  CHECK_CUDECOMP_EXIT(cudecompFinalize(handle));
+  CHECK_HIP_EXIT(hipFree(data_d));
+  CHECK_HIPDECOMP_EXIT(hipdecompFree(handle, grid_desc, transpose_work_d));
+  CHECK_HIPDECOMP_EXIT(hipdecompFree(handle, grid_desc, halo_work_d));
+  CHECK_HIPDECOMP_EXIT(hipdecompGridDescDestroy(handle, grid_desc));
+  CHECK_HIPDECOMP_EXIT(hipdecompFinalize(handle));
 
   CHECK_MPI_EXIT(MPI_Finalize());
 }

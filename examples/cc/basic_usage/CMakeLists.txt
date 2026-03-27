@@ -18,7 +18,7 @@ target_sources(basic_usage_autotune_cc
 foreach(tgt ${basic_usage_targets_cc})
   string(REPLACE "_cc" "" bin_name ${tgt})
   set_target_properties(${tgt} PROPERTIES OUTPUT_NAME ${bin_name})
-  set_target_properties(${tgt} PROPERTIES HIP_ARCHITECTURES "${CUDECOMP_HIP_ARCH_LIST}")
+  set_target_properties(${tgt} PROPERTIES HIP_ARCHITECTURES "${HIPDECOMP_HIP_ARCH_LIST}")
   target_include_directories(${tgt}
     PRIVATE
     ${CMAKE_BINARY_DIR}/include

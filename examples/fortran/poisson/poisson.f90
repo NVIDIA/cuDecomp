@@ -13,7 +13,7 @@
 ! See the License for the specific language governing permissions and
 ! limitations under the License.
 
-#define CHECK_CUDECOMP_EXIT(f) if (f /= CUDECOMP_RESULT_SUCCESS) call exit(1)
+#define CHECK_HIPDECOMP_EXIT(f) if (f /= HIPDECOMP_RESULT_SUCCESS) call exit(1)
 
 ! Solves poisson equation
 !
@@ -27,7 +27,7 @@
 
 program main
   use cudafor
-  use cudecomp
+  use hipdecomp
   use cufft
   use mpi
 
@@ -60,16 +60,16 @@ program main
   integer :: rank, ranks, ierr
   integer :: localRank, localComm
 
-  ! cudecomp
-  type(cudecompHandle) :: handle
-  type(cudecompGridDesc) :: grid_desc
-  type(cudecompGridDescConfig) :: config
-  type(cudecompGridDescAutotuneOptions) :: options
+  ! hipdecomp
+  type(hipdecompHandle) :: handle
+  type(hipdecompGridDesc) :: grid_desc
+  type(hipdecompGridDescConfig) :: config
+  type(hipdecompGridDescAutotuneOptions) :: options
 
   integer :: pdims(2)
   integer :: gdims(3)
   integer :: npx, npy, npz
-  type(cudecompPencilInfo) :: piX, piY, piZ
+  type(hipdecompPencilInfo) :: piX, piY, piZ
   integer(8) :: nElemX, nElemY, nElemZ, nElemWork
 
   ! CUFFT
@@ -102,7 +102,7 @@ program main
   nz = 64
   pr = 0
   pc = 0
-  comm_backend = CUDECOMP_TRANSPOSE_COMM_MPI_P2P
+  comm_backend = HIPDECOMP_TRANSPOSE_COMM_MPI_P2P
 
   skip_next = .false.
   do i = 1, command_argument_count()
@@ -153,11 +153,11 @@ program main
           nx, ny, nz
   end if
 
-  ! cudecomp initialization
+  ! hipdecomp initialization
 
-  CHECK_CUDECOMP_EXIT(cudecompInit(handle, MPI_COMM_WORLD))
+  CHECK_HIPDECOMP_EXIT(hipdecompInit(handle, MPI_COMM_WORLD))
 
-  CHECK_CUDECOMP_EXIT(cudecompGridDescConfigSetDefaults(config))
+  CHECK_HIPDECOMP_EXIT(hipdecompGridDescConfigSetDefaults(config))
   pdims = [pr, pc]
   config%pdims = pdims
   gdims = [nx, ny, nz]
@@ -165,29 +165,29 @@ program main
   config%transpose_comm_backend = comm_backend
   config%transpose_axis_contiguous = .true.
 
-  CHECK_CUDECOMP_EXIT(cudecompGridDescAutotuneOptionsSetDefaults(options))
-  options%dtype = CUDECOMP_DOUBLE_COMPLEX
+  CHECK_HIPDECOMP_EXIT(hipdecompGridDescAutotuneOptionsSetDefaults(options))
+  options%dtype = HIPDECOMP_DOUBLE_COMPLEX
   if (comm_backend == 0) then
     options%autotune_transpose_backend = .true.
   endif
 
-  CHECK_CUDECOMP_EXIT(cudecompGridDescCreate(handle, grid_desc, config, options))
+  CHECK_HIPDECOMP_EXIT(hipdecompGridDescCreate(handle, grid_desc, config, options))
 
   if (rank == 0) then
      write(*,"('Running on ', i0, ' x ', i0, ' process grid ...')") config%pdims(1), config%pdims(2)
-     write(*,"('Using ', a, ' backend ...')") cudecompTransposeCommBackendToString(config%transpose_comm_backend)
+     write(*,"('Using ', a, ' backend ...')") hipdecompTransposeCommBackendToString(config%transpose_comm_backend)
   end if
 
   ! get pencil info
-  CHECK_CUDECOMP_EXIT(cudecompGetPencilInfo(handle, grid_desc, piX, 1))
+  CHECK_HIPDECOMP_EXIT(hipdecompGetPencilInfo(handle, grid_desc, piX, 1))
   nElemX = piX%size
-  CHECK_CUDECOMP_EXIT(cudecompGetPencilInfo(handle, grid_desc, piY, 2))
+  CHECK_HIPDECOMP_EXIT(hipdecompGetPencilInfo(handle, grid_desc, piY, 2))
   nElemY = piY%size
-  CHECK_CUDECOMP_EXIT(cudecompGetPencilInfo(handle, grid_desc, piZ, 3))
+  CHECK_HIPDECOMP_EXIT(hipdecompGetPencilInfo(handle, grid_desc, piZ, 3))
   nElemZ = piZ%size
 
   ! get workspace size
-  CHECK_CUDECOMP_EXIT(cudecompGetTransposeWorkspaceSize(handle, grid_desc, nElemWork))
+  CHECK_HIPDECOMP_EXIT(hipdecompGetTransposeWorkspaceSize(handle, grid_desc, nElemWork))
 
   ! CUFFT initialization
 
@@ -256,7 +256,7 @@ program main
   allocate(phi(max(nElemX, nElemY, nElemZ)))
   allocate(phi_d, mold=phi)
   allocate(ua(nx, piX%shape(2), piX%shape(3)))
-  CHECK_CUDECOMP_EXIT(cudecompMalloc(handle, grid_desc, work_d, nElemWork))
+  CHECK_HIPDECOMP_EXIT(hipdecompMalloc(handle, grid_desc, work_d, nElemWork))
 
   ! initialize phi and analytical solution
   block
@@ -286,12 +286,12 @@ program main
   status = cufftExecZ2Z(planX, phi_d, phi_d, CUFFT_FORWARD)
   if (status /= CUFFT_SUCCESS) write(*,*) 'X forward error: ', status
   ! phi(kx,y,z) -> phi(y,z,kx)
-  CHECK_CUDECOMP_EXIT(cudecompTransposeXToY(handle, grid_desc, phi_d, phi_d, work_d, CUDECOMP_DOUBLE_COMPLEX))
+  CHECK_HIPDECOMP_EXIT(hipdecompTransposeXToY(handle, grid_desc, phi_d, phi_d, work_d, HIPDECOMP_DOUBLE_COMPLEX))
   ! phi(y,z,kx) -> phi(ky,z,kx)
   status = cufftExecZ2Z(planY, phi_d, phi_d, CUFFT_FORWARD)
   if (status /= CUFFT_SUCCESS) write(*,*) 'Y forward error: ', status
   ! phi(ky,z,kx) -> phi(z,kx,ky)
-  CHECK_CUDECOMP_EXIT(cudecompTransposeYToZ(handle, grid_desc, phi_d, phi_d, work_d, CUDECOMP_DOUBLE_COMPLEX))
+  CHECK_HIPDECOMP_EXIT(hipdecompTransposeYToZ(handle, grid_desc, phi_d, phi_d, work_d, HIPDECOMP_DOUBLE_COMPLEX))
   ! phi(z,kx,ky) -> phi(kz,kx,ky)
   status = cufftExecZ2Z(planZ, phi_d, phi_d, CUFFT_FORWARD)
   if (status /= CUFFT_SUCCESS) write(*,*) 'Z forward error: ', status
@@ -342,12 +342,12 @@ program main
   status = cufftExecZ2Z(planZ, phi_d, phi_d, CUFFT_INVERSE)
   if (status /= CUFFT_SUCCESS) write(*,*) 'Z inverse error: ', status
   ! phi(z,kx,ky) -> phi(ky,z,kx)
-  CHECK_CUDECOMP_EXIT(cudecompTransposeZToY(handle, grid_desc, phi_d, phi_d, work_d, CUDECOMP_DOUBLE_COMPLEX))
+  CHECK_HIPDECOMP_EXIT(hipdecompTransposeZToY(handle, grid_desc, phi_d, phi_d, work_d, HIPDECOMP_DOUBLE_COMPLEX))
   ! phi(ky,z,kx) -> phi(y,z,kx)
   status = cufftExecZ2Z(planY, phi_d, phi_d, CUFFT_INVERSE)
   if (status /= CUFFT_SUCCESS) write(*,*) 'Y inverse error: ', status
   ! phi(y,z,kx) -> phi(kx,y,z)
-  CHECK_CUDECOMP_EXIT(cudecompTransposeYToX(handle, grid_desc, phi_d, phi_d, work_d, CUDECOMP_DOUBLE_COMPLEX))
+  CHECK_HIPDECOMP_EXIT(hipdecompTransposeYToX(handle, grid_desc, phi_d, phi_d, work_d, HIPDECOMP_DOUBLE_COMPLEX))
   ! phi(kx,y,z) -> phi(x,y,z)
   status = cufftExecZ2Z(planX, phi_d, phi_d, CUFFT_INVERSE)
   if (status /= CUFFT_SUCCESS) write(*,*) 'X inverse error: ', status
@@ -392,9 +392,9 @@ program main
   deallocate(kx_d, ky_d, kz_d)
   deallocate(phi, phi_d, ua)
 
-  CHECK_CUDECOMP_EXIT(cudecompFree(handle, grid_desc, work_d))
-  CHECK_CUDECOMP_EXIT(cudecompGridDescDestroy(handle, grid_desc))
-  CHECK_CUDECOMP_EXIT(cudecompFinalize(handle))
+  CHECK_HIPDECOMP_EXIT(hipdecompFree(handle, grid_desc, work_d))
+  CHECK_HIPDECOMP_EXIT(hipdecompGridDescDestroy(handle, grid_desc))
+  CHECK_HIPDECOMP_EXIT(hipdecompFinalize(handle))
 
   call mpi_finalize(ierr)
 

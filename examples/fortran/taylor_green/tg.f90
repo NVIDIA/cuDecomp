@@ -13,11 +13,11 @@
 ! See the License for the specific language governing permissions and
 ! limitations under the License.
 
-#define CHECK_CUDECOMP_EXIT(f) if (f /= CUDECOMP_RESULT_SUCCESS) call exit(1)
+#define CHECK_HIPDECOMP_EXIT(f) if (f /= HIPDECOMP_RESULT_SUCCESS) call exit(1)
 
 module precision
   use mpi, only: MPI_REAL,MPI_DOUBLE_PRECISION
-  use cudecomp, only: CUDECOMP_DOUBLE, CUDECOMP_DOUBLE_COMPLEX, CUDECOMP_FLOAT, CUDECOMP_FLOAT_COMPLEX
+  use hipdecomp, only: HIPDECOMP_DOUBLE, HIPDECOMP_DOUBLE_COMPLEX, HIPDECOMP_FLOAT, HIPDECOMP_FLOAT_COMPLEX
   use cufft, only: CUFFT_D2Z, CUFFT_Z2D, CUFFT_Z2Z, CUFFT_R2C, CUFFT_C2R, CUFFT_C2C
   use iso_fortran_env, only: int64,real32,real64
   implicit none
@@ -28,16 +28,16 @@ module precision
 #define cufftExecZ2Z cufftExecC2C
   integer, parameter, public :: rp = real32
   integer, parameter, public :: MPI_REAL_RP = MPI_REAL
-  integer, parameter, public :: CUDECOMP_REAL_RP = CUDECOMP_FLOAT
-  integer, parameter, public :: CUDECOMP_REAL_COMPLEX_RP = CUDECOMP_FLOAT_COMPLEX
+  integer, parameter, public :: HIPDECOMP_REAL_RP = HIPDECOMP_FLOAT
+  integer, parameter, public :: HIPDECOMP_REAL_COMPLEX_RP = HIPDECOMP_FLOAT_COMPLEX
   integer, parameter, public :: CUFFT_R2C_RP = CUFFT_R2C
   integer, parameter, public :: CUFFT_C2R_RP = CUFFT_C2R
   integer, parameter, public :: CUFFT_C2C_RP = CUFFT_C2C
 #else
   integer, parameter, public :: rp = real64
   integer, parameter, public :: MPI_REAL_RP = MPI_DOUBLE_PRECISION
-  integer, parameter, public :: CUDECOMP_REAL_RP = CUDECOMP_DOUBLE
-  integer, parameter, public :: CUDECOMP_REAL_COMPLEX_RP = CUDECOMP_DOUBLE_COMPLEX
+  integer, parameter, public :: HIPDECOMP_REAL_RP = HIPDECOMP_DOUBLE
+  integer, parameter, public :: HIPDECOMP_REAL_COMPLEX_RP = HIPDECOMP_DOUBLE_COMPLEX
   integer, parameter, public :: CUFFT_R2C_RP = CUFFT_D2Z
   integer, parameter, public :: CUFFT_C2R_RP = CUFFT_Z2D
   integer, parameter, public :: CUFFT_C2C_RP = CUFFT_Z2Z
@@ -47,7 +47,7 @@ end module precision
 program taylor_green
   use precision
   use mpi
-  use cudecomp
+  use hipdecomp
   use cufft
   implicit none
 
@@ -56,12 +56,12 @@ program taylor_green
   integer :: localRank, localComm
   integer :: pdims(2) = [0,0]
 
-  type(cudecompHandle) :: handle
-  type(cudecompGridDesc) :: gridDescR, gridDescC
-  type(cudecompGridDescConfig) :: gridDescConfigR, gridDescConfigC
-  type(cudecompGridDescAutotuneOptions) :: optionsR, optionsC
+  type(hipdecompHandle) :: handle
+  type(hipdecompGridDesc) :: gridDescR, gridDescC
+  type(hipdecompGridDescConfig) :: gridDescConfigR, gridDescConfigC
+  type(hipdecompGridDescAutotuneOptions) :: optionsR, optionsC
   integer :: gdimR(3), gdimC(3)
-  type(cudecompPencilInfo) :: piXR, piXC, piYC, piZC
+  type(hipdecompPencilInfo) :: piXR, piXC, piYC, piZC
   integer(i8) :: nElemXR, nElemXC, nElemYC, nElemZC, nElemWorkC, workSize
   logical :: axisContiguous = .true.
 
@@ -133,7 +133,7 @@ program taylor_green
 
     if( spec_freq > 0.0_rp .and. flowtime >= real(spec_count + 1,rp)*spec_freq ) then
       call write_spectrum_sample(spec_count+1)
-      spec_count = spec_count + 1  
+      spec_count = spec_count + 1
     end if
 
     if( mod(i,stat_freq) == 0 ) then
@@ -168,7 +168,7 @@ contains
 
 subroutine initializeField(Ur,Vr,Wr,dx,dy,dz,piXR)
   real(rp), managed :: Ur(:,:,:),Vr(:,:,:),Wr(:,:,:)
-  type(cudecompPencilInfo) :: piXR
+  type(hipdecompPencilInfo) :: piXR
   integer :: il,ig,jl,jg,kl,kg
   real(rp) :: dx,dy,dz
 
@@ -233,7 +233,7 @@ subroutine cross(U,V,W,dU,dV,dW)
         dUw = dW(il,jl,kl)/N3
         dU(il,jl,kl) = Uv*dUw - Uw*dUv
         dV(il,jl,kl) = Uw*dUu - Uu*dUw
-        dW(il,jl,kl) = Uu*dUv - Uv*dUu  
+        dW(il,jl,kl) = Uu*dUv - Uv*dUu
       end do
     end do
   end do
@@ -292,9 +292,9 @@ subroutine forward(work)
   do i=1,3
     start=1+(i-1)*workSize
     status = cufftExecD2Z(planD2ZX, work(start), work(start))
-    CHECK_CUDECOMP_EXIT(cudecompTransposeXtoY(handle, gridDescC, work(start), work(start), workC, CUDECOMP_REAL_COMPLEX_RP))
+    CHECK_HIPDECOMP_EXIT(hipdecompTransposeXtoY(handle, gridDescC, work(start), work(start), workC, HIPDECOMP_REAL_COMPLEX_RP))
     status = cufftExecZ2Z(planZ2ZY, work(start), work(start), CUFFT_FORWARD)
-    CHECK_CUDECOMP_EXIT(cudecompTransposeYtoZ(handle, gridDescC, work(start), work(start), workC, CUDECOMP_REAL_COMPLEX_RP))
+    CHECK_HIPDECOMP_EXIT(hipdecompTransposeYtoZ(handle, gridDescC, work(start), work(start), workC, HIPDECOMP_REAL_COMPLEX_RP))
     status = cufftExecZ2Z(planZ2ZZ, work(start), work(start), CUFFT_FORWARD)
   end do
 end subroutine
@@ -307,9 +307,9 @@ subroutine backward(work)
   do i=1,3
     start=1+(i-1)*workSize
     status = cufftExecZ2Z(planZ2ZZ, work(start), work(start), CUFFT_INVERSE)
-    CHECK_CUDECOMP_EXIT(cudecompTransposeZtoY(handle, gridDescC, work(start), work(start), workC, CUDECOMP_REAL_COMPLEX_RP))
+    CHECK_HIPDECOMP_EXIT(hipdecompTransposeZtoY(handle, gridDescC, work(start), work(start), workC, HIPDECOMP_REAL_COMPLEX_RP))
     status = cufftExecZ2Z(planZ2ZY, work(start), work(start), CUFFT_INVERSE)
-    CHECK_CUDECOMP_EXIT(cudecompTransposeYtoX(handle, gridDescC, work(start), work(start), workC, CUDECOMP_REAL_COMPLEX_RP))
+    CHECK_HIPDECOMP_EXIT(hipdecompTransposeYtoX(handle, gridDescC, work(start), work(start), workC, HIPDECOMP_REAL_COMPLEX_RP))
     status = cufftExecZ2D(planZ2DX, work(start), work(start))
   end do
 end subroutine
@@ -633,47 +633,47 @@ subroutine initialize
     write(*,"('running on ', i0, ' x ', i0, ' x ', i0, ' spatial grid...')") N, N, N
   end if
 
-  CHECK_CUDECOMP_EXIT(cudecompInit(handle, MPI_COMM_WORLD))
+  CHECK_HIPDECOMP_EXIT(hipdecompInit(handle, MPI_COMM_WORLD))
 
-  CHECK_CUDECOMP_EXIT(cudecompGridDescConfigSetDefaults(gridDescConfigC))
+  CHECK_HIPDECOMP_EXIT(hipdecompGridDescConfigSetDefaults(gridDescConfigC))
   gridDescConfigC%pdims = pdims
   gdimC = [N/2+1, N, N]
   gridDescConfigC%gdims = gdimC
   gridDescConfigC%transpose_comm_backend = commType
   gridDescConfigC%transpose_axis_contiguous = axisContiguous
 
-  CHECK_CUDECOMP_EXIT(cudecompGridDescAutotuneOptionsSetDefaults(optionsC))
-  optionsC%dtype = CUDECOMP_REAL_COMPLEX_RP
+  CHECK_HIPDECOMP_EXIT(hipdecompGridDescAutotuneOptionsSetDefaults(optionsC))
+  optionsC%dtype = HIPDECOMP_REAL_COMPLEX_RP
   if (commType == 0) then
     optionsC%autotune_transpose_backend = .true.
   endif
 
-  CHECK_CUDECOMP_EXIT(cudecompGridDescCreate(handle, gridDescC, gridDescConfigC, optionsC))
+  CHECK_HIPDECOMP_EXIT(hipdecompGridDescCreate(handle, gridDescC, gridDescConfigC, optionsC))
 
   pdims = gridDescConfigC%pdims
 
-  CHECK_CUDECOMP_EXIT(cudecompGridDescConfigSetDefaults(gridDescConfigR))
+  CHECK_HIPDECOMP_EXIT(hipdecompGridDescConfigSetDefaults(gridDescConfigR))
   gridDescConfigR%pdims = pdims
   gdimR = [(N/2+1)*2, N, N]
   gridDescConfigR%gdims = gdimR
   gridDescConfigR%transpose_comm_backend = gridDescConfigC%transpose_comm_backend
   gridDescConfigR%transpose_axis_contiguous = axisContiguous
 
-  CHECK_CUDECOMP_EXIT(cudecompGridDescAutotuneOptionsSetDefaults(optionsR))
-  optionsR%dtype = CUDECOMP_REAL_RP
+  CHECK_HIPDECOMP_EXIT(hipdecompGridDescAutotuneOptionsSetDefaults(optionsR))
+  optionsR%dtype = HIPDECOMP_REAL_RP
 
-  CHECK_CUDECOMP_EXIT(cudecompGridDescCreate(handle, gridDescR, gridDescConfigR, optionsR))
+  CHECK_HIPDECOMP_EXIT(hipdecompGridDescCreate(handle, gridDescR, gridDescConfigR, optionsR))
 
-  CHECK_CUDECOMP_EXIT(cudecompGetPencilInfo(handle, gridDescR, piXR, 1))
+  CHECK_HIPDECOMP_EXIT(hipdecompGetPencilInfo(handle, gridDescR, piXR, 1))
   nElemXR = product(piXR%shape)
-  CHECK_CUDECOMP_EXIT(cudecompGetPencilInfo(handle, gridDescC, piXC, 1))
+  CHECK_HIPDECOMP_EXIT(hipdecompGetPencilInfo(handle, gridDescC, piXC, 1))
   nElemXC = product(piXC%shape)
-  CHECK_CUDECOMP_EXIT(cudecompGetPencilInfo(handle, gridDescC, piYC, 2))
+  CHECK_HIPDECOMP_EXIT(hipdecompGetPencilInfo(handle, gridDescC, piYC, 2))
   nElemYC = product(piYC%shape)
-  CHECK_CUDECOMP_EXIT(cudecompGetPencilInfo(handle, gridDescC, piZC, 3))
+  CHECK_HIPDECOMP_EXIT(hipdecompGetPencilInfo(handle, gridDescC, piZC, 3))
   nElemZC = product(piZC%shape)
 
-  CHECK_CUDECOMP_EXIT(cudecompGetTransposeWorkspaceSize(handle, gridDescC, nElemWorkDecomp))
+  CHECK_HIPDECOMP_EXIT(hipdecompGetTransposeWorkspaceSize(handle, gridDescC, nElemWorkDecomp))
 
   if (printPencilInfo) then
     write(*,"('[',i0,'] piXR%shape = ',i0,' x ',i0,' x ',i0)") rank, piXR%shape
@@ -723,7 +723,7 @@ subroutine initialize
 
   nElemWorkCufft = max(sizeD2ZX,sizeZ2DX,sizeZ2ZY,sizeZ2ZZ)/(2*sizeof(1.0_rp))
   nElemWorkC = max(nElemWorkCufft,nElemWorkDecomp)
-  CHECK_CUDECOMP_EXIT(cudecompMalloc(handle, gridDescC, workC, nElemWorkC))
+  CHECK_HIPDECOMP_EXIT(hipdecompMalloc(handle, gridDescC, workC, nElemWorkC))
 
   status = cufftSetWorkArea(planD2ZX, workC)
   status = cufftSetWorkArea(planZ2DX, workC)
@@ -789,7 +789,7 @@ subroutine initialize
   Wh1r = Wr
 !$acc end kernels
 
-  call forward(hworkspace(:,1))   
+  call forward(hworkspace(:,1))
   status=cudaDeviceSynchronize()
 
   N3 = real(N,rp)*real(N,rp)*real(N,rp)
@@ -817,10 +817,10 @@ subroutine finalize
   status = cufftDestroy(planZ2ZY)
   status = cufftDestroy(planZ2ZZ)
 
-  CHECK_CUDECOMP_EXIT(cudecompFree(handle, gridDescC, workC))
-  CHECK_CUDECOMP_EXIT(cudecompGridDescDestroy(handle, gridDescC))
-  CHECK_CUDECOMP_EXIT(cudecompGridDescDestroy(handle, gridDescR))
-  CHECK_CUDECOMP_EXIT(cudecompFinalize(handle))
+  CHECK_HIPDECOMP_EXIT(hipdecompFree(handle, gridDescC, workC))
+  CHECK_HIPDECOMP_EXIT(hipdecompGridDescDestroy(handle, gridDescC))
+  CHECK_HIPDECOMP_EXIT(hipdecompGridDescDestroy(handle, gridDescR))
+  CHECK_HIPDECOMP_EXIT(hipdecompFinalize(handle))
 end subroutine
 
 end program

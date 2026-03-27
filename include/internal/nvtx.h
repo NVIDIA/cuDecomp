@@ -1,5 +1,6 @@
 /*
  * SPDX-FileCopyrightText: Copyright (c) 2022-2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2026 The Authors.
  * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,8 +16,8 @@
  * limitations under the License.
  */
 
-#ifndef CUDECOMP_NVTX_H
-#define CUDECOMP_NVTX_H
+#ifndef HIPDECOMP_NVTX_H
+#define HIPDECOMP_NVTX_H
 
 #include <string>
 
@@ -24,7 +25,7 @@
 #include <nvtx3/nvToolsExt.h>
 #endif
 
-namespace cudecomp {
+namespace hipdecomp {
 
 // Helper class for NVTX ranges
 class nvtx {
@@ -54,6 +55,6 @@ public:
   }
 };
 
-} // namespace cudecomp
+} // namespace hipdecomp
 
-#endif // CUDECOMP_NVTX_H
+#endif // HIPDECOMP_NVTX_H

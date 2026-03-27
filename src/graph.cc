@@ -1,5 +1,6 @@
 /*
  * SPDX-FileCopyrightText: Copyright (c) 2022-2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2026 The Authors.
  * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,14 +21,14 @@
 
 #include <hip/hip_runtime.h>
 
-#include "cudecomp.h"
+#include "hipdecomp.h"
 #include "internal/checks.h"
 #include "internal/graph.h"
 #include "internal/hashes.h"
 
-namespace cudecomp {
+namespace hipdecomp {
 
-graphCache::graphCache() { CHECK_CUDA(hipStreamCreateWithFlags(&graph_stream_, hipStreamNonBlocking)); }
+graphCache::graphCache() { CHECK_HIP(hipStreamCreateWithFlags(&graph_stream_, hipStreamNonBlocking)); }
 
 graphCache::~graphCache() {
   std::ignore = hipStreamDestroy(graph_stream_);
@@ -35,20 +36,20 @@ graphCache::~graphCache() {
 }
 
 void graphCache::replay(const graphCache::key_type& key, hipStream_t stream) const {
-  CHECK_CUDA(hipGraphLaunch(graph_cache_.at(key), stream));
+  CHECK_HIP(hipGraphLaunch(graph_cache_.at(key), stream));
 }
 
 hipStream_t graphCache::startCapture(const graphCache::key_type& key, hipStream_t stream) const {
-  CHECK_CUDA(hipStreamBeginCapture(graph_stream_, hipStreamCaptureModeGlobal));
+  CHECK_HIP(hipStreamBeginCapture(graph_stream_, hipStreamCaptureModeGlobal));
   return graph_stream_;
 }
 
 void graphCache::endCapture(const graphCache::key_type& key) {
   hipGraph_t graph;
   hipGraphExec_t graph_exec;
-  CHECK_CUDA(hipStreamEndCapture(graph_stream_, &graph));
-  CHECK_CUDA(hipGraphInstantiate(&graph_exec, graph, nullptr, nullptr, 0));
-  CHECK_CUDA(hipGraphDestroy(graph));
+  CHECK_HIP(hipStreamEndCapture(graph_stream_, &graph));
+  CHECK_HIP(hipGraphInstantiate(&graph_exec, graph, nullptr, nullptr, 0));
+  CHECK_HIP(hipGraphDestroy(graph));
 
   graph_cache_[key] = graph_exec;
 }
@@ -57,10 +58,10 @@ bool graphCache::cached(const graphCache::key_type& key) const { return graph_ca
 
 void graphCache::clear() {
   for (auto& entry : graph_cache_) {
-    CHECK_CUDA(hipGraphExecDestroy(entry.second));
+    CHECK_HIP(hipGraphExecDestroy(entry.second));
   }
 
   graph_cache_.clear();
 }
 
-} // namespace cudecomp
+} // namespace hipdecomp

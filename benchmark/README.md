@@ -1,6 +1,6 @@
 # FFT benchmarking example
 
-In this sub-directory, there is a FFT benchmarking example to illustrate cuDecomp usage in the
+In this sub-directory, there is a FFT benchmarking example to illustrate hipDecomp usage in the
 context of performing a distributed 3D C2C or R2C FFT. The benchmarking executable accepts
 a number of flags to control the configuration of the run (run `./benchmark_c2c -h` or similar
 for a listing of options.)
@@ -44,7 +44,7 @@ The subplot on the left (in green) records the FFT performance, in GFLOP/s, meas
 
 The subplot on the right (in purple) records the average transpose trial time, in milliseconds, measured by the autotuner during a full autotuning run (i.e. process grid and transpose backend autotuning). In this subplot, lower is better. The right-arrow symbols mark the minimum value within rows, indicating the process grid achieving minimum transpose time for a given communication backend. The down-arrow symbols mark the minimum value within columns, indicating the communication backend achieving minimum transpose time for a given process grid. The star symbol marks the minimum value across the rows and columns, indicating the process grid and communication backend pair the autotuner would select that minimized transpose time.
 
-The results in this plot indicate an important consideration when using cuDecomp autotuning. The autotuner seeks to minimize communication
+The results in this plot indicate an important consideration when using hipDecomp autotuning. The autotuner seeks to minimize communication
 time, which is a good proxy for end-to-end performance in many codes, but not always. In this FFT benchmark code, some optimizations are
 made based on the process grid dimensions, meaning some decompositions might have more efficient compute than others. Additionally, some grid
 configurations might yield better memory layouts for the FFTs than others, introducing more variation in compute efficiency across process grid
@@ -53,5 +53,5 @@ in the plot above, where the autotuner would select the `1 x 8 + NVSHMEM (pipeli
 configuration achieves the peak FFT performance. With that said, the selected configuration would still achieve high performance relative to
 many of the other options.
 
-For situations where some known optimizations can greatly benefit specific process grid dimensions, consider limiting the cuDecomp autotuner to
+For situations where some known optimizations can greatly benefit specific process grid dimensions, consider limiting the hipDecomp autotuner to
 only backend autotuning with a fixed process grid.

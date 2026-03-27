@@ -1,5 +1,6 @@
 /*
  * SPDX-FileCopyrightText: Copyright (c) 2022-2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2026 The Authors.
  * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,8 +16,8 @@
  * limitations under the License.
  */
 
-#ifndef CUDECOMP_PERFORMANCE_H
-#define CUDECOMP_PERFORMANCE_H
+#ifndef HIPDECOMP_PERFORMANCE_H
+#define HIPDECOMP_PERFORMANCE_H
 
 #include <array>
 #include <string>
@@ -26,27 +27,27 @@
 
 #include "internal/common.h"
 
-namespace cudecomp {
+namespace hipdecomp {
 
-using cudecompTransposeConfigKey = std::tuple<int32_t,                // ax (axis)
-                                              int32_t,                // dir (direction)
-                                              std::array<int32_t, 3>, // input_halo_extents
-                                              std::array<int32_t, 3>, // output_halo_extents
-                                              std::array<int32_t, 3>, // input_padding
-                                              std::array<int32_t, 3>, // output_padding
-                                              bool,                   // inplace
-                                              bool,                   // managed_memory
-                                              cudecompDataType_t      // datatype
-                                              >;
+using hipdecompTransposeConfigKey = std::tuple<int32_t,                // ax (axis)
+                                               int32_t,                // dir (direction)
+                                               std::array<int32_t, 3>, // input_halo_extents
+                                               std::array<int32_t, 3>, // output_halo_extents
+                                               std::array<int32_t, 3>, // input_padding
+                                               std::array<int32_t, 3>, // output_padding
+                                               bool,                   // inplace
+                                               bool,                   // managed_memory
+                                               hipdecompDataType_t     // datatype
+                                               >;
 
-using cudecompHaloConfigKey = std::tuple<int32_t,                // ax (axis)
-                                         int32_t,                // dim (dimension)
-                                         std::array<int32_t, 3>, // halo_extents
-                                         std::array<bool, 3>,    // halo_periods
-                                         std::array<int32_t, 3>, // padding
-                                         bool,                   // managed_memory
-                                         cudecompDataType_t      // datatype
-                                         >;
+using hipdecompHaloConfigKey = std::tuple<int32_t,                // ax (axis)
+                                          int32_t,                // dim (dimension)
+                                          std::array<int32_t, 3>, // halo_extents
+                                          std::array<bool, 3>,    // halo_periods
+                                          std::array<int32_t, 3>, // padding
+                                          bool,                   // managed_memory
+                                          hipdecompDataType_t     // datatype
+                                          >;
 
 // Helper structure for transpose statistics
 struct TransposePerformanceStats {
@@ -101,36 +102,36 @@ struct HaloConfigTimingData {
   std::vector<int> sample_indices;
 };
 
-void printPerformanceReport(const cudecompHandle_t handle, const cudecompGridDesc_t grid_desc);
+void printPerformanceReport(const hipdecompHandle_t handle, const hipdecompGridDesc_t grid_desc);
 
-void resetPerformanceSamples(const cudecompHandle_t handle, cudecompGridDesc_t grid_desc);
+void resetPerformanceSamples(const hipdecompHandle_t handle, hipdecompGridDesc_t grid_desc);
 
-void advanceTransposePerformanceSample(const cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
-                                       const cudecompTransposeConfigKey& config);
+void advanceTransposePerformanceSample(const hipdecompHandle_t handle, hipdecompGridDesc_t grid_desc,
+                                       const hipdecompTransposeConfigKey& config);
 
-cudecompTransposePerformanceSampleCollection&
-getOrCreateTransposePerformanceSamples(const cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
-                                       const cudecompTransposeConfigKey& config);
+hipdecompTransposePerformanceSampleCollection&
+getOrCreateTransposePerformanceSamples(const hipdecompHandle_t handle, hipdecompGridDesc_t grid_desc,
+                                       const hipdecompTransposeConfigKey& config);
 
-void advanceHaloPerformanceSample(const cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
-                                  const cudecompHaloConfigKey& config);
+void advanceHaloPerformanceSample(const hipdecompHandle_t handle, hipdecompGridDesc_t grid_desc,
+                                  const hipdecompHaloConfigKey& config);
 
-cudecompHaloPerformanceSampleCollection& getOrCreateHaloPerformanceSamples(const cudecompHandle_t handle,
-                                                                           cudecompGridDesc_t grid_desc,
-                                                                           const cudecompHaloConfigKey& config);
+hipdecompHaloPerformanceSampleCollection& getOrCreateHaloPerformanceSamples(const hipdecompHandle_t handle,
+                                                                            hipdecompGridDesc_t grid_desc,
+                                                                            const hipdecompHaloConfigKey& config);
 
 // Helper function to create transpose configuration key
-cudecompTransposeConfigKey createTransposeConfig(int ax, int dir, void* input, void* output,
-                                                 const int32_t input_halo_extents_ptr[],
-                                                 const int32_t output_halo_extents_ptr[],
-                                                 const int32_t input_padding_ptr[], const int32_t output_padding_ptr[],
-                                                 cudecompDataType_t datatype);
+hipdecompTransposeConfigKey createTransposeConfig(int ax, int dir, void* input, void* output,
+                                                  const int32_t input_halo_extents_ptr[],
+                                                  const int32_t output_halo_extents_ptr[],
+                                                  const int32_t input_padding_ptr[], const int32_t output_padding_ptr[],
+                                                  hipdecompDataType_t datatype);
 
 // Helper function to create halo configuration key
-cudecompHaloConfigKey createHaloConfig(int ax, int dim, void* input, const int32_t halo_extents_ptr[],
-                                       const bool halo_periods_ptr[], const int32_t padding_ptr[],
-                                       cudecompDataType_t datatype);
+hipdecompHaloConfigKey createHaloConfig(int ax, int dim, void* input, const int32_t halo_extents_ptr[],
+                                        const bool halo_periods_ptr[], const int32_t padding_ptr[],
+                                        hipdecompDataType_t datatype);
 
-} // namespace cudecomp
+} // namespace hipdecomp
 
-#endif // CUDECOMP_PERFORMANCE_H
+#endif // HIPDECOMP_PERFORMANCE_H

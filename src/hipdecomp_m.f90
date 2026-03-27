@@ -13,74 +13,74 @@
 ! See the License for the specific language governing permissions and
 ! limitations under the License.
 
-module cudecomp
+module hipdecomp
   use, intrinsic :: iso_c_binding
   use, intrinsic :: iso_fortran_env, only: int64, real32, real64
 
   ! enumerators
 
-  ! enum for cuDecomp transpose backend options
-  enum, bind(c) ! cudecompTransposeCommBackend
-    enumerator :: CUDECOMP_TRANSPOSE_COMM_MPI_P2P = 1
-    enumerator :: CUDECOMP_TRANSPOSE_COMM_MPI_P2P_PL = 2
-    enumerator :: CUDECOMP_TRANSPOSE_COMM_MPI_A2A = 3
-    enumerator :: CUDECOMP_TRANSPOSE_COMM_NCCL = 4
-    enumerator :: CUDECOMP_TRANSPOSE_COMM_NCCL_PL = 5
-    enumerator :: CUDECOMP_TRANSPOSE_COMM_NVSHMEM = 6
-    enumerator :: CUDECOMP_TRANSPOSE_COMM_NVSHMEM_PL = 7
+  ! enum for hipDecomp transpose backend options
+  enum, bind(c) ! hipdecompTransposeCommBackend
+    enumerator :: HIPDECOMP_TRANSPOSE_COMM_MPI_P2P = 1
+    enumerator :: HIPDECOMP_TRANSPOSE_COMM_MPI_P2P_PL = 2
+    enumerator :: HIPDECOMP_TRANSPOSE_COMM_MPI_A2A = 3
+    enumerator :: HIPDECOMP_TRANSPOSE_COMM_NCCL = 4
+    enumerator :: HIPDECOMP_TRANSPOSE_COMM_NCCL_PL = 5
+    enumerator :: HIPDECOMP_TRANSPOSE_COMM_NVSHMEM = 6
+    enumerator :: HIPDECOMP_TRANSPOSE_COMM_NVSHMEM_PL = 7
   end enum
 
-  ! enum for cuDecomp halo backend options
-  enum, bind(c) ! cudecompHaloCommBackend
-    enumerator :: CUDECOMP_HALO_COMM_MPI = 1
-    enumerator :: CUDECOMP_HALO_COMM_MPI_BLOCKING = 2
-    enumerator :: CUDECOMP_HALO_COMM_NCCL = 3
-    enumerator :: CUDECOMP_HALO_COMM_NVSHMEM = 4
-    enumerator :: CUDECOMP_HALO_COMM_NVSHMEM_BLOCKING = 5
+  ! enum for hipDecomp halo backend options
+  enum, bind(c) ! hipdecompHaloCommBackend
+    enumerator :: HIPDECOMP_HALO_COMM_MPI = 1
+    enumerator :: HIPDECOMP_HALO_COMM_MPI_BLOCKING = 2
+    enumerator :: HIPDECOMP_HALO_COMM_NCCL = 3
+    enumerator :: HIPDECOMP_HALO_COMM_NVSHMEM = 4
+    enumerator :: HIPDECOMP_HALO_COMM_NVSHMEM_BLOCKING = 5
   end enum
 
-  ! enum for cuDecomp grid autotune setting
-  enum, bind(c) ! cudecompAutotuneGridMode
-    enumerator :: CUDECOMP_AUTOTUNE_GRID_TRANSPOSE = 0
-    enumerator :: CUDECOMP_AUTOTUNE_GRID_HALO = 1
+  ! enum for hipDecomp grid autotune setting
+  enum, bind(c) ! hipdecompAutotuneGridMode
+    enumerator :: HIPDECOMP_AUTOTUNE_GRID_TRANSPOSE = 0
+    enumerator :: HIPDECOMP_AUTOTUNE_GRID_HALO = 1
   end enum
 
-  ! enum for cuDecomp supported data types
-  enum, bind(c) ! cudecompDataType
-    enumerator :: CUDECOMP_FLOAT = -1
-    enumerator :: CUDECOMP_DOUBLE = -2
-    enumerator :: CUDECOMP_FLOAT_COMPLEX = -3
-    enumerator :: CUDECOMP_DOUBLE_COMPLEX = -4
+  ! enum for hipDecomp supported data types
+  enum, bind(c) ! hipdecompDataType
+    enumerator :: HIPDECOMP_FLOAT = -1
+    enumerator :: HIPDECOMP_DOUBLE = -2
+    enumerator :: HIPDECOMP_FLOAT_COMPLEX = -3
+    enumerator :: HIPDECOMP_DOUBLE_COMPLEX = -4
   end enum
 
-  ! enum for cuDecomp return values
-  enum, bind(c) ! cudecompResult
-    enumerator :: CUDECOMP_RESULT_SUCCESS = 0
-    enumerator :: CUDECOMP_RESULT_INVALID_USAGE = 1
-    enumerator :: CUDECOMP_RESULT_NOT_SUPPORTED = 2
-    enumerator :: CUDECOMP_RESULT_INTERNAL_ERROR = 3
-    enumerator :: CUDECOMP_RESULT_CUDA_ERROR = 4
-    enumerator :: CUDECOMP_RESULT_CUTENSOR_ERROR = 5
-    enumerator :: CUDECOMP_RESULT_MPI_ERROR = 6
-    enumerator :: CUDECOMP_RESULT_NCCL_ERROR = 7
-    enumerator :: CUDECOMP_RESULT_NVSHMEM_ERROR = 8
-    enumerator :: CUDECOMP_RESULT_NVML_ERROR = 9
+  ! enum for hipDecomp return values
+  enum, bind(c) ! hipdecompResult
+    enumerator :: HIPDECOMP_RESULT_SUCCESS = 0
+    enumerator :: HIPDECOMP_RESULT_INVALID_USAGE = 1
+    enumerator :: HIPDECOMP_RESULT_NOT_SUPPORTED = 2
+    enumerator :: HIPDECOMP_RESULT_INTERNAL_ERROR = 3
+    enumerator :: HIPDECOMP_RESULT_CUDA_ERROR = 4
+    enumerator :: HIPDECOMP_RESULT_CUTENSOR_ERROR = 5
+    enumerator :: HIPDECOMP_RESULT_MPI_ERROR = 6
+    enumerator :: HIPDECOMP_RESULT_NCCL_ERROR = 7
+    enumerator :: HIPDECOMP_RESULT_NVSHMEM_ERROR = 8
+    enumerator :: HIPDECOMP_RESULT_NVML_ERROR = 9
   end enum
 
   ! types
 
-  ! Opaque handle to cuDecomp handle
-  type, bind(c) :: cudecompHandle
+  ! Opaque handle to hipDecomp handle
+  type, bind(c) :: hipdecompHandle
     type(c_ptr) :: member
-  end type cudecompHandle
+  end type hipdecompHandle
 
-  ! Opaque handle to cuDecomp grid descriptor
-  type, bind(c) :: cudecompGridDesc
+  ! Opaque handle to hipDecomp grid descriptor
+  type, bind(c) :: hipdecompGridDesc
     type(c_ptr) :: member
-  end type cudecompGridDesc
+  end type hipdecompGridDesc
 
   ! Structure defining configuration options for grid descriptor creation
-  type, bind(c) :: cudecompGridDescConfig
+  type, bind(c) :: hipdecompGridDescConfig
     ! Grid information
     integer(c_int32_t) :: gdims(3) ! dimensions of data grid
     integer(c_int32_t) :: gdims_dist(3) ! dimensions of data grid for distribution
@@ -94,10 +94,10 @@ module cudecomp
     ! Halo Options
     integer(c_int32_t) :: halo_comm_backend ! communication backend to use for halo communication
 
-  end type cudecompGridDescConfig
+  end type hipdecompGridDescConfig
 
   ! Structure defining autotuning options for grid descriptor creation
-  type, bind(c) :: cudecompGridDescAutotuneOptions
+  type, bind(c) :: hipdecompGridDescAutotuneOptions
     ! General options
     integer(c_int32_t) :: n_warmup_trials ! number of warmup trials to run for each tested configuration during autotuning
     integer(c_int32_t) :: n_trials ! number of timed trials to run for each tested configuration during autotuning
@@ -123,10 +123,10 @@ module cudecomp
     logical(c_bool) :: halo_periods(3) ! periodicity for halo autotuning
     integer(c_int32_t) :: halo_axis ! which axis pencils to use for halo autotuning
     integer(c_int32_t) :: halo_padding(3) ! padding argument for halo autotuning
-  end type cudecompGridDescAutotuneOptions
+  end type hipdecompGridDescAutotuneOptions
 
   ! Info structure containing pencil specific information
-  type, bind(c) :: cudecompPencilInfo
+  type, bind(c) :: hipdecompPencilInfo
     integer(c_int32_t) :: shape(3)        ! pencil shape (in local order, including halo elements)
     integer(c_int32_t) :: lo(3)           ! lower bound coordinates (in local order, excluding halo elements)
     integer(c_int32_t) :: hi(3)           ! upper bound coordinates (in local order, excluding halo elements)
@@ -134,218 +134,218 @@ module cudecomp
     integer(c_int32_t) :: halo_extents(3) ! halo extents by dimension (always in x,y,z order)
     integer(c_int32_t) :: padding(3)      ! padding by dimension (always in x,y,z order)
     integer(c_int64_t) :: size            ! number of elements in pencil (including halo elements)
-  end type cudecompPencilInfo
+  end type hipdecompPencilInfo
 
   ! interfaces
 
-  ! cuDecomp initialization/finalization functions
+  ! hipDecomp initialization/finalization functions
   ! generic interface that takes either integer or type(MPI_Comm) communicator arguments
 
-  interface cudecompInit
-    module procedure cudecompInit_MPI_F, cudecompInit_MPI_F08
-  end interface cudecompInit
+  interface hipdecompInit
+    module procedure hipdecompInit_MPI_F, hipdecompInit_MPI_F08
+  end interface hipdecompInit
 
   interface
-    function cudecompInit_FC(handle, mpi_comm) bind(C, name="cudecompInit_F") result(res)
+    function hipdecompInit_FC(handle, mpi_comm) bind(C, name="hipdecompInit_F") result(res)
       import
-      type(cudecompHandle) :: handle
+      type(hipdecompHandle) :: handle
       integer, value :: mpi_comm
       integer(c_int) :: res
-    end function cudecompInit_FC
+    end function hipdecompInit_FC
   end interface
 
   interface
-    function cudecompFinalize(handle) bind(C, name="cudecompFinalize") result(res)
+    function hipdecompFinalize(handle) bind(C, name="hipdecompFinalize") result(res)
       import
-      type(cudecompHandle), value :: handle
+      type(hipdecompHandle), value :: handle
       integer(c_int) :: res
-    end function cudecompFinalize
+    end function hipdecompFinalize
   end interface
 
   interface
-    function cudecompGridDescCreateC(handle, grid_desc, config, options) &
-       bind(C, name="cudecompGridDescCreate") result(res)
+    function hipdecompGridDescCreateC(handle, grid_desc, config, options) &
+       bind(C, name="hipdecompGridDescCreate") result(res)
       import
-      type(cudecompHandle), value :: handle
-      type(cudecompGridDesc) :: grid_desc
-      type(cudecompGridDescConfig) :: config
-      type(cudecompGridDescAutotuneOptions) :: options
+      type(hipdecompHandle), value :: handle
+      type(hipdecompGridDesc) :: grid_desc
+      type(hipdecompGridDescConfig) :: config
+      type(hipdecompGridDescAutotuneOptions) :: options
       integer(c_int) :: res
-    end function cudecompGridDescCreateC
+    end function hipdecompGridDescCreateC
   end interface
 
   interface
-    function cudecompGridDescCreateC_nullopt(handle, grid_desc, config, options) &
-       bind(C, name="cudecompGridDescCreate") result(res)
+    function hipdecompGridDescCreateC_nullopt(handle, grid_desc, config, options) &
+       bind(C, name="hipdecompGridDescCreate") result(res)
       import
-      type(cudecompHandle), value :: handle
-      type(cudecompGridDesc) :: grid_desc
-      type(cudecompGridDescConfig) :: config
+      type(hipdecompHandle), value :: handle
+      type(hipdecompGridDesc) :: grid_desc
+      type(hipdecompGridDescConfig) :: config
       type(c_ptr), value :: options
       integer(c_int) :: res
-    end function cudecompGridDescCreateC_nullopt
+    end function hipdecompGridDescCreateC_nullopt
   end interface
 
   interface
-    function cudecompGridDescDestroy(handle, grid_desc) bind(C, name="cudecompGridDescDestroy") result(res)
+    function hipdecompGridDescDestroy(handle, grid_desc) bind(C, name="hipdecompGridDescDestroy") result(res)
       import
-      type(cudecompHandle), value :: handle
-      type(cudecompGridDesc), value :: grid_desc
+      type(hipdecompHandle), value :: handle
+      type(hipdecompGridDesc), value :: grid_desc
       integer(c_int) :: res
-    end function cudecompGridDescDestroy
+    end function hipdecompGridDescDestroy
   end interface
 
-  ! cudecompGridDescConfig creation/manipulation functions
+  ! hipdecompGridDescConfig creation/manipulation functions
   interface
-    function cudecompGridDescConfigSetDefaults(config) &
-      bind(C, name="cudecompGridDescConfigSetDefaults") result(res)
+    function hipdecompGridDescConfigSetDefaults(config) &
+      bind(C, name="hipdecompGridDescConfigSetDefaults") result(res)
       import
-      type(cudecompGridDescConfig) :: config
+      type(hipdecompGridDescConfig) :: config
       integer(c_int) :: res
-    end function cudecompGridDescConfigSetDefaults
+    end function hipdecompGridDescConfigSetDefaults
   end interface
 
-  ! cudecompGridDescAutotuneOptions creation/manipulation functions
+  ! hipdecompGridDescAutotuneOptions creation/manipulation functions
   interface
-    function cudecompGridDescAutotuneOptionsSetDefaultsC(options) &
-      bind(C, name="cudecompGridDescAutotuneOptionsSetDefaults") result(res)
+    function hipdecompGridDescAutotuneOptionsSetDefaultsC(options) &
+      bind(C, name="hipdecompGridDescAutotuneOptionsSetDefaults") result(res)
       import
-      type(cudecompGridDescAutotuneOptions) :: options
+      type(hipdecompGridDescAutotuneOptions) :: options
       integer(c_int) :: res
-    end function cudecompGridDescAutotuneOptionsSetDefaultsC
+    end function hipdecompGridDescAutotuneOptionsSetDefaultsC
   end interface
 
   ! General functions
   interface
-    function cudecompGetPencilInfoC(handle, grid_desc, pencil_info, axis, halo_extents, padding) &
-      bind(C, name="cudecompGetPencilInfo") result(res)
+    function hipdecompGetPencilInfoC(handle, grid_desc, pencil_info, axis, halo_extents, padding) &
+      bind(C, name="hipdecompGetPencilInfo") result(res)
       import
-      type(cudecompHandle), value :: handle
-      type(cudecompGridDesc), value :: grid_desc
+      type(hipdecompHandle), value :: handle
+      type(hipdecompGridDesc), value :: grid_desc
       integer(c_int32_t), value :: axis
       integer(c_int32_t) :: halo_extents(3)
       integer(c_int32_t) :: padding(3)
-      type(cudecompPencilInfo) :: pencil_info
+      type(hipdecompPencilInfo) :: pencil_info
       integer(c_int) :: res
-    end function cudecompGetPencilInfoC
+    end function hipdecompGetPencilInfoC
   end interface
 
   interface
-    function cudecompGetGridDescConfigC(handle, grid_desc, config) &
-      bind(C, name="cudecompGetGridDescConfig") result(res)
+    function hipdecompGetGridDescConfigC(handle, grid_desc, config) &
+      bind(C, name="hipdecompGetGridDescConfig") result(res)
       import
-      type(cudecompHandle), value :: handle
-      type(cudecompGridDesc), value :: grid_desc
-      type(cudecompGridDescConfig) :: config
+      type(hipdecompHandle), value :: handle
+      type(hipdecompGridDesc), value :: grid_desc
+      type(hipdecompGridDescConfig) :: config
       integer(c_int) :: res
-    end function cudecompGetGridDescConfigC
+    end function hipdecompGetGridDescConfigC
   end interface
 
   interface
-    function cudecompGetTransposeWorkspaceSize(handle, grid_desc, workspace_size) &
-      bind(C, name="cudecompGetTransposeWorkspaceSize") result(res)
+    function hipdecompGetTransposeWorkspaceSize(handle, grid_desc, workspace_size) &
+      bind(C, name="hipdecompGetTransposeWorkspaceSize") result(res)
       import
-      type(cudecompHandle), value :: handle
-      type(cudecompGridDesc), value :: grid_desc
+      type(hipdecompHandle), value :: handle
+      type(hipdecompGridDesc), value :: grid_desc
       integer(c_int64_t) :: workspace_size
       integer(c_int) :: res
-    end function cudecompGetTransposeWorkspaceSize
+    end function hipdecompGetTransposeWorkspaceSize
   end interface
 
   interface
-    function cudecompGetHaloWorkspaceSizeC(handle, grid_desc, axis, halo_extents, workspace_size) &
-      bind(C, name="cudecompGetHaloWorkspaceSize") result(res)
+    function hipdecompGetHaloWorkspaceSizeC(handle, grid_desc, axis, halo_extents, workspace_size) &
+      bind(C, name="hipdecompGetHaloWorkspaceSize") result(res)
       import
-      type(cudecompHandle), value :: handle
-      type(cudecompGridDesc), value :: grid_desc
+      type(hipdecompHandle), value :: handle
+      type(hipdecompGridDesc), value :: grid_desc
       integer(c_int32_t), value :: axis
       integer(c_int32_t) :: halo_extents(3)
       integer(c_int64_t) :: workspace_size
       integer(c_int) :: res
-    end function cudecompGetHaloWorkspaceSizeC
+    end function hipdecompGetHaloWorkspaceSizeC
   end interface
 
   interface
-    function cudecompMallocC(handle, grid_desc, buffer, buffer_size_bytes) &
-      bind(C, name="cudecompMalloc") result(res)
+    function hipdecompMallocC(handle, grid_desc, buffer, buffer_size_bytes) &
+      bind(C, name="hipdecompMalloc") result(res)
       import
-      type(cudecompHandle), value :: handle
-      type(cudecompGridDesc), value :: grid_desc
+      type(hipdecompHandle), value :: handle
+      type(hipdecompGridDesc), value :: grid_desc
       type(c_ptr) :: buffer
       integer(c_size_t), value :: buffer_size_bytes
       integer(c_int) :: res
-    end function cudecompMallocC
+    end function hipdecompMallocC
   end interface
 
-  interface cudecompMalloc
-    module procedure cudecompMallocR4, cudecompMallocR8, cudecompMallocC4, cudecompMallocC8
-  end interface cudecompMalloc
+  interface hipdecompMalloc
+    module procedure hipdecompMallocR4, hipdecompMallocR8, hipdecompMallocC4, hipdecompMallocC8
+  end interface hipdecompMalloc
 
   interface
-    function cudecompFreeC(handle, grid_desc, buffer) &
-      bind(C, name="cudecompFree") result(res)
+    function hipdecompFreeC(handle, grid_desc, buffer) &
+      bind(C, name="hipdecompFree") result(res)
       import
-      type(cudecompHandle), value :: handle
-      type(cudecompGridDesc), value :: grid_desc
+      type(hipdecompHandle), value :: handle
+      type(hipdecompGridDesc), value :: grid_desc
       type(c_ptr), value :: buffer
       integer(c_int) :: res
-    end function cudecompFreeC
+    end function hipdecompFreeC
   end interface
 
-  interface cudecompFree
-    module procedure cudecompFreeR4, cudecompFreeR8, cudecompFreeC4, cudecompFreeC8
-  end interface cudecompFree
+  interface hipdecompFree
+    module procedure hipdecompFreeR4, hipdecompFreeR8, hipdecompFreeC4, hipdecompFreeC8
+  end interface hipdecompFree
 
   ! Convenience functions
   interface
-    function cudecompTransposeCommBackendToStringC(comm_backend) &
-      bind(C, name="cudecompTransposeCommBackendToString") result(res)
+    function hipdecompTransposeCommBackendToStringC(comm_backend) &
+      bind(C, name="hipdecompTransposeCommBackendToString") result(res)
       import
       integer(c_int), value :: comm_backend
       type(c_ptr) :: res
-    end function cudecompTransposeCommBackendToStringC
+    end function hipdecompTransposeCommBackendToStringC
   end interface
 
   interface
-    function cudecompHaloCommBackendToStringC(comm_backend) &
-      bind(C, name="cudecompHaloCommBackendToString") result(res)
+    function hipdecompHaloCommBackendToStringC(comm_backend) &
+      bind(C, name="hipdecompHaloCommBackendToString") result(res)
       import
       integer(c_int), value :: comm_backend
       type(c_ptr) :: res
-    end function cudecompHaloCommBackendToStringC
+    end function hipdecompHaloCommBackendToStringC
   end interface
 
   interface
-    function cudecompGetDataTypeSize(dtype, dtype_size) bind(C, name="cudecompGetDataTypeSize") result(res)
+    function hipdecompGetDataTypeSize(dtype, dtype_size) bind(C, name="hipdecompGetDataTypeSize") result(res)
       import
       integer(c_int), value :: dtype
       integer(c_int64_t) :: dtype_size
       integer(c_int) :: res
-    end function cudecompGetDataTypeSize
+    end function hipdecompGetDataTypeSize
   end interface
 
   interface
-    function cudecompGetShiftedRankC(handle, grid_desc, axis, dim, displacement, periodic, shifted_rank) &
-      bind(C, name="cudecompGetShiftedRank") result(res)
+    function hipdecompGetShiftedRankC(handle, grid_desc, axis, dim, displacement, periodic, shifted_rank) &
+      bind(C, name="hipdecompGetShiftedRank") result(res)
       import
-      type(cudecompHandle), value :: handle
-      type(cudecompGridDesc), value :: grid_desc
+      type(hipdecompHandle), value :: handle
+      type(hipdecompGridDesc), value :: grid_desc
       integer(c_int32_t), value :: axis, dim, displacement
       logical(c_bool), value :: periodic
       integer(c_int32_t) :: shifted_rank
       integer(c_int) :: res
-    end function cudecompGetShiftedRankC
+    end function hipdecompGetShiftedRankC
   end interface
 
   ! Transpose functions
   interface
-    function cudecompTransposeXToY_C(handle, grid_desc, input, output, work, dtype, &
+    function hipdecompTransposeXToY_C(handle, grid_desc, input, output, work, dtype, &
                                      input_halo_extents, output_halo_extents, input_padding, &
                                      output_padding, stream) &
-      bind(C, name="cudecompTransposeXToY") result(res)
+      bind(C, name="hipdecompTransposeXToY") result(res)
       import
-      type(cudecompHandle), value :: handle
-      type(cudecompGridDesc), value :: grid_desc
+      type(hipdecompHandle), value :: handle
+      type(hipdecompGridDesc), value :: grid_desc
       !dir$ ignore_tkr input, output, work
       real(c_float) :: input(*), output(*), work(*)
       integer(c_int), value :: dtype
@@ -353,17 +353,17 @@ module cudecomp
       integer(c_int32_t) :: input_padding(3), output_padding(3)
       integer(c_intptr_t), value :: stream
       integer(c_int) :: res
-    end function cudecompTransposeXToY_C
+    end function hipdecompTransposeXToY_C
   end interface
 
   interface
-    function cudecompTransposeYToZ_C(handle, grid_desc, input, output, work, dtype, &
+    function hipdecompTransposeYToZ_C(handle, grid_desc, input, output, work, dtype, &
                                      input_halo_extents, output_halo_extents, input_padding, &
                                      output_padding, stream) &
-      bind(C, name="cudecompTransposeYToZ") result(res)
+      bind(C, name="hipdecompTransposeYToZ") result(res)
       import
-      type(cudecompHandle), value :: handle
-      type(cudecompGridDesc), value :: grid_desc
+      type(hipdecompHandle), value :: handle
+      type(hipdecompGridDesc), value :: grid_desc
       !dir$ ignore_tkr input, output, work
       real(c_float) :: input(*), output(*), work(*)
       integer(c_int), value :: dtype
@@ -371,17 +371,17 @@ module cudecomp
       integer(c_int32_t) :: input_padding(3), output_padding(3)
       integer(c_intptr_t), value :: stream
       integer(c_int) :: res
-    end function cudecompTransposeYToZ_C
+    end function hipdecompTransposeYToZ_C
   end interface
 
   interface
-    function cudecompTransposeZToY_C(handle, grid_desc, input, output, work, dtype, &
+    function hipdecompTransposeZToY_C(handle, grid_desc, input, output, work, dtype, &
                                      input_halo_extents, output_halo_extents, input_padding, &
                                      output_padding, stream) &
-       bind(C, name="cudecompTransposeZToY") result(res)
+       bind(C, name="hipdecompTransposeZToY") result(res)
       import
-      type(cudecompHandle), value :: handle
-      type(cudecompGridDesc), value :: grid_desc
+      type(hipdecompHandle), value :: handle
+      type(hipdecompGridDesc), value :: grid_desc
       !dir$ ignore_tkr input, output, work
       real(c_float) :: input(*), output(*), work(*)
       integer(c_int), value :: dtype
@@ -389,17 +389,17 @@ module cudecomp
       integer(c_int32_t) :: input_padding(3), output_padding(3)
       integer(c_intptr_t), value :: stream
       integer(c_int) :: res
-    end function cudecompTransposeZToY_C
+    end function hipdecompTransposeZToY_C
   end interface
 
   interface
-    function cudecompTransposeYToX_C(handle, grid_desc, input, output, work, dtype, &
+    function hipdecompTransposeYToX_C(handle, grid_desc, input, output, work, dtype, &
                                      input_halo_extents, output_halo_extents, input_padding, &
                                      output_padding, stream) &
-      bind(C, name="cudecompTransposeYToX") result(res)
+      bind(C, name="hipdecompTransposeYToX") result(res)
       import
-      type(cudecompHandle), value :: handle
-      type(cudecompGridDesc), value :: grid_desc
+      type(hipdecompHandle), value :: handle
+      type(hipdecompGridDesc), value :: grid_desc
       !dir$ ignore_tkr input, output, work
       real(c_float) :: input(*), output(*), work(*)
       integer(c_int), value :: dtype
@@ -407,17 +407,17 @@ module cudecomp
       integer(c_int32_t) :: input_padding(3), output_padding(3)
       integer(c_intptr_t), value :: stream
       integer(c_int) :: res
-    end function cudecompTransposeYToX_C
+    end function hipdecompTransposeYToX_C
   end interface
 
   ! Halo functions
   interface
-    function cudecompUpdateHalosX_C(handle, grid_desc, input, work, dtype, &
+    function hipdecompUpdateHalosX_C(handle, grid_desc, input, work, dtype, &
                                     halo_extents, halo_periods, dim, padding, stream) &
-      bind(C, name="cudecompUpdateHalosX") result(res)
+      bind(C, name="hipdecompUpdateHalosX") result(res)
       import
-      type(cudecompHandle), value :: handle
-      type(cudecompGridDesc), value :: grid_desc
+      type(hipdecompHandle), value :: handle
+      type(hipdecompGridDesc), value :: grid_desc
       !dir$ ignore_tkr input, work
       real(c_float) :: input(*), work(*)
       integer(c_int), value :: dtype
@@ -427,16 +427,16 @@ module cudecomp
       integer(c_int32_t) :: padding(3)
       integer(c_intptr_t), value :: stream
       integer(c_int) :: res
-    end function cudecompUpdateHalosX_C
+    end function hipdecompUpdateHalosX_C
   end interface
 
   interface
-    function cudecompUpdateHalosY_C(handle, grid_desc, input, work, dtype, &
+    function hipdecompUpdateHalosY_C(handle, grid_desc, input, work, dtype, &
                                     halo_extents, halo_periods, dim, padding, stream) &
-      bind(C, name="cudecompUpdateHalosY") result(res)
+      bind(C, name="hipdecompUpdateHalosY") result(res)
       import
-      type(cudecompHandle), value :: handle
-      type(cudecompGridDesc), value :: grid_desc
+      type(hipdecompHandle), value :: handle
+      type(hipdecompGridDesc), value :: grid_desc
       !dir$ ignore_tkr input, work
       real(c_float) :: input(*), work(*)
       integer(c_int), value :: dtype
@@ -446,16 +446,16 @@ module cudecomp
       integer(c_int32_t) :: padding(3)
       integer(c_intptr_t), value :: stream
       integer(c_int) :: res
-    end function cudecompUpdateHalosY_C
+    end function hipdecompUpdateHalosY_C
   end interface
 
   interface
-    function cudecompUpdateHalosZ_C(handle, grid_desc, input, work, dtype, &
+    function hipdecompUpdateHalosZ_C(handle, grid_desc, input, work, dtype, &
                                     halo_extents, halo_periods, dim, padding, stream) &
-      bind(C, name="cudecompUpdateHalosZ") result(res)
+      bind(C, name="hipdecompUpdateHalosZ") result(res)
       import
-      type(cudecompHandle), value :: handle
-      type(cudecompGridDesc), value :: grid_desc
+      type(hipdecompHandle), value :: handle
+      type(hipdecompGridDesc), value :: grid_desc
       !dir$ ignore_tkr input, work
       real(c_float) :: input(*), work(*)
       integer(c_int), value :: dtype
@@ -465,7 +465,7 @@ module cudecomp
       integer(c_int32_t) :: padding(3)
       integer(c_intptr_t), value :: stream
       integer(c_int) :: res
-    end function cudecompUpdateHalosZ_C
+    end function hipdecompUpdateHalosZ_C
   end interface
 
   ! Internal interface to strlen
@@ -482,46 +482,46 @@ contains
 
   ! Fortran native functions/subroutines
 
-  ! cuDecomp initialization/finalization functions
-  function cudecompInit_MPI_F(handle, comm) result(res)
+  ! hipDecomp initialization/finalization functions
+  function hipdecompInit_MPI_F(handle, comm) result(res)
     implicit none
-    type(cudecompHandle) :: handle
+    type(hipdecompHandle) :: handle
     integer :: comm
     integer(c_int) :: res
 
-    res = cudecompInit_FC(handle, comm)
-  end function cudecompInit_MPI_F
+    res = hipdecompInit_FC(handle, comm)
+  end function hipdecompInit_MPI_F
 
-  function cudecompInit_MPI_F08(handle, comm) result(res)
+  function hipdecompInit_MPI_F08(handle, comm) result(res)
     implicit none
     type, bind(c) :: MPI_Comm
       integer :: MPI_VAL
     end type MPI_Comm
-    type(cudecompHandle) :: handle
+    type(hipdecompHandle) :: handle
     type(MPI_Comm) :: comm
     integer(c_int) :: res
 
-    res = cudecompInit_FC(handle, comm%MPI_VAL)
-  end function cudecompInit_MPI_F08
+    res = hipdecompInit_FC(handle, comm%MPI_VAL)
+  end function hipdecompInit_MPI_F08
 
-  ! cudecompGridDesc creation/manipulation functions
-  function cudecompGridDescAutotuneOptionsSetDefaults(options) result(res)
-    type(cudecompGridDescAutotuneOptions) :: options
+  ! hipdecompGridDesc creation/manipulation functions
+  function hipdecompGridDescAutotuneOptionsSetDefaults(options) result(res)
+    type(hipdecompGridDescAutotuneOptions) :: options
     integer(c_int) :: res
 
-    res = cudecompGridDescAutotuneOptionsSetDefaultsC(options)
+    res = hipdecompGridDescAutotuneOptionsSetDefaultsC(options)
 
     ! Adjust halo axis entry for one-based axis indexing
     options%halo_axis = options%halo_axis + 1
 
-  end function cudecompGridDescAutotuneOptionsSetDefaults
+  end function hipdecompGridDescAutotuneOptionsSetDefaults
 
-  function cudecompGridDescCreate(handle, grid_desc, config, options) result(res)
+  function hipdecompGridDescCreate(handle, grid_desc, config, options) result(res)
     implicit none
-    type(cudecompHandle) :: handle
-    type(cudecompGridDesc) :: grid_desc
-    type(cudecompGridDescConfig) :: config
-    type(cudecompGridDescAutotuneOptions), optional :: options
+    type(hipdecompHandle) :: handle
+    type(hipdecompGridDesc) :: grid_desc
+    type(hipdecompGridDescConfig) :: config
+    type(hipdecompGridDescAutotuneOptions), optional :: options
     integer(c_int) :: res
 
     ! Adjust transpose mem order entries for zero-based indexing
@@ -530,26 +530,26 @@ contains
     if (present(options)) then
       ! Adjust halo axis entry for zero-based axis indexing
       options%halo_axis = options%halo_axis - 1
-      res = cudecompGridDescCreateC(handle, grid_desc, config, options)
+      res = hipdecompGridDescCreateC(handle, grid_desc, config, options)
       ! Adjust halo axis entry for one-based axis indexing
       options%halo_axis = options%halo_axis + 1
     else
-      res = cudecompGridDescCreateC_nullopt(handle, grid_desc, config, C_NULL_PTR)
+      res = hipdecompGridDescCreateC_nullopt(handle, grid_desc, config, C_NULL_PTR)
     endif
 
     ! Adjust transpose mem order entries for one-based indexing
     config%transpose_mem_order = config%transpose_mem_order + 1
-  end function cudecompGridDescCreate
+  end function hipdecompGridDescCreate
 
   ! General functions
-  function cudecompGetPencilInfo(handle, grid_desc, pencil_info, axis, halo_extents, padding) result(res)
+  function hipdecompGetPencilInfo(handle, grid_desc, pencil_info, axis, halo_extents, padding) result(res)
     implicit none
-    type(cudecompHandle) :: handle
-    type(cudecompGridDesc) :: grid_desc
+    type(hipdecompHandle) :: handle
+    type(hipdecompGridDesc) :: grid_desc
     integer :: axis  ! unit offset, so x/y/z = 1/2/3
     integer, optional:: halo_extents(3)
     integer, optional:: padding(3)
-    type(cudecompPencilInfo) :: pencil_info  ! res%order is unit offset, x/y/z = 1/2/3
+    type(hipdecompPencilInfo) :: pencil_info  ! res%order is unit offset, x/y/z = 1/2/3
     integer(c_int) :: res
 
     integer :: halo_extents_(3)
@@ -559,173 +559,173 @@ contains
     padding_(:) = [0, 0, 0]
     if (present(halo_extents)) halo_extents_ = halo_extents
     if (present(padding)) padding_ = padding
-    res = cudecompGetPencilInfoC(handle, grid_desc, pencil_info, axis - 1, halo_extents_, padding_)
+    res = hipdecompGetPencilInfoC(handle, grid_desc, pencil_info, axis - 1, halo_extents_, padding_)
     ! Update entries for Fortran indexing
     pencil_info%order = pencil_info%order + 1
     pencil_info%lo = pencil_info%lo + 1
     pencil_info%hi = pencil_info%hi + 1
-  end function cudecompGetPencilInfo
+  end function hipdecompGetPencilInfo
 
-  function cudecompGetGridDescConfig(handle, grid_desc, config) result(res)
-    type(cudecompHandle), value :: handle
-    type(cudecompGridDesc), value :: grid_desc
-    type(cudecompGridDescConfig) :: config
+  function hipdecompGetGridDescConfig(handle, grid_desc, config) result(res)
+    type(hipdecompHandle), value :: handle
+    type(hipdecompGridDesc), value :: grid_desc
+    type(hipdecompGridDescConfig) :: config
     integer(c_int) :: res
 
-    res = cudecompGetGridDescConfigC(handle, grid_desc, config)
+    res = hipdecompGetGridDescConfigC(handle, grid_desc, config)
 
     ! Adjust transpose mem order entries for one-based indexing
     config%transpose_mem_order = config%transpose_mem_order + 1
 
-  end function cudecompGetGridDescConfig
+  end function hipdecompGetGridDescConfig
 
-  function cudecompGetHaloWorkspaceSize(handle, grid_desc, axis, halo_extents, workspace_size) result(res)
+  function hipdecompGetHaloWorkspaceSize(handle, grid_desc, axis, halo_extents, workspace_size) result(res)
     implicit none
-    type(cudecompHandle) :: handle
-    type(cudecompGridDesc) :: grid_desc
+    type(hipdecompHandle) :: handle
+    type(hipdecompGridDesc) :: grid_desc
     integer :: axis
     integer :: halo_extents(3)
     integer(int64) :: workspace_size
     integer(c_int) :: res
 
-    res = cudecompGetHaloWorkspaceSizeC(handle, grid_desc, axis - 1, halo_extents, workspace_size)
-  end function cudecompGetHaloWorkspaceSize
+    res = hipdecompGetHaloWorkspaceSizeC(handle, grid_desc, axis - 1, halo_extents, workspace_size)
+  end function hipdecompGetHaloWorkspaceSize
 
-  function cudecompMallocR4(handle, grid_desc, buffer, buffer_size) result(res)
+  function hipdecompMallocR4(handle, grid_desc, buffer, buffer_size) result(res)
     implicit none
-    type(cudecompHandle) :: handle
-    type(cudecompGridDesc) :: grid_desc
+    type(hipdecompHandle) :: handle
+    type(hipdecompGridDesc) :: grid_desc
     real(real32), pointer, contiguous :: buffer(:)
     integer(int64) :: buffer_size
     integer(c_int) :: res
 
     type(c_ptr) :: buffer_c
 
-    res = cudecompMallocC(handle, grid_desc, buffer_c, buffer_size * 4)
+    res = hipdecompMallocC(handle, grid_desc, buffer_c, buffer_size * 4)
     call c_f_pointer(buffer_c, buffer, [buffer_size])
-  end function cudecompMallocR4
+  end function hipdecompMallocR4
 
-  function cudecompMallocR8(handle, grid_desc, buffer, buffer_size) result(res)
+  function hipdecompMallocR8(handle, grid_desc, buffer, buffer_size) result(res)
     implicit none
-    type(cudecompHandle) :: handle
-    type(cudecompGridDesc) :: grid_desc
+    type(hipdecompHandle) :: handle
+    type(hipdecompGridDesc) :: grid_desc
     real(real64), pointer, contiguous :: buffer(:)
     integer(int64) :: buffer_size
     integer(c_int) :: res
 
     type(c_ptr) :: buffer_c
 
-    res = cudecompMallocC(handle, grid_desc, buffer_c, buffer_size * 8)
+    res = hipdecompMallocC(handle, grid_desc, buffer_c, buffer_size * 8)
     call c_f_pointer(buffer_c, buffer, [buffer_size])
-  end function cudecompMallocR8
+  end function hipdecompMallocR8
 
-  function cudecompMallocC4(handle, grid_desc, buffer, buffer_size) result(res)
+  function hipdecompMallocC4(handle, grid_desc, buffer, buffer_size) result(res)
     implicit none
-    type(cudecompHandle) :: handle
-    type(cudecompGridDesc) :: grid_desc
+    type(hipdecompHandle) :: handle
+    type(hipdecompGridDesc) :: grid_desc
     complex(real32), pointer, contiguous :: buffer(:)
     integer(int64) :: buffer_size
     integer(c_int) :: res
 
     type(c_ptr) :: buffer_c
 
-    res = cudecompMallocC(handle, grid_desc, buffer_c, buffer_size * 8)
+    res = hipdecompMallocC(handle, grid_desc, buffer_c, buffer_size * 8)
     call c_f_pointer(buffer_c, buffer, [buffer_size])
-  end function cudecompMallocC4
+  end function hipdecompMallocC4
 
-  function cudecompMallocC8(handle, grid_desc, buffer, buffer_size) result(res)
+  function hipdecompMallocC8(handle, grid_desc, buffer, buffer_size) result(res)
     implicit none
-    type(cudecompHandle) :: handle
-    type(cudecompGridDesc) :: grid_desc
+    type(hipdecompHandle) :: handle
+    type(hipdecompGridDesc) :: grid_desc
     complex(real64), pointer, contiguous :: buffer(:)
     integer(int64) :: buffer_size
     integer(c_int) :: res
 
     type(c_ptr) :: buffer_c
 
-    res = cudecompMallocC(handle, grid_desc, buffer_c, buffer_size * 16)
+    res = hipdecompMallocC(handle, grid_desc, buffer_c, buffer_size * 16)
     call c_f_pointer(buffer_c, buffer, [buffer_size])
-  end function cudecompMallocC8
+  end function hipdecompMallocC8
 
-  function cudecompFreeR4(handle, grid_desc, buffer) result(res)
+  function hipdecompFreeR4(handle, grid_desc, buffer) result(res)
     implicit none
-    type(cudecompHandle) :: handle
-    type(cudecompGridDesc) :: grid_desc
+    type(hipdecompHandle) :: handle
+    type(hipdecompGridDesc) :: grid_desc
     real(real32), pointer, contiguous :: buffer(:)
     integer(c_int) :: res
 
     type(c_ptr) :: buffer_c
 
     buffer_c = c_loc(buffer)
-    res = cudecompFreeC(handle, grid_desc, buffer_c)
-  end function cudecompFreeR4
+    res = hipdecompFreeC(handle, grid_desc, buffer_c)
+  end function hipdecompFreeR4
 
-  function cudecompFreeR8(handle, grid_desc, buffer) result(res)
+  function hipdecompFreeR8(handle, grid_desc, buffer) result(res)
     implicit none
-    type(cudecompHandle) :: handle
-    type(cudecompGridDesc) :: grid_desc
+    type(hipdecompHandle) :: handle
+    type(hipdecompGridDesc) :: grid_desc
     real(real64), pointer, contiguous :: buffer(:)
     integer(c_int) :: res
 
     type(c_ptr) :: buffer_c
 
     buffer_c = c_loc(buffer)
-    res = cudecompFreeC(handle, grid_desc, buffer_c)
-  end function cudecompFreeR8
+    res = hipdecompFreeC(handle, grid_desc, buffer_c)
+  end function hipdecompFreeR8
 
-  function cudecompFreeC4(handle, grid_desc, buffer) result(res)
+  function hipdecompFreeC4(handle, grid_desc, buffer) result(res)
     implicit none
-    type(cudecompHandle) :: handle
-    type(cudecompGridDesc) :: grid_desc
+    type(hipdecompHandle) :: handle
+    type(hipdecompGridDesc) :: grid_desc
     complex(real32), pointer, contiguous :: buffer(:)
     integer(c_int) :: res
 
     type(c_ptr) :: buffer_c
 
     buffer_c = c_loc(buffer)
-    res = cudecompFreeC(handle, grid_desc, buffer_c)
-  end function cudecompFreeC4
+    res = hipdecompFreeC(handle, grid_desc, buffer_c)
+  end function hipdecompFreeC4
 
-  function cudecompFreeC8(handle, grid_desc, buffer) result(res)
+  function hipdecompFreeC8(handle, grid_desc, buffer) result(res)
     implicit none
-    type(cudecompHandle) :: handle
-    type(cudecompGridDesc) :: grid_desc
+    type(hipdecompHandle) :: handle
+    type(hipdecompGridDesc) :: grid_desc
     complex(real64), pointer, contiguous :: buffer(:)
     integer(c_int) :: res
 
     type(c_ptr) :: buffer_c
 
     buffer_c = c_loc(buffer)
-    res = cudecompFreeC(handle, grid_desc, buffer_c)
-  end function cudecompFreeC8
+    res = hipdecompFreeC(handle, grid_desc, buffer_c)
+  end function hipdecompFreeC8
 
   ! Convenience functions
-  function cudecompTransposeCommBackendToString(comm_backend) result(res)
+  function hipdecompTransposeCommBackendToString(comm_backend) result(res)
     implicit none
     integer(c_int) :: comm_backend
     character(len=:), allocatable :: res
     type(c_ptr) :: cstr
 
-    cstr = cudecompTransposeCommBackendToStringC(comm_backend)
-    call __cudecomp_copy_c_string(cstr, res)
-  end function cudecompTransposeCommBackendToString
+    cstr = hipdecompTransposeCommBackendToStringC(comm_backend)
+    call __hipdecomp_copy_c_string(cstr, res)
+  end function hipdecompTransposeCommBackendToString
 
-  function cudecompHaloCommBackendToString(comm_backend) result(res)
+  function hipdecompHaloCommBackendToString(comm_backend) result(res)
     implicit none
     integer(c_int) :: comm_backend
     character(len=:), allocatable :: res
     type(c_ptr) :: cstr
     integer(c_int) :: csize
 
-    cstr = cudecompHaloCommBackendToStringC(comm_backend)
-    call __cudecomp_copy_c_string(cstr, res)
-  end function cudecompHaloCommBackendToString
+    cstr = hipdecompHaloCommBackendToStringC(comm_backend)
+    call __hipdecomp_copy_c_string(cstr, res)
+  end function hipdecompHaloCommBackendToString
 
-  function cudecompGetShiftedRank(handle, grid_desc, axis, dim, displacement, periodic, shifted_rank) &
+  function hipdecompGetShiftedRank(handle, grid_desc, axis, dim, displacement, periodic, shifted_rank) &
     result(res)
     implicit none
-    type(cudecompHandle) :: handle
-    type(cudecompGridDesc) :: grid_desc
+    type(hipdecompHandle) :: handle
+    type(hipdecompGridDesc) :: grid_desc
     integer :: axis, dim, displacement
     logical :: periodic
     integer(c_int32_t) :: shifted_rank
@@ -733,16 +733,16 @@ contains
     logical(c_bool) :: periodic_c
 
     periodic_c = periodic
-    res = cudecompGetShiftedRankC(handle, grid_desc, axis - 1, dim - 1, displacement, periodic_c, shifted_rank)
-  end function cudecompGetShiftedRank
+    res = hipdecompGetShiftedRankC(handle, grid_desc, axis - 1, dim - 1, displacement, periodic_c, shifted_rank)
+  end function hipdecompGetShiftedRank
 
   ! Transpose functions
-  function cudecompTransposeXToY(handle, grid_desc, &
+  function hipdecompTransposeXToY(handle, grid_desc, &
        input, output, work, dtype, input_halo_extents, output_halo_extents, &
        input_padding, output_padding, stream) result(res)
     implicit none
-    type(cudecompHandle) :: handle
-    type(cudecompGridDesc) :: grid_desc
+    type(hipdecompHandle) :: handle
+    type(hipdecompGridDesc) :: grid_desc
     !dir$ ignore_tkr input, output, work
     real(c_float) :: input(*), output(*), work(*)
     integer :: dtype
@@ -769,17 +769,17 @@ contains
     if (present(output_halo_extents)) output_halo_extents_ = output_halo_extents
     if (present(input_padding)) input_padding_ = input_padding
     if (present(output_padding)) output_padding_ = output_padding
-    res = cudecompTransposeXToY_C(handle, grid_desc, &
+    res = hipdecompTransposeXToY_C(handle, grid_desc, &
           input, output, work, dtype, input_halo_extents_, output_halo_extents_, &
           input_padding_, output_padding_, stream_)
-  end function cudecompTransposeXToY
+  end function hipdecompTransposeXToY
 
-  function cudecompTransposeYToZ(handle, grid_desc, &
+  function hipdecompTransposeYToZ(handle, grid_desc, &
        input, output, work, dtype, input_halo_extents, output_halo_extents, &
        input_padding, output_padding, stream) result(res)
     implicit none
-    type(cudecompHandle) :: handle
-    type(cudecompGridDesc) :: grid_desc
+    type(hipdecompHandle) :: handle
+    type(hipdecompGridDesc) :: grid_desc
     !dir$ ignore_tkr input, output, work
     real(c_float) :: input(*), output(*), work(*)
     integer :: dtype
@@ -806,17 +806,17 @@ contains
     if (present(output_halo_extents)) output_halo_extents_ = output_halo_extents
     if (present(input_padding)) input_padding_ = input_padding
     if (present(output_padding)) output_padding_ = output_padding
-    res = cudecompTransposeYToZ_C(handle, grid_desc, &
+    res = hipdecompTransposeYToZ_C(handle, grid_desc, &
           input, output, work, dtype, input_halo_extents_, output_halo_extents_, &
           input_padding_, output_padding_, stream_)
-  end function cudecompTransposeYToZ
+  end function hipdecompTransposeYToZ
 
-  function cudecompTransposeZToY(handle, grid_desc, &
+  function hipdecompTransposeZToY(handle, grid_desc, &
        input, output, work, dtype, input_halo_extents, output_halo_extents, &
        input_padding, output_padding, stream) result(res)
     implicit none
-    type(cudecompHandle) :: handle
-    type(cudecompGridDesc) :: grid_desc
+    type(hipdecompHandle) :: handle
+    type(hipdecompGridDesc) :: grid_desc
     !dir$ ignore_tkr input, output, work
     real(c_float) :: input(*), output(*), work(*)
     integer :: dtype
@@ -843,17 +843,17 @@ contains
     if (present(output_halo_extents)) output_halo_extents_ = output_halo_extents
     if (present(input_padding)) input_padding_ = input_padding
     if (present(output_padding)) output_padding_ = output_padding
-    res = cudecompTransposeZToY_C(handle, grid_desc, &
+    res = hipdecompTransposeZToY_C(handle, grid_desc, &
           input, output, work, dtype, input_halo_extents_, output_halo_extents_, &
           input_padding_, output_padding_, stream_)
-  end function cudecompTransposeZToY
+  end function hipdecompTransposeZToY
 
-  function cudecompTransposeYToX(handle, grid_desc, &
+  function hipdecompTransposeYToX(handle, grid_desc, &
        input, output, work, dtype, input_halo_extents, output_halo_extents, &
        input_padding, output_padding ,stream) result(res)
     implicit none
-    type(cudecompHandle) :: handle
-    type(cudecompGridDesc) :: grid_desc
+    type(hipdecompHandle) :: handle
+    type(hipdecompGridDesc) :: grid_desc
     !dir$ ignore_tkr input, output, work
     real(c_float) :: input(*), output(*), work(*)
     integer :: dtype
@@ -880,18 +880,18 @@ contains
     if (present(output_halo_extents)) output_halo_extents_ = output_halo_extents
     if (present(input_padding)) input_padding_ = input_padding
     if (present(output_padding)) output_padding_ = output_padding
-    res = cudecompTransposeYToX_C(handle, grid_desc, &
+    res = hipdecompTransposeYToX_C(handle, grid_desc, &
           input, output, work, dtype, input_halo_extents_, output_halo_extents_, &
           input_padding_, output_padding_, stream_)
-  end function cudecompTransposeYToX
+  end function hipdecompTransposeYToX
 
   ! Halo functions
-  function cudecompUpdateHalosX(handle, grid_desc, &
+  function hipdecompUpdateHalosX(handle, grid_desc, &
        input, work, dtype, halo_extents, halo_periods, &
        dim, padding, stream) result(res)
     implicit none
-    type(cudecompHandle) :: handle
-    type(cudecompGridDesc) :: grid_desc
+    type(hipdecompHandle) :: handle
+    type(hipdecompGridDesc) :: grid_desc
     !dir$ ignore_tkr input, work
     real(c_float) :: input(*), work(*)
     integer :: dtype
@@ -912,17 +912,17 @@ contains
     padding_ = [0, 0, 0]
     if (present(stream)) stream_ = stream
     if (present(padding)) padding_ = padding
-    res = cudecompUpdateHalosX_C(handle, grid_desc, &
+    res = hipdecompUpdateHalosX_C(handle, grid_desc, &
           input, work, dtype, halo_extents, halo_periods_c, &
           dim - 1, padding_, stream_)
-  end function cudecompUpdateHalosX
+  end function hipdecompUpdateHalosX
 
-  function cudecompUpdateHalosY(handle, grid_desc, &
+  function hipdecompUpdateHalosY(handle, grid_desc, &
        input, work, dtype, halo_extents, halo_periods, &
        dim, padding, stream) result(res)
     implicit none
-    type(cudecompHandle) :: handle
-    type(cudecompGridDesc) :: grid_desc
+    type(hipdecompHandle) :: handle
+    type(hipdecompGridDesc) :: grid_desc
     !dir$ ignore_tkr input, work
     real(c_float) :: input(*), work(*)
     integer :: dtype
@@ -943,17 +943,17 @@ contains
     padding_ = [0, 0, 0]
     if (present(stream)) stream_ = stream
     if (present(padding)) padding_ = padding
-    res = cudecompUpdateHalosY_C(handle, grid_desc, &
+    res = hipdecompUpdateHalosY_C(handle, grid_desc, &
           input, work, dtype, halo_extents, halo_periods_c, &
           dim - 1, padding_, stream_)
-  end function cudecompUpdateHalosY
+  end function hipdecompUpdateHalosY
 
-  function cudecompUpdateHalosZ(handle, grid_desc, &
+  function hipdecompUpdateHalosZ(handle, grid_desc, &
        input, work, dtype, halo_extents, halo_periods, &
        dim, padding, stream) result(res)
     implicit none
-    type(cudecompHandle) :: handle
-    type(cudecompGridDesc) :: grid_desc
+    type(hipdecompHandle) :: handle
+    type(hipdecompGridDesc) :: grid_desc
     !dir$ ignore_tkr input, work
     real(c_float) :: input(*), work(*)
     integer :: dtype
@@ -974,13 +974,13 @@ contains
     padding_ = [0, 0, 0]
     if (present(stream)) stream_ = stream
     if (present(padding)) padding_ = padding
-    res = cudecompUpdateHalosZ_C(handle, grid_desc, &
+    res = hipdecompUpdateHalosZ_C(handle, grid_desc, &
           input, work, dtype, halo_extents, halo_periods_c, &
           dim - 1, padding, stream_)
-  end function cudecompUpdateHalosZ
+  end function hipdecompUpdateHalosZ
 
   ! Helper function to copy string
-  subroutine __cudecomp_copy_c_string(cstr, fstr)
+  subroutine __hipdecomp_copy_c_string(cstr, fstr)
     implicit none
     type(c_ptr) :: cstr
     character(len=:), allocatable :: fstr
@@ -997,6 +997,6 @@ contains
     else
       fstr = ' '
     endif
-  end subroutine __cudecomp_copy_c_string
+  end subroutine __hipdecomp_copy_c_string
 
-end module cudecomp
+end module hipdecomp

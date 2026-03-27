@@ -13,51 +13,51 @@
 ! See the License for the specific language governing permissions and
 ! limitations under the License.
 
-#define CHECK_CUDECOMP_EXIT(f) if (f /= CUDECOMP_RESULT_SUCCESS) call exit(1)
-#define CHECK_CUDECOMP(f) if (f /= CUDECOMP_RESULT_SUCCESS) then; res = 1; return; endif
-#define CHECK_CUDA_EXIT(f) if (f /= hipSuccess) call exit(1)
+#define CHECK_HIPDECOMP_EXIT(f) if (f /= HIPDECOMP_RESULT_SUCCESS) call exit(1)
+#define CHECK_HIPDECOMP(f) if (f /= HIPDECOMP_RESULT_SUCCESS) then; res = 1; return; endif
+#define CHECK_HIP_EXIT(f) if (f /= hipSuccess) call exit(1)
 
 #ifdef R32
 #define ARRTYPE real(real32)
-#define DTYPE CUDECOMP_FLOAT
-module halo_CUDECOMP_FLOAT_mod
+#define DTYPE HIPDECOMP_FLOAT
+module halo_HIPDECOMP_FLOAT_mod
 #endif
 
 #ifdef R64
 #define ARRTYPE real(real64)
-#define DTYPE CUDECOMP_DOUBLE
-module halo_CUDECOMP_DOUBLE_mod
+#define DTYPE HIPDECOMP_DOUBLE
+module halo_HIPDECOMP_DOUBLE_mod
 #endif
 
 #ifdef C32
 #define ARRTYPE complex(real32)
-#define DTYPE CUDECOMP_FLOAT_COMPLEX
-module halo_CUDECOMP_FLOAT_COMPLEX_mod
+#define DTYPE HIPDECOMP_FLOAT_COMPLEX
+module halo_HIPDECOMP_FLOAT_COMPLEX_mod
 #endif
 
 #ifdef C64
 #define ARRTYPE complex(real64)
-#define DTYPE CUDECOMP_DOUBLE_COMPLEX
-module halo_CUDECOMP_DOUBLE_COMPLEX_mod
+#define DTYPE HIPDECOMP_DOUBLE_COMPLEX
+module halo_HIPDECOMP_DOUBLE_COMPLEX_mod
 #endif
 
   use, intrinsic :: iso_fortran_env, only: real32, real64
   use hipfort, only: hipSuccess,hipSetDevice
-  use cudecomp
+  use hipdecomp
   use mpi
 
-  type(cudecompHandle) :: handle
+  type(hipdecompHandle) :: handle
   integer :: rank, nranks
-  type(cudecompGridDesc) :: grid_desc_cache(5)
+  type(hipdecompGridDesc) :: grid_desc_cache(5)
   logical :: grid_desc_cache_set(5) = .false.
   ARRTYPE, pointer, contiguous :: work_d(:)
   integer :: work_backend = -1
 
   contains
   function compare_pencils(ref, res, pinfo) result(mismatch)
-    use cudecomp
+    use hipdecomp
     implicit none
-    type(cudecompPencilInfo) :: pinfo
+    type(hipdecompPencilInfo) :: pinfo
     ARRTYPE :: ref(pinfo%shape(1), pinfo%shape(2), pinfo%shape(3))
     ARRTYPE :: res(pinfo%shape(1), pinfo%shape(2), pinfo%shape(3))
 
@@ -66,11 +66,11 @@ module halo_CUDECOMP_DOUBLE_COMPLEX_mod
   end function compare_pencils
 
   subroutine initialize_pencil(ref, pinfo, gdims)
-    use cudecomp
+    use hipdecomp
     implicit none
     ARRTYPE, allocatable :: ref(:,:,:)
 
-    type(cudecompPencilInfo) :: pinfo
+    type(hipdecompPencilInfo) :: pinfo
     integer :: i, j, k
     integer :: gdims(3)
     integer :: gx(3)
@@ -100,11 +100,11 @@ module halo_CUDECOMP_DOUBLE_COMPLEX_mod
   end subroutine initialize_pencil
 
   subroutine initialize_reference(ref, pinfo, gdims, halo_periods)
-    use cudecomp
+    use hipdecomp
     implicit none
     ARRTYPE, allocatable :: ref(:,:,:)
 
-    type(cudecompPencilInfo) :: pinfo
+    type(hipdecompPencilInfo) :: pinfo
     integer :: i, j, k, l
     integer :: gdims(3)
     integer :: gx(3)
@@ -188,11 +188,11 @@ module halo_CUDECOMP_DOUBLE_COMPLEX_mod
 
   subroutine cache_grid_desc(grid_desc, backend)
     implicit none
-    type(cudecompGridDesc) :: grid_desc
+    type(hipdecompGridDesc) :: grid_desc
     integer :: backend
 
     if (grid_desc_cache_set(backend)) then
-      CHECK_CUDECOMP_EXIT(cudecompGridDescDestroy(handle, grid_desc_cache(backend)))
+      CHECK_HIPDECOMP_EXIT(hipdecompGridDescDestroy(handle, grid_desc_cache(backend)))
     endif
 
     grid_desc_cache(backend) = grid_desc
@@ -223,11 +223,11 @@ module halo_CUDECOMP_DOUBLE_COMPLEX_mod
     integer :: local_rank, ierr
     integer :: local_comm
 
-    ! cudecomp
-    type(cudecompGridDescConfig) :: config
-    type(cudecompGridDescAutotuneOptions) :: options
-    type(cudecompGridDesc) :: grid_desc
-    type(cudecompPencilInfo) :: pinfo
+    ! hipdecomp
+    type(hipdecompGridDescConfig) :: config
+    type(hipdecompGridDescAutotuneOptions) :: options
+    type(hipdecompGridDesc) :: grid_desc
+    type(hipdecompPencilInfo) :: pinfo
 
     integer :: pdims(2)
     integer :: gdims(3)
@@ -393,7 +393,7 @@ module halo_CUDECOMP_DOUBLE_COMPLEX_mod
     end if
 
     ! Setup grid descriptor
-    CHECK_CUDECOMP(cudecompGridDescConfigSetDefaults(config))
+    CHECK_HIPDECOMP(hipdecompGridDescConfigSetDefaults(config))
     config%pdims = pdims
     gdims = [gx, gy, gz]
     config%gdims = gdims
@@ -403,12 +403,12 @@ module halo_CUDECOMP_DOUBLE_COMPLEX_mod
     config%transpose_mem_order(:, 2) = mem_order
     config%transpose_mem_order(:, 3) = mem_order
 
-    CHECK_CUDECOMP(cudecompGridDescAutotuneOptionsSetDefaults(options))
+    CHECK_HIPDECOMP(hipdecompGridDescAutotuneOptionsSetDefaults(options))
     options%halo_extents = halo_extents
     options%halo_periods = halo_periods
     options%halo_axis = axis
     options%dtype = dtype
-    options%grid_mode = CUDECOMP_AUTOTUNE_GRID_HALO
+    options%grid_mode = HIPDECOMP_AUTOTUNE_GRID_HALO
 
     if (comm_backend /= 0) then
       config%halo_comm_backend = comm_backend
@@ -416,20 +416,20 @@ module halo_CUDECOMP_DOUBLE_COMPLEX_mod
       options%autotune_halo_backend = .true.
     endif
 
-    CHECK_CUDECOMP(cudecompGridDescCreate(handle, grid_desc, config, options))
+    CHECK_HIPDECOMP(hipdecompGridDescCreate(handle, grid_desc, config, options))
     call cache_grid_desc(grid_desc, config%halo_comm_backend)
 
     if (.not. silent .and. rank == 0) then
        write(*,"('running on ', i0, ' x ', i0, ' process grid ...')") config%pdims(1), config%pdims(2)
        write(*,"('running using ', a, ' halo backend ...')") &
-                 cudecompHaloCommBackendToString(config%halo_comm_backend)
+                 hipdecompHaloCommBackendToString(config%halo_comm_backend)
     endif
 
     ! Get pencil information
-    CHECK_CUDECOMP(cudecompGetPencilInfo(handle, grid_desc, pinfo, axis, halo_extents, padding))
+    CHECK_HIPDECOMP(hipdecompGetPencilInfo(handle, grid_desc, pinfo, axis, halo_extents, padding))
 
     ! Get workspace size
-    CHECK_CUDECOMP(cudecompGetHaloWorkspaceSize(handle, grid_desc, axis, halo_extents, workspace_num_elements))
+    CHECK_HIPDECOMP(hipdecompGetHaloWorkspaceSize(handle, grid_desc, axis, halo_extents, workspace_num_elements))
 
     ! Allocate data arrays
     data_num_elements = pinfo%size
@@ -448,21 +448,21 @@ module halo_CUDECOMP_DOUBLE_COMPLEX_mod
     ! Allocate workspace (reuse exising workspace if able)
     if (work_backend == config%halo_comm_backend) then
       if (size(work_d) < workspace_num_elements) then
-        CHECK_CUDECOMP(cudecompFree(handle, grid_desc, work_d))
-        CHECK_CUDECOMP(cudecompMalloc(handle, grid_desc, work_d, workspace_num_elements))
+        CHECK_HIPDECOMP(hipdecompFree(handle, grid_desc, work_d))
+        CHECK_HIPDECOMP(hipdecompMalloc(handle, grid_desc, work_d, workspace_num_elements))
       endif
     elseif (work_backend > 0 .and. work_backend /= config%halo_comm_backend) then
-      CHECK_CUDECOMP(cudecompFree(handle, grid_desc_cache(work_backend), work_d))
-      CHECK_CUDECOMP(cudecompMalloc(handle, grid_desc, work_d, workspace_num_elements))
+      CHECK_HIPDECOMP(hipdecompFree(handle, grid_desc_cache(work_backend), work_d))
+      CHECK_HIPDECOMP(hipdecompMalloc(handle, grid_desc, work_d, workspace_num_elements))
       work_backend = config%halo_comm_backend;
     else
-      CHECK_CUDECOMP(cudecompMalloc(handle, grid_desc, work_d, workspace_num_elements))
+      CHECK_HIPDECOMP(hipdecompMalloc(handle, grid_desc, work_d, workspace_num_elements))
       work_backend = config%halo_comm_backend;
     endif
 
     ! Running correctness tests
     if (.not. silent .and. rank == 0) write(*,"('Running correctness tests using ', a, ' backend ...')") &
-                           cudecompHaloCommBackendToString(config%halo_comm_backend)
+                           hipdecompHaloCommBackendToString(config%halo_comm_backend)
 
     ! Initialize data to initial pencil data
     if (use_managed_memory) then
@@ -480,17 +480,17 @@ module halo_CUDECOMP_DOUBLE_COMPLEX_mod
     do i = 1, 3
       select case(axis)
         case(1)
-          CHECK_CUDECOMP(cudecompUpdateHalosX(handle, grid_desc, input, work_d, dtype, pinfo%halo_extents, halo_periods, i, padding))
+          CHECK_HIPDECOMP(hipdecompUpdateHalosX(handle, grid_desc, input, work_d, dtype, pinfo%halo_extents, halo_periods, i, padding))
         case(2)
-          CHECK_CUDECOMP(cudecompUpdateHalosY(handle, grid_desc, input, work_d, dtype, pinfo%halo_extents, halo_periods, i, padding))
+          CHECK_HIPDECOMP(hipdecompUpdateHalosY(handle, grid_desc, input, work_d, dtype, pinfo%halo_extents, halo_periods, i, padding))
         case(3)
-          CHECK_CUDECOMP(cudecompUpdateHalosZ(handle, grid_desc, input, work_d, dtype, pinfo%halo_extents, halo_periods, i, padding))
+          CHECK_HIPDECOMP(hipdecompUpdateHalosZ(handle, grid_desc, input, work_d, dtype, pinfo%halo_extents, halo_periods, i, padding))
       end select
     end do
 
     data = input
     if (compare_pencils(ref, data, pinfo)) then
-      print*, "FAILED cudecompUpdateHalos"
+      print*, "FAILED hipdecompUpdateHalos"
       res = 1
       return
     endif
@@ -508,19 +508,19 @@ program main
   use, intrinsic :: iso_fortran_env, only: real32, real64
 
 #ifdef R32
-  use halo_CUDECOMP_FLOAT_mod
+  use halo_HIPDECOMP_FLOAT_mod
 #endif
 
 #ifdef R64
-  use halo_CUDECOMP_DOUBLE_mod
+  use halo_HIPDECOMP_DOUBLE_mod
 #endif
 
 #ifdef C32
-  use halo_CUDECOMP_FLOAT_COMPLEX_mod
+  use halo_HIPDECOMP_FLOAT_COMPLEX_mod
 #endif
 
 #ifdef C64
-  use halo_CUDECOMP_DOUBLE_COMPLEX_mod
+  use halo_HIPDECOMP_DOUBLE_COMPLEX_mod
 #endif
 
   implicit none
@@ -544,7 +544,7 @@ program main
 
   call MPI_Comm_split_Type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL, local_comm, ierr)
   call MPI_Comm_rank(local_comm, local_rank, ierr)
-  CHECK_CUDA_EXIT(hipSetDevice(local_rank))
+  CHECK_HIP_EXIT(hipSetDevice(local_rank))
 
   using_testfile = .false.
   do i = 1, command_argument_count()
@@ -556,8 +556,8 @@ program main
     endif
   enddo
 
-  ! Initialize cuDecomp
-  CHECK_CUDECOMP_EXIT(cudecompInit(handle, MPI_COMM_WORLD))
+  ! Initialize hipDecomp
+  CHECK_HIPDECOMP_EXIT(hipdecompInit(handle, MPI_COMM_WORLD))
 
   if (.not. using_testfile) then
     allocate(testcases(1))
@@ -626,13 +626,13 @@ program main
     if (grid_desc_cache_set(i)) then
       ! Free workspace with correct grid descriptor
       if (work_backend == i) then
-        CHECK_CUDECOMP_EXIT(cudecompFree(handle, grid_desc_cache(i), work_d))
+        CHECK_HIPDECOMP_EXIT(hipdecompFree(handle, grid_desc_cache(i), work_d))
       endif
-      CHECK_CUDECOMP_EXIT(cudecompGridDescDestroy(handle, grid_desc_cache(i)))
+      CHECK_HIPDECOMP_EXIT(hipdecompGridDescDestroy(handle, grid_desc_cache(i)))
     endif
   end do
 
-  CHECK_CUDECOMP_EXIT(cudecompFinalize(handle))
+  CHECK_HIPDECOMP_EXIT(hipdecompFinalize(handle))
   call MPI_Finalize(ierr)
 
   call exit(retcode)

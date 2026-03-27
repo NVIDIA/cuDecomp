@@ -12,8 +12,8 @@ target_include_directories(poisson
 )
 target_link_libraries(poisson PRIVATE MPI::MPI_Fortran)
 target_link_libraries(poisson PRIVATE NVHPC::CUFFT)
-target_link_libraries(poisson PRIVATE cudecomp)
-target_link_libraries(poisson PRIVATE cudecomp_fort)
+target_link_libraries(poisson PRIVATE hipdecomp)
+target_link_libraries(poisson PRIVATE hipdecomp_fort)
 target_compile_options(poisson PRIVATE $<$<COMPILE_LANGUAGE:Fortran>:-cpp -cuda -gpu=${CUF_GPU_ARG}>)
 target_link_options(poisson PRIVATE $<$<COMPILE_LANGUAGE:Fortran>:-cpp -cuda -gpu=${CUF_GPU_ARG}>)
 

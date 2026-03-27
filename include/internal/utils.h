@@ -1,5 +1,6 @@
 /*
  * SPDX-FileCopyrightText: Copyright (c) 2022-2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2026 The Authors.
  * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,14 +16,14 @@
  * limitations under the License.
  */
 
-#ifndef CUDECOMP_UTILS_H
-#define CUDECOMP_UTILS_H
+#ifndef HIPDECOMP_UTILS_H
+#define HIPDECOMP_UTILS_H
 
 #include <complex>
 
-#include "cudecomp.h"
+#include "hipdecomp.h"
 
-inline bool operator==(const cudecompPencilInfo_t& a, const cudecompPencilInfo_t& b) {
+inline bool operator==(const hipdecompPencilInfo_t& a, const hipdecompPencilInfo_t& b) {
   if (a.size != b.size) return false;
   for (int i = 0; i < 3; ++i) {
     if ((a.shape[i] != b.shape[i]) || (a.lo[i] != b.lo[i]) || (a.hi[i] != b.hi[i]) || (a.order[i] != b.order[i]) ||
@@ -33,10 +34,10 @@ inline bool operator==(const cudecompPencilInfo_t& a, const cudecompPencilInfo_t
   return true;
 }
 
-inline cudecompDataType_t getCudecompDataType(float) { return CUDECOMP_FLOAT; }
-inline cudecompDataType_t getCudecompDataType(double) { return CUDECOMP_DOUBLE; }
-inline cudecompDataType_t getCudecompDataType(std::complex<float>) { return CUDECOMP_FLOAT_COMPLEX; }
-inline cudecompDataType_t getCudecompDataType(std::complex<double>) { return CUDECOMP_DOUBLE_COMPLEX; }
-template <typename T> inline cudecompDataType_t getCudecompDataType() { return getCudecompDataType(T(0)); }
+inline hipdecompDataType_t getHipdecompDataType(float) { return HIPDECOMP_FLOAT; }
+inline hipdecompDataType_t getHipdecompDataType(double) { return HIPDECOMP_DOUBLE; }
+inline hipdecompDataType_t getHipdecompDataType(std::complex<float>) { return HIPDECOMP_FLOAT_COMPLEX; }
+inline hipdecompDataType_t getHipdecompDataType(std::complex<double>) { return HIPDECOMP_DOUBLE_COMPLEX; }
+template <typename T> inline hipdecompDataType_t getHipdecompDataType() { return getHipdecompDataType(T(0)); }
 
-#endif // CUDECOMP_UTILS_H
+#endif // HIPDECOMP_UTILS_H

@@ -1,5 +1,6 @@
 /*
  * SPDX-FileCopyrightText: Copyright (c) 2022-2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2026 The Authors.
  * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,15 +16,15 @@
  * limitations under the License.
  */
 
-#ifndef CUDECOMP_HASHES_H
-#define CUDECOMP_HASHES_H
+#ifndef HIPDECOMP_HASHES_H
+#define HIPDECOMP_HASHES_H
 
 #include <array>
 #include <functional>
 #include <tuple>
 #include <utility>
 
-#include "cudecomp.h"
+#include "hipdecomp.h"
 
 #define MAGIC 0x9e3779b9
 
@@ -60,8 +61,8 @@ template <typename U, typename V> struct std::hash<std::pair<U, V>> {
   }
 };
 
-template <> struct std::hash<cudecompPencilInfo_t> {
-  size_t operator()(const cudecompPencilInfo_t& info) const {
+template <> struct std::hash<hipdecompPencilInfo_t> {
+  size_t operator()(const hipdecompPencilInfo_t& info) const {
     size_t hash_value = 0;
     hash_combine(hash_value, info.shape);
     hash_combine(hash_value, info.order);
@@ -92,4 +93,4 @@ template <typename... Types> struct std::hash<std::tuple<Types...>> {
 
 #undef MAGIC
 
-#endif // CUDECOMP_HASHES_H
+#endif // HIPDECOMP_HASHES_H

@@ -99,7 +99,7 @@ def add_csv_entry(csvfile, cmd, stdout_str):
 
   lines = stdout_str.split('\n')
 
-  at_lines = [x for x in lines if "CUDECOMP:" in x]
+  at_lines = [x for x in lines if "HIPDECOMP:" in x]
   at_results = []
   if at_lines:
     for i, line in enumerate(at_lines):

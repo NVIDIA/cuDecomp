@@ -1,7 +1,7 @@
 # Taylor-Green Vortex Solver
 In this sub-directory, there is an example spectral incompressible CFD solver for the Taylor-Green vortex problem
 written in CUDA. The solver is based on an implementation presented by Mortensen and Langtangen ([paper](https://arxiv.org/abs/1602.03638)).
-This example uses cuDecomp to perform global transposes required for distributed FFT computations, with
+This example uses hipDecomp to perform global transposes required for distributed FFT computations, with
 full autotuning enabled to select a process grid and communication backend to minimize transpose communication.
 
 An example of how to launch this solver on a DGX A100 system with 8 GPUs is:

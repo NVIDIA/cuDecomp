@@ -1,5 +1,6 @@
 /*
  * SPDX-FileCopyrightText: Copyright (c) 2022-2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2026 The Authors.
  * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,18 +19,18 @@
 /**
  * @file
  * @brief This file contains all public function and type declarations
- * used in the cuDecomp library.
+ * used in the hipDecomp library.
  **/
 
-#ifndef CUDECOMP_H
-#define CUDECOMP_H
+#ifndef HIPDECOMP_H
+#define HIPDECOMP_H
 
 #include <hip/hip_runtime.h>
 #include <mpi.h>
 
-#define CUDECOMP_MAJOR 0
-#define CUDECOMP_MINOR 6
-#define CUDECOMP_PATCH 1
+#define HIPDECOMP_MAJOR 0
+#define HIPDECOMP_MINOR 6
+#define HIPDECOMP_PATCH 1
 
 #ifdef __cplusplus
 extern "C" {
@@ -42,69 +43,69 @@ extern "C" {
  * @brief This enum lists the different available transpose backend options.
  */
 typedef enum {
-  CUDECOMP_TRANSPOSE_COMM_MPI_P2P = 1,    ///< MPI backend using peer-to-peer algorithm (i.e.,MPI_Isend/MPI_Irecv)
-  CUDECOMP_TRANSPOSE_COMM_MPI_P2P_PL = 2, ///< MPI backend using peer-to-peer algorithm with pipelining
-  CUDECOMP_TRANSPOSE_COMM_MPI_A2A = 3,    ///< MPI backend using MPI_Alltoallv
-  CUDECOMP_TRANSPOSE_COMM_NCCL = 4,       ///< NCCL backend
-  CUDECOMP_TRANSPOSE_COMM_NCCL_PL = 5,    ///< NCCL backend with pipelining
-  CUDECOMP_TRANSPOSE_COMM_NVSHMEM = 6,    ///< NVSHMEM backend
-  CUDECOMP_TRANSPOSE_COMM_NVSHMEM_PL = 7  ///< NVSHMEM backend with pipelining
-} cudecompTransposeCommBackend_t;
+  HIPDECOMP_TRANSPOSE_COMM_MPI_P2P = 1,    ///< MPI backend using peer-to-peer algorithm (i.e.,MPI_Isend/MPI_Irecv)
+  HIPDECOMP_TRANSPOSE_COMM_MPI_P2P_PL = 2, ///< MPI backend using peer-to-peer algorithm with pipelining
+  HIPDECOMP_TRANSPOSE_COMM_MPI_A2A = 3,    ///< MPI backend using MPI_Alltoallv
+  HIPDECOMP_TRANSPOSE_COMM_NCCL = 4,       ///< NCCL backend
+  HIPDECOMP_TRANSPOSE_COMM_NCCL_PL = 5,    ///< NCCL backend with pipelining
+  HIPDECOMP_TRANSPOSE_COMM_NVSHMEM = 6,    ///< NVSHMEM backend
+  HIPDECOMP_TRANSPOSE_COMM_NVSHMEM_PL = 7  ///< NVSHMEM backend with pipelining
+} hipdecompTransposeCommBackend_t;
 
 /**
  * @brief This enum lists the different available halo backend options.
  */
 typedef enum {
-  CUDECOMP_HALO_COMM_MPI = 1,             ///< MPI backend
-  CUDECOMP_HALO_COMM_MPI_BLOCKING = 2,    ///< MPI backend with blocking between each peer transfer
-  CUDECOMP_HALO_COMM_NCCL = 3,            ///< NCCL backend
-  CUDECOMP_HALO_COMM_NVSHMEM = 4,         ///< NVSHMEM backend
-  CUDECOMP_HALO_COMM_NVSHMEM_BLOCKING = 5 ///< NVSHMEM backend with blocking between each peer transfer
-} cudecompHaloCommBackend_t;
+  HIPDECOMP_HALO_COMM_MPI = 1,             ///< MPI backend
+  HIPDECOMP_HALO_COMM_MPI_BLOCKING = 2,    ///< MPI backend with blocking between each peer transfer
+  HIPDECOMP_HALO_COMM_NCCL = 3,            ///< NCCL backend
+  HIPDECOMP_HALO_COMM_NVSHMEM = 4,         ///< NVSHMEM backend
+  HIPDECOMP_HALO_COMM_NVSHMEM_BLOCKING = 5 ///< NVSHMEM backend with blocking between each peer transfer
+} hipdecompHaloCommBackend_t;
 
 /**
  * @brief This enum defines the data types supported.
  */
 typedef enum {
-  CUDECOMP_FLOAT = -1,         ///< Single-precision real
-  CUDECOMP_DOUBLE = -2,        ///< Double-precision real
-  CUDECOMP_FLOAT_COMPLEX = -3, ///< Single-precision complex (interleaved)
-  CUDECOMP_DOUBLE_COMPLEX = -4 ///< Double-precision complex (interleaved)
-} cudecompDataType_t;
+  HIPDECOMP_FLOAT = -1,         ///< Single-precision real
+  HIPDECOMP_DOUBLE = -2,        ///< Double-precision real
+  HIPDECOMP_FLOAT_COMPLEX = -3, ///< Single-precision complex (interleaved)
+  HIPDECOMP_DOUBLE_COMPLEX = -4 ///< Double-precision complex (interleaved)
+} hipdecompDataType_t;
 
 /**
  * @brief This enum defines the modes available for process grid autotuning.
  */
 typedef enum {
-  CUDECOMP_AUTOTUNE_GRID_TRANSPOSE = 0, ///< Use transpose communication to autotune process grid dimensions
-  CUDECOMP_AUTOTUNE_GRID_HALO = 1       ///< Use halo communication to autotune process grid dimensions
-} cudecompAutotuneGridMode_t;
+  HIPDECOMP_AUTOTUNE_GRID_TRANSPOSE = 0, ///< Use transpose communication to autotune process grid dimensions
+  HIPDECOMP_AUTOTUNE_GRID_HALO = 1       ///< Use halo communication to autotune process grid dimensions
+} hipdecompAutotuneGridMode_t;
 
 /**
- * @brief This enum defines the possible values return values from cuDecomp. Most functions in the cuDecomp library
+ * @brief This enum defines the possible values return values from hipDecomp. Most functions in the hipDecomp library
  * will return one of these values to indicate if an operation has completed successfully or an error occured.
  */
 typedef enum {
-  CUDECOMP_RESULT_SUCCESS = 0,        ///< The operation completed successfully
-  CUDECOMP_RESULT_INVALID_USAGE = 1,  ///< A user error, typically an invalid argument
-  CUDECOMP_RESULT_NOT_SUPPORTED = 2,  ///< A user error, requesting an invalid or unsupported operation configuration
-  CUDECOMP_RESULT_INTERNAL_ERROR = 3, ///< An internal library error, should be reported
-  CUDECOMP_RESULT_CUDA_ERROR = 4,     ///< An error occured in the CUDA Runtime
-  CUDECOMP_RESULT_CUTENSOR_ERROR = 5, ///< An error occured in the cuTENSOR library
-  CUDECOMP_RESULT_MPI_ERROR = 6,      ///< An error occurred in the MPI library
-  CUDECOMP_RESULT_NCCL_ERROR = 7,     ///< An error occured in the NCCL library
-  CUDECOMP_RESULT_NVSHMEM_ERROR = 8,  ///< An error occured in the NVSHMEM library
-} cudecompResult_t;
+  HIPDECOMP_RESULT_SUCCESS = 0,        ///< The operation completed successfully
+  HIPDECOMP_RESULT_INVALID_USAGE = 1,  ///< A user error, typically an invalid argument
+  HIPDECOMP_RESULT_NOT_SUPPORTED = 2,  ///< A user error, requesting an invalid or unsupported operation configuration
+  HIPDECOMP_RESULT_INTERNAL_ERROR = 3, ///< An internal library error, should be reported
+  HIPDECOMP_RESULT_CUDA_ERROR = 4,     ///< An error occured in the CUDA Runtime
+  HIPDECOMP_RESULT_CUTENSOR_ERROR = 5, ///< An error occured in the cuTENSOR library
+  HIPDECOMP_RESULT_MPI_ERROR = 6,      ///< An error occurred in the MPI library
+  HIPDECOMP_RESULT_NCCL_ERROR = 7,     ///< An error occured in the NCCL library
+  HIPDECOMP_RESULT_NVSHMEM_ERROR = 8,  ///< An error occured in the NVSHMEM library
+} hipdecompResult_t;
 
 /**
- * @brief A pointer to a cuDecomp internal handle structure.
+ * @brief A pointer to a hipDecomp internal handle structure.
  */
-typedef struct cudecompHandle* cudecompHandle_t;
+typedef struct hipdecompHandle* hipdecompHandle_t;
 
 /**
- * @brief A pointer to a cuDecomp internal grid descriptor structure.
+ * @brief A pointer to a hipDecomp internal grid descriptor structure.
  */
-typedef struct cudecompGridDesc* cudecompGridDesc_t;
+typedef struct hipdecompGridDesc* hipdecompGridDesc_t;
 
 /**
  * @brief A data structure defining configuration options for grid descriptor creation.
@@ -116,8 +117,8 @@ typedef struct {
   int32_t pdims[2];      ///< dimensions of process grid
 
   // Transpose settings
-  cudecompTransposeCommBackend_t transpose_comm_backend; ///< communication backend to use for transpose communication
-                                                         ///< (default: CUDECOMP_TRANSPOSE_COMM_MPI_P2P)
+  hipdecompTransposeCommBackend_t transpose_comm_backend; ///< communication backend to use for transpose communication
+                                                          ///< (default: HIPDECOMP_TRANSPOSE_COMM_MPI_P2P)
   bool transpose_axis_contiguous[3]; ///< flag (by axis) indicating if memory should be contiguous along pencil axis
                                      ///< (default: [false, false, false])
   int32_t transpose_mem_order[3][3]; ///< user-specified memory ordering by axis, overrides transpose_axis_contiguous
@@ -125,10 +126,10 @@ typedef struct {
                                      ///< setting (default: unset)
 
   // Halo settings
-  cudecompHaloCommBackend_t
-      halo_comm_backend; ///< communication backend to use for halo communication (default: CUDECOMP_HALO_COMM_MPI)
+  hipdecompHaloCommBackend_t
+      halo_comm_backend; ///< communication backend to use for halo communication (default: HIPDECOMP_HALO_COMM_MPI)
 
-} cudecompGridDescConfig_t;
+} hipdecompGridDescConfig_t;
 
 /**
  * @brief A data structure defining autotuning options for grid descriptor creation.
@@ -139,9 +140,9 @@ typedef struct {
                            ///< (default: 3)
   int32_t n_trials;        ///< number of timed trials to run for each tested configuration during autotuning
                            ///< (default: 5)
-  cudecompAutotuneGridMode_t grid_mode; ///< which communication (transpose/halo) to use to autotune process grid
-                                        ///< (default: CUDECOMP_AUTOTUNE_GRID_TRANSPOSE)
-  cudecompDataType_t dtype;             ///< datatype to use during autotuning (default: CUDECOMP_DOUBLE)
+  hipdecompAutotuneGridMode_t grid_mode; ///< which communication (transpose/halo) to use to autotune process grid
+                                         ///< (default: HIPDECOMP_AUTOTUNE_GRID_TRANSPOSE)
+  hipdecompDataType_t dtype;             ///< datatype to use during autotuning (default: HIPDECOMP_DOUBLE)
   bool allow_uneven_decompositions; ///< flag to control whether autotuning allows process grids that result in uneven
                                     ///< distributions of elements across processes (default: true)
   bool disable_nccl_backends;       ///< flag to disable NCCL backend options during autotuning (default: false)
@@ -185,7 +186,7 @@ typedef struct {
   bool halo_periods[3];       ///< periodicity for halo autotuning (default: [false, false, false])
   int32_t halo_axis;          ///< which axis pencils to use for halo autotuning (default: 0, X-pencils)
   int32_t halo_padding[3];    ///< padding argument for halo autotuning (default: [0, 0, 0])
-} cudecompGridDescAutotuneOptions_t;
+} hipdecompGridDescAutotuneOptions_t;
 
 /**
  * @brief A data structure containing geometry information about a pencil data buffer.
@@ -198,98 +199,98 @@ typedef struct {
   int32_t halo_extents[3]; ///< halo extents by dimension (in global order)
   int32_t padding[3];      ///< padding by dimension (in global order)
   int64_t size;            ///< number of elements in pencil (including halo and padding elements)
-} cudecompPencilInfo_t;
+} hipdecompPencilInfo_t;
 
-// cuDecomp initialization/finalization functions
+// hipDecomp initialization/finalization functions
 /**
- * @brief Initializes the cuDecomp library from an existing MPI communicator
+ * @brief Initializes the hipDecomp library from an existing MPI communicator
  *
- * @param[out] handle A pointer to an uninitialized cudecompHandle_t
- * @param[in] mpi_comm MPI communicator containing ranks to use with cuDecomp
+ * @param[out] handle A pointer to an uninitialized hipdecompHandle_t
+ * @param[in] mpi_comm MPI communicator containing ranks to use with hipDecomp
  *
- * @return CUDECOMP_RESULT_SUCCESS on success or error code on failure.
+ * @return HIPDECOMP_RESULT_SUCCESS on success or error code on failure.
  */
-cudecompResult_t cudecompInit(cudecompHandle_t* handle, MPI_Comm mpi_comm);
+hipdecompResult_t hipdecompInit(hipdecompHandle_t* handle, MPI_Comm mpi_comm);
 
 /**
- * @brief Initializes the cuDecomp library from an existing MPI communicator
+ * @brief Initializes the hipDecomp library from an existing MPI communicator
  *
- * @param[out] handle A pointer to an uninitialized cudecompHandle_t
- * @param[in] mpi_comm_f MPI communicator, in Fortran integer format, containing ranks to use with cuDecomp
+ * @param[out] handle A pointer to an uninitialized hipdecompHandle_t
+ * @param[in] mpi_comm_f MPI communicator, in Fortran integer format, containing ranks to use with hipDecomp
  *
- * @return CUDECOMP_RESULT_SUCCESS on success or error code on failure.
+ * @return HIPDECOMP_RESULT_SUCCESS on success or error code on failure.
  */
-cudecompResult_t cudecompInit_F(cudecompHandle_t* handle, MPI_Fint mpi_comm_f);
+hipdecompResult_t hipdecompInit_F(hipdecompHandle_t* handle, MPI_Fint mpi_comm_f);
 
 /**
- * @brief Finalizes the cuDecomp library and frees associated resources
+ * @brief Finalizes the hipDecomp library and frees associated resources
  *
- * @param[in] handle The initialized cuDecomp library handle
+ * @param[in] handle The initialized hipDecomp library handle
  *
- * @return CUDECOMP_RESULT_SUCCESS on success or error code on failure.
+ * @return HIPDECOMP_RESULT_SUCCESS on success or error code on failure.
  */
-cudecompResult_t cudecompFinalize(cudecompHandle_t handle);
+hipdecompResult_t hipdecompFinalize(hipdecompHandle_t handle);
 
-// cudecompGridDesc_t creation/manipulation functions
+// hipdecompGridDesc_t creation/manipulation functions
 /**
- * @brief Creates a cuDecomp grid descriptor for use with cuDecomp functions.
- * @details This function creates a grid descriptor that cuDecomp requires for most library operations that perform
+ * @brief Creates a hipDecomp grid descriptor for use with hipDecomp functions.
+ * @details This function creates a grid descriptor that hipDecomp requires for most library operations that perform
  * communication or query decomposition information. This grid descriptor contains information about how
  * the global data grid is distributed and other internal resources to facilitate communication.
- * @param[in] handle The initialized cuDecomp library handle
- * @param[out] grid_desc A pointer to an uninitialized cudecompGridDesc_t
- * @param[in,out] config A pointer to a populated cudecompGridDescConfig_t structure. This config structure defines
+ * @param[in] handle The initialized hipDecomp library handle
+ * @param[out] grid_desc A pointer to an uninitialized hipdecompGridDesc_t
+ * @param[in,out] config A pointer to a populated hipdecompGridDescConfig_t structure. This config structure defines
  * the required attributes of the decomposition. On successful exit, fields in this structure may be updated to reflect
  * autotuning results.
- * @param[in] options A pointer to cudecompGridDescAutotuneOptions_t structure. This options structure is used
+ * @param[in] options A pointer to hipdecompGridDescAutotuneOptions_t structure. This options structure is used
  * to control the behavior of the process grid and communication backend autotuning. If autotuning is not desired, a
  * NULL pointer can be passed in for this argument.
  *
- * @return CUDECOMP_RESULT_SUCCESS on success or error code on failure.
+ * @return HIPDECOMP_RESULT_SUCCESS on success or error code on failure.
  */
-cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDesc_t* grid_desc,
-                                        cudecompGridDescConfig_t* config,
-                                        const cudecompGridDescAutotuneOptions_t* options);
+hipdecompResult_t hipdecompGridDescCreate(hipdecompHandle_t handle, hipdecompGridDesc_t* grid_desc,
+                                          hipdecompGridDescConfig_t* config,
+                                          const hipdecompGridDescAutotuneOptions_t* options);
 /**
- * @brief Destroys a cuDecomp grid descriptor and frees associated resources.
- * @param[in] handle The initialized cuDecomp library handle
- * @param[in] grid_desc A cuDecomp grid descriptor
+ * @brief Destroys a hipDecomp grid descriptor and frees associated resources.
+ * @param[in] handle The initialized hipDecomp library handle
+ * @param[in] grid_desc A hipDecomp grid descriptor
  *
- * @return CUDECOMP_RESULT_SUCCESS on success or error code on failure.
+ * @return HIPDECOMP_RESULT_SUCCESS on success or error code on failure.
  */
-cudecompResult_t cudecompGridDescDestroy(cudecompHandle_t handle, cudecompGridDesc_t grid_desc);
+hipdecompResult_t hipdecompGridDescDestroy(hipdecompHandle_t handle, hipdecompGridDesc_t grid_desc);
 
-// cudecompGridDescConfig_t creation/manipulation functions
+// hipdecompGridDescConfig_t creation/manipulation functions
 /**
- * @brief Initializes a cudecompGridDescConfig_t structure with default values
- * @details This function initializes entries in a cuDecomp grid descriptor configuration structure to default
+ * @brief Initializes a hipdecompGridDescConfig_t structure with default values
+ * @details This function initializes entries in a hipDecomp grid descriptor configuration structure to default
  * values.
- * @param[in,out] config A pointer to cudecompGridDescConfig_t structure
+ * @param[in,out] config A pointer to hipdecompGridDescConfig_t structure
  *
- * @return CUDECOMP_RESULT_SUCCESS on success or error code on failure.
+ * @return HIPDECOMP_RESULT_SUCCESS on success or error code on failure.
  */
-cudecompResult_t cudecompGridDescConfigSetDefaults(cudecompGridDescConfig_t* config);
+hipdecompResult_t hipdecompGridDescConfigSetDefaults(hipdecompGridDescConfig_t* config);
 
-// cudecompGridDescAutotuneOptions_t creation/manipulation functions
+// hipdecompGridDescAutotuneOptions_t creation/manipulation functions
 /**
- * @brief Initializes a cudecompGridDescAutotuneOptions_t structure with default values
- * @details This function initializes entries in a cuDecomp grid descriptor autotune options structure to default
+ * @brief Initializes a hipdecompGridDescAutotuneOptions_t structure with default values
+ * @details This function initializes entries in a hipDecomp grid descriptor autotune options structure to default
  * values.
- * @param[in,out] options A pointer to cudecompGridDescAutotuneOptions_t structure
+ * @param[in,out] options A pointer to hipdecompGridDescAutotuneOptions_t structure
  *
- * @return CUDECOMP_RESULT_SUCCESS on success or error code on failure.
+ * @return HIPDECOMP_RESULT_SUCCESS on success or error code on failure.
  */
-cudecompResult_t cudecompGridDescAutotuneOptionsSetDefaults(cudecompGridDescAutotuneOptions_t* options);
+hipdecompResult_t hipdecompGridDescAutotuneOptionsSetDefaults(hipdecompGridDescAutotuneOptions_t* options);
 
 // General functions
 /**
  * @brief Collects geometry information about assigned pencils, by domain axis
  * @details This function queries information about the pencil assigned to the calling worker for the given axis.
- * This information is collected in a cudecompPencilInfo_t structure, which can be used to access and manipuate
+ * This information is collected in a hipdecompPencilInfo_t structure, which can be used to access and manipuate
  * data within the user-allocated memory buffer.
- * @param[in] handle The initialized cuDecomp library handle
- * @param[in] grid_desc A created cuDecomp grid descriptor
- * @param[out] pencil_info A pointer to a cuDecompPencilInfo_t structure
+ * @param[in] handle The initialized hipDecomp library handle
+ * @param[in] grid_desc A created hipDecomp grid descriptor
+ * @param[out] pencil_info A pointer to a hipDecompPencilInfo_t structure
  * @param[in] axis The domain axis the desired pencil is aligned with
  * @param[in] halo_extents An array of three integers to define halo region extents of the pencil, in global order. The
  * i-th entry in this array should contain the number of halo elements (per direction) expected in the along the i-th
@@ -299,33 +300,33 @@ cudecompResult_t cudecompGridDescAutotuneOptionsSetDefaults(cudecompGridDescAuto
  * in this array should contain the number of elements to treat as padding in the i-th global domain axis. If no padding
  * is necesary, a NULL pointer can be provided in place of this array.
  *
- * @return CUDECOMP_RESULT_SUCCESS on success or error code on failure.
+ * @return HIPDECOMP_RESULT_SUCCESS on success or error code on failure.
  */
-cudecompResult_t cudecompGetPencilInfo(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
-                                       cudecompPencilInfo_t* pencil_info, int32_t axis, const int32_t halo_extents[],
-                                       const int32_t padding[]);
+hipdecompResult_t hipdecompGetPencilInfo(hipdecompHandle_t handle, hipdecompGridDesc_t grid_desc,
+                                         hipdecompPencilInfo_t* pencil_info, int32_t axis, const int32_t halo_extents[],
+                                         const int32_t padding[]);
 
 /**
  * @brief Queries the required transpose workspace size, in elements, for a provided grid descriptor.
  * @details This function queries the required workspace size, in elements, for transposition communication using
  * a provided grid descriptor. This workspace is required to faciliate local transposition/packing/unpacking operations,
  * or for use as a staging buffer.
- * @param[in] handle The initialized cuDecomp library handle
- * @param[in] grid_desc A cuDecomp grid descriptor
+ * @param[in] handle The initialized hipDecomp library handle
+ * @param[in] grid_desc A hipDecomp grid descriptor
  * @param[out] workspace_size A pointer to a 64-bit integer to write the workspace size
  *
- * @return CUDECOMP_RESULT_SUCCESS on success or error code on failure.
+ * @return HIPDECOMP_RESULT_SUCCESS on success or error code on failure.
  */
-cudecompResult_t cudecompGetTransposeWorkspaceSize(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
-                                                   int64_t* workspace_size);
+hipdecompResult_t hipdecompGetTransposeWorkspaceSize(hipdecompHandle_t handle, hipdecompGridDesc_t grid_desc,
+                                                     int64_t* workspace_size);
 
 /**
  * @brief Queries the required halo workspace size, in elements, for a provided grid descriptor.
  * @details This function queries the required workspace size, in elements, for halo communication using
  * a provided grid descriptor. This workspace is required to faciliate local packing operations for halo regions that
  * are not contiguous in memory, or for use as a staging buffer.
- * @param[in] handle The initialized cuDecomp library handle
- * @param[in] grid_desc A cuDecomp grid descriptor
+ * @param[in] handle The initialized hipDecomp library handle
+ * @param[in] grid_desc A hipDecomp grid descriptor
  * @param[in] axis The domain axis the desired pencil is aligned with
  * @param[in] halo_extents An array of three integers to define halo region extents of the pencil, in global order. The
  * i-th entry in this array should contain the number of halo elements (per direction) expected in the along the i-th
@@ -333,86 +334,86 @@ cudecompResult_t cudecompGetTransposeWorkspaceSize(cudecompHandle_t handle, cude
  * one element on each side).
  * @param[out] workspace_size A pointer to a 64-bit integer to write the workspace size
  *
- * @return CUDECOMP_RESULT_SUCCESS on success or error code on failure.
+ * @return HIPDECOMP_RESULT_SUCCESS on success or error code on failure.
  */
-cudecompResult_t cudecompGetHaloWorkspaceSize(cudecompHandle_t handle, cudecompGridDesc_t grid_desc, int32_t axis,
-                                              const int32_t halo_extents[], int64_t* workspace_size);
+hipdecompResult_t hipdecompGetHaloWorkspaceSize(hipdecompHandle_t handle, hipdecompGridDesc_t grid_desc, int32_t axis,
+                                                const int32_t halo_extents[], int64_t* workspace_size);
 
 /**
- * @brief Function to get size (in bytes) of a cuDecomp data type
- * @param[in] dtype A cudecompDataType_t value
+ * @brief Function to get size (in bytes) of a hipDecomp data type
+ * @param[in] dtype A hipdecompDataType_t value
  * @param[out] dtype_size A pointer to a 64-bit integer to write the data type size
  *
- * @return CUDECOMP_RESULT_SUCCESS on success or error code on failure.
+ * @return HIPDECOMP_RESULT_SUCCESS on success or error code on failure.
  */
-cudecompResult_t cudecompGetDataTypeSize(cudecompDataType_t dtype, int64_t* dtype_size);
+hipdecompResult_t hipdecompGetDataTypeSize(hipdecompDataType_t dtype, int64_t* dtype_size);
 
 /**
- * @brief Allocation function for cuDecomp workspaces
- * @details This function should be used to allocate cuDecomp workspaces. It will select an appropriate allocator
+ * @brief Allocation function for hipDecomp workspaces
+ * @details This function should be used to allocate hipDecomp workspaces. It will select an appropriate allocator
  * based on the communication backend information found in the provided grid descriptor. At the current time, only
  * NVSHMEM-enabled backends require a special allocation (using nvshmem_malloc). This function is collective and should
  * be called on all workers to avoid deadlocks. Additionally, any memory allocated using this function is invalidated
  * if the provided grid descriptor is destroyed and care are should be taken free memory allocated using this function
  * before the provided grid descriptor is destroyed.
- * @param[in] handle The initialized cuDecomp library handle
- * @param[in] grid_desc A cuDecomp grid descriptor
+ * @param[in] handle The initialized hipDecomp library handle
+ * @param[in] grid_desc A hipDecomp grid descriptor
  * @param[out] buffer A pointer to the allocated memory
  * @param[out] buffer_size_bytes The size of requested allocation, in bytes
  *
- * @return CUDECOMP_RESULT_SUCCESS on success or error code on failure.
+ * @return HIPDECOMP_RESULT_SUCCESS on success or error code on failure.
  */
-cudecompResult_t cudecompMalloc(cudecompHandle_t handle, cudecompGridDesc_t grid_desc, void** buffer,
-                                size_t buffer_size_bytes);
+hipdecompResult_t hipdecompMalloc(hipdecompHandle_t handle, hipdecompGridDesc_t grid_desc, void** buffer,
+                                  size_t buffer_size_bytes);
 
 /**
- * @brief Deallocation function for cuDecomp workspaces
- * @details This function should be used to deallocate memory allocate with cudecompMalloc. It will select an
+ * @brief Deallocation function for hipDecomp workspaces
+ * @details This function should be used to deallocate memory allocate with hipdecompMalloc. It will select an
  * appropriate deallocation function based on the communication backend information found in the provided grid
  * descriptor. At the current time, only NVSHMEM-enabled backends require a special deallocation (using nvshmem_free).
  * This function is collective and should be called on all workers to avoid deadlocks.
- * @param[in] handle The initialized cuDecomp library handle
- * @param[in] grid_desc A cuDecomp grid descriptor
+ * @param[in] handle The initialized hipDecomp library handle
+ * @param[in] grid_desc A hipDecomp grid descriptor
  * @param[in] buffer A pointer to the memory to be deallocated
  *
- * @return CUDECOMP_RESULT_SUCCESS on success or error code on failure.
+ * @return HIPDECOMP_RESULT_SUCCESS on success or error code on failure.
  */
-cudecompResult_t cudecompFree(cudecompHandle_t handle, cudecompGridDesc_t grid_desc, void* buffer);
+hipdecompResult_t hipdecompFree(hipdecompHandle_t handle, hipdecompGridDesc_t grid_desc, void* buffer);
 
 // Convenience functions
 /**
  * @brief Function to get string name of transpose communication backend.
- * @param[in] comm_backend A cudecompTransposeCommBackend_t value
+ * @param[in] comm_backend A hipdecompTransposeCommBackend_t value
  *
  * @return A string representation of the transpose communication backend. Will return string "ERROR" if
  * invalid backend value is provided.
  */
-const char* cudecompTransposeCommBackendToString(cudecompTransposeCommBackend_t comm_backend);
+const char* hipdecompTransposeCommBackendToString(hipdecompTransposeCommBackend_t comm_backend);
 
 /**
  * @brief Function to get string name of halo communication backend.
- * @param[in] comm_backend A cudecompHaloCommBackend_t value
+ * @param[in] comm_backend A hipdecompHaloCommBackend_t value
  *
  * @return A string representation of the halo communication backend. Will return string "ERROR" if
  * invalid backend value is provided.
  */
-const char* cudecompHaloCommBackendToString(cudecompHaloCommBackend_t comm_backend);
+const char* hipdecompHaloCommBackendToString(hipdecompHaloCommBackend_t comm_backend);
 
 /**
  * @brief Queries the configuration used to create a grid descriptor.
- * @param[in] handle The initialized cuDecomp library handle
- * @param[in] grid_desc cuDecomp grid descriptor
- * @param[out] config A pointer to a cuDecompGridDescConfig_t structure.
+ * @param[in] handle The initialized hipDecomp library handle
+ * @param[in] grid_desc hipDecomp grid descriptor
+ * @param[out] config A pointer to a hipDecompGridDescConfig_t structure.
  *
- * @return CUDECOMP_RESULT_SUCCESS on success or error code on failure.
+ * @return HIPDECOMP_RESULT_SUCCESS on success or error code on failure.
  */
-cudecompResult_t cudecompGetGridDescConfig(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
-                                           cudecompGridDescConfig_t* config);
+hipdecompResult_t hipdecompGetGridDescConfig(hipdecompHandle_t handle, hipdecompGridDesc_t grid_desc,
+                                             hipdecompGridDescConfig_t* config);
 
 /**
  * @brief Function to retrieve the global rank of neighboring processes
- * @param[in] handle The initialized cuDecomp library handle
- * @param[in] grid_desc A cuDecomp grid descriptor
+ * @param[in] handle The initialized hipDecomp library handle
+ * @param[in] grid_desc A hipDecomp grid descriptor
  * @param[in] axis The domain axis the pencil is aligned with
  * @param[in] dim Which pencil dimension (global indexed) to retrieve neighboring rank
  * @param[in] displacement Displacement of neighboring rank to retrieve. For example, 1 will retrieve the +1-th neighbor
@@ -421,21 +422,21 @@ cudecompResult_t cudecompGetGridDescConfig(cudecompHandle_t handle, cudecompGrid
  * @param[out] shifted_rank A pointer to an integer to write the global rank of the requested neighbor. For non-periodic
  * cases, a value of -1 will be written if the displacement results in a position outside the global domain.
  *
- * @return CUDECOMP_RESULT_SUCCESS on success or error code on failure.
+ * @return HIPDECOMP_RESULT_SUCCESS on success or error code on failure.
  */
-cudecompResult_t cudecompGetShiftedRank(cudecompHandle_t handle, cudecompGridDesc_t grid_desc, int32_t axis,
-                                        int32_t dim, int32_t displacement, bool periodic, int32_t* shifted_rank);
+hipdecompResult_t hipdecompGetShiftedRank(hipdecompHandle_t handle, hipdecompGridDesc_t grid_desc, int32_t axis,
+                                          int32_t dim, int32_t displacement, bool periodic, int32_t* shifted_rank);
 
 // Transpose functions
 /**
  * @brief Function to transpose data from X-axis aligned pencils to a Y-axis aligned pencils.
- * @param[in] handle The initialized cuDecomp library handle
- * @param[in] grid_desc A cuDecomp grid descriptor
+ * @param[in] handle The initialized hipDecomp library handle
+ * @param[in] grid_desc A hipDecomp grid descriptor
  * @param[in] input A pointer to the memory buffer to read input X-axis aligned pencil data
  * @param[out] output A pointer to the memory buffer to write output Y-axis aligned pencil data. If input and output are
  * the same, operation is performed in-place
  * @param[in] work A pointer to the transpose workspace memory
- * @param[in] dtype The cuDecomp datatype to use for the transpose operation
+ * @param[in] dtype The hipDecomp datatype to use for the transpose operation
  * @param[in] input_halo_extents An array of three integers to define halo region extents of the input data, in global
  * order. The i-th entry in this array should contain the number of halo elements (per direction) expected in the along
  * the i-th global domain axis. Symmetric halos are assumed (e.g. a value of one in halo_extents means there are 2 halo
@@ -449,22 +450,23 @@ cudecompResult_t cudecompGetShiftedRank(cudecompHandle_t handle, cudecompGridDes
  * pointer can be provided.
  * @param[in] stream CUDA stream to enqueue GPU operations into
  *
- * @return CUDECOMP_RESULT_SUCCESS on success or error code on failure.
+ * @return HIPDECOMP_RESULT_SUCCESS on success or error code on failure.
  */
-cudecompResult_t cudecompTransposeXToY(cudecompHandle_t handle, cudecompGridDesc_t grid_desc, void* input, void* output,
-                                       void* work, cudecompDataType_t dtype, const int32_t input_halo_extents[],
-                                       const int32_t output_halo_extents[], const int32_t input_padding[],
-                                       const int32_t output_padding[], hipStream_t stream);
+hipdecompResult_t hipdecompTransposeXToY(hipdecompHandle_t handle, hipdecompGridDesc_t grid_desc, void* input,
+                                         void* output, void* work, hipdecompDataType_t dtype,
+                                         const int32_t input_halo_extents[], const int32_t output_halo_extents[],
+                                         const int32_t input_padding[], const int32_t output_padding[],
+                                         hipStream_t stream);
 
 /**
  * @brief Function to transpose data from Y-axis aligned pencils to a Z-axis aligned pencils.
- * @param[in] handle The initialized cuDecomp library handle
- * @param[in] grid_desc A cuDecomp grid descriptor
+ * @param[in] handle The initialized hipDecomp library handle
+ * @param[in] grid_desc A hipDecomp grid descriptor
  * @param[in] input A pointer to the memory buffer to read input Y-axis aligned pencil data
  * @param[out] output A pointer to the memory buffer to write output Z-axis aligned pencil data. If input and output are
  * the same, operation is performed in-place
  * @param[in] work A pointer to the transpose workspace memory
- * @param[in] dtype The cuDecomp datatype to use for the transpose operation
+ * @param[in] dtype The hipDecomp datatype to use for the transpose operation
  * @param[in] input_halo_extents An array of three integers to define halo region extents of the input data, in global
  * order. The i-th entry in this array should contain the number of halo elements (per direction) expected in the along
  * the i-th global domain axis. Symmetric halos are assumed (e.g. a value of one in halo_extents means there are 2 halo
@@ -478,22 +480,23 @@ cudecompResult_t cudecompTransposeXToY(cudecompHandle_t handle, cudecompGridDesc
  * pointer can be provided.
  * @param[in] stream CUDA stream to enqueue GPU operations into
  *
- * @return CUDECOMP_RESULT_SUCCESS on success or error code on failure.
+ * @return HIPDECOMP_RESULT_SUCCESS on success or error code on failure.
  */
-cudecompResult_t cudecompTransposeYToZ(cudecompHandle_t handle, cudecompGridDesc_t grid_desc, void* input, void* output,
-                                       void* work, cudecompDataType_t dtype, const int32_t input_halo_extents[],
-                                       const int32_t output_halo_extents[], const int32_t input_padding[],
-                                       const int32_t output_padding[], hipStream_t stream);
+hipdecompResult_t hipdecompTransposeYToZ(hipdecompHandle_t handle, hipdecompGridDesc_t grid_desc, void* input,
+                                         void* output, void* work, hipdecompDataType_t dtype,
+                                         const int32_t input_halo_extents[], const int32_t output_halo_extents[],
+                                         const int32_t input_padding[], const int32_t output_padding[],
+                                         hipStream_t stream);
 
 /**
  * @brief Function to transpose data from Z-axis aligned pencils to a Y-axis aligned pencils.
- * @param[in] handle The initialized cuDecomp library handle
- * @param[in] grid_desc A cuDecomp grid descriptor
+ * @param[in] handle The initialized hipDecomp library handle
+ * @param[in] grid_desc A hipDecomp grid descriptor
  * @param[in] input A pointer to the memory buffer to read input Z-axis aligned pencil data
  * @param[out] output A pointer to the memory buffer to write output Y-axis aligned pencil data. If input and output are
  * the same, operation is performed in-place
  * @param[in] work A pointer to the transpose workspace memory
- * @param[in] dtype The cuDecomp datatype to use for the transpose operation
+ * @param[in] dtype The hipDecomp datatype to use for the transpose operation
  * @param[in] input_halo_extents An array of three integers to define halo region extents of the input data, in global
  * order. The i-th entry in this array should contain the number of halo elements (per direction) expected in the along
  * the i-th global domain axis. Symmetric halos are assumed (e.g. a value of one in halo_extents means there are 2 halo
@@ -507,22 +510,23 @@ cudecompResult_t cudecompTransposeYToZ(cudecompHandle_t handle, cudecompGridDesc
  * pointer can be provided.
  * @param[in] stream CUDA stream to enqueue GPU operations into
  *
- * @return CUDECOMP_RESULT_SUCCESS on success or error code on failure.
+ * @return HIPDECOMP_RESULT_SUCCESS on success or error code on failure.
  */
-cudecompResult_t cudecompTransposeZToY(cudecompHandle_t handle, cudecompGridDesc_t grid_desc, void* input, void* output,
-                                       void* work, cudecompDataType_t dtype, const int32_t input_halo_extents[],
-                                       const int32_t output_halo_extents[], const int32_t input_padding[],
-                                       const int32_t output_padding[], hipStream_t stream);
+hipdecompResult_t hipdecompTransposeZToY(hipdecompHandle_t handle, hipdecompGridDesc_t grid_desc, void* input,
+                                         void* output, void* work, hipdecompDataType_t dtype,
+                                         const int32_t input_halo_extents[], const int32_t output_halo_extents[],
+                                         const int32_t input_padding[], const int32_t output_padding[],
+                                         hipStream_t stream);
 
 /**
  * @brief Function to transpose data from Y-axis aligned pencils to a X-axis aligned pencils.
- * @param[in] handle The initialized cuDecomp library handle
- * @param[in] grid_desc A cuDecomp grid descriptor
+ * @param[in] handle The initialized hipDecomp library handle
+ * @param[in] grid_desc A hipDecomp grid descriptor
  * @param[in] input A pointer to the memory buffer to read input Y-axis aligned pencil data
  * @param[out] output A pointer to the memory buffer to write output X-axis aligned pencil data. If input and output are
  * the same, operation is performed in-place
  * @param[in] work A pointer to the transpose workspace memory
- * @param[in] dtype The cuDecomp datatype to use for the transpose operation
+ * @param[in] dtype The hipDecomp datatype to use for the transpose operation
  * @param[in] input_halo_extents An array of three integers to define halo region extents of the input data, in global
  * order. The i-th entry in this array should contain the number of halo elements (per direction) expected in the along
  * the i-th global domain axis. Symmetric halos are assumed (e.g. a value of one in halo_extents means there are 2 halo
@@ -536,22 +540,23 @@ cudecompResult_t cudecompTransposeZToY(cudecompHandle_t handle, cudecompGridDesc
  * pointer can be provided.
  * @param[in] stream CUDA stream to enqueue GPU operations into
  *
- * @return CUDECOMP_RESULT_SUCCESS on success or error code on failure.
+ * @return HIPDECOMP_RESULT_SUCCESS on success or error code on failure.
  */
-cudecompResult_t cudecompTransposeYToX(cudecompHandle_t handle, cudecompGridDesc_t grid_desc, void* input, void* output,
-                                       void* work, cudecompDataType_t dtype, const int32_t input_halo_extents[],
-                                       const int32_t output_halo_extents[], const int32_t input_padding[],
-                                       const int32_t output_padding[], hipStream_t stream);
+hipdecompResult_t hipdecompTransposeYToX(hipdecompHandle_t handle, hipdecompGridDesc_t grid_desc, void* input,
+                                         void* output, void* work, hipdecompDataType_t dtype,
+                                         const int32_t input_halo_extents[], const int32_t output_halo_extents[],
+                                         const int32_t input_padding[], const int32_t output_padding[],
+                                         hipStream_t stream);
 
 // Halo functions
 /**
  * @brief Function to perform halo communication of X-axis aligned pencil data
- * @param[in] handle The initialized cuDecomp library handle
- * @param[in] grid_desc A cuDecomp grid descriptor
+ * @param[in] handle The initialized hipDecomp library handle
+ * @param[in] grid_desc A hipDecomp grid descriptor
  * @param[in,out] input A pointer to the memory buffer to read input X-axis aligned pencil data. On successful
  * completion, this buffer will contain the input X-axis aligned pencil data with the specified halo regions updated.
  * @param[in] work A pointer to the halo workspace memory
- * @param[in] dtype The cuDecomp datatype to use for the halo operation
+ * @param[in] dtype The hipDecomp datatype to use for the halo operation
  * @param[in] halo_extents An array of three integers to define halo region extents of the input data, in global order.
  * The i-th entry in this array should contain the number of halo elements (per direction) expected in the along the
  * i-th global domain axis. Symmetric halos are assumed (e.g. a value of one in halo_extents means there are 2 halo
@@ -565,20 +570,21 @@ cudecompResult_t cudecompTransposeYToX(cudecompHandle_t handle, cudecompGridDesc
  * has no padding, a NULL pointer can be provided.
  * @param[in] stream CUDA stream to enqueue GPU operations into
  *
- * @return CUDECOMP_RESULT_SUCCESS on success or error code on failure.
+ * @return HIPDECOMP_RESULT_SUCCESS on success or error code on failure.
  */
-cudecompResult_t cudecompUpdateHalosX(cudecompHandle_t handle, cudecompGridDesc_t grid_desc, void* input, void* work,
-                                      cudecompDataType_t dtype, const int32_t halo_extents[], const bool halo_periods[],
-                                      int32_t dim, const int32_t padding[], hipStream_t stream);
+hipdecompResult_t hipdecompUpdateHalosX(hipdecompHandle_t handle, hipdecompGridDesc_t grid_desc, void* input,
+                                        void* work, hipdecompDataType_t dtype, const int32_t halo_extents[],
+                                        const bool halo_periods[], int32_t dim, const int32_t padding[],
+                                        hipStream_t stream);
 
 /**
  * @brief Function to perform halo communication of Y-axis aligned pencil data
- * @param[in] handle The initialized cuDecomp library handle
- * @param[in] grid_desc A cuDecomp grid descriptor
+ * @param[in] handle The initialized hipDecomp library handle
+ * @param[in] grid_desc A hipDecomp grid descriptor
  * @param[in,out] input A pointer to the memory buffer to read input Y-axis aligned pencil data. On successful
  * completion, this buffer will contain the input Y-axis aligned pencil data with the specified halo regions updated.
  * @param[in] work A pointer to the halo workspace memory
- * @param[in] dtype The cuDecomp datatype to use for the halo operation
+ * @param[in] dtype The hipDecomp datatype to use for the halo operation
  * @param[in] halo_extents An array of three integers to define halo region extents of the input data, in global order.
  * The i-th entry in this array should contain the number of halo elements (per direction) expected in the along the
  * i-th global domain axis. Symmetric halos are assumed (e.g. a value of one in halo_extents means there are 2 halo
@@ -591,20 +597,21 @@ cudecompResult_t cudecompUpdateHalosX(cudecompHandle_t handle, cudecompGridDesc_
  * has no padding, a NULL pointer can be provided.
  * @param[in] stream CUDA stream to enqueue GPU operations into
  *
- * @return CUDECOMP_RESULT_SUCCESS on success or error code on failure.
+ * @return HIPDECOMP_RESULT_SUCCESS on success or error code on failure.
  */
-cudecompResult_t cudecompUpdateHalosY(cudecompHandle_t handle, cudecompGridDesc_t grid_desc, void* input, void* work,
-                                      cudecompDataType_t dtype, const int32_t halo_extents[], const bool halo_periods[],
-                                      int32_t dim, const int32_t padding[], hipStream_t stream);
+hipdecompResult_t hipdecompUpdateHalosY(hipdecompHandle_t handle, hipdecompGridDesc_t grid_desc, void* input,
+                                        void* work, hipdecompDataType_t dtype, const int32_t halo_extents[],
+                                        const bool halo_periods[], int32_t dim, const int32_t padding[],
+                                        hipStream_t stream);
 
 /**
  * @brief Function to perform halo communication of Z-axis aligned pencil data
- * @param[in] handle The initialized cuDecomp library handle
- * @param[in] grid_desc A cuDecomp grid descriptor
+ * @param[in] handle The initialized hipDecomp library handle
+ * @param[in] grid_desc A hipDecomp grid descriptor
  * @param[in,out] input A pointer to the memory buffer to read input Z-axis aligned pencil data. On successful
  * completion, this buffer will contain the input Z-axis aligned pencil data with the specified halo regions updated.
  * @param[in] work A pointer to the halo workspace memory
- * @param[in] dtype The cuDecomp datatype to use for the halo operation
+ * @param[in] dtype The hipDecomp datatype to use for the halo operation
  * @param[in] halo_extents An array of three integers to define halo region extents of the input data, in global order.
  * The i-th entry in this array should contain the number of halo elements (per direction) expected in the along the
  * i-th global domain axis. Symmetric halos are assumed (e.g. a value of one in halo_extents means there are 2 halo
@@ -617,14 +624,15 @@ cudecompResult_t cudecompUpdateHalosY(cudecompHandle_t handle, cudecompGridDesc_
  * has no padding, a NULL pointer can be provided.
  * @param[in] stream CUDA stream to enqueue GPU operations into
  *
- * @return CUDECOMP_RESULT_SUCCESS on success or error code on failure.
+ * @return HIPDECOMP_RESULT_SUCCESS on success or error code on failure.
  */
-cudecompResult_t cudecompUpdateHalosZ(cudecompHandle_t handle, cudecompGridDesc_t grid_desc, void* input, void* work,
-                                      cudecompDataType_t dtype, const int32_t halo_extents[], const bool halo_periods[],
-                                      int32_t dim, const int32_t padding[], hipStream_t stream);
+hipdecompResult_t hipdecompUpdateHalosZ(hipdecompHandle_t handle, hipdecompGridDesc_t grid_desc, void* input,
+                                        void* work, hipdecompDataType_t dtype, const int32_t halo_extents[],
+                                        const bool halo_periods[], int32_t dim, const int32_t padding[],
+                                        hipStream_t stream);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif // CUDECOMP_H
+#endif // HIPDECOMP_H

@@ -9,7 +9,7 @@ set(benchmark_targets
 
 foreach(tgt ${benchmark_targets})
   add_executable(${tgt})
-  set_target_properties(${tgt} PROPERTIES CUDA_ARCHITECTURES "${CUDECOMP_HIP_ARCH_LIST}")
+  set_target_properties(${tgt} PROPERTIES CUDA_ARCHITECTURES "${HIPDECOMP_HIP_ARCH_LIST}")
   target_sources(${tgt}
     PRIVATE
     benchmark.cu

@@ -1,5 +1,6 @@
 /*
  * SPDX-FileCopyrightText: Copyright (c) 2022-2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2026 The Authors.
  * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -33,21 +34,21 @@
 
 #include <hipcub/hipcub.hpp>
 
-#include <cudecomp.h>
+#include <hipdecomp.h>
 
 #define PI (std::atan(1.0) * 4.0)
 
 // Error check macros
-#define CHECK_CUDECOMP_EXIT(call)                                                                                      \
+#define CHECK_HIPDECOMP_EXIT(call)                                                                                     \
   do {                                                                                                                 \
-    cudecompResult_t err = call;                                                                                       \
-    if (CUDECOMP_RESULT_SUCCESS != err) {                                                                              \
-      fprintf(stderr, "%s:%d CUDECOMP error. (error code %d)\n", __FILE__, __LINE__, err);                             \
+    hipdecompResult_t err = call;                                                                                      \
+    if (HIPDECOMP_RESULT_SUCCESS != err) {                                                                             \
+      fprintf(stderr, "%s:%d HIPDECOMP error. (error code %d)\n", __FILE__, __LINE__, err);                            \
       exit(EXIT_FAILURE);                                                                                              \
     }                                                                                                                  \
   } while (false)
 
-#define CHECK_CUDA_EXIT(call)                                                                                          \
+#define CHECK_HIP_EXIT(call)                                                                                           \
   do {                                                                                                                 \
     hipError_t err = call;                                                                                             \
     if (hipSuccess != err) {                                                                                           \
@@ -56,7 +57,7 @@
     }                                                                                                                  \
   } while (false)
 
-#define CHECK_CUDA_LAUNCH_EXIT()                                                                                       \
+#define CHECK_HIP_LAUNCH_EXIT()                                                                                        \
   do {                                                                                                                 \
     hipError_t err = hipGetLastError();                                                                                \
     if (hipSuccess != err) {                                                                                           \
@@ -81,7 +82,7 @@
     }                                                                                                                  \
   } while (false)
 
-#define CHECK_CUFFT_EXIT(call)                                                                                         \
+#define CHECK_HIPFFT_EXIT(call)                                                                                        \
   do {                                                                                                                 \
     hipfftResult_t err = call;                                                                                         \
     if (HIPFFT_SUCCESS != err) {                                                                                       \
@@ -100,17 +101,17 @@ static hipfftType get_cufft_type_c2r(float) { return HIPFFT_C2R; }
 static hipfftType get_cufft_type_c2c(double) { return HIPFFT_Z2Z; }
 static hipfftType get_cufft_type_c2c(float) { return HIPFFT_C2C; }
 
-static cudecompDataType_t get_cudecomp_datatype(float) { return CUDECOMP_FLOAT; }
-static cudecompDataType_t get_cudecomp_datatype(double) { return CUDECOMP_DOUBLE; }
-static cudecompDataType_t get_cudecomp_datatype(std::complex<float>) { return CUDECOMP_FLOAT_COMPLEX; }
-static cudecompDataType_t get_cudecomp_datatype(std::complex<double>) { return CUDECOMP_DOUBLE_COMPLEX; }
+static hipdecompDataType_t get_hipdecomp_datatype(float) { return HIPDECOMP_FLOAT; }
+static hipdecompDataType_t get_hipdecomp_datatype(double) { return HIPDECOMP_DOUBLE; }
+static hipdecompDataType_t get_hipdecomp_datatype(std::complex<float>) { return HIPDECOMP_FLOAT_COMPLEX; }
+static hipdecompDataType_t get_hipdecomp_datatype(std::complex<double>) { return HIPDECOMP_DOUBLE_COMPLEX; }
 
 static MPI_Datatype get_mpi_datatype(float) { return MPI_FLOAT; }
 static MPI_Datatype get_mpi_datatype(double) { return MPI_DOUBLE; }
 
 // CUDA kernels
 template <typename T, typename TS>
-__global__ static void scale(T* U0, T* U1, T* U2, TS scale_factor, cudecompPencilInfo_t info) {
+__global__ static void scale(T* U0, T* U1, T* U2, TS scale_factor, hipdecompPencilInfo_t info) {
 
   const int64_t i = blockIdx.x * blockDim.x + threadIdx.x;
   if (i >= info.size) return;
@@ -120,7 +121,7 @@ __global__ static void scale(T* U0, T* U1, T* U2, TS scale_factor, cudecompPenci
   U2[i] *= scale_factor;
 }
 
-__host__ __device__ __forceinline__ static void get_gx(const cudecompPencilInfo_t& info, int64_t i, int64_t gx[3]) {
+__host__ __device__ __forceinline__ static void get_gx(const hipdecompPencilInfo_t& info, int64_t i, int64_t gx[3]) {
   int64_t lx[3];
   // Compute pencil local coordinate
   lx[0] = i % info.shape[0];
@@ -141,7 +142,7 @@ __host__ __device__ __forceinline__ static void get_k(int64_t N, int64_t gx[3], 
 }
 
 __global__ static void initialize_U(real_t* U_r0, real_t* U_r1, real_t* U_r2, real_t dx, real_t dy, real_t dz,
-                                    cudecompPencilInfo_t info) {
+                                    hipdecompPencilInfo_t info) {
 
   const int64_t i = blockIdx.x * blockDim.x + threadIdx.x;
   if (i >= info.size) return;
@@ -164,7 +165,7 @@ __global__ static void initialize_U(real_t* U_r0, real_t* U_r1, real_t* U_r2, re
 }
 
 __global__ static void curl(const complex_t* Uh_c0, const complex_t* Uh_c1, const complex_t* Uh_c2, complex_t* dU_c0,
-                            complex_t* dU_c1, complex_t* dU_c2, int64_t N, cudecompPencilInfo_t info) {
+                            complex_t* dU_c1, complex_t* dU_c2, int64_t N, hipdecompPencilInfo_t info) {
 
   const int64_t i = blockIdx.x * blockDim.x + threadIdx.x;
   if (i >= info.size) return;
@@ -182,7 +183,7 @@ __global__ static void curl(const complex_t* Uh_c0, const complex_t* Uh_c1, cons
 }
 
 __global__ static void cross(const real_t* U_r0, const real_t* U_r1, const real_t* U_r2, real_t* dU_r0, real_t* dU_r1,
-                             real_t* dU_r2, int64_t N, cudecompPencilInfo_t info) {
+                             real_t* dU_r2, int64_t N, hipdecompPencilInfo_t info) {
 
   const int64_t i = blockIdx.x * blockDim.x + threadIdx.x;
   if (i >= info.size) return;
@@ -200,7 +201,7 @@ __global__ static void cross(const real_t* U_r0, const real_t* U_r1, const real_
 
 __global__ static void compute_dU(const complex_t* Uh_c0, const complex_t* Uh_c1, const complex_t* Uh_c2,
                                   complex_t* dU_c0, complex_t* dU_c1, complex_t* dU_c2, real_t kmax, int64_t N,
-                                  real_t nu, cudecompPencilInfo_t info) {
+                                  real_t nu, hipdecompPencilInfo_t info) {
 
   const int64_t i = blockIdx.x * blockDim.x + threadIdx.x;
   if (i >= info.size) return;
@@ -237,7 +238,7 @@ __global__ static void compute_dU(const complex_t* Uh_c0, const complex_t* Uh_c1
 
 __global__ static void update_Uh(const complex_t* dU_c0, const complex_t* dU_c1, const complex_t* dU_c2,
                                  complex_t* Uh0_c0, complex_t* Uh0_c1, complex_t* Uh0_c2, complex_t* Uh_c0,
-                                 complex_t* Uh_c1, complex_t* Uh_c2, real_t dt, cudecompPencilInfo_t info) {
+                                 complex_t* Uh_c1, complex_t* Uh_c2, real_t dt, hipdecompPencilInfo_t info) {
 
   const int64_t i = blockIdx.x * blockDim.x + threadIdx.x;
   if (i >= info.size) return;
@@ -247,7 +248,7 @@ __global__ static void update_Uh(const complex_t* dU_c0, const complex_t* dU_c1,
 }
 
 __global__ static void sumsq(int64_t N, const real_t* U_r0, const real_t* U_r1, const real_t* U_r2, real_t* sumsq,
-                             cudecompPencilInfo_t info) {
+                             hipdecompPencilInfo_t info) {
 
   const int64_t i = blockIdx.x * blockDim.x + threadIdx.x;
   if (i >= info.size) return;
@@ -269,7 +270,7 @@ __global__ static void sumsq(int64_t N, const real_t* U_r0, const real_t* U_r1, 
 }
 
 __global__ static void velmax(int64_t N, const real_t* U_r0, const real_t* U_r1, const real_t* U_r2, real_t* velmax,
-                              cudecompPencilInfo_t info) {
+                              hipdecompPencilInfo_t info) {
 
   const int64_t i = blockIdx.x * blockDim.x + threadIdx.x;
   if (i >= info.size) return;
@@ -292,7 +293,7 @@ __global__ static void velmax(int64_t N, const real_t* U_r0, const real_t* U_r1,
 }
 
 __global__ static void spectrum(const complex_t* Uh_c0, const complex_t* Uh_c1, const complex_t* Uh_c2, real_t* ek,
-                                int64_t N, cudecompPencilInfo_t info) {
+                                int64_t N, hipdecompPencilInfo_t info) {
 
   const int64_t i = blockIdx.x * blockDim.x + threadIdx.x;
   if (i >= info.size) return;
@@ -322,18 +323,18 @@ public:
   void finalize() {
     // Free memory
     for (int i = 0; i < 3; ++i) {
-      CHECK_CUDA_EXIT(hipFree(U[i]));
-      CHECK_CUDA_EXIT(hipFree(dU[i]));
+      CHECK_HIP_EXIT(hipFree(U[i]));
+      CHECK_HIP_EXIT(hipFree(dU[i]));
       free(U_cpu[i]);
     }
-    CHECK_CUDA_EXIT(hipFree(cub_sum));
-    CHECK_CUDA_EXIT(hipFree(cub_work));
+    CHECK_HIP_EXIT(hipFree(cub_sum));
+    CHECK_HIP_EXIT(hipFree(cub_work));
 
-    // Cleanup cudecomp resources
-    CHECK_CUDECOMP_EXIT(cudecompFree(handle, grid_desc_c, work));
-    CHECK_CUDECOMP_EXIT(cudecompGridDescDestroy(handle, grid_desc_r));
-    CHECK_CUDECOMP_EXIT(cudecompGridDescDestroy(handle, grid_desc_c));
-    CHECK_CUDECOMP_EXIT(cudecompFinalize(handle));
+    // Cleanup hipdecomp resources
+    CHECK_HIPDECOMP_EXIT(hipdecompFree(handle, grid_desc_c, work));
+    CHECK_HIPDECOMP_EXIT(hipdecompGridDescDestroy(handle, grid_desc_r));
+    CHECK_HIPDECOMP_EXIT(hipdecompGridDescDestroy(handle, grid_desc_c));
+    CHECK_HIPDECOMP_EXIT(hipdecompFinalize(handle));
   }
 
   void initialize(MPI_Comm mpi_comm_in = MPI_COMM_WORLD) {
@@ -347,84 +348,84 @@ public:
     CHECK_MPI_EXIT(MPI_Comm_rank(mpi_local_comm, &local_rank));
 
     int device_count;
-    CHECK_CUDA_EXIT(hipGetDeviceCount(&device_count));
-    CHECK_CUDA_EXIT(hipSetDevice(local_rank % device_count));
+    CHECK_HIP_EXIT(hipGetDeviceCount(&device_count));
+    CHECK_HIP_EXIT(hipSetDevice(local_rank % device_count));
 
     if (rank == 0) printf("running on %d x %d x %d spatial grid...\n", (int)N, (int)N, (int)N);
 
-    // Initialize cuDecomp
-    cudecompInit(&handle, mpi_comm);
+    // Initialize hipDecomp
+    hipdecompInit(&handle, mpi_comm);
 
     // Setup grid descriptors, autotuning of process grid and backend selection
-    cudecompGridDescConfig_t config;
-    cudecompGridDescConfigSetDefaults(&config);
+    hipdecompGridDescConfig_t config;
+    hipdecompGridDescConfigSetDefaults(&config);
     config.pdims[0] = 0;
     config.pdims[1] = 0;
     config.transpose_axis_contiguous[0] = true;
     config.transpose_axis_contiguous[1] = true;
     config.transpose_axis_contiguous[2] = true;
 
-    cudecompGridDescAutotuneOptions_t options;
-    cudecompGridDescAutotuneOptionsSetDefaults(&options);
-    options.dtype = get_cudecomp_datatype(complex_t(0));
+    hipdecompGridDescAutotuneOptions_t options;
+    hipdecompGridDescAutotuneOptionsSetDefaults(&options);
+    options.dtype = get_hipdecomp_datatype(complex_t(0));
     options.autotune_transpose_backend = true;
 
     std::array<int, 3> gdim_c{(int)N / 2 + 1, (int)N, (int)N};
     config.gdims[0] = gdim_c[0];
     config.gdims[1] = gdim_c[1];
     config.gdims[2] = gdim_c[2];
-    cudecompGridDescCreate(handle, &grid_desc_c, &config, &options);
+    hipdecompGridDescCreate(handle, &grid_desc_c, &config, &options);
 
     std::array<int, 3> gdim_r{((int)N / 2 + 1) * 2, (int)N, (int)N}; // with padding for in-place operation
     config.gdims[0] = gdim_r[0];
     config.gdims[1] = gdim_r[1];
     config.gdims[2] = gdim_r[2];
-    cudecompGridDescCreate(handle, &grid_desc_r, &config, nullptr);
+    hipdecompGridDescCreate(handle, &grid_desc_r, &config, nullptr);
 
     // Get x-pencil information (real)
-    cudecompGetPencilInfo(handle, grid_desc_r, &pinfo_x_r, 0, nullptr, nullptr);
+    hipdecompGetPencilInfo(handle, grid_desc_r, &pinfo_x_r, 0, nullptr, nullptr);
 
     // Get x-pencil information (complex)
-    cudecompGetPencilInfo(handle, grid_desc_c, &pinfo_x_c, 0, nullptr, nullptr);
+    hipdecompGetPencilInfo(handle, grid_desc_c, &pinfo_x_c, 0, nullptr, nullptr);
 
     // Get y-pencil information (complex)
-    cudecompGetPencilInfo(handle, grid_desc_c, &pinfo_y_c, 1, nullptr, nullptr);
+    hipdecompGetPencilInfo(handle, grid_desc_c, &pinfo_y_c, 1, nullptr, nullptr);
 
     // Get z-pencil information (complex)
-    cudecompGetPencilInfo(handle, grid_desc_c, &pinfo_z_c, 2, nullptr, nullptr);
+    hipdecompGetPencilInfo(handle, grid_desc_c, &pinfo_z_c, 2, nullptr, nullptr);
 
     // Get workspace size (only complex workspace required)
     int64_t num_elements_work_c;
-    cudecompGetTransposeWorkspaceSize(handle, grid_desc_c, &num_elements_work_c);
+    hipdecompGetTransposeWorkspaceSize(handle, grid_desc_c, &num_elements_work_c);
 
     // Setup cuFFT
     // x-axis real-to-complex
-    CHECK_CUFFT_EXIT(hipfftCreate(&cufft_plan_r2c_x));
-    CHECK_CUFFT_EXIT(hipfftSetAutoAllocation(cufft_plan_r2c_x, 0));
+    CHECK_HIPFFT_EXIT(hipfftCreate(&cufft_plan_r2c_x));
+    CHECK_HIPFFT_EXIT(hipfftSetAutoAllocation(cufft_plan_r2c_x, 0));
     size_t work_sz_r2c_x;
-    CHECK_CUFFT_EXIT(hipfftMakePlan1d(cufft_plan_r2c_x, N, get_cufft_type_r2c(real_t(0)),
-                                      pinfo_x_r.shape[1] * pinfo_x_r.shape[2], &work_sz_r2c_x));
+    CHECK_HIPFFT_EXIT(hipfftMakePlan1d(cufft_plan_r2c_x, N, get_cufft_type_r2c(real_t(0)),
+                                       pinfo_x_r.shape[1] * pinfo_x_r.shape[2], &work_sz_r2c_x));
 
     // x-axis complex-to-real
-    CHECK_CUFFT_EXIT(hipfftCreate(&cufft_plan_c2r_x));
-    CHECK_CUFFT_EXIT(hipfftSetAutoAllocation(cufft_plan_c2r_x, 0));
+    CHECK_HIPFFT_EXIT(hipfftCreate(&cufft_plan_c2r_x));
+    CHECK_HIPFFT_EXIT(hipfftSetAutoAllocation(cufft_plan_c2r_x, 0));
     size_t work_sz_c2r_x;
-    CHECK_CUFFT_EXIT(hipfftMakePlan1d(cufft_plan_c2r_x, N, get_cufft_type_c2r(real_t(0)),
-                                      pinfo_x_c.shape[1] * pinfo_x_c.shape[2], &work_sz_c2r_x));
+    CHECK_HIPFFT_EXIT(hipfftMakePlan1d(cufft_plan_c2r_x, N, get_cufft_type_c2r(real_t(0)),
+                                       pinfo_x_c.shape[1] * pinfo_x_c.shape[2], &work_sz_c2r_x));
 
     // y-axis complex-to-complex
-    CHECK_CUFFT_EXIT(hipfftCreate(&cufft_plan_c2c_y));
-    CHECK_CUFFT_EXIT(hipfftSetAutoAllocation(cufft_plan_c2c_y, 0));
+    CHECK_HIPFFT_EXIT(hipfftCreate(&cufft_plan_c2c_y));
+    CHECK_HIPFFT_EXIT(hipfftSetAutoAllocation(cufft_plan_c2c_y, 0));
     size_t work_sz_c2c_y;
-    CHECK_CUFFT_EXIT(hipfftMakePlan1d(cufft_plan_c2c_y, N, get_cufft_type_c2c(real_t(0)),
-                                      pinfo_y_c.shape[1] * pinfo_y_c.shape[2], &work_sz_c2c_y));
+    CHECK_HIPFFT_EXIT(hipfftMakePlan1d(cufft_plan_c2c_y, N, get_cufft_type_c2c(real_t(0)),
+                                       pinfo_y_c.shape[1] * pinfo_y_c.shape[2], &work_sz_c2c_y));
 
     // z-axis complex-to-complex
-    CHECK_CUFFT_EXIT(hipfftCreate(&cufft_plan_c2c_z));
-    CHECK_CUFFT_EXIT(hipfftSetAutoAllocation(cufft_plan_c2c_z, 0));
+    CHECK_HIPFFT_EXIT(hipfftCreate(&cufft_plan_c2c_z));
+    CHECK_HIPFFT_EXIT(hipfftSetAutoAllocation(cufft_plan_c2c_z, 0));
     size_t work_sz_c2c_z;
-    CHECK_CUFFT_EXIT(hipfftMakePlan1d(cufft_plan_c2c_z, N, get_cufft_type_c2c(real_t(0)),
-                                      pinfo_z_c.shape[1] * pinfo_z_c.shape[2], &work_sz_c2c_z));
+    CHECK_HIPFFT_EXIT(hipfftMakePlan1d(cufft_plan_c2c_z, N, get_cufft_type_c2c(real_t(0)),
+                                       pinfo_z_c.shape[1] * pinfo_z_c.shape[2], &work_sz_c2c_z));
 
     // Allocate data arrays
     int64_t data_sz =
@@ -435,20 +436,20 @@ public:
     int64_t work_sz = std::max(work_sz_decomp, work_sz_cufft);
 
     // Workspace array
-    CHECK_CUDECOMP_EXIT(cudecompMalloc(handle, grid_desc_c, &work, work_sz));
+    CHECK_HIPDECOMP_EXIT(hipdecompMalloc(handle, grid_desc_c, &work, work_sz));
     work_r = static_cast<real_t*>(work);
     work_c = static_cast<complex_t*>(work);
 
     // Assign cuFFT work area
-    CHECK_CUFFT_EXIT(hipfftSetWorkArea(cufft_plan_r2c_x, work));
-    CHECK_CUFFT_EXIT(hipfftSetWorkArea(cufft_plan_c2c_y, work));
-    CHECK_CUFFT_EXIT(hipfftSetWorkArea(cufft_plan_c2c_z, work));
-    CHECK_CUFFT_EXIT(hipfftSetWorkArea(cufft_plan_c2r_x, work));
+    CHECK_HIPFFT_EXIT(hipfftSetWorkArea(cufft_plan_r2c_x, work));
+    CHECK_HIPFFT_EXIT(hipfftSetWorkArea(cufft_plan_c2c_y, work));
+    CHECK_HIPFFT_EXIT(hipfftSetWorkArea(cufft_plan_c2c_z, work));
+    CHECK_HIPFFT_EXIT(hipfftSetWorkArea(cufft_plan_c2r_x, work));
 
     // Data arrays
     for (int i = 0; i < 3; ++i) {
-      CHECK_CUDA_EXIT(hipMalloc(&U[i], data_sz));
-      CHECK_CUDA_EXIT(hipMalloc(&dU[i], data_sz));
+      CHECK_HIP_EXIT(hipMalloc(&U[i], data_sz));
+      CHECK_HIP_EXIT(hipMalloc(&dU[i], data_sz));
       U_cpu[i] = malloc(data_sz);
       U_r[i] = static_cast<real_t*>(U[i]);
       U_c[i] = static_cast<complex_t*>(U[i]);
@@ -459,12 +460,12 @@ public:
     }
 
     // Set up CUB arrays
-    CHECK_CUDA_EXIT(hipMallocManaged(&cub_sum, sizeof(real_t)));
+    CHECK_HIP_EXIT(hipMallocManaged(&cub_sum, sizeof(real_t)));
     size_t cub_work_sz_sum, cub_work_sz_max;
-    CHECK_CUDA_EXIT(hipcub::DeviceReduce::Sum(cub_work, cub_work_sz_sum, U_r[0], cub_sum, pinfo_x_r.size));
-    CHECK_CUDA_EXIT(hipcub::DeviceReduce::Max(cub_work, cub_work_sz_max, U_r[0], cub_sum, pinfo_x_r.size));
+    CHECK_HIP_EXIT(hipcub::DeviceReduce::Sum(cub_work, cub_work_sz_sum, U_r[0], cub_sum, pinfo_x_r.size));
+    CHECK_HIP_EXIT(hipcub::DeviceReduce::Max(cub_work, cub_work_sz_max, U_r[0], cub_sum, pinfo_x_r.size));
     cub_work_sz = std::max(cub_work_sz_sum, cub_work_sz_max);
-    CHECK_CUDA_EXIT(hipMalloc(&cub_work, cub_work_sz));
+    CHECK_HIP_EXIT(hipMalloc(&cub_work, cub_work_sz));
 
     // Set timestepping variables
     switch (tscheme) {
@@ -485,7 +486,7 @@ public:
     Uh_c.resize(rk_b.size());
     for (int n = 0; n < rk_b.size(); ++n) {
       for (int i = 0; i < 3; ++i) {
-        CHECK_CUDA_EXIT(hipMalloc(&Uh[n][i], data_sz));
+        CHECK_HIP_EXIT(hipMalloc(&Uh[n][i], data_sz));
         Uh_r[n][i] = static_cast<real_t*>(Uh[n][i]);
         Uh_c[n][i] = static_cast<complex_t*>(Uh[n][i]);
       }
@@ -493,26 +494,26 @@ public:
 
     // Spectrum
     int num_shells = int(std::sqrt(9 * N * N + 4 * N + 4) / 4) + 1;
-    CHECK_CUDA_EXIT(hipMallocManaged(&ek, num_shells * sizeof(real_t)));
+    CHECK_HIP_EXIT(hipMallocManaged(&ek, num_shells * sizeof(real_t)));
 
     // Initialize U (physical space)
     real_t dx = 2 * PI / N;
     real_t dy = 2 * PI / N;
     real_t dz = 2 * PI / N;
     initialize_U<<<(pinfo_x_r.size + 256 - 1) / 256, 256>>>(U_r[0], U_r[1], U_r[2], dx, dy, dz, pinfo_x_r);
-    CHECK_CUDA_LAUNCH_EXIT();
+    CHECK_HIP_LAUNCH_EXIT();
 
     // Compute initial Uh (transformed U)
     for (int i = 0; i < 3; ++i) {
-      CHECK_CUDA_EXIT(hipMemcpy(Uh_r[0][i], U_r[i], pinfo_x_r.size * sizeof(*U_r[i]), hipMemcpyDeviceToDevice));
+      CHECK_HIP_EXIT(hipMemcpy(Uh_r[0][i], U_r[i], pinfo_x_r.size * sizeof(*U_r[i]), hipMemcpyDeviceToDevice));
     }
     forward(Uh_r[0], Uh_c[0]);
 
-    CHECK_CUDA_EXIT(hipDeviceSynchronize());
+    CHECK_HIP_EXIT(hipDeviceSynchronize());
 
     // Scale up initial U by N^3 as solver expects this
     scale<<<(pinfo_x_r.size + 256 - 1) / 256, 256>>>(U_r[0], U_r[1], U_r[2], N * N * N, pinfo_x_r);
-    CHECK_CUDA_LAUNCH_EXIT();
+    CHECK_HIP_LAUNCH_EXIT();
   }
 
   void step() {
@@ -531,15 +532,15 @@ public:
     // Recompute curl and transform to physical space (z-pencil -> x-pencil).
     curl<<<(pinfo_z_c.size + 256 - 1) / 256, 256>>>(Uh_c[0][0], Uh_c[0][1], Uh_c[0][2], dU_c[0], dU_c[1], dU_c[2], N,
                                                     pinfo_z_c);
-    CHECK_CUDA_LAUNCH_EXIT();
+    CHECK_HIP_LAUNCH_EXIT();
 
     backward(dU_c, dU_r);
 
     sumsq<<<(pinfo_x_r.size + 256 - 1) / 256, 256>>>(N, dU_r[0], dU_r[1], dU_r[2], dU_r[0], pinfo_x_r);
-    CHECK_CUDA_LAUNCH_EXIT();
+    CHECK_HIP_LAUNCH_EXIT();
 
-    CHECK_CUDA_EXIT(hipcub::DeviceReduce::Sum(cub_work, cub_work_sz, dU_r[0], cub_sum, pinfo_x_r.size));
-    CHECK_CUDA_EXIT(hipDeviceSynchronize());
+    CHECK_HIP_EXIT(hipcub::DeviceReduce::Sum(cub_work, cub_work_sz, dU_r[0], cub_sum, pinfo_x_r.size));
+    CHECK_HIP_EXIT(hipDeviceSynchronize());
 
     double enst = 0.5 * (*cub_sum) / (N * N * N);
     if (nranks > 1) {
@@ -548,10 +549,10 @@ public:
 
     // Compute kinetic energy
     sumsq<<<(pinfo_x_r.size + 256 - 1) / 256, 256>>>(N, U_r[0], U_r[1], U_r[2], dU_r[0], pinfo_x_r);
-    CHECK_CUDA_LAUNCH_EXIT();
+    CHECK_HIP_LAUNCH_EXIT();
 
-    CHECK_CUDA_EXIT(hipcub::DeviceReduce::Sum(cub_work, cub_work_sz, dU_r[0], cub_sum, pinfo_x_r.size));
-    CHECK_CUDA_EXIT(hipDeviceSynchronize());
+    CHECK_HIP_EXIT(hipcub::DeviceReduce::Sum(cub_work, cub_work_sz, dU_r[0], cub_sum, pinfo_x_r.size));
+    CHECK_HIP_EXIT(hipDeviceSynchronize());
 
     double ke = 0.5 * (*cub_sum) / (N * N * N);
     if (nranks > 1) {
@@ -583,10 +584,10 @@ public:
   void write_spectrum_sample(int idx) {
     // Compute spectrum per rank
     int num_shells = int(std::sqrt(9 * N * N + 4 * N + 4) / 4) + 1;
-    CHECK_CUDA_EXIT(hipMemset(ek, 0, num_shells * sizeof(real_t)));
+    CHECK_HIP_EXIT(hipMemset(ek, 0, num_shells * sizeof(real_t)));
     spectrum<<<(pinfo_z_c.size + 256 - 1) / 256, 256>>>(Uh_c[0][0], Uh_c[0][1], Uh_c[0][2], ek, N, pinfo_z_c);
-    CHECK_CUDA_LAUNCH_EXIT();
-    CHECK_CUDA_EXIT(hipDeviceSynchronize());
+    CHECK_HIP_LAUNCH_EXIT();
+    CHECK_HIP_EXIT(hipDeviceSynchronize());
 
     if (nranks > 1) {
       CHECK_MPI_EXIT(MPI_Reduce((rank == 0) ? MPI_IN_PLACE : ek, ek, num_shells, get_mpi_datatype(real_t(0)), MPI_SUM,
@@ -613,9 +614,9 @@ public:
   void write_solution(std::string prefix) {
     // Copy solution to host
     for (int i = 0; i < 3; ++i) {
-      CHECK_CUDA_EXIT(hipMemcpy(U_cpu_r[i], U_r[i], pinfo_x_r.size * sizeof(*U_r[i]), hipMemcpyDeviceToHost));
+      CHECK_HIP_EXIT(hipMemcpy(U_cpu_r[i], U_r[i], pinfo_x_r.size * sizeof(*U_r[i]), hipMemcpyDeviceToHost));
     }
-    CHECK_CUDA_EXIT(hipDeviceSynchronize());
+    CHECK_HIP_EXIT(hipDeviceSynchronize());
 
     std::string fname;
     fname = prefix + "_" + std::to_string(rank) + ".csv";
@@ -646,25 +647,25 @@ public:
 private:
   void forward(std::array<real_t*, 3>& U_r, std::array<complex_t*, 3>& U_c) {
     for (int i = 0; i < 3; ++i) {
-      CHECK_CUFFT_EXIT(hipfftXtExec(cufft_plan_r2c_x, U_r[i], U_c[i], HIPFFT_FORWARD));
-      cudecompTransposeXToY(handle, grid_desc_c, U_c[i], U_c[i], work_c, get_cudecomp_datatype(complex_t(0)), nullptr,
-                            nullptr, nullptr, nullptr, 0);
-      CHECK_CUFFT_EXIT(hipfftXtExec(cufft_plan_c2c_y, U_c[i], U_c[i], HIPFFT_FORWARD));
-      cudecompTransposeYToZ(handle, grid_desc_c, U_c[i], U_c[i], work_c, get_cudecomp_datatype(complex_t(0)), nullptr,
-                            nullptr, nullptr, nullptr, 0);
-      CHECK_CUFFT_EXIT(hipfftXtExec(cufft_plan_c2c_z, U_c[i], U_c[i], HIPFFT_FORWARD));
+      CHECK_HIPFFT_EXIT(hipfftXtExec(cufft_plan_r2c_x, U_r[i], U_c[i], HIPFFT_FORWARD));
+      hipdecompTransposeXToY(handle, grid_desc_c, U_c[i], U_c[i], work_c, get_hipdecomp_datatype(complex_t(0)), nullptr,
+                             nullptr, nullptr, nullptr, 0);
+      CHECK_HIPFFT_EXIT(hipfftXtExec(cufft_plan_c2c_y, U_c[i], U_c[i], HIPFFT_FORWARD));
+      hipdecompTransposeYToZ(handle, grid_desc_c, U_c[i], U_c[i], work_c, get_hipdecomp_datatype(complex_t(0)), nullptr,
+                             nullptr, nullptr, nullptr, 0);
+      CHECK_HIPFFT_EXIT(hipfftXtExec(cufft_plan_c2c_z, U_c[i], U_c[i], HIPFFT_FORWARD));
     }
   }
 
   void backward(std::array<complex_t*, 3>& U_c, std::array<real_t*, 3>& U_r) {
     for (int i = 0; i < 3; ++i) {
-      CHECK_CUFFT_EXIT(hipfftXtExec(cufft_plan_c2c_z, U_c[i], U_c[i], HIPFFT_BACKWARD));
-      cudecompTransposeZToY(handle, grid_desc_c, U_c[i], U_c[i], work_c, get_cudecomp_datatype(complex_t(0)), nullptr,
-                            nullptr, nullptr, nullptr, 0);
-      CHECK_CUFFT_EXIT(hipfftXtExec(cufft_plan_c2c_y, U_c[i], U_c[i], HIPFFT_BACKWARD));
-      cudecompTransposeYToX(handle, grid_desc_c, U_c[i], U_c[i], work_c, get_cudecomp_datatype(complex_t(0)), nullptr,
-                            nullptr, nullptr, nullptr, 0);
-      CHECK_CUFFT_EXIT(hipfftXtExec(cufft_plan_c2r_x, U_c[i], U_r[i], HIPFFT_BACKWARD));
+      CHECK_HIPFFT_EXIT(hipfftXtExec(cufft_plan_c2c_z, U_c[i], U_c[i], HIPFFT_BACKWARD));
+      hipdecompTransposeZToY(handle, grid_desc_c, U_c[i], U_c[i], work_c, get_hipdecomp_datatype(complex_t(0)), nullptr,
+                             nullptr, nullptr, nullptr, 0);
+      CHECK_HIPFFT_EXIT(hipfftXtExec(cufft_plan_c2c_y, U_c[i], U_c[i], HIPFFT_BACKWARD));
+      hipdecompTransposeYToX(handle, grid_desc_c, U_c[i], U_c[i], work_c, get_hipdecomp_datatype(complex_t(0)), nullptr,
+                             nullptr, nullptr, nullptr, 0);
+      CHECK_HIPFFT_EXIT(hipfftXtExec(cufft_plan_c2r_x, U_c[i], U_r[i], HIPFFT_BACKWARD));
     }
   }
 
@@ -672,13 +673,13 @@ private:
 
     // Compute curl and transform to physical space (z-pencil -> x-pencil)
     curl<<<(pinfo_z_c.size + 256 - 1) / 256, 256>>>(Uh_c[0], Uh_c[1], Uh_c[2], dU_c[0], dU_c[1], dU_c[2], N, pinfo_z_c);
-    CHECK_CUDA_LAUNCH_EXIT();
+    CHECK_HIP_LAUNCH_EXIT();
 
     backward(dU_c, dU_r);
 
     // Compute cross and transform to frequency space (x-pencil -> z-pencil)
     cross<<<(pinfo_x_r.size + 256 - 1) / 256, 256>>>(U_r[0], U_r[1], U_r[2], dU_r[0], dU_r[1], dU_r[2], N, pinfo_x_r);
-    CHECK_CUDA_LAUNCH_EXIT();
+    CHECK_HIP_LAUNCH_EXIT();
 
     forward(dU_r, dU_c);
 
@@ -686,7 +687,7 @@ private:
     real_t kmax = 2.0 / 3.0 * (N / 2 + 1); // aliasing limit
     compute_dU<<<(pinfo_z_c.size + 256 - 1) / 256, 256>>>(Uh_c[0], Uh_c[1], Uh_c[2], dU_c[0], dU_c[1], dU_c[2], kmax, N,
                                                           nu, pinfo_z_c);
-    CHECK_CUDA_LAUNCH_EXIT();
+    CHECK_HIP_LAUNCH_EXIT();
   }
 
   // Forward Euler (z-pencil)
@@ -694,12 +695,12 @@ private:
     compute_rhs(Uh_c[0]);
     update_Uh<<<(pinfo_z_c.size + 256 - 1) / 256, 256>>>(dU_c[0], dU_c[1], dU_c[2], Uh_c[0][0], Uh_c[0][1], Uh_c[0][2],
                                                          Uh_c[0][0], Uh_c[0][1], Uh_c[0][2], dt_, pinfo_z_c);
-    CHECK_CUDA_LAUNCH_EXIT();
+    CHECK_HIP_LAUNCH_EXIT();
 
     // Get physical U (z-pencil -> x-pencil)
     // Copy Uh to U (cuFFT C2R clobbers input, need to make copy)
     for (int i = 0; i < 3; ++i) {
-      CHECK_CUDA_EXIT(hipMemcpy(U_c[i], Uh_c[0][i], pinfo_z_c.size * sizeof(*U_c[i]), hipMemcpyDeviceToDevice));
+      CHECK_HIP_EXIT(hipMemcpy(U_c[i], Uh_c[0][i], pinfo_z_c.size * sizeof(*U_c[i]), hipMemcpyDeviceToDevice));
     }
     backward(U_c, U_r);
   }
@@ -708,7 +709,7 @@ private:
   void update_rk4() {
     // Copy initial Uh
     for (int i = 0; i < 3; ++i) {
-      CHECK_CUDA_EXIT(hipMemcpy(Uh_c[1][i], Uh_c[0][i], pinfo_z_c.size * sizeof(*Uh_c[0][i]), hipMemcpyDeviceToDevice));
+      CHECK_HIP_EXIT(hipMemcpy(Uh_c[1][i], Uh_c[0][i], pinfo_z_c.size * sizeof(*Uh_c[0][i]), hipMemcpyDeviceToDevice));
     }
 
     // Run RK stages
@@ -718,12 +719,12 @@ private:
         update_Uh<<<(pinfo_z_c.size + 256 - 1) / 256, 256>>>(dU_c[0], dU_c[1], dU_c[2], Uh_c[0][0], Uh_c[0][1],
                                                              Uh_c[0][2], Uh_c[1][0], Uh_c[1][1], Uh_c[1][2],
                                                              rk_b[i] * dt_, pinfo_z_c);
-        CHECK_CUDA_LAUNCH_EXIT();
+        CHECK_HIP_LAUNCH_EXIT();
 
         // Get physical U (z-pencil -> x-pencil)
         // Copy Uh to U (cuFFT C2R clobbers input, need to make copy)
         for (int i = 0; i < 3; ++i) {
-          CHECK_CUDA_EXIT(hipMemcpy(U_c[i], Uh_c[1][i], pinfo_z_c.size * sizeof(*U_c[i]), hipMemcpyDeviceToDevice));
+          CHECK_HIP_EXIT(hipMemcpy(U_c[i], Uh_c[1][i], pinfo_z_c.size * sizeof(*U_c[i]), hipMemcpyDeviceToDevice));
         }
         backward(U_c, U_r);
       }
@@ -733,37 +734,37 @@ private:
         update_Uh<<<(pinfo_z_c.size + 256 - 1) / 256, 256>>>(dU_c[0], dU_c[1], dU_c[2], Uh_c[0][0], Uh_c[0][1],
                                                              Uh_c[0][2], Uh_c[2][0], Uh_c[2][1], Uh_c[2][2],
                                                              rk_a[i] * dt_, pinfo_z_c);
-        CHECK_CUDA_LAUNCH_EXIT();
+        CHECK_HIP_LAUNCH_EXIT();
       } else if (i == 3) {
         // Last stage: assign to Uh_c[0]
         update_Uh<<<(pinfo_z_c.size + 256 - 1) / 256, 256>>>(dU_c[0], dU_c[1], dU_c[2], Uh_c[2][0], Uh_c[2][1],
                                                              Uh_c[2][2], Uh_c[0][0], Uh_c[0][1], Uh_c[0][2],
                                                              rk_a[i] * dt_, pinfo_z_c);
-        CHECK_CUDA_LAUNCH_EXIT();
+        CHECK_HIP_LAUNCH_EXIT();
       } else {
         // Middle stages: accumulate in Uh_c[2]
         update_Uh<<<(pinfo_z_c.size + 256 - 1) / 256, 256>>>(dU_c[0], dU_c[1], dU_c[2], Uh_c[2][0], Uh_c[2][1],
                                                              Uh_c[2][2], Uh_c[2][0], Uh_c[2][1], Uh_c[2][2],
                                                              rk_a[i] * dt_, pinfo_z_c);
-        CHECK_CUDA_LAUNCH_EXIT();
+        CHECK_HIP_LAUNCH_EXIT();
       }
     }
 
     // Get physical U (z-pencil -> x-pencil)
     // Copy Uh to U (cuFFT C2R clobbers input, need to make copy)
     for (int i = 0; i < 3; ++i) {
-      CHECK_CUDA_EXIT(hipMemcpy(U_c[i], Uh_c[0][i], pinfo_z_c.size * sizeof(*U_c[i]), hipMemcpyDeviceToDevice));
+      CHECK_HIP_EXIT(hipMemcpy(U_c[i], Uh_c[0][i], pinfo_z_c.size * sizeof(*U_c[i]), hipMemcpyDeviceToDevice));
     }
     backward(U_c, U_r);
   }
 
   real_t get_dt(real_t cfl) {
     velmax<<<(pinfo_x_r.size + 256 - 1) / 256, 256>>>(N, U_r[0], U_r[1], U_r[2], dU_r[0], pinfo_x_r);
-    CHECK_CUDA_LAUNCH_EXIT();
+    CHECK_HIP_LAUNCH_EXIT();
 
-    CHECK_CUDA_EXIT(hipcub::DeviceReduce::Max(cub_work, cub_work_sz, dU_r[0], cub_sum, pinfo_x_r.size));
+    CHECK_HIP_EXIT(hipcub::DeviceReduce::Max(cub_work, cub_work_sz, dU_r[0], cub_sum, pinfo_x_r.size));
     ;
-    CHECK_CUDA_EXIT(hipDeviceSynchronize());
+    CHECK_HIP_EXIT(hipDeviceSynchronize());
     real_t velmax = *cub_sum;
     if (nranks > 1) {
       CHECK_MPI_EXIT(MPI_Allreduce(MPI_IN_PLACE, &velmax, 1, get_mpi_datatype(velmax), MPI_MAX, mpi_comm));
@@ -786,14 +787,14 @@ private:
   MPI_Comm mpi_comm, mpi_local_comm;
   bool should_finalize_mpi = false;
 
-  // cuDecomp
-  cudecompHandle_t handle;
-  cudecompGridDesc_t grid_desc_r; // real grid
-  cudecompGridDesc_t grid_desc_c; // complex grid
-  cudecompPencilInfo_t pinfo_x_r;
-  cudecompPencilInfo_t pinfo_x_c;
-  cudecompPencilInfo_t pinfo_y_c;
-  cudecompPencilInfo_t pinfo_z_c;
+  // hipDecomp
+  hipdecompHandle_t handle;
+  hipdecompGridDesc_t grid_desc_r; // real grid
+  hipdecompGridDesc_t grid_desc_c; // complex grid
+  hipdecompPencilInfo_t pinfo_x_r;
+  hipdecompPencilInfo_t pinfo_x_c;
+  hipdecompPencilInfo_t pinfo_y_c;
+  hipdecompPencilInfo_t pinfo_z_c;
 
   // cuFFT
   hipfftHandle cufft_plan_r2c_x;
@@ -937,7 +938,7 @@ int main(int argc, char** argv) {
   if (specfreq > 0) solver.write_spectrum_sample(0);
 
   // Run simulation
-  CHECK_CUDA_EXIT(hipDeviceSynchronize());
+  CHECK_HIP_EXIT(hipDeviceSynchronize());
   CHECK_MPI_EXIT(MPI_Barrier(MPI_COMM_WORLD));
   double ts = MPI_Wtime();
   double ts_step = MPI_Wtime();
@@ -950,13 +951,13 @@ int main(int argc, char** argv) {
     count++;
 
     if (i > 0 && (i + 1) % printfreq == 0) {
-      CHECK_CUDA_EXIT(hipDeviceSynchronize());
+      CHECK_HIP_EXIT(hipDeviceSynchronize());
       CHECK_MPI_EXIT(MPI_Barrier(MPI_COMM_WORLD));
       double te_step = MPI_Wtime();
       if (rank == 0) printf("Average iteration time: %f ms\n", (te_step - ts_step) * 1000 / count);
       count = 0;
       solver.print_stats(logfile);
-      CHECK_CUDA_EXIT(hipDeviceSynchronize());
+      CHECK_HIP_EXIT(hipDeviceSynchronize());
       CHECK_MPI_EXIT(MPI_Barrier(MPI_COMM_WORLD));
       ts_step = MPI_Wtime();
     }
@@ -971,7 +972,7 @@ int main(int argc, char** argv) {
     i++;
   }
 
-  CHECK_CUDA_EXIT(hipDeviceSynchronize());
+  CHECK_HIP_EXIT(hipDeviceSynchronize());
   CHECK_MPI_EXIT(MPI_Barrier(MPI_COMM_WORLD));
   double te = MPI_Wtime();
   if (rank == 0) printf("Simulation time: %f s\n", te - ts);
@@ -981,6 +982,6 @@ int main(int argc, char** argv) {
 
   solver.finalize();
 
-  CHECK_CUDA_EXIT(hipDeviceSynchronize());
+  CHECK_HIP_EXIT(hipDeviceSynchronize());
   CHECK_MPI_EXIT(MPI_Finalize());
 }

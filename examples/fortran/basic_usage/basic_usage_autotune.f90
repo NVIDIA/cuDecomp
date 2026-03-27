@@ -13,20 +13,20 @@
 ! See the License for the specific language governing permissions and
 ! limitations under the License.
 
-! Simple subroutine to check cuDecomp errors
-subroutine CHECK_CUDECOMP_EXIT(istat)
-  use cudecomp
+! Simple subroutine to check hipDecomp errors
+subroutine CHECK_HIPDECOMP_EXIT(istat)
+  use hipdecomp
   integer :: istat
-  if (istat /= CUDECOMP_RESULT_SUCCESS) then
-    print*, "CUDECOMP Error. Exiting."
+  if (istat /= HIPDECOMP_RESULT_SUCCESS) then
+    print*, "HIPDECOMP Error. Exiting."
     call exit(1)
   endif
-end subroutine CHECK_CUDECOMP_EXIT
+end subroutine CHECK_HIPDECOMP_EXIT
 
 program main
   use cudafor
   use mpi
-  use cudecomp
+  use hipdecomp
   use, intrinsic :: iso_fortran_env, only: real64
 
   implicit none
@@ -35,12 +35,12 @@ program main
   integer :: rank, local_rank, nranks, ierr
   integer :: local_comm
 
-  ! cudecomp
-  type(cudecompHandle) :: handle
-  type(cudecompGridDescConfig) :: config
-  type(cudecompGridDescAutotuneOptions) :: options
-  type(cudecompGridDesc) :: grid_desc
-  type(cudecompPencilInfo) :: pinfo_x, pinfo_y, pinfo_z
+  ! hipdecomp
+  type(hipdecompHandle) :: handle
+  type(hipdecompGridDescConfig) :: config
+  type(hipdecompGridDescAutotuneOptions) :: options
+  type(hipdecompGridDesc) :: grid_desc
+  type(hipdecompPencilInfo) :: pinfo_x, pinfo_y, pinfo_z
   integer :: istat
 
   ! data
@@ -55,7 +55,7 @@ program main
   integer :: i, j, k
   integer :: gx(3)
 
-  ! Initialize MPI and start up cuDecomp
+  ! Initialize MPI and start up hipDecomp
   call MPI_Init(ierr)
   call MPI_Comm_rank(MPI_COMM_WORLD, rank, ierr)
   call MPI_Comm_size(MPI_COMM_WORLD, nranks, ierr)
@@ -64,35 +64,35 @@ program main
   call MPI_Comm_rank(local_comm, local_rank, ierr)
   ierr = cudaSetDevice(local_rank)
 
-  istat = cudecompInit(handle, MPI_COMM_WORLD)
-  call CHECK_CUDECOMP_EXIT(istat)
+  istat = hipdecompInit(handle, MPI_COMM_WORLD)
+  call CHECK_HIPDECOMP_EXIT(istat)
 
-  ! Create cuDecomp grid descriptor
-  istat = cudecompGridDescConfigSetDefaults(config)
-  call CHECK_CUDECOMP_EXIT(istat)
+  ! Create hipDecomp grid descriptor
+  istat = hipdecompGridDescConfigSetDefaults(config)
+  call CHECK_HIPDECOMP_EXIT(istat)
   ! Set pdims entries to 0 to enable process grid autotuning
   config%pdims = [0, 0] ! [P_rows, P_cols]
   config%gdims = [64, 64, 64] ! [X, Y, Z]
 
-  config%transpose_comm_backend = CUDECOMP_TRANSPOSE_COMM_MPI_P2P
-  config%halo_comm_backend = CUDECOMP_HALO_COMM_MPI
+  config%transpose_comm_backend = HIPDECOMP_TRANSPOSE_COMM_MPI_P2P
+  config%halo_comm_backend = HIPDECOMP_HALO_COMM_MPI
 
   config%transpose_axis_contiguous = [.true., .true., .true.]
 
   ! Set up autotune options structure
-  istat = cudecompGridDescAutotuneOptionsSetDefaults(options)
-  call CHECK_CUDECOMP_EXIT(istat)
+  istat = hipdecompGridDescAutotuneOptionsSetDefaults(options)
+  call CHECK_HIPDECOMP_EXIT(istat)
 
   ! General options
   options%n_warmup_trials = 3
   options%n_trials = 5
-  options%dtype = CUDECOMP_DOUBLE
+  options%dtype = HIPDECOMP_DOUBLE
   options%disable_nccl_backends = .false.
   options%disable_nvshmem_backends = .false.
   options%skip_threshold = 0.0
 
   ! Process grid autotuning options
-  options%grid_mode = CUDECOMP_AUTOTUNE_GRID_TRANSPOSE
+  options%grid_mode = HIPDECOMP_AUTOTUNE_GRID_TRANSPOSE
   options%allow_uneven_decompositions = .true.
 
   ! Transpose communication backend autotuning options
@@ -117,32 +117,32 @@ program main
 
   options%halo_periods = [.true., .true., .true.]
 
-  istat = cudecompGridDescCreate(handle, grid_desc, config, options)
-  call CHECK_CUDECOMP_EXIT(istat)
+  istat = hipdecompGridDescCreate(handle, grid_desc, config, options)
+  call CHECK_HIPDECOMP_EXIT(istat)
 
   ! Print information on configuration (updated by autotuner)
   if (rank == 0) then
     write(*,"('running on ', i0, ' x ', i0, ' process grid ...')") config%pdims(1), config%pdims(2)
     write(*,"('running using ', a, ' transpose backend ...')") &
-              cudecompTransposeCommBackendToString(config%transpose_comm_backend)
+              hipdecompTransposeCommBackendToString(config%transpose_comm_backend)
     write(*,"('running using ', a, ' halo backend ...')") &
-              cudecompHaloCommBackendToString(config%halo_comm_backend)
+              hipdecompHaloCommBackendToString(config%halo_comm_backend)
   endif
 
   ! Allocating pencil memory
 
   ! Get X-pencil information (with halo elements)
-  istat = cudecompGetPencilInfo(handle, grid_desc, pinfo_x, 1, [1, 1, 1])
-  call CHECK_CUDECOMP_EXIT(istat)
+  istat = hipdecompGetPencilInfo(handle, grid_desc, pinfo_x, 1, [1, 1, 1])
+  call CHECK_HIPDECOMP_EXIT(istat)
 
 
   ! Get Y-pencil information
-  istat = cudecompGetPencilInfo(handle, grid_desc, pinfo_y, 2)
-  call CHECK_CUDECOMP_EXIT(istat)
+  istat = hipdecompGetPencilInfo(handle, grid_desc, pinfo_y, 2)
+  call CHECK_HIPDECOMP_EXIT(istat)
 
   ! Get Z-pencil information
-  istat = cudecompGetPencilInfo(handle, grid_desc, pinfo_z, 3)
-  call CHECK_CUDECOMP_EXIT(istat)
+  istat = hipdecompGetPencilInfo(handle, grid_desc, pinfo_z, 3)
+  call CHECK_HIPDECOMP_EXIT(istat)
 
   ! Allocate pencil memory
   data_num_elements = max(pinfo_x%size, pinfo_y%size, pinfo_z%size)
@@ -220,39 +220,39 @@ program main
     enddo
   enddo
 
-  ! Allocating cuDecomp workspace
+  ! Allocating hipDecomp workspace
 
   ! Get workspace sizes
-  istat = cudecompGetTransposeWorkspaceSize(handle, grid_desc, transpose_work_num_elements)
-  call CHECK_CUDECOMP_EXIT(istat)
-  istat = cudecompGetHaloWorkspaceSize(handle, grid_desc, 1, [1,1,1], halo_work_num_elements)
-  call CHECK_CUDECOMP_EXIT(istat)
+  istat = hipdecompGetTransposeWorkspaceSize(handle, grid_desc, transpose_work_num_elements)
+  call CHECK_HIPDECOMP_EXIT(istat)
+  istat = hipdecompGetHaloWorkspaceSize(handle, grid_desc, 1, [1,1,1], halo_work_num_elements)
+  call CHECK_HIPDECOMP_EXIT(istat)
 
-  ! Allocate using cudecompMalloc
-  ! Note: *_work_d arrays are of type consistent with cudecompDataType to be used (CUDECOMP_DOUBLE). Otherwise,
+  ! Allocate using hipdecompMalloc
+  ! Note: *_work_d arrays are of type consistent with hipdecompDataType to be used (HIPDECOMP_DOUBLE). Otherwise,
   ! must adjust workspace_num_elements to allocate enough workspace.
-  istat = cudecompMalloc(handle, grid_desc, transpose_work_d, transpose_work_num_elements)
-  call CHECK_CUDECOMP_EXIT(istat)
-  istat = cudecompMalloc(handle, grid_desc, halo_work_d, halo_work_num_elements)
-  call CHECK_CUDECOMP_EXIT(istat)
+  istat = hipdecompMalloc(handle, grid_desc, transpose_work_d, transpose_work_num_elements)
+  call CHECK_HIPDECOMP_EXIT(istat)
+  istat = hipdecompMalloc(handle, grid_desc, halo_work_d, halo_work_num_elements)
+  call CHECK_HIPDECOMP_EXIT(istat)
 
   ! Transposing data
 
   ! Transpose from X-pencils to Y-pencils.
-  istat = cudecompTransposeXToY(handle, grid_desc, data_d, data_d, transpose_work_d, CUDECOMP_DOUBLE, pinfo_x%halo_extents, [0,0,0])
-  call CHECK_CUDECOMP_EXIT(istat)
+  istat = hipdecompTransposeXToY(handle, grid_desc, data_d, data_d, transpose_work_d, HIPDECOMP_DOUBLE, pinfo_x%halo_extents, [0,0,0])
+  call CHECK_HIPDECOMP_EXIT(istat)
 
   ! Transpose from Y-pencils to Z-pencils.
-  istat = cudecompTransposeYToZ(handle, grid_desc, data_d, data_d, transpose_work_d, CUDECOMP_DOUBLE)
-  call CHECK_CUDECOMP_EXIT(istat)
+  istat = hipdecompTransposeYToZ(handle, grid_desc, data_d, data_d, transpose_work_d, HIPDECOMP_DOUBLE)
+  call CHECK_HIPDECOMP_EXIT(istat)
 
   ! Transpose from Z-pencils to Y-pencils.
-  istat = cudecompTransposeZToY(handle, grid_desc, data_d, data_d, transpose_work_d, CUDECOMP_DOUBLE)
-  call CHECK_CUDECOMP_EXIT(istat)
+  istat = hipdecompTransposeZToY(handle, grid_desc, data_d, data_d, transpose_work_d, HIPDECOMP_DOUBLE)
+  call CHECK_HIPDECOMP_EXIT(istat)
 
   ! Transpose from Y-pencils to X-pencils.
-  istat = cudecompTransposeYToX(handle, grid_desc, data_d, data_d, transpose_work_d, CUDECOMP_DOUBLE, [0,0,0], pinfo_x%halo_extents)
-  call CHECK_CUDECOMP_EXIT(istat)
+  istat = hipdecompTransposeYToX(handle, grid_desc, data_d, data_d, transpose_work_d, HIPDECOMP_DOUBLE, [0,0,0], pinfo_x%halo_extents)
+  call CHECK_HIPDECOMP_EXIT(istat)
 
 
   ! Updating halos
@@ -261,28 +261,28 @@ program main
   halo_periods = [.true., .true., .true.]
 
   ! Update X-pencil halos in X direction
-  istat = cudecompUpdateHalosX(handle, grid_desc, data_d, halo_work_d, CUDECOMP_DOUBLE, pinfo_x%halo_extents, halo_periods, 1)
-  call CHECK_CUDECOMP_EXIT(istat)
+  istat = hipdecompUpdateHalosX(handle, grid_desc, data_d, halo_work_d, HIPDECOMP_DOUBLE, pinfo_x%halo_extents, halo_periods, 1)
+  call CHECK_HIPDECOMP_EXIT(istat)
 
   ! Update X-pencil halos in Y direction
-  istat = cudecompUpdateHalosX(handle, grid_desc, data_d, halo_work_d, CUDECOMP_DOUBLE, pinfo_x%halo_extents, halo_periods, 2)
-  call CHECK_CUDECOMP_EXIT(istat)
+  istat = hipdecompUpdateHalosX(handle, grid_desc, data_d, halo_work_d, HIPDECOMP_DOUBLE, pinfo_x%halo_extents, halo_periods, 2)
+  call CHECK_HIPDECOMP_EXIT(istat)
 
   ! Update X-pencil halos in Z direction
-  istat = cudecompUpdateHalosX(handle, grid_desc, data_d, halo_work_d, CUDECOMP_DOUBLE, pinfo_x%halo_extents, halo_periods, 3)
-  call CHECK_CUDECOMP_EXIT(istat)
+  istat = hipdecompUpdateHalosX(handle, grid_desc, data_d, halo_work_d, HIPDECOMP_DOUBLE, pinfo_x%halo_extents, halo_periods, 3)
+  call CHECK_HIPDECOMP_EXIT(istat)
 
   ! Cleanup resources
   deallocate(data)
   deallocate(data_d)
-  istat = cudecompFree(handle, grid_desc, transpose_work_d)
-  call CHECK_CUDECOMP_EXIT(istat)
-  istat = cudecompFree(handle, grid_desc, halo_work_d)
-  call CHECK_CUDECOMP_EXIT(istat)
-  istat = cudecompGridDescDestroy(handle, grid_desc)
-  call CHECK_CUDECOMP_EXIT(istat)
-  istat = cudecompFinalize(handle)
-  call CHECK_CUDECOMP_EXIT(istat)
+  istat = hipdecompFree(handle, grid_desc, transpose_work_d)
+  call CHECK_HIPDECOMP_EXIT(istat)
+  istat = hipdecompFree(handle, grid_desc, halo_work_d)
+  call CHECK_HIPDECOMP_EXIT(istat)
+  istat = hipdecompGridDescDestroy(handle, grid_desc)
+  call CHECK_HIPDECOMP_EXIT(istat)
+  istat = hipdecompFinalize(handle)
+  call CHECK_HIPDECOMP_EXIT(istat)
 
   call MPI_Finalize(ierr)
 

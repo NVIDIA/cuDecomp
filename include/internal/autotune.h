@@ -1,5 +1,6 @@
 /*
  * SPDX-FileCopyrightText: Copyright (c) 2022-2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2026 The Authors.
  * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,16 +16,16 @@
  * limitations under the License.
  */
 
-#ifndef CUDECOMP_AUTOTUNE_H
-#define CUDECOMP_AUTOTUNE_H
+#ifndef HIPDECOMP_AUTOTUNE_H
+#define HIPDECOMP_AUTOTUNE_H
 
-#include "cudecomp.h"
+#include "hipdecomp.h"
 
-namespace cudecomp {
-void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
-                              const cudecompGridDescAutotuneOptions_t* options);
-void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
-                         const cudecompGridDescAutotuneOptions_t* options);
-} // namespace cudecomp
+namespace hipdecomp {
+void autotuneTransposeBackend(hipdecompHandle_t handle, hipdecompGridDesc_t grid_desc,
+                              const hipdecompGridDescAutotuneOptions_t* options);
+void autotuneHaloBackend(hipdecompHandle_t handle, hipdecompGridDesc_t grid_desc,
+                         const hipdecompGridDescAutotuneOptions_t* options);
+} // namespace hipdecomp
 
-#endif // CUDECOMP_AUTOTUNE_H
+#endif // HIPDECOMP_AUTOTUNE_H
