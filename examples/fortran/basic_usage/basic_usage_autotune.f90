@@ -62,7 +62,7 @@ program main
 
   call MPI_Comm_split_Type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL, local_comm, ierr)
   call MPI_Comm_rank(local_comm, local_rank, ierr)
-  ierr = cudaSetDevice(local_rank)
+  ierr = hipSetDevice(local_rank)
 
   istat = hipdecompInit(handle, MPI_COMM_WORLD)
   call CHECK_HIPDECOMP_EXIT(istat)

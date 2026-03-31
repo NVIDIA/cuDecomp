@@ -26,9 +26,9 @@
 ! on domain 0 <= x <= 1, 0 <= y <= 1
 
 program main
-  use cudafor
+  use hipfor
   use hipdecomp
-  use cufft
+  use hipfft
   use mpi
 
   implicit none
@@ -72,7 +72,7 @@ program main
   type(hipdecompPencilInfo) :: piX, piY, piZ
   integer(8) :: nElemX, nElemY, nElemZ, nElemWork
 
-  ! CUFFT
+  ! HIPFFT
   integer :: planX, planY, planZ
   integer :: batchsize
   integer :: status
@@ -94,7 +94,7 @@ program main
   if (ierr /= MPI_SUCCESS) write(*,*) 'mpi_comm_split_type failed: ', ierr
   call mpi_comm_rank(localComm, localRank, ierr)
   if (ierr /= MPI_SUCCESS) write(*,*) 'mpi_comm_rank on local rank failed: ', ierr
-  ierr = cudaSetDevice(localRank)
+  ierr = hipSetDevice(localRank)
 
   ! Parse command-line arguments
   nx = 64
@@ -189,19 +189,19 @@ program main
   ! get workspace size
   CHECK_HIPDECOMP_EXIT(hipdecompGetTransposeWorkspaceSize(handle, grid_desc, nElemWork))
 
-  ! CUFFT initialization
+  ! HIPFFT initialization
 
   batchSize = piX%shape(2)*piX%shape(3)
-  status = cufftPlan1D(planX, nx, CUFFT_Z2Z, batchSize)
-  if (status /= CUFFT_SUCCESS) write(*,*) rank, ': Error in creating X plan'
+  status = hipfftPlan1D(planX, nx, HIPFFT_Z2Z, batchSize)
+  if (status /= HIPFFT_SUCCESS) write(*,*) rank, ': Error in creating X plan'
 
   batchSize = piY%shape(2)*piY%shape(3)
-  status = cufftPlan1D(planY, ny, CUFFT_Z2Z, batchSize)
-  if (status /= CUFFT_SUCCESS) write(*,*) rank, ': Error in creating Y plan'
+  status = hipfftPlan1D(planY, ny, HIPFFT_Z2Z, batchSize)
+  if (status /= HIPFFT_SUCCESS) write(*,*) rank, ': Error in creating Y plan'
 
   batchSize = piZ%shape(2)*piZ%shape(3)
-  status = cufftPlan1D(planZ, nz, CUFFT_Z2Z, batchSize)
-  if (status /= CUFFT_SUCCESS) write(*,*) rank, ': Error in creating Z plan'
+  status = hipfftPlan1D(planZ, nz, HIPFFT_Z2Z, batchSize)
+  if (status /= HIPFFT_SUCCESS) write(*,*) rank, ': Error in creating Z plan'
 
 
   ! Physical grid
@@ -283,18 +283,18 @@ program main
   phi_d = phi
 
   ! phi(x,y,z) -> phi(kx,y,z)
-  status = cufftExecZ2Z(planX, phi_d, phi_d, CUFFT_FORWARD)
-  if (status /= CUFFT_SUCCESS) write(*,*) 'X forward error: ', status
+  status = hipfftExecZ2Z(planX, phi_d, phi_d, HIPFFT_FORWARD)
+  if (status /= HIPFFT_SUCCESS) write(*,*) 'X forward error: ', status
   ! phi(kx,y,z) -> phi(y,z,kx)
   CHECK_HIPDECOMP_EXIT(hipdecompTransposeXToY(handle, grid_desc, phi_d, phi_d, work_d, HIPDECOMP_DOUBLE_COMPLEX))
   ! phi(y,z,kx) -> phi(ky,z,kx)
-  status = cufftExecZ2Z(planY, phi_d, phi_d, CUFFT_FORWARD)
-  if (status /= CUFFT_SUCCESS) write(*,*) 'Y forward error: ', status
+  status = hipfftExecZ2Z(planY, phi_d, phi_d, HIPFFT_FORWARD)
+  if (status /= HIPFFT_SUCCESS) write(*,*) 'Y forward error: ', status
   ! phi(ky,z,kx) -> phi(z,kx,ky)
   CHECK_HIPDECOMP_EXIT(hipdecompTransposeYToZ(handle, grid_desc, phi_d, phi_d, work_d, HIPDECOMP_DOUBLE_COMPLEX))
   ! phi(z,kx,ky) -> phi(kz,kx,ky)
-  status = cufftExecZ2Z(planZ, phi_d, phi_d, CUFFT_FORWARD)
-  if (status /= CUFFT_SUCCESS) write(*,*) 'Z forward error: ', status
+  status = hipfftExecZ2Z(planZ, phi_d, phi_d, HIPFFT_FORWARD)
+  if (status /= HIPFFT_SUCCESS) write(*,*) 'Z forward error: ', status
 
   block
     complex(8), device, pointer :: phi3d(:,:,:)
@@ -339,18 +339,18 @@ program main
   end block
 
   ! phi(kz,kx,ky) -> phi(z,kx,ky)
-  status = cufftExecZ2Z(planZ, phi_d, phi_d, CUFFT_INVERSE)
-  if (status /= CUFFT_SUCCESS) write(*,*) 'Z inverse error: ', status
+  status = hipfftExecZ2Z(planZ, phi_d, phi_d, HIPFFT_INVERSE)
+  if (status /= HIPFFT_SUCCESS) write(*,*) 'Z inverse error: ', status
   ! phi(z,kx,ky) -> phi(ky,z,kx)
   CHECK_HIPDECOMP_EXIT(hipdecompTransposeZToY(handle, grid_desc, phi_d, phi_d, work_d, HIPDECOMP_DOUBLE_COMPLEX))
   ! phi(ky,z,kx) -> phi(y,z,kx)
-  status = cufftExecZ2Z(planY, phi_d, phi_d, CUFFT_INVERSE)
-  if (status /= CUFFT_SUCCESS) write(*,*) 'Y inverse error: ', status
+  status = hipfftExecZ2Z(planY, phi_d, phi_d, HIPFFT_INVERSE)
+  if (status /= HIPFFT_SUCCESS) write(*,*) 'Y inverse error: ', status
   ! phi(y,z,kx) -> phi(kx,y,z)
   CHECK_HIPDECOMP_EXIT(hipdecompTransposeYToX(handle, grid_desc, phi_d, phi_d, work_d, HIPDECOMP_DOUBLE_COMPLEX))
   ! phi(kx,y,z) -> phi(x,y,z)
-  status = cufftExecZ2Z(planX, phi_d, phi_d, CUFFT_INVERSE)
-  if (status /= CUFFT_SUCCESS) write(*,*) 'X inverse error: ', status
+  status = hipfftExecZ2Z(planX, phi_d, phi_d, HIPFFT_INVERSE)
+  if (status /= HIPFFT_SUCCESS) write(*,*) 'X inverse error: ', status
 
   phi = phi_d
 
@@ -380,12 +380,12 @@ program main
 
   ! cleanup
 
-  status = cufftDestroy(planX)
-  if (status /= CUFFT_SUCCESS) write(*,*) 'X plan destroy: ', status
-  status = cufftDestroy(planY)
-  if (status /= CUFFT_SUCCESS) write(*,*) 'Y plan destroy: ', status
-  status = cufftDestroy(planZ)
-  if (status /= CUFFT_SUCCESS) write(*,*) 'Z plan destroy: ', status
+  status = hipfftDestroy(planX)
+  if (status /= HIPFFT_SUCCESS) write(*,*) 'X plan destroy: ', status
+  status = hipfftDestroy(planY)
+  if (status /= HIPFFT_SUCCESS) write(*,*) 'Y plan destroy: ', status
+  status = hipfftDestroy(planZ)
+  if (status /= HIPFFT_SUCCESS) write(*,*) 'Z plan destroy: ', status
 
   deallocate(x, y, z)
   deallocate(kx, ky, kz)

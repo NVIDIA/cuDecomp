@@ -29,17 +29,17 @@ using complex_t = std::complex<real_t>;
 
 #ifdef USE_FLOAT
 #ifdef R2C
-static hipfftType get_cufft_type_r2c(float) { return HIPFFT_R2C; }
-static hipfftType get_cufft_type_c2r(float) { return HIPFFT_C2R; }
+static hipfftType get_hipfft_type_r2c(float) { return HIPFFT_R2C; }
+static hipfftType get_hipfft_type_c2r(float) { return HIPFFT_C2R; }
 #endif
-static hipfftType get_cufft_type_c2c(float) { return HIPFFT_C2C; }
+static hipfftType get_hipfft_type_c2c(float) { return HIPFFT_C2C; }
 static hipdecompDataType_t get_hipdecomp_datatype(std::complex<float>) { return HIPDECOMP_FLOAT_COMPLEX; }
 #else
 #ifdef R2C
-static hipfftType get_cufft_type_r2c(double) { return HIPFFT_D2Z; }
-static hipfftType get_cufft_type_c2r(double) { return HIPFFT_Z2D; }
+static hipfftType get_hipfft_type_r2c(double) { return HIPFFT_D2Z; }
+static hipfftType get_hipfft_type_c2r(double) { return HIPFFT_Z2D; }
 #endif
-static hipfftType get_cufft_type_c2c(double) { return HIPFFT_Z2Z; }
+static hipfftType get_hipfft_type_c2c(double) { return HIPFFT_Z2Z; }
 static hipdecompDataType_t get_hipdecomp_datatype(std::complex<double>) { return HIPDECOMP_DOUBLE_COMPLEX; }
 
 #endif
@@ -290,67 +290,67 @@ int main(int argc, char** argv) {
   int64_t num_elements_work_c;
   CHECK_HIPDECOMP_EXIT(hipdecompGetTransposeWorkspaceSize(handle, grid_desc_c, &num_elements_work_c));
 
-  // Setup cuFFT
+  // Setup hipfft
   bool slab_xy = false;
   bool slab_yz = false;
   bool slab_xyz = false;
 #ifdef R2C
   // x-axis real-to-complex
-  hipfftHandle cufft_plan_r2c_x;
-  CHECK_HIPFFT_EXIT(hipfftCreate(&cufft_plan_r2c_x));
-  CHECK_HIPFFT_EXIT(hipfftSetAutoAllocation(cufft_plan_r2c_x, 0));
+  hipfftHandle hipfft_plan_r2c_x;
+  CHECK_HIPFFT_EXIT(hipfftCreate(&hipfft_plan_r2c_x));
+  CHECK_HIPFFT_EXIT(hipfftSetAutoAllocation(hipfft_plan_r2c_x, 0));
   size_t work_sz_r2c_x = 0;
 
   // x-axis complex-to-real
-  hipfftHandle cufft_plan_c2r_x;
-  CHECK_HIPFFT_EXIT(hipfftCreate(&cufft_plan_c2r_x));
-  CHECK_HIPFFT_EXIT(hipfftSetAutoAllocation(cufft_plan_c2r_x, 0));
+  hipfftHandle hipfft_plan_c2r_x;
+  CHECK_HIPFFT_EXIT(hipfftCreate(&hipfft_plan_c2r_x));
+  CHECK_HIPFFT_EXIT(hipfftSetAutoAllocation(hipfft_plan_c2r_x, 0));
   size_t work_sz_c2r_x = 0;
 
   if (!no_slab_opt && config.pdims[0] == 1 && config.pdims[1] == 1) {
     // single rank, x-y-z slab: use 3D FFT
     slab_xyz = true;
-    CHECK_HIPFFT_EXIT(hipfftMakePlan3d(cufft_plan_r2c_x, gx, gy, gz, get_cufft_type_r2c(real_t(0)), &work_sz_r2c_x));
-    CHECK_HIPFFT_EXIT(hipfftMakePlan3d(cufft_plan_c2r_x, gx, gy, gz, get_cufft_type_c2r(real_t(0)), &work_sz_c2r_x));
+    CHECK_HIPFFT_EXIT(hipfftMakePlan3d(hipfft_plan_r2c_x, gx, gy, gz, get_hipfft_type_r2c(real_t(0)), &work_sz_r2c_x));
+    CHECK_HIPFFT_EXIT(hipfftMakePlan3d(hipfft_plan_c2r_x, gx, gy, gz, get_hipfft_type_c2r(real_t(0)), &work_sz_c2r_x));
   } else if (!no_slab_opt && config.pdims[0] == 1) {
     // x-y slab: use 2D FFT
     slab_xy = true;
     std::array<int, 2> n{gx, gy};
-    CHECK_HIPFFT_EXIT(hipfftMakePlanMany(cufft_plan_r2c_x, 2, n.data(), nullptr, 1,
+    CHECK_HIPFFT_EXIT(hipfftMakePlanMany(hipfft_plan_r2c_x, 2, n.data(), nullptr, 1,
                                         pinfo_x_r.shape[0] * pinfo_x_r.shape[1], nullptr, 1,
-                                        pinfo_x_c.shape[0] * pinfo_x_c.shape[1], get_cufft_type_r2c(real_t(0)),
+                                        pinfo_x_c.shape[0] * pinfo_x_c.shape[1], get_hipfft_type_r2c(real_t(0)),
                                         pinfo_x_r.shape[2], &work_sz_r2c_x));
-    CHECK_HIPFFT_EXIT(hipfftMakePlanMany(cufft_plan_c2r_x, 2, n.data(), nullptr, 1,
+    CHECK_HIPFFT_EXIT(hipfftMakePlanMany(hipfft_plan_c2r_x, 2, n.data(), nullptr, 1,
                                         pinfo_x_c.shape[0] * pinfo_x_c.shape[1], nullptr, 1,
-                                        pinfo_x_r.shape[0] * pinfo_x_r.shape[1], get_cufft_type_c2r(real_t(0)),
+                                        pinfo_x_r.shape[0] * pinfo_x_r.shape[1], get_hipfft_type_c2r(real_t(0)),
                                         pinfo_x_c.shape[2], &work_sz_c2r_x));
   } else {
-    CHECK_HIPFFT_EXIT(hipfftMakePlan1d(cufft_plan_r2c_x, gx, get_cufft_type_r2c(real_t(0)),
+    CHECK_HIPFFT_EXIT(hipfftMakePlan1d(hipfft_plan_r2c_x, gx, get_hipfft_type_r2c(real_t(0)),
                                       pinfo_x_r.shape[1] * pinfo_x_r.shape[2], &work_sz_r2c_x));
-    CHECK_HIPFFT_EXIT(hipfftMakePlan1d(cufft_plan_c2r_x, gx, get_cufft_type_c2r(real_t(0)),
+    CHECK_HIPFFT_EXIT(hipfftMakePlan1d(hipfft_plan_c2r_x, gx, get_hipfft_type_c2r(real_t(0)),
                                       pinfo_x_c.shape[1] * pinfo_x_c.shape[2], &work_sz_c2r_x));
   }
 #else
   // x-axis complex-to-complex
-  hipfftHandle cufft_plan_c2c_x;
-  CHECK_HIPFFT_EXIT(hipfftCreate(&cufft_plan_c2c_x));
-  CHECK_HIPFFT_EXIT(hipfftSetAutoAllocation(cufft_plan_c2c_x, 0));
+  hipfftHandle hipfft_plan_c2c_x;
+  CHECK_HIPFFT_EXIT(hipfftCreate(&hipfft_plan_c2c_x));
+  CHECK_HIPFFT_EXIT(hipfftSetAutoAllocation(hipfft_plan_c2c_x, 0));
   size_t work_sz_c2c_x = 0;
 
   if (!no_slab_opt && config.pdims[0] == 1 && config.pdims[1] == 1) {
     // single rank, x-y-z slab: use 3D FFT
     slab_xyz = true;
-    CHECK_HIPFFT_EXIT(hipfftMakePlan3d(cufft_plan_c2c_x, gx, gy, gz, get_cufft_type_c2c(real_t(0)), &work_sz_c2c_x));
+    CHECK_HIPFFT_EXIT(hipfftMakePlan3d(hipfft_plan_c2c_x, gx, gy, gz, get_hipfft_type_c2c(real_t(0)), &work_sz_c2c_x));
   } else if (!no_slab_opt && config.pdims[0] == 1) {
     // x-y slab: use 2D FFT
     slab_xy = true;
     std::array<int, 2> n{gy, gx};
-    CHECK_HIPFFT_EXIT(hipfftMakePlanMany(cufft_plan_c2c_x, 2, n.data(), nullptr, 1,
+    CHECK_HIPFFT_EXIT(hipfftMakePlanMany(hipfft_plan_c2c_x, 2, n.data(), nullptr, 1,
                                         pinfo_x_c.shape[0] * pinfo_x_c.shape[1], nullptr, 1,
-                                        pinfo_x_c.shape[0] * pinfo_x_c.shape[1], get_cufft_type_c2c(real_t(0)),
+                                        pinfo_x_c.shape[0] * pinfo_x_c.shape[1], get_hipfft_type_c2c(real_t(0)),
                                         pinfo_x_c.shape[2], &work_sz_c2c_x));
   } else {
-    CHECK_HIPFFT_EXIT(hipfftMakePlan1d(cufft_plan_c2c_x, gx, get_cufft_type_c2c(real_t(0)),
+    CHECK_HIPFFT_EXIT(hipfftMakePlan1d(hipfft_plan_c2c_x, gx, get_hipfft_type_c2c(real_t(0)),
                                       pinfo_x_c.shape[1] * pinfo_x_c.shape[2], &work_sz_c2c_x));
   }
 #endif
@@ -358,56 +358,56 @@ int main(int argc, char** argv) {
   size_t fftsize = static_cast<size_t>(gx) * static_cast<size_t>(gy) * static_cast<size_t>(gz);
 
   // y-axis complex-to-complex
-  hipfftHandle cufft_plan_c2c_y;
-  CHECK_HIPFFT_EXIT(hipfftCreate(&cufft_plan_c2c_y));
-  CHECK_HIPFFT_EXIT(hipfftSetAutoAllocation(cufft_plan_c2c_y, 0));
+  hipfftHandle hipfft_plan_c2c_y;
+  CHECK_HIPFFT_EXIT(hipfftCreate(&hipfft_plan_c2c_y));
+  CHECK_HIPFFT_EXIT(hipfftSetAutoAllocation(hipfft_plan_c2c_y, 0));
   size_t work_sz_c2c_y = 0;
   if (!no_slab_opt && !slab_xyz && config.pdims[1] == 1) {
     // y-z slab: use 2D FFT
     slab_yz = true;
     if (axis_contiguous[1]) {
       std::array<int, 2> n{gz, gy};
-      CHECK_HIPFFT_EXIT(hipfftMakePlanMany(cufft_plan_c2c_y, 2, n.data(), nullptr, 1,
+      CHECK_HIPFFT_EXIT(hipfftMakePlanMany(hipfft_plan_c2c_y, 2, n.data(), nullptr, 1,
                                           pinfo_y_c.shape[0] * pinfo_y_c.shape[1], nullptr, 1,
-                                          pinfo_y_c.shape[0] * pinfo_y_c.shape[1], get_cufft_type_c2c(real_t(0)),
+                                          pinfo_y_c.shape[0] * pinfo_y_c.shape[1], get_hipfft_type_c2c(real_t(0)),
                                           pinfo_y_c.shape[2], &work_sz_c2c_y));
     } else {
       // Note: In this case, both slab dimensions are strided, leading to slower performance using
       // 2D FFT. Run 1D + 1D instead.
       slab_yz = false;
-      CHECK_HIPFFT_EXIT(hipfftMakePlanMany(cufft_plan_c2c_y, 1, &gy /* unused */, &gy, pinfo_y_c.shape[0], 1, &gy,
-                                          pinfo_y_c.shape[0], 1, get_cufft_type_c2c(real_t(0)), pinfo_y_c.shape[0],
+      CHECK_HIPFFT_EXIT(hipfftMakePlanMany(hipfft_plan_c2c_y, 1, &gy /* unused */, &gy, pinfo_y_c.shape[0], 1, &gy,
+                                          pinfo_y_c.shape[0], 1, get_hipfft_type_c2c(real_t(0)), pinfo_y_c.shape[0],
                                           &work_sz_c2c_y));
       // std::array<int, 2> n{gz, gy};
       // std::array<int, 2> embed{pinfo_y_c.shape[2], pinfo_y_c.shape[1]};
-      // CHECK_HIPFFT_EXIT(hipfftMakePlanMany(cufft_plan_c2c_y, 2, n.data(),
+      // CHECK_HIPFFT_EXIT(hipfftMakePlanMany(hipfft_plan_c2c_y, 2, n.data(),
       //                                   embed.data(), pinfo_y_c.shape[0], 1,
       //                                   embed.data(), pinfo_y_c.shape[0], 1,
-      //                                   get_cufft_type_c2c(real_t(0)), pinfo_y_c.shape[0], &work_sz_c2c_y));
+      //                                   get_hipfft_type_c2c(real_t(0)), pinfo_y_c.shape[0], &work_sz_c2c_y));
     }
   } else {
     if (axis_contiguous[1]) {
-      CHECK_HIPFFT_EXIT(hipfftMakePlan1d(cufft_plan_c2c_y, gy, get_cufft_type_c2c(real_t(0)),
+      CHECK_HIPFFT_EXIT(hipfftMakePlan1d(hipfft_plan_c2c_y, gy, get_hipfft_type_c2c(real_t(0)),
                                         pinfo_y_c.shape[1] * pinfo_y_c.shape[2], &work_sz_c2c_y));
     } else {
-      CHECK_HIPFFT_EXIT(hipfftMakePlanMany(cufft_plan_c2c_y, 1, &gy /* unused */, &gy, pinfo_y_c.shape[0], 1, &gy,
-                                          pinfo_y_c.shape[0], 1, get_cufft_type_c2c(real_t(0)), pinfo_y_c.shape[0],
+      CHECK_HIPFFT_EXIT(hipfftMakePlanMany(hipfft_plan_c2c_y, 1, &gy /* unused */, &gy, pinfo_y_c.shape[0], 1, &gy,
+                                          pinfo_y_c.shape[0], 1, get_hipfft_type_c2c(real_t(0)), pinfo_y_c.shape[0],
                                           &work_sz_c2c_y));
     }
   }
 
   // z-axis complex-to-complex
-  hipfftHandle cufft_plan_c2c_z;
-  CHECK_HIPFFT_EXIT(hipfftCreate(&cufft_plan_c2c_z));
-  CHECK_HIPFFT_EXIT(hipfftSetAutoAllocation(cufft_plan_c2c_z, 0));
+  hipfftHandle hipfft_plan_c2c_z;
+  CHECK_HIPFFT_EXIT(hipfftCreate(&hipfft_plan_c2c_z));
+  CHECK_HIPFFT_EXIT(hipfftSetAutoAllocation(hipfft_plan_c2c_z, 0));
   size_t work_sz_c2c_z = 0;
   if (axis_contiguous[2]) {
-    CHECK_HIPFFT_EXIT(hipfftMakePlan1d(cufft_plan_c2c_z, gz, get_cufft_type_c2c(real_t(0)),
+    CHECK_HIPFFT_EXIT(hipfftMakePlan1d(hipfft_plan_c2c_z, gz, get_hipfft_type_c2c(real_t(0)),
                                       pinfo_z_c.shape[1] * pinfo_z_c.shape[2], &work_sz_c2c_z));
   } else {
-    CHECK_HIPFFT_EXIT(hipfftMakePlanMany(cufft_plan_c2c_z, 1, &gz /* unused */, &gz,
+    CHECK_HIPFFT_EXIT(hipfftMakePlanMany(hipfft_plan_c2c_z, 1, &gz /* unused */, &gz,
                                         pinfo_z_c.shape[0] * pinfo_z_c.shape[1], 1, &gz,
-                                        pinfo_z_c.shape[0] * pinfo_z_c.shape[1], 1, get_cufft_type_c2c(real_t(0)),
+                                        pinfo_z_c.shape[0] * pinfo_z_c.shape[1], 1, get_hipfft_type_c2c(real_t(0)),
                                         pinfo_z_c.shape[0] * pinfo_z_c.shape[1], &work_sz_c2c_z));
   }
 
@@ -417,13 +417,13 @@ int main(int argc, char** argv) {
       std::max(std::max(std::max(2 * pinfo_x_c.size, 2 * pinfo_y_c.size), 2 * pinfo_z_c.size), pinfo_x_r.size) *
       sizeof(real_t);
   int64_t work_sz_decomp = 2 * num_elements_work_c * sizeof(real_t);
-  int64_t work_sz_cufft = std::max(std::max(work_sz_r2c_x, std::max(work_sz_c2c_y, work_sz_c2c_z)), work_sz_c2r_x);
-  int64_t work_sz = std::max(work_sz_decomp, work_sz_cufft);
+  int64_t work_sz_hipfft = std::max(std::max(work_sz_r2c_x, std::max(work_sz_c2c_y, work_sz_c2c_z)), work_sz_c2r_x);
+  int64_t work_sz = std::max(work_sz_decomp, work_sz_hipfft);
 #else
   int64_t data_sz = std::max(std::max(2 * pinfo_x_c.size, 2 * pinfo_y_c.size), 2 * pinfo_z_c.size) * sizeof(real_t);
   int64_t work_sz_decomp = 2 * num_elements_work_c * sizeof(real_t);
-  int64_t work_sz_cufft = std::max(work_sz_c2c_x, std::max(work_sz_c2c_y, work_sz_c2c_z));
-  int64_t work_sz = std::max(work_sz_decomp, work_sz_cufft);
+  int64_t work_sz_hipfft = std::max(work_sz_c2c_x, std::max(work_sz_c2c_y, work_sz_c2c_z));
+  int64_t work_sz = std::max(work_sz_decomp, work_sz_hipfft);
 #endif
 
   void* ref = malloc(data_sz);
@@ -457,15 +457,15 @@ int main(int argc, char** argv) {
   complex_t* data2_c_d = static_cast<complex_t*>(data2_d);
   complex_t* work_c_d = static_cast<complex_t*>(work_d);
 
-  // Assign cuFFT work area
+  // Assign hipfft work area
 #ifdef R2C
-  CHECK_HIPFFT_EXIT(hipfftSetWorkArea(cufft_plan_r2c_x, work_d));
-  CHECK_HIPFFT_EXIT(hipfftSetWorkArea(cufft_plan_c2r_x, work_d));
+  CHECK_HIPFFT_EXIT(hipfftSetWorkArea(hipfft_plan_r2c_x, work_d));
+  CHECK_HIPFFT_EXIT(hipfftSetWorkArea(hipfft_plan_c2r_x, work_d));
 #else
-  CHECK_HIPFFT_EXIT(hipfftSetWorkArea(cufft_plan_c2c_x, work_d));
+  CHECK_HIPFFT_EXIT(hipfftSetWorkArea(hipfft_plan_c2c_x, work_d));
 #endif
-  CHECK_HIPFFT_EXIT(hipfftSetWorkArea(cufft_plan_c2c_y, work_d));
-  CHECK_HIPFFT_EXIT(hipfftSetWorkArea(cufft_plan_c2c_z, work_d));
+  CHECK_HIPFFT_EXIT(hipfftSetWorkArea(hipfft_plan_c2c_y, work_d));
+  CHECK_HIPFFT_EXIT(hipfftSetWorkArea(hipfft_plan_c2c_z, work_d));
 
   if (!skip_correctness_tests) {
     // Initialize data to random values
@@ -506,9 +506,9 @@ int main(int argc, char** argv) {
     }
 
 #ifdef R2C
-    CHECK_HIPFFT_EXIT(hipfftXtExec(cufft_plan_r2c_x, input_r, input, HIPFFT_FORWARD));
+    CHECK_HIPFFT_EXIT(hipfftXtExec(hipfft_plan_r2c_x, input_r, input, HIPFFT_FORWARD));
 #else
-    CHECK_HIPFFT_EXIT(hipfftXtExec(cufft_plan_c2c_x, input, input, HIPFFT_FORWARD));
+    CHECK_HIPFFT_EXIT(hipfftXtExec(hipfft_plan_c2c_x, input, input, HIPFFT_FORWARD));
 #endif
 
     if (!slab_xyz) {
@@ -519,10 +519,10 @@ int main(int argc, char** argv) {
 
     if (!slab_xy && !slab_xyz) {
       if (axis_contiguous[1] || slab_yz) {
-        CHECK_HIPFFT_EXIT(hipfftXtExec(cufft_plan_c2c_y, output, output, HIPFFT_FORWARD));
+        CHECK_HIPFFT_EXIT(hipfftXtExec(hipfft_plan_c2c_y, output, output, HIPFFT_FORWARD));
       } else {
         for (int i = 0; i < pinfo_y_c.shape[2]; ++i) {
-          CHECK_HIPFFT_EXIT(hipfftXtExec(cufft_plan_c2c_y, output + i * (pinfo_y_c.shape[0] * pinfo_y_c.shape[1]),
+          CHECK_HIPFFT_EXIT(hipfftXtExec(hipfft_plan_c2c_y, output + i * (pinfo_y_c.shape[0] * pinfo_y_c.shape[1]),
                                         output + i * (pinfo_y_c.shape[0] * pinfo_y_c.shape[1]), HIPFFT_FORWARD));
         }
       }
@@ -541,8 +541,8 @@ int main(int argc, char** argv) {
     }
 
     if (!slab_yz && !slab_xyz) {
-      CHECK_HIPFFT_EXIT(hipfftXtExec(cufft_plan_c2c_z, output, output, HIPFFT_FORWARD));
-      CHECK_HIPFFT_EXIT(hipfftXtExec(cufft_plan_c2c_z, output, output, HIPFFT_BACKWARD));
+      CHECK_HIPFFT_EXIT(hipfftXtExec(hipfft_plan_c2c_z, output, output, HIPFFT_FORWARD));
+      CHECK_HIPFFT_EXIT(hipfftXtExec(hipfft_plan_c2c_z, output, output, HIPFFT_BACKWARD));
     }
 
     if (out_of_place) std::swap(input, output);
@@ -558,10 +558,10 @@ int main(int argc, char** argv) {
 
     if (!slab_xy && !slab_xyz) {
       if (axis_contiguous[1] || slab_yz) {
-        CHECK_HIPFFT_EXIT(hipfftXtExec(cufft_plan_c2c_y, output, output, HIPFFT_BACKWARD));
+        CHECK_HIPFFT_EXIT(hipfftXtExec(hipfft_plan_c2c_y, output, output, HIPFFT_BACKWARD));
       } else {
         for (int i = 0; i < pinfo_y_c.shape[2]; ++i) {
-          CHECK_HIPFFT_EXIT(hipfftXtExec(cufft_plan_c2c_y, output + i * (pinfo_y_c.shape[0] * pinfo_y_c.shape[1]),
+          CHECK_HIPFFT_EXIT(hipfftXtExec(hipfft_plan_c2c_y, output + i * (pinfo_y_c.shape[0] * pinfo_y_c.shape[1]),
                                         output + i * (pinfo_y_c.shape[0] * pinfo_y_c.shape[1]), HIPFFT_BACKWARD));
         }
       }
@@ -578,9 +578,9 @@ int main(int argc, char** argv) {
                                                 0));
     }
 #ifdef R2C
-    CHECK_HIPFFT_EXIT(hipfftXtExec(cufft_plan_c2r_x, output, output_r, HIPFFT_BACKWARD));
+    CHECK_HIPFFT_EXIT(hipfftXtExec(hipfft_plan_c2r_x, output, output_r, HIPFFT_BACKWARD));
 #else
-    CHECK_HIPFFT_EXIT(hipfftXtExec(cufft_plan_c2c_x, output, output, HIPFFT_BACKWARD));
+    CHECK_HIPFFT_EXIT(hipfftXtExec(hipfft_plan_c2c_x, output, output, HIPFFT_BACKWARD));
 #endif
 
     if (trial >= nwarmup) {

@@ -72,10 +72,10 @@ struct hipdecompHandle {
   std::vector<hipStream_t> streams; // internal streams for concurrent scheduling
 
 #if HIPTENSOR_MAJOR_VERSION >= 2
-  hiptensorHandle_t cutensor_handle;            // cuTENSOR handle;
-  hiptensorPlanPreference_t cutensor_plan_pref; // cuTENSOR plan preference;
+  hiptensorHandle_t hiptensor_handle;            // hipTENSOR handle;
+  hiptensorPlanPreference_t hiptensor_plan_pref; // hipTENSOR plan preference;
 #else
-  hiptensorHandle_t* cutensor_handle; // pointer to cuTENSOR handle;
+  hiptensorHandle_t* hiptensor_handle; // pointer to hipTENSOR handle;
 #endif
 
   std::vector<std::array<char, MPI_MAX_PROCESSOR_NAME>> hostnames; // list of hostnames by rank

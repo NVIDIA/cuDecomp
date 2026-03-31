@@ -18,29 +18,29 @@
 module precision
   use mpi, only: MPI_REAL,MPI_DOUBLE_PRECISION
   use hipdecomp, only: HIPDECOMP_DOUBLE, HIPDECOMP_DOUBLE_COMPLEX, HIPDECOMP_FLOAT, HIPDECOMP_FLOAT_COMPLEX
-  use cufft, only: CUFFT_D2Z, CUFFT_Z2D, CUFFT_Z2Z, CUFFT_R2C, CUFFT_C2R, CUFFT_C2C
+  use hipfft, only: HIPFFT_D2Z, HIPFFT_Z2D, HIPFFT_Z2Z, HIPFFT_R2C, HIPFFT_C2R, HIPFFT_C2C
   use iso_fortran_env, only: int64,real32,real64
   implicit none
   integer, parameter, public :: i8 = int64
 #ifdef SINGLE
-#define cufftExecD2Z cufftExecR2C
-#define cufftExecZ2D cufftExecC2R
-#define cufftExecZ2Z cufftExecC2C
+#define hipfftExecD2Z hipfftExecR2C
+#define hipfftExecZ2D hipfftExecC2R
+#define hipfftExecZ2Z hipfftExecC2C
   integer, parameter, public :: rp = real32
   integer, parameter, public :: MPI_REAL_RP = MPI_REAL
   integer, parameter, public :: HIPDECOMP_REAL_RP = HIPDECOMP_FLOAT
   integer, parameter, public :: HIPDECOMP_REAL_COMPLEX_RP = HIPDECOMP_FLOAT_COMPLEX
-  integer, parameter, public :: CUFFT_R2C_RP = CUFFT_R2C
-  integer, parameter, public :: CUFFT_C2R_RP = CUFFT_C2R
-  integer, parameter, public :: CUFFT_C2C_RP = CUFFT_C2C
+  integer, parameter, public :: HIPFFT_R2C_RP = HIPFFT_R2C
+  integer, parameter, public :: HIPFFT_C2R_RP = HIPFFT_C2R
+  integer, parameter, public :: HIPFFT_C2C_RP = HIPFFT_C2C
 #else
   integer, parameter, public :: rp = real64
   integer, parameter, public :: MPI_REAL_RP = MPI_DOUBLE_PRECISION
   integer, parameter, public :: HIPDECOMP_REAL_RP = HIPDECOMP_DOUBLE
   integer, parameter, public :: HIPDECOMP_REAL_COMPLEX_RP = HIPDECOMP_DOUBLE_COMPLEX
-  integer, parameter, public :: CUFFT_R2C_RP = CUFFT_D2Z
-  integer, parameter, public :: CUFFT_C2R_RP = CUFFT_Z2D
-  integer, parameter, public :: CUFFT_C2C_RP = CUFFT_Z2Z
+  integer, parameter, public :: HIPFFT_R2C_RP = HIPFFT_D2Z
+  integer, parameter, public :: HIPFFT_C2R_RP = HIPFFT_Z2D
+  integer, parameter, public :: HIPFFT_C2C_RP = HIPFFT_Z2Z
 #endif
 end module precision
 
@@ -48,7 +48,7 @@ program taylor_green
   use precision
   use mpi
   use hipdecomp
-  use cufft
+  use hipfft
   implicit none
 
   integer :: commType = 0
@@ -74,7 +74,7 @@ program taylor_green
   integer :: planD2ZX, planZ2DX, planZ2ZY, planZ2ZZ
   integer :: batchSize
   integer(i8) :: sizeD2ZX, sizeZ2DX, sizeZ2ZY, sizeZ2ZZ
-  integer(i8) :: nElemWorkCUFFT, nElemWorkDecomp
+  integer(i8) :: nElemWorkHIPFFT, nElemWorkDecomp
 
   logical :: skip_next
   character(len=16) :: arg
@@ -121,7 +121,7 @@ program taylor_green
   call print_stats
   if( spec_freq > 0.0_rp ) call write_spectrum_sample(0)
 
-  status=cudaDeviceSynchronize()
+  status=hipDeviceSynchronize()
   call MPI_Barrier(MPI_COMM_WORLD,ierr)
   ts = MPI_Wtime()
   ts_step = MPI_Wtime()
@@ -137,7 +137,7 @@ program taylor_green
     end if
 
     if( mod(i,stat_freq) == 0 ) then
-      status=cudaDeviceSynchronize()
+      status=hipDeviceSynchronize()
       call MPI_Barrier(MPI_COMM_WORLD,ierr)
       te_step = MPI_Wtime()
       if (rank == 0) write(*,"(' Average iteration time: ',F12.6,' ms')") (te_step - ts_step) * 1000._rp / real(count,rp)
@@ -145,7 +145,7 @@ program taylor_green
 
       call print_stats
 
-      status=cudaDeviceSynchronize()
+      status=hipDeviceSynchronize()
       call MPI_Barrier(MPI_COMM_WORLD,ierr)
       ts_step = MPI_Wtime()
     end if
@@ -154,14 +154,14 @@ program taylor_green
 
   end do
 
-  status=cudaDeviceSynchronize()
+  status=hipDeviceSynchronize()
   call MPI_Barrier(MPI_COMM_WORLD,ierr)
   te = MPI_Wtime()
   if (rank == 0) write(*,"(' Simulation time: ',F12.6,' s')") te - ts
 
   call finalize
 
-  status=cudaDeviceSynchronize()
+  status=hipDeviceSynchronize()
   call mpi_finalize(ierr)
 
 contains
@@ -188,7 +188,7 @@ subroutine initializeField(Ur,Vr,Wr,dx,dy,dz,piXR)
   end do
 !$acc end parallel
 
-  status=cudaDeviceSynchronize()
+  status=hipDeviceSynchronize()
 end subroutine
 
 subroutine curl(U,V,W,dU,dV,dW)
@@ -212,7 +212,7 @@ subroutine curl(U,V,W,dU,dV,dW)
   end do
 !$acc end parallel
 
-  status=cudaDeviceSynchronize()
+  status=hipDeviceSynchronize()
 end subroutine
 
 subroutine cross(U,V,W,dU,dV,dW)
@@ -239,7 +239,7 @@ subroutine cross(U,V,W,dU,dV,dW)
   end do
 !$acc end parallel
 
-  status=cudaDeviceSynchronize()
+  status=hipDeviceSynchronize()
 end subroutine
 
 subroutine compute_dU(U,V,W,dU,dV,dW)
@@ -281,7 +281,7 @@ subroutine compute_dU(U,V,W,dU,dV,dW)
   end do
 !$acc end parallel
 
-  status=cudaDeviceSynchronize()
+  status=hipDeviceSynchronize()
 end subroutine
 
 subroutine forward(work)
@@ -291,11 +291,11 @@ subroutine forward(work)
 
   do i=1,3
     start=1+(i-1)*workSize
-    status = cufftExecD2Z(planD2ZX, work(start), work(start))
+    status = hipfftExecD2Z(planD2ZX, work(start), work(start))
     CHECK_HIPDECOMP_EXIT(hipdecompTransposeXtoY(handle, gridDescC, work(start), work(start), workC, HIPDECOMP_REAL_COMPLEX_RP))
-    status = cufftExecZ2Z(planZ2ZY, work(start), work(start), CUFFT_FORWARD)
+    status = hipfftExecZ2Z(planZ2ZY, work(start), work(start), HIPFFT_FORWARD)
     CHECK_HIPDECOMP_EXIT(hipdecompTransposeYtoZ(handle, gridDescC, work(start), work(start), workC, HIPDECOMP_REAL_COMPLEX_RP))
-    status = cufftExecZ2Z(planZ2ZZ, work(start), work(start), CUFFT_FORWARD)
+    status = hipfftExecZ2Z(planZ2ZZ, work(start), work(start), HIPFFT_FORWARD)
   end do
 end subroutine
 
@@ -306,11 +306,11 @@ subroutine backward(work)
 
   do i=1,3
     start=1+(i-1)*workSize
-    status = cufftExecZ2Z(planZ2ZZ, work(start), work(start), CUFFT_INVERSE)
+    status = hipfftExecZ2Z(planZ2ZZ, work(start), work(start), HIPFFT_INVERSE)
     CHECK_HIPDECOMP_EXIT(hipdecompTransposeZtoY(handle, gridDescC, work(start), work(start), workC, HIPDECOMP_REAL_COMPLEX_RP))
-    status = cufftExecZ2Z(planZ2ZY, work(start), work(start), CUFFT_INVERSE)
+    status = hipfftExecZ2Z(planZ2ZY, work(start), work(start), HIPFFT_INVERSE)
     CHECK_HIPDECOMP_EXIT(hipdecompTransposeYtoX(handle, gridDescC, work(start), work(start), workC, HIPDECOMP_REAL_COMPLEX_RP))
-    status = cufftExecZ2D(planZ2DX, work(start), work(start))
+    status = hipfftExecZ2D(planZ2DX, work(start), work(start))
   end do
 end subroutine
 
@@ -332,7 +332,7 @@ subroutine print_stats
   end do
 !$acc end parallel
 
-  status=cudaDeviceSynchronize()
+  status=hipDeviceSynchronize()
 
   sumsq = 0._rp
   call mpi_reduce(sumsql, sumsq, 1, MPI_REAL_RP, MPI_SUM, 0, MPI_COMM_WORLD, ierr)
@@ -352,7 +352,7 @@ subroutine print_stats
   end do
 !$acc end parallel
 
-  status=cudaDeviceSynchronize()
+  status=hipDeviceSynchronize()
 
   sumsq = 0._rp
   call mpi_reduce(sumsql, sumsq, 1, MPI_REAL_RP, MPI_SUM, 0, MPI_COMM_WORLD, ierr)
@@ -401,7 +401,7 @@ subroutine write_spectrum_sample(idx)
   end do
 !$acc end parallel
 
-  status=cudaDeviceSynchronize()
+  status=hipDeviceSynchronize()
 
   if (rank == 0) then
     call mpi_reduce(MPI_IN_PLACE, ek, num_shells, MPI_REAL_RP, MPI_SUM, 0, MPI_COMM_WORLD, ierr)
@@ -545,7 +545,7 @@ subroutine get_dt
     end do
 !$acc end parallel
 
-    status=cudaDeviceSynchronize()
+    status=hipDeviceSynchronize()
 
     velmax = 0._rp
     call mpi_allreduce(velmaxl, velmax, 1, MPI_REAL_RP, MPI_MAX, MPI_COMM_WORLD, ierr)
@@ -575,8 +575,8 @@ subroutine initialize
 
   call mpi_comm_rank(localComm, localRank, ierr)
   if (ierr /= MPI_SUCCESS) write(*,*) 'mpi_comm_rank on local rank failed: ', ierr
-  ierr = cudaGetDeviceCount(numDev)
-  ierr = cudaSetDevice(mod(localRank,numDev))
+  ierr = hipGetDeviceCount(numDev)
+  ierr = hipSetDevice(mod(localRank,numDev))
 
   skip_next = .false.
   do i = 1, command_argument_count()
@@ -698,37 +698,37 @@ subroutine initialize
   end if
 
   batchSize = piXR%shape(2)*piXR%shape(3)
-  status = cufftCreate(planD2ZX)
-  status = cufftSetAutoAllocation(planD2ZX, 0)
-  status = cufftMakePlan1D(planD2ZX, N, CUFFT_R2C_RP, batchSize, sizeD2ZX)
-  if (status /= CUFFT_SUCCESS) write(*,*) rank, ': Error in creating X R2C plan'
+  status = hipfftCreate(planD2ZX)
+  status = hipfftSetAutoAllocation(planD2ZX, 0)
+  status = hipfftMakePlan1D(planD2ZX, N, HIPFFT_R2C_RP, batchSize, sizeD2ZX)
+  if (status /= HIPFFT_SUCCESS) write(*,*) rank, ': Error in creating X R2C plan'
 
   batchSize = piXC%shape(2)*piXC%shape(3)
-  status = cufftCreate(planZ2DX)
-  status = cufftSetAutoAllocation(planZ2DX, 0)
-  status = cufftMakePlan1D(planZ2DX, N, CUFFT_C2R_RP, batchSize, sizeZ2DX)
-  if (status /= CUFFT_SUCCESS) write(*,*) rank, ': Error in creating X C2R plan'
+  status = hipfftCreate(planZ2DX)
+  status = hipfftSetAutoAllocation(planZ2DX, 0)
+  status = hipfftMakePlan1D(planZ2DX, N, HIPFFT_C2R_RP, batchSize, sizeZ2DX)
+  if (status /= HIPFFT_SUCCESS) write(*,*) rank, ': Error in creating X C2R plan'
 
   batchSize = piYC%shape(2)*piYC%shape(3)
-  status = cufftCreate(planZ2ZY)
-  status = cufftSetAutoAllocation(planZ2ZY, 0)
-  status = cufftMakePlan1D(planZ2ZY, N, CUFFT_C2C_RP, batchSize, sizeZ2ZY)
-  if (status /= CUFFT_SUCCESS) write(*,*) rank, ': Error in creating Y plan'
+  status = hipfftCreate(planZ2ZY)
+  status = hipfftSetAutoAllocation(planZ2ZY, 0)
+  status = hipfftMakePlan1D(planZ2ZY, N, HIPFFT_C2C_RP, batchSize, sizeZ2ZY)
+  if (status /= HIPFFT_SUCCESS) write(*,*) rank, ': Error in creating Y plan'
 
   batchSize = piZC%shape(2)*piZC%shape(3)
-  status = cufftCreate(planZ2ZZ)
-  status = cufftSetAutoAllocation(planZ2ZZ, 0)
-  status = cufftMakePlan1D(planZ2ZZ, N, CUFFT_C2C_RP, batchSize, sizeZ2ZZ)
-  if (status /= CUFFT_SUCCESS) write(*,*) rank, ': Error in creating Z plan'
+  status = hipfftCreate(planZ2ZZ)
+  status = hipfftSetAutoAllocation(planZ2ZZ, 0)
+  status = hipfftMakePlan1D(planZ2ZZ, N, HIPFFT_C2C_RP, batchSize, sizeZ2ZZ)
+  if (status /= HIPFFT_SUCCESS) write(*,*) rank, ': Error in creating Z plan'
 
-  nElemWorkCufft = max(sizeD2ZX,sizeZ2DX,sizeZ2ZY,sizeZ2ZZ)/(2*sizeof(1.0_rp))
-  nElemWorkC = max(nElemWorkCufft,nElemWorkDecomp)
+  nElemWorkHipfft = max(sizeD2ZX,sizeZ2DX,sizeZ2ZY,sizeZ2ZZ)/(2*sizeof(1.0_rp))
+  nElemWorkC = max(nElemWorkHipfft,nElemWorkDecomp)
   CHECK_HIPDECOMP_EXIT(hipdecompMalloc(handle, gridDescC, workC, nElemWorkC))
 
-  status = cufftSetWorkArea(planD2ZX, workC)
-  status = cufftSetWorkArea(planZ2DX, workC)
-  status = cufftSetWorkArea(planZ2ZY, workC)
-  status = cufftSetWorkArea(planZ2ZZ, workC)
+  status = hipfftSetWorkArea(planD2ZX, workC)
+  status = hipfftSetWorkArea(planZ2DX, workC)
+  status = hipfftSetWorkArea(planZ2ZY, workC)
+  status = hipfftSetWorkArea(planZ2ZZ, workC)
 
   workSize=max(2*nElemXC, 2*nElemYC, 2*nElemZC, nElemXR)
   allocate(workspace(3*workSize))
@@ -790,7 +790,7 @@ subroutine initialize
 !$acc end kernels
 
   call forward(hworkspace(:,1))
-  status=cudaDeviceSynchronize()
+  status=hipDeviceSynchronize()
 
   N3 = real(N,rp)*real(N,rp)*real(N,rp)
 !$acc kernels
@@ -812,10 +812,10 @@ subroutine finalize
   deallocate(dworkspace)
   deallocate(hworkspace)
 
-  status = cufftDestroy(planD2ZX)
-  status = cufftDestroy(planZ2DX)
-  status = cufftDestroy(planZ2ZY)
-  status = cufftDestroy(planZ2ZZ)
+  status = hipfftDestroy(planD2ZX)
+  status = hipfftDestroy(planZ2DX)
+  status = hipfftDestroy(planZ2ZY)
+  status = hipfftDestroy(planZ2ZZ)
 
   CHECK_HIPDECOMP_EXIT(hipdecompFree(handle, gridDescC, workC))
   CHECK_HIPDECOMP_EXIT(hipdecompGridDescDestroy(handle, gridDescC))

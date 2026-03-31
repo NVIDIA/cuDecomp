@@ -1,6 +1,6 @@
 base: &base
   env_vars :
-    NVSHMEM_DISABLE_CUDA_VMM: 1
+    NVSHMEM_DISABLE_HIP_VMM: 1
     NVSHMEM_DISABLE_NCCL: 1
 
   dtypes: ['R32', 'R64', 'C32', 'C64']

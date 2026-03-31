@@ -59,8 +59,8 @@ module hipdecomp
     enumerator :: HIPDECOMP_RESULT_INVALID_USAGE = 1
     enumerator :: HIPDECOMP_RESULT_NOT_SUPPORTED = 2
     enumerator :: HIPDECOMP_RESULT_INTERNAL_ERROR = 3
-    enumerator :: HIPDECOMP_RESULT_CUDA_ERROR = 4
-    enumerator :: HIPDECOMP_RESULT_CUTENSOR_ERROR = 5
+    enumerator :: HIPDECOMP_RESULT_HIP_ERROR = 4
+    enumerator :: HIPDECOMP_RESULT_HIPTENSOR_ERROR = 5
     enumerator :: HIPDECOMP_RESULT_MPI_ERROR = 6
     enumerator :: HIPDECOMP_RESULT_NCCL_ERROR = 7
     enumerator :: HIPDECOMP_RESULT_NVSHMEM_ERROR = 8

@@ -51,7 +51,7 @@
 #define CHECK_HIP(call)                                                                                                \
   do {                                                                                                                 \
     hipError_t err = call;                                                                                             \
-    if (hipSuccess != err) { throw hipdecomp::CudaError(__FILE__, __LINE__, hipGetErrorString(err)); }                 \
+    if (hipSuccess != err) { throw hipdecomp::HipError(__FILE__, __LINE__, hipGetErrorString(err)); }                  \
   } while (false)
 
 #define CHECK_HIP_DRV(call)                                                                                            \
@@ -60,21 +60,21 @@
     if (hipSuccess != err) {                                                                                           \
       const char* error_str;                                                                                           \
       cuFnTable.pfn_cuGetErrorString(err, &error_str);                                                                 \
-      throw hipdecomp::CudaError(__FILE__, __LINE__, error_str);                                                       \
+      throw hipdecomp::HipError(__FILE__, __LINE__, error_str);                                                        \
     }                                                                                                                  \
   } while (false)
 
 #define CHECK_HIP_LAUNCH()                                                                                             \
   do {                                                                                                                 \
     hipError_t err = hipGetLastError();                                                                                \
-    if (hipSuccess != err) { throw hipdecomp::CudaError(__FILE__, __LINE__, hipGetErrorString(err)); }                 \
+    if (hipSuccess != err) { throw hipdecomp::HipError(__FILE__, __LINE__, hipGetErrorString(err)); }                  \
   } while (false)
 
-#define CHECK_CUTENSOR(call)                                                                                           \
+#define CHECK_HIPTENSOR(call)                                                                                          \
   do {                                                                                                                 \
     hiptensorStatus_t err = call;                                                                                      \
     if (HIPTENSOR_STATUS_SUCCESS != err) {                                                                             \
-      throw hipdecomp::CutensorError(__FILE__, __LINE__, hiptensorGetErrorString(err));                                \
+      throw hipdecomp::HiptensorError(__FILE__, __LINE__, hiptensorGetErrorString(err));                               \
     }                                                                                                                  \
   } while (false)
 
@@ -115,7 +115,7 @@
   do {                                                                                                                 \
     hipError_t err = call;                                                                                             \
     if (hipSuccess != err) {                                                                                           \
-      fprintf(stderr, "%s:%d CUDA error. (%s)\n", __FILE__, __LINE__, hipGetErrorString(err));                         \
+      fprintf(stderr, "%s:%d HIP error. (%s)\n", __FILE__, __LINE__, hipGetErrorString(err));                          \
       exit(EXIT_FAILURE);                                                                                              \
     }                                                                                                                  \
   } while (false)
@@ -124,7 +124,7 @@
   do {                                                                                                                 \
     hipError_t err = hipGetLastError();                                                                                \
     if (hipSuccess != err) {                                                                                           \
-      fprintf(stderr, "%s:%d CUDA error. (%s)\n", __FILE__, __LINE__, hipGetErrorString(err));                         \
+      fprintf(stderr, "%s:%d HIP error. (%s)\n", __FILE__, __LINE__, hipGetErrorString(err));                          \
       exit(EXIT_FAILURE);                                                                                              \
     }                                                                                                                  \
   } while (false)
@@ -149,7 +149,7 @@
   do {                                                                                                                 \
     hipfftResult_t err = call;                                                                                         \
     if (HIPFFT_SUCCESS != err) {                                                                                       \
-      fprintf(stderr, "%s:%d CUFFT error. (error code %d)\n", __FILE__, __LINE__, err);                                \
+      fprintf(stderr, "%s:%d HIPFFT error. (error code %d)\n", __FILE__, __LINE__, err);                               \
       exit(EXIT_FAILURE);                                                                                              \
     }                                                                                                                  \
   } while (false)

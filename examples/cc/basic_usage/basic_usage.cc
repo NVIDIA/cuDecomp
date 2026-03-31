@@ -44,7 +44,7 @@
   do {                                                                                                                 \
     hipError_t err = call;                                                                                             \
     if (hipSuccess != err) {                                                                                           \
-      fprintf(stderr, "%s:%d CUDA error. (%s)\n", __FILE__, __LINE__, hipGetErrorString(err));                         \
+      fprintf(stderr, "%s:%d HIP error. (%s)\n", __FILE__, __LINE__, hipGetErrorString(err));                          \
       exit(EXIT_FAILURE);                                                                                              \
     }                                                                                                                  \
   } while (false)
@@ -65,7 +65,7 @@
     }                                                                                                                  \
   } while (false)
 
-// CUDA kernel to demonstrate pencil data access on device.
+// HIP kernel to demonstrate pencil data access on device.
 __global__ void initialize_pencil(double* data, hipdecompPencilInfo_t pinfo) {
 
   int64_t l = blockIdx.x * blockDim.x + threadIdx.x;
@@ -222,7 +222,7 @@ int main(int argc, char** argv) {
   // Copy host data to device
   CHECK_HIP_EXIT(hipMemcpy(data_d, data, pinfo_x.size * sizeof(*data), hipMemcpyHostToDevice));
 
-  // Initializing pencil data (device version using CUDA kernel)
+  // Initializing pencil data (device version using HIP kernel)
   int threads_per_block = 256;
   int nblocks = (pinfo_x.size + threads_per_block - 1) / threads_per_block;
   initialize_pencil<<<nblocks, threads_per_block>>>(data_d, pinfo_x);

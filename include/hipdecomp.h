@@ -86,15 +86,15 @@ typedef enum {
  * will return one of these values to indicate if an operation has completed successfully or an error occured.
  */
 typedef enum {
-  HIPDECOMP_RESULT_SUCCESS = 0,        ///< The operation completed successfully
-  HIPDECOMP_RESULT_INVALID_USAGE = 1,  ///< A user error, typically an invalid argument
-  HIPDECOMP_RESULT_NOT_SUPPORTED = 2,  ///< A user error, requesting an invalid or unsupported operation configuration
-  HIPDECOMP_RESULT_INTERNAL_ERROR = 3, ///< An internal library error, should be reported
-  HIPDECOMP_RESULT_CUDA_ERROR = 4,     ///< An error occured in the CUDA Runtime
-  HIPDECOMP_RESULT_CUTENSOR_ERROR = 5, ///< An error occured in the cuTENSOR library
-  HIPDECOMP_RESULT_MPI_ERROR = 6,      ///< An error occurred in the MPI library
-  HIPDECOMP_RESULT_NCCL_ERROR = 7,     ///< An error occured in the NCCL library
-  HIPDECOMP_RESULT_NVSHMEM_ERROR = 8,  ///< An error occured in the NVSHMEM library
+  HIPDECOMP_RESULT_SUCCESS = 0,         ///< The operation completed successfully
+  HIPDECOMP_RESULT_INVALID_USAGE = 1,   ///< A user error, typically an invalid argument
+  HIPDECOMP_RESULT_NOT_SUPPORTED = 2,   ///< A user error, requesting an invalid or unsupported operation configuration
+  HIPDECOMP_RESULT_INTERNAL_ERROR = 3,  ///< An internal library error, should be reported
+  HIPDECOMP_RESULT_HIP_ERROR = 4,       ///< An error occured in the HIP Runtime
+  HIPDECOMP_RESULT_HIPTENSOR_ERROR = 5, ///< An error occured in the hipTENSOR library
+  HIPDECOMP_RESULT_MPI_ERROR = 6,       ///< An error occurred in the MPI library
+  HIPDECOMP_RESULT_NCCL_ERROR = 7,      ///< An error occured in the NCCL library
+  HIPDECOMP_RESULT_NVSHMEM_ERROR = 8,   ///< An error occured in the NVSHMEM library
 } hipdecompResult_t;
 
 /**
@@ -448,7 +448,7 @@ hipdecompResult_t hipdecompGetShiftedRank(hipdecompHandle_t handle, hipdecompGri
  * input has no padding, a NULL pointer can be provided.
  * @param[in] output_padding Similar to input_padding, but for the output data. If the output has no padding, a NULL
  * pointer can be provided.
- * @param[in] stream CUDA stream to enqueue GPU operations into
+ * @param[in] stream HIP stream to enqueue GPU operations into
  *
  * @return HIPDECOMP_RESULT_SUCCESS on success or error code on failure.
  */
@@ -478,7 +478,7 @@ hipdecompResult_t hipdecompTransposeXToY(hipdecompHandle_t handle, hipdecompGrid
  * input has no padding, a NULL pointer can be provided.
  * @param[in] output_padding Similar to input_padding, but for the output data. If the output has no padding, a NULL
  * pointer can be provided.
- * @param[in] stream CUDA stream to enqueue GPU operations into
+ * @param[in] stream HIP stream to enqueue GPU operations into
  *
  * @return HIPDECOMP_RESULT_SUCCESS on success or error code on failure.
  */
@@ -508,7 +508,7 @@ hipdecompResult_t hipdecompTransposeYToZ(hipdecompHandle_t handle, hipdecompGrid
  * input has no padding, a NULL pointer can be provided.
  * @param[in] output_padding Similar to input_padding, but for the output data. If the output has no padding, a NULL
  * pointer can be provided.
- * @param[in] stream CUDA stream to enqueue GPU operations into
+ * @param[in] stream HIP stream to enqueue GPU operations into
  *
  * @return HIPDECOMP_RESULT_SUCCESS on success or error code on failure.
  */
@@ -538,7 +538,7 @@ hipdecompResult_t hipdecompTransposeZToY(hipdecompHandle_t handle, hipdecompGrid
  * input has no padding, a NULL pointer can be provided.
  * @param[in] output_padding Similar to input_padding, but for the output data. If the output has no padding, a NULL
  * pointer can be provided.
- * @param[in] stream CUDA stream to enqueue GPU operations into
+ * @param[in] stream HIP stream to enqueue GPU operations into
  *
  * @return HIPDECOMP_RESULT_SUCCESS on success or error code on failure.
  */
@@ -568,7 +568,7 @@ hipdecompResult_t hipdecompTransposeYToX(hipdecompHandle_t handle, hipdecompGrid
  * @param[in] padding An array of three integers to define padding of the input data, in global order. The i-th entry
  * in this array should contain the number of elements to treat as padding in the i-th global domain axis. If the input
  * has no padding, a NULL pointer can be provided.
- * @param[in] stream CUDA stream to enqueue GPU operations into
+ * @param[in] stream HIP stream to enqueue GPU operations into
  *
  * @return HIPDECOMP_RESULT_SUCCESS on success or error code on failure.
  */
@@ -595,7 +595,7 @@ hipdecompResult_t hipdecompUpdateHalosX(hipdecompHandle_t handle, hipdecompGridD
  * @param[in] padding An array of three integers to define padding of the input data, in global order. The i-th entry
  * in this array should contain the number of elements to treat as padding in the i-th global domain axis. If the input
  * has no padding, a NULL pointer can be provided.
- * @param[in] stream CUDA stream to enqueue GPU operations into
+ * @param[in] stream HIP stream to enqueue GPU operations into
  *
  * @return HIPDECOMP_RESULT_SUCCESS on success or error code on failure.
  */
@@ -622,7 +622,7 @@ hipdecompResult_t hipdecompUpdateHalosY(hipdecompHandle_t handle, hipdecompGridD
  * @param[in] padding An array of three integers to define padding of the input data, in global order. The i-th entry
  * in this array should contain the number of elements to treat as padding in the i-th global domain axis. If the input
  * has no padding, a NULL pointer can be provided.
- * @param[in] stream CUDA stream to enqueue GPU operations into
+ * @param[in] stream HIP stream to enqueue GPU operations into
  *
  * @return HIPDECOMP_RESULT_SUCCESS on success or error code on failure.
  */

@@ -38,13 +38,13 @@
   do {                                                                                                                 \
     throw hipdecomp::InternalError(__FILE__, __LINE__, msg);                                                           \
   } while (false)
-#define THROW_CUDA_ERROR(msg)                                                                                          \
+#define THROW_HIP_ERROR(msg)                                                                                           \
   do {                                                                                                                 \
-    throw hipdecomp::CudaError(__FILE__, __LINE__, msg);                                                               \
+    throw hipdecomp::HipError(__FILE__, __LINE__, msg);                                                                \
   } while (false)
-#define THROW_CUTENSOR_ERROR(msg)                                                                                      \
+#define THROW_HIPTENSOR_ERROR(msg)                                                                                     \
   do {                                                                                                                 \
-    throw hipdecomp::CutensorError(__FILE__, __LINE__, msg);                                                           \
+    throw hipdecomp::HiptensorError(__FILE__, __LINE__, msg);                                                          \
   } while (false)
 #define THROW_MPI_ERROR(msg)                                                                                           \
   do {                                                                                                                 \
@@ -103,18 +103,18 @@ public:
   hipdecompResult_t getResult() const override { return HIPDECOMP_RESULT_INTERNAL_ERROR; }
 };
 
-class CudaError : public BaseException {
+class HipError : public BaseException {
 public:
-  CudaError(const char* file, int line, const char* extra_info = nullptr)
-      : BaseException(file, line, "CUDA error.", extra_info) {};
-  hipdecompResult_t getResult() const override { return HIPDECOMP_RESULT_CUDA_ERROR; }
+  HipError(const char* file, int line, const char* extra_info = nullptr)
+      : BaseException(file, line, "HIP error.", extra_info) {};
+  hipdecompResult_t getResult() const override { return HIPDECOMP_RESULT_HIP_ERROR; }
 };
 
-class CutensorError : public BaseException {
+class HiptensorError : public BaseException {
 public:
-  CutensorError(const char* file, int line, const char* extra_info = nullptr)
-      : BaseException(file, line, "cuTENSOR error.", extra_info) {};
-  hipdecompResult_t getResult() const override { return HIPDECOMP_RESULT_CUTENSOR_ERROR; }
+  HiptensorError(const char* file, int line, const char* extra_info = nullptr)
+      : BaseException(file, line, "hipTENSOR error.", extra_info) {};
+  hipdecompResult_t getResult() const override { return HIPDECOMP_RESULT_HIPTENSOR_ERROR; }
 };
 
 class MpiError : public BaseException {

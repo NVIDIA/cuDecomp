@@ -51,14 +51,14 @@ static inline bool isTransposeCommPipelined(hipdecompTransposeCommBackend_t comm
 }
 
 #if HIPTENSOR_MAJOR_VERSION >= 2
-static inline hiptensorDataType_t getCutensorDataType(float) { return HIPTENSOR_R_32F; }
-static inline hiptensorDataType_t getCutensorDataType(double) { return HIPTENSOR_R_64F; }
-static inline hiptensorDataType_t getCutensorDataType(std::complex<float>) { return HIPTENSOR_C_32F; }
-static inline hiptensorDataType_t getCutensorDataType(std::complex<double>) { return HIPTENSOR_C_64F; }
-template <typename T> static inline hiptensorDataType_t getCutensorDataType() { return getCutensorDataType(T(0)); }
+static inline hiptensorDataType_t getHiptensorDataType(float) { return HIPTENSOR_R_32F; }
+static inline hiptensorDataType_t getHiptensorDataType(double) { return HIPTENSOR_R_64F; }
+static inline hiptensorDataType_t getHiptensorDataType(std::complex<float>) { return HIPTENSOR_C_32F; }
+static inline hiptensorDataType_t getHiptensorDataType(std::complex<double>) { return HIPTENSOR_C_64F; }
+template <typename T> static inline hiptensorDataType_t getHiptensorDataType() { return getHiptensorDataType(T(0)); }
 
-static inline hiptensorComputeDescriptor_t getCutensorComputeType(hiptensorDataType_t cutensor_dtype) {
-  switch (cutensor_dtype) {
+static inline hiptensorComputeDescriptor_t getHiptensorComputeType(hiptensorDataType_t hiptensor_dtype) {
+  switch (hiptensor_dtype) {
   case HIPTENSOR_R_32F:
   case HIPTENSOR_C_32F: return HIPTENSOR_COMPUTE_DESC_32F;
   case HIPTENSOR_R_64F:
@@ -79,7 +79,7 @@ template <typename T>
 static void localPermute(const hipdecompHandle_t handle, const std::array<int64_t, 3>& extent_in,
                          const std::array<int32_t, 3>& order_out, const std::array<int64_t, 3>& strides_in,
                          const std::array<int64_t, 3>& strides_out, T* input, T* output, hipStream_t stream) {
-  hiptensorDataType_t cutensor_type = getCutensorDataType<T>();
+  hiptensorDataType_t hiptensor_type = getHiptensorDataType<T>();
 
   std::array<int32_t, 3> order_in{0, 1, 2};
   std::array<int64_t, 3> extent_out;
@@ -92,42 +92,42 @@ static void localPermute(const hipdecompHandle_t handle, const std::array<int64_
   auto strides_out_ptr = anyNonzeros(strides_out) ? strides_out.data() : nullptr;
 
   hiptensorTensorDescriptor_t desc_in;
-  CHECK_CUTENSOR(hiptensorCreateTensorDescriptor(handle->cutensor_handle, &desc_in, 3, extent_in.data(), strides_in_ptr,
-                                                 cutensor_type, getAlignment(input)));
+  CHECK_HIPTENSOR(hiptensorCreateTensorDescriptor(handle->hiptensor_handle, &desc_in, 3, extent_in.data(),
+                                                  strides_in_ptr, hiptensor_type, getAlignment(input)));
   hiptensorTensorDescriptor_t desc_out;
-  CHECK_CUTENSOR(hiptensorCreateTensorDescriptor(handle->cutensor_handle, &desc_out, 3, extent_out.data(),
-                                                 strides_out_ptr, cutensor_type, getAlignment(output)));
+  CHECK_HIPTENSOR(hiptensorCreateTensorDescriptor(handle->hiptensor_handle, &desc_out, 3, extent_out.data(),
+                                                  strides_out_ptr, hiptensor_type, getAlignment(output)));
 
   hiptensorOperationDescriptor_t desc_op;
-  CHECK_CUTENSOR(hiptensorCreatePermutation(handle->cutensor_handle, &desc_op, desc_in, order_in.data(),
-                                            HIPTENSOR_OP_IDENTITY, desc_out, order_out.data(),
-                                            getCutensorComputeType(cutensor_type)));
+  CHECK_HIPTENSOR(hiptensorCreatePermutation(handle->hiptensor_handle, &desc_op, desc_in, order_in.data(),
+                                             HIPTENSOR_OP_IDENTITY, desc_out, order_out.data(),
+                                             getHiptensorComputeType(hiptensor_type)));
 
   hiptensorPlan_t plan;
-  CHECK_CUTENSOR(hiptensorCreatePlan(handle->cutensor_handle, &plan, desc_op, handle->cutensor_plan_pref, 0));
+  CHECK_HIPTENSOR(hiptensorCreatePlan(handle->hiptensor_handle, &plan, desc_op, handle->hiptensor_plan_pref, 0));
 
   T one(1);
-  CHECK_CUTENSOR(hiptensorPermute(handle->cutensor_handle, plan, &one, input, output, stream));
+  CHECK_HIPTENSOR(hiptensorPermute(handle->hiptensor_handle, plan, &one, input, output, stream));
 
-  CHECK_CUTENSOR(hiptensorDestroyTensorDescriptor(desc_in));
-  CHECK_CUTENSOR(hiptensorDestroyTensorDescriptor(desc_out));
-  CHECK_CUTENSOR(hiptensorDestroyOperationDescriptor(desc_op));
-  CHECK_CUTENSOR(hiptensorDestroyPlan(plan));
+  CHECK_HIPTENSOR(hiptensorDestroyTensorDescriptor(desc_in));
+  CHECK_HIPTENSOR(hiptensorDestroyTensorDescriptor(desc_out));
+  CHECK_HIPTENSOR(hiptensorDestroyOperationDescriptor(desc_op));
+  CHECK_HIPTENSOR(hiptensorDestroyPlan(plan));
 }
 
 #else
 
-static inline hipDataType getCudaDataType(float) { return HIP_R_32F; }
-static inline hipDataType getCudaDataType(double) { return HIP_R_64F; }
-static inline hipDataType getCudaDataType(std::complex<float>) { return HIP_C_32F; }
-static inline hipDataType getCudaDataType(std::complex<double>) { return HIP_C_64F; }
-template <typename T> static inline hipDataType getCudaDataType() { return getCudaDataType(T(0)); }
+static inline hipDataType getHipDataType(float) { return HIP_R_32F; }
+static inline hipDataType getHipDataType(double) { return HIP_R_64F; }
+static inline hipDataType getHipDataType(std::complex<float>) { return HIP_C_32F; }
+static inline hipDataType getHipDataType(std::complex<double>) { return HIP_C_64F; }
+template <typename T> static inline hipDataType getHipDataType() { return getHipDataType(T(0)); }
 
 template <typename T>
 static void localPermute(const hipdecompHandle_t handle, const std::array<int64_t, 3>& extent_in,
                          const std::array<int32_t, 3>& order_out, const std::array<int64_t, 3>& strides_in,
                          const std::array<int64_t, 3>& strides_out, T* input, T* output, hipStream_t stream) {
-  hipDataType hip_type = getCudaDataType<T>();
+  hipDataType hip_type = getHipDataType<T>();
 
   std::array<int32_t, 3> order_in{0, 1, 2};
   std::array<int64_t, 3> extent_out;
@@ -140,16 +140,16 @@ static void localPermute(const hipdecompHandle_t handle, const std::array<int64_
   auto strides_out_ptr = anyNonzeros(strides_out) ? strides_out.data() : nullptr;
 
   hiptensorTensorDescriptor_t desc_in;
-  CHECK_CUTENSOR(hiptensorInitTensorDescriptor(handle->cutensor_handle, &desc_in, 3, extent_in.data(), strides_in_ptr,
-                                               hip_type, HIPTENSOR_OP_IDENTITY));
+  CHECK_HIPTENSOR(hiptensorInitTensorDescriptor(handle->hiptensor_handle, &desc_in, 3, extent_in.data(), strides_in_ptr,
+                                                hip_type, HIPTENSOR_OP_IDENTITY));
 
   hiptensorTensorDescriptor_t desc_out;
-  CHECK_CUTENSOR(hiptensorInitTensorDescriptor(handle->cutensor_handle, &desc_out, 3, extent_out.data(),
-                                               strides_out_ptr, hip_type, HIPTENSOR_OP_IDENTITY));
+  CHECK_HIPTENSOR(hiptensorInitTensorDescriptor(handle->hiptensor_handle, &desc_out, 3, extent_out.data(),
+                                                strides_out_ptr, hip_type, HIPTENSOR_OP_IDENTITY));
 
   T one(1);
-  CHECK_CUTENSOR(hiptensorPermutation(handle->cutensor_handle, &one, input, &desc_in, order_in.data(), output,
-                                      &desc_out, order_out.data(), hip_type, stream));
+  CHECK_HIPTENSOR(hiptensorPermutation(handle->hiptensor_handle, &one, input, &desc_in, order_in.data(), output,
+                                       &desc_out, order_out.data(), hip_type, stream));
 }
 #endif
 

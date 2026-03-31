@@ -25,7 +25,7 @@
 
 #include "internal/hipdecomp_kernels.h"
 
-#define HIPDECOMP_CUDA_NTHREADS (128)
+#define HIPDECOMP_HIP_NTHREADS (128)
 #define HIPDECOMP_UNROLL_FACTOR (4)
 #define HIPDECOMP_MIN_BLOCKS_PER_SM (16)
 
@@ -33,7 +33,7 @@ namespace hipdecomp {
 
 #ifdef ENABLE_NVSHMEM
 template <typename T>
-__launch_bounds__(HIPDECOMP_CUDA_NTHREADS) __global__
+__launch_bounds__(HIPDECOMP_HIP_NTHREADS) __global__
     void hipdecomp_nvshmem_alltoallv_k(hipdecompNvshmemA2AParams<T> params) {
 
   const int tid = blockIdx.x * blockDim.x + threadIdx.x;
@@ -51,7 +51,7 @@ __launch_bounds__(HIPDECOMP_CUDA_NTHREADS) __global__
 #endif
 
 template <int src_nd, int dest_nd, typename T>
-__launch_bounds__(HIPDECOMP_CUDA_NTHREADS) __global__
+__launch_bounds__(HIPDECOMP_HIP_NTHREADS) __global__
     void hipdecomp_batched_d2d_memcpy_3d_k(hipdecompBatchedD2DMemcpy3DParams<T> params, int blocks_per_copy) {
 
   int copyid = blockIdx.x / blocks_per_copy;
@@ -135,7 +135,7 @@ void hipdecomp_batched_d2d_memcpy_3d_nd_dispatch(const hipdecompBatchedD2DMemcpy
     }
   }
 
-  int blocks_per_copy = (N + HIPDECOMP_CUDA_NTHREADS - 1) / HIPDECOMP_CUDA_NTHREADS;
+  int blocks_per_copy = (N + HIPDECOMP_HIP_NTHREADS - 1) / HIPDECOMP_HIP_NTHREADS;
   int blocks_per_copy_unroll = (blocks_per_copy + HIPDECOMP_UNROLL_FACTOR - 1) / HIPDECOMP_UNROLL_FACTOR;
   size_t total_blocks_unroll = params.ncopies * blocks_per_copy_unroll;
 
@@ -151,15 +151,15 @@ void hipdecomp_batched_d2d_memcpy_3d_nd_dispatch(const hipdecompBatchedD2DMemcpy
     switch (dest_nd) {
     case 1:
       hipdecomp_batched_d2d_memcpy_3d_k<1, 1>
-          <<<params.ncopies * blocks_per_copy, HIPDECOMP_CUDA_NTHREADS, 0, stream>>>(params, blocks_per_copy);
+          <<<params.ncopies * blocks_per_copy, HIPDECOMP_HIP_NTHREADS, 0, stream>>>(params, blocks_per_copy);
       break;
     case 2:
       hipdecomp_batched_d2d_memcpy_3d_k<1, 2>
-          <<<params.ncopies * blocks_per_copy, HIPDECOMP_CUDA_NTHREADS, 0, stream>>>(params, blocks_per_copy);
+          <<<params.ncopies * blocks_per_copy, HIPDECOMP_HIP_NTHREADS, 0, stream>>>(params, blocks_per_copy);
       break;
     case 3:
       hipdecomp_batched_d2d_memcpy_3d_k<1, 3>
-          <<<params.ncopies * blocks_per_copy, HIPDECOMP_CUDA_NTHREADS, 0, stream>>>(params, blocks_per_copy);
+          <<<params.ncopies * blocks_per_copy, HIPDECOMP_HIP_NTHREADS, 0, stream>>>(params, blocks_per_copy);
       break;
     }
     break;
@@ -167,15 +167,15 @@ void hipdecomp_batched_d2d_memcpy_3d_nd_dispatch(const hipdecompBatchedD2DMemcpy
     switch (dest_nd) {
     case 1:
       hipdecomp_batched_d2d_memcpy_3d_k<2, 1>
-          <<<params.ncopies * blocks_per_copy, HIPDECOMP_CUDA_NTHREADS, 0, stream>>>(params, blocks_per_copy);
+          <<<params.ncopies * blocks_per_copy, HIPDECOMP_HIP_NTHREADS, 0, stream>>>(params, blocks_per_copy);
       break;
     case 2:
       hipdecomp_batched_d2d_memcpy_3d_k<2, 2>
-          <<<params.ncopies * blocks_per_copy, HIPDECOMP_CUDA_NTHREADS, 0, stream>>>(params, blocks_per_copy);
+          <<<params.ncopies * blocks_per_copy, HIPDECOMP_HIP_NTHREADS, 0, stream>>>(params, blocks_per_copy);
       break;
     case 3:
       hipdecomp_batched_d2d_memcpy_3d_k<2, 3>
-          <<<params.ncopies * blocks_per_copy, HIPDECOMP_CUDA_NTHREADS, 0, stream>>>(params, blocks_per_copy);
+          <<<params.ncopies * blocks_per_copy, HIPDECOMP_HIP_NTHREADS, 0, stream>>>(params, blocks_per_copy);
       break;
     }
     break;
@@ -183,15 +183,15 @@ void hipdecomp_batched_d2d_memcpy_3d_nd_dispatch(const hipdecompBatchedD2DMemcpy
     switch (dest_nd) {
     case 1:
       hipdecomp_batched_d2d_memcpy_3d_k<3, 1>
-          <<<params.ncopies * blocks_per_copy, HIPDECOMP_CUDA_NTHREADS, 0, stream>>>(params, blocks_per_copy);
+          <<<params.ncopies * blocks_per_copy, HIPDECOMP_HIP_NTHREADS, 0, stream>>>(params, blocks_per_copy);
       break;
     case 2:
       hipdecomp_batched_d2d_memcpy_3d_k<3, 2>
-          <<<params.ncopies * blocks_per_copy, HIPDECOMP_CUDA_NTHREADS, 0, stream>>>(params, blocks_per_copy);
+          <<<params.ncopies * blocks_per_copy, HIPDECOMP_HIP_NTHREADS, 0, stream>>>(params, blocks_per_copy);
       break;
     case 3:
       hipdecomp_batched_d2d_memcpy_3d_k<3, 3>
-          <<<params.ncopies * blocks_per_copy, HIPDECOMP_CUDA_NTHREADS, 0, stream>>>(params, blocks_per_copy);
+          <<<params.ncopies * blocks_per_copy, HIPDECOMP_HIP_NTHREADS, 0, stream>>>(params, blocks_per_copy);
       break;
     }
     break;

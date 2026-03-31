@@ -318,11 +318,11 @@ hipdecompResult_t hipdecompInit(hipdecompHandle_t* handle_in, MPI_Comm mpi_comm)
     CHECK_MPI(MPI_Comm_rank(handle->mpi_local_comm, &handle->local_rank));
     CHECK_MPI(MPI_Comm_size(handle->mpi_local_comm, &handle->local_nranks));
 
-    // Initialize cuTENSOR library
-    CHECK_CUTENSOR(hiptensorCreate(&handle->cutensor_handle));
+    // Initialize hipTENSOR library
+    CHECK_HIPTENSOR(hiptensorCreate(&handle->hiptensor_handle));
 #if HIPTENSOR_MAJOR_VERSION >= 2
-    CHECK_CUTENSOR(hiptensorCreatePlanPreference(handle->cutensor_handle, &handle->cutensor_plan_pref,
-                                                 HIPTENSOR_ALGO_DEFAULT, HIPTENSOR_JIT_MODE_NONE));
+    CHECK_HIPTENSOR(hiptensorCreatePlanPreference(handle->hiptensor_handle, &handle->hiptensor_plan_pref,
+                                                  HIPTENSOR_ALGO_DEFAULT, HIPTENSOR_JIT_MODE_NONE));
 #endif
 
     // Gather hipDecomp environment variable settings
@@ -365,9 +365,9 @@ hipdecompResult_t hipdecompFinalize(hipdecompHandle_t handle) {
 #endif
     CHECK_MPI(MPI_Comm_free(&handle->mpi_local_comm));
 
-    CHECK_CUTENSOR(hiptensorDestroy(handle->cutensor_handle));
+    CHECK_HIPTENSOR(hiptensorDestroy(handle->hiptensor_handle));
 #if HIPTENSOR_MAJOR_VERSION >= 2
-    CHECK_CUTENSOR(hiptensorDestroyPlanPreference(handle->cutensor_plan_pref));
+    CHECK_HIPTENSOR(hiptensorDestroyPlanPreference(handle->hiptensor_plan_pref));
 #endif
 
     handle = nullptr;

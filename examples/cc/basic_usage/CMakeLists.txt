@@ -26,6 +26,7 @@ foreach(tgt ${basic_usage_targets_cc})
   )
   target_link_libraries(${tgt} PRIVATE MPI::MPI_CXX)
   target_link_libraries(${tgt} PRIVATE hipdecomp)
+  target_link_libraries(${tgt} PRIVATE hiptensor)
   set_target_properties(${tgt} PROPERTIES LINKER_LANGUAGE CXX)
 endforeach()
 

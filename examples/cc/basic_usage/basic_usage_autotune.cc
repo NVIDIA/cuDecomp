@@ -27,6 +27,7 @@
 #include <mpi.h>
 
 #include <hip/hip_runtime.h>
+#include <hiptensor/hiptensor.hpp>
 
 #include "hipdecomp.h"
 
@@ -44,7 +45,7 @@
   do {                                                                                                                 \
     hipError_t err = call;                                                                                             \
     if (hipSuccess != err) {                                                                                           \
-      fprintf(stderr, "%s:%d CUDA error. (%s)\n", __FILE__, __LINE__, hipGetErrorString(err));                         \
+      fprintf(stderr, "%s:%d HIP error. (%s)\n", __FILE__, __LINE__, hipGetErrorString(err));                          \
       exit(EXIT_FAILURE);                                                                                              \
     }                                                                                                                  \
   } while (false)
@@ -65,7 +66,7 @@
     }                                                                                                                  \
   } while (false)
 
-// CUDA kernel to demonstrate pencil data access on device.
+// HIP kernel to demonstrate pencil data access on device.
 __global__ void initialize_pencil(double* data, hipdecompPencilInfo_t pinfo) {
 
   int64_t l = blockIdx.x * blockDim.x + threadIdx.x;
@@ -89,6 +90,7 @@ __global__ void initialize_pencil(double* data, hipdecompPencilInfo_t pinfo) {
 }
 
 int main(int argc, char** argv) {
+  hiptensorLoggerSetLevel(HIPTENSOR_LOG_LEVEL_ERROR);
 
   // Initialize MPI and start up hipDecomp
   CHECK_MPI_EXIT(MPI_Init(nullptr, nullptr));
@@ -206,7 +208,7 @@ int main(int argc, char** argv) {
   // Allocate host buffer
   double* data = reinterpret_cast<double*>(malloc(data_num_elements * sizeof(*data)));
 
-  // Initializing pencil data (device version using CUDA kernel)
+  // Initializing pencil data (device version using HIP kernel)
   int threads_per_block = 256;
   int nblocks = (pinfo_x.size + threads_per_block - 1) / threads_per_block;
   initialize_pencil<<<nblocks, threads_per_block>>>(data_d, pinfo_x);
