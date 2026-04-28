@@ -95,10 +95,11 @@ __launch_bounds__(CUDECOMP_NVSHMEM_NTHREADS) __global__
                             block_count * sizeof(T), peer_rank);
     }
 
-    // Last block to finish this copy signals the destination PE.
-    nvshmem_fence();
+    // Ensure all threads complete the put operation
     __syncthreads();
     if (threadIdx.x == 0) {
+      nvshmem_fence();
+      // Last block to finish this copy signals the destination PE.
       if (atomicAdd(&params.block_counters[peer_rank], 1) + 1 == blocks_per_copy) {
         params.block_counters[peer_rank] = 0;
         nvshmemx_signal_op(sig_addr, 1, NVSHMEM_SIGNAL_ADD, peer_rank);
