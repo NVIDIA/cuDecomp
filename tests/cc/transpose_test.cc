@@ -176,6 +176,8 @@ static void usage(const char* pname) {
           "\t\tRow dimension of process grid. (default: 0, autotune) \n"
           "\t--pc\n"
           "\t\tColumn dimension of process grid. (default: 0, autotune) \n"
+          "\t--rank-order\n"
+          "\t\tProcess grid rank order. 0=default, 1=row-major, 2=column-major. (default: 0) \n"
           "\t--backend"
           "\t\tTranspose communication backend (default: 0, autotune) \n"
           "\t--acx\n"
@@ -214,6 +216,7 @@ struct transposeTestArgs {
   int gz = 256;
   int pr = 0;
   int pc = 0;
+  cudecompRankOrder_t rank_order = CUDECOMP_RANK_ORDER_DEFAULT;
   cudecompTransposeCommBackend_t comm_backend = static_cast<cudecompTransposeCommBackend_t>(0);
   std::array<bool, 3> axis_contiguous{};
   std::array<int, 3> gdims_dist{};
@@ -244,6 +247,7 @@ static transposeTestArgs parse_arguments(const std::string& arguments) {
                                            {"backend", required_argument, 0, 'b'},
                                            {"pr", required_argument, 0, 'r'},
                                            {"pc", required_argument, 0, 'c'},
+                                           {"rank-order", required_argument, 0, 'R'},
                                            {"acx", required_argument, 0, '1'},
                                            {"acy", required_argument, 0, '2'},
                                            {"acz", required_argument, 0, '3'},
@@ -261,7 +265,7 @@ static transposeTestArgs parse_arguments(const std::string& arguments) {
                                            {0, 0, 0, 0}};
 
     int option_index = 0;
-    int ch = getopt_long(argc, argv, "x:y:z:b:r:c:1:2:3:4:7:8:9:&:*:(:q:omh", long_options, &option_index);
+    int ch = getopt_long(argc, argv, "x:y:z:b:r:c:R:1:2:3:4:7:8:9:&:*:(:q:omh", long_options, &option_index);
     if (ch == -1) break;
 
     switch (ch) {
@@ -272,6 +276,7 @@ static transposeTestArgs parse_arguments(const std::string& arguments) {
     case 'b': args.comm_backend = static_cast<cudecompTransposeCommBackend_t>(atoi(optarg)); break;
     case 'r': args.pr = atoi(optarg); break;
     case 'c': args.pc = atoi(optarg); break;
+    case 'R': args.rank_order = static_cast<cudecompRankOrder_t>(atoi(optarg)); break;
     case '1': args.axis_contiguous[0] = atoi(optarg); break;
     case '2': args.axis_contiguous[1] = atoi(optarg); break;
     case '3': args.axis_contiguous[2] = atoi(optarg); break;
@@ -380,6 +385,7 @@ static int run_test(const std::string& arguments, bool silent) {
     CHECK_CUDECOMP(cudecompGridDescConfigSetDefaults(&config));
     config.pdims[0] = pdims[0];
     config.pdims[1] = pdims[1];
+    config.rank_order = args.rank_order;
     config.gdims[0] = gdims[0];
     config.gdims[1] = gdims[1];
     config.gdims[2] = gdims[2];
