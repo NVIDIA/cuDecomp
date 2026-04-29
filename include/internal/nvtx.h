@@ -18,6 +18,7 @@
 #ifndef CUDECOMP_NVTX_H
 #define CUDECOMP_NVTX_H
 
+#include <functional>
 #include <string>
 
 #ifdef ENABLE_NVTX

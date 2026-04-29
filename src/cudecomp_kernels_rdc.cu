@@ -15,6 +15,9 @@
  * limitations under the License.
  */
 
+#include <algorithm>
+#include <cstdint>
+
 #include <cuda/std/complex>
 
 #include "internal/checks.h"

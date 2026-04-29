@@ -18,6 +18,9 @@
 #ifndef CUDECOMP_KERNELS_H
 #define CUDECOMP_KERNELS_H
 
+#include <cstddef>
+#include <cstdint>
+
 #include <cuda/std/complex>
 
 #include "internal/common.h"

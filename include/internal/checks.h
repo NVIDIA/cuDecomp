@@ -19,7 +19,9 @@
 #define CUDECOMP_CHECKS_H
 
 #include <cstdio>
+#include <cstdlib>
 #include <iostream>
+#include <sstream>
 #include <string>
 
 #include <cuda.h>
