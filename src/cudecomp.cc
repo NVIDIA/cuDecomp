@@ -1268,11 +1268,11 @@ cudecompResult_t cudecompMalloc(cudecompHandle_t handle, cudecompGridDesc_t grid
         if (handle->nccl_enable_ubr) {
           void* nccl_ubr_handle;
           if (grid_desc->nccl_comm) {
-            CHECK_NCCL(ncclCommRegister(*grid_desc->nccl_comm, buffer, buffer_size_bytes, &nccl_ubr_handle));
+            CHECK_NCCL(ncclCommRegister(*grid_desc->nccl_comm, *buffer, buffer_size_bytes, &nccl_ubr_handle));
             handle->nccl_ubr_handles[*buffer].push_back(std::make_pair(*grid_desc->nccl_comm, nccl_ubr_handle));
           }
           if (grid_desc->nccl_local_comm) {
-            CHECK_NCCL(ncclCommRegister(*grid_desc->nccl_local_comm, buffer, buffer_size_bytes, &nccl_ubr_handle));
+            CHECK_NCCL(ncclCommRegister(*grid_desc->nccl_local_comm, *buffer, buffer_size_bytes, &nccl_ubr_handle));
             handle->nccl_ubr_handles[*buffer].push_back(std::make_pair(*grid_desc->nccl_local_comm, nccl_ubr_handle));
           }
         }
