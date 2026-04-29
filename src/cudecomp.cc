@@ -142,6 +142,15 @@ static void checkDataType(cudecompDataType_t dtype) {
   }
 }
 
+static void checkRankOrder(cudecompRankOrder_t rank_order) {
+  switch (rank_order) {
+  case CUDECOMP_RANK_ORDER_DEFAULT:
+  case CUDECOMP_RANK_ORDER_ROW_MAJOR:
+  case CUDECOMP_RANK_ORDER_COL_MAJOR: return;
+  default: THROW_INVALID_USAGE("unknown rank order");
+  }
+}
+
 static void checkHandle(cudecompHandle_t handle) {
   if (!handle || !handle->initialized) { THROW_INVALID_USAGE("invalid handle"); }
 }
@@ -154,6 +163,7 @@ static void checkConfig(cudecompHandle_t handle, const cudecompGridDescConfig_t*
                         bool autotune_halos) {
   if (!autotune_transpose) { checkTransposeCommBackend(config->transpose_comm_backend); }
   if (!autotune_halos) { checkHaloCommBackend(config->halo_comm_backend); }
+  checkRankOrder(config->rank_order);
 
   int pdims_prod = config->pdims[0] * config->pdims[1];
   if (pdims_prod == 0) {
@@ -368,9 +378,23 @@ static void getCudecompEnvVars(cudecompHandle_t& handle) {
   // Check CUDECOMP_PERFORMANCE_REPORT_WRITE_DIR (Directory for CSV performance reports)
   const char* performance_write_dir_str = std::getenv("CUDECOMP_PERFORMANCE_REPORT_WRITE_DIR");
   if (performance_write_dir_str) { handle->performance_report_write_dir = std::string(performance_write_dir_str); }
+}
 
-  // Check CUDECOMP_USE_COL_MAJOR_RANK_ORDER (Column-major rank assignment)
-  handle->use_col_major_rank_order = checkEnvVar("CUDECOMP_USE_COL_MAJOR_RANK_ORDER");
+static void resolveRankOrder(cudecompHandle_t handle, cudecompGridDesc_t grid_desc) {
+  const char* env_val = std::getenv("CUDECOMP_USE_COL_MAJOR_RANK_ORDER");
+  if (env_val && !handle->col_major_rank_order_env_warning_issued) {
+    if (handle->rank == 0) {
+      printf("CUDECOMP:WARN: CUDECOMP_USE_COL_MAJOR_RANK_ORDER is deprecated and will be removed in a future "
+             "release. Set cudecompGridDescConfig_t::rank_order instead.\n");
+    }
+    handle->col_major_rank_order_env_warning_issued = true;
+  }
+
+  if (grid_desc->config.rank_order == CUDECOMP_RANK_ORDER_DEFAULT) {
+    grid_desc->config.rank_order = (env_val && checkEnvVar("CUDECOMP_USE_COL_MAJOR_RANK_ORDER"))
+                                       ? CUDECOMP_RANK_ORDER_COL_MAJOR
+                                       : CUDECOMP_RANK_ORDER_ROW_MAJOR;
+  }
 }
 
 #ifdef ENABLE_NVSHMEM
@@ -624,6 +648,7 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
     grid_desc = new cudecompGridDesc;
     grid_desc->initialized = true;
     grid_desc->config = *config;
+    resolveRankOrder(handle, grid_desc);
     auto comm_backend = grid_desc->config.transpose_comm_backend;
     auto halo_comm_backend = grid_desc->config.halo_comm_backend;
 
@@ -669,13 +694,7 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
         if (grid_desc->config.pdims[0] > 0 && grid_desc->config.pdims[1] > 0) {
           // If pdims are set, temporarily set up comm info stuctures to determine if we need to create a local NCCL
           // communicator
-          if (handle->use_col_major_rank_order) {
-            grid_desc->pidx[0] = handle->rank % grid_desc->config.pdims[0];
-            grid_desc->pidx[1] = handle->rank / grid_desc->config.pdims[0];
-          } else {
-            grid_desc->pidx[0] = handle->rank / grid_desc->config.pdims[1];
-            grid_desc->pidx[1] = handle->rank % grid_desc->config.pdims[1];
-          }
+          setProcessGridIndex(handle, grid_desc);
           int color_row = grid_desc->pidx[0];
           MPI_Comm row_comm;
           CHECK_MPI(MPI_Comm_split(handle->mpi_comm, color_row, handle->rank, &row_comm));
@@ -759,13 +778,7 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
       }
     }
 
-    if (handle->use_col_major_rank_order) {
-      grid_desc->pidx[0] = handle->rank % grid_desc->config.pdims[0];
-      grid_desc->pidx[1] = handle->rank / grid_desc->config.pdims[0];
-    } else {
-      grid_desc->pidx[0] = handle->rank / grid_desc->config.pdims[1];
-      grid_desc->pidx[1] = handle->rank % grid_desc->config.pdims[1];
-    }
+    setProcessGridIndex(handle, grid_desc);
 
     // Setup final row and column communicators
     int color_row = grid_desc->pidx[0];
@@ -962,6 +975,7 @@ cudecompResult_t cudecompGridDescConfigSetDefaults(cudecompGridDescConfig_t* con
       config->gdims[i] = 0;
       config->gdims_dist[i] = 0;
     }
+    config->rank_order = CUDECOMP_RANK_ORDER_DEFAULT;
 
     // Transpose Options
     config->transpose_comm_backend = CUDECOMP_TRANSPOSE_COMM_MPI_P2P;

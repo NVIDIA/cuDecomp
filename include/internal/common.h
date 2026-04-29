@@ -113,10 +113,10 @@ struct cudecompHandle {
       ""; // directory to write CSV performance reports, empty means no file writing
 
   // Miscellaneous
-  int32_t device_p2p_ce_count = 0;       // number of P2P CEs available
-  int32_t device_num_sms = 0;            // number of SMs on the device
-  int32_t device_max_threads_per_sm = 0; // maximum threads per SM
-  bool use_col_major_rank_order = false; // Flag to control whether to use column-major rank order
+  int32_t device_p2p_ce_count = 0;                      // number of P2P CEs available
+  int32_t device_num_sms = 0;                           // number of SMs on the device
+  int32_t device_max_threads_per_sm = 0;                // maximum threads per SM
+  bool col_major_rank_order_env_warning_issued = false; // Warn once for deprecated rank order env var
 };
 
 // Structure with information about row/column communicator
@@ -221,15 +221,31 @@ using comm_count_t = int64_t;
 
 enum cudecompCommAxis { CUDECOMP_COMM_COL = 0, CUDECOMP_COMM_ROW = 1 };
 
+static inline void setProcessGridIndex(const cudecompHandle_t handle, cudecompGridDesc_t grid_desc) {
+  switch (grid_desc->config.rank_order) {
+  case CUDECOMP_RANK_ORDER_COL_MAJOR:
+    grid_desc->pidx[0] = handle->rank % grid_desc->config.pdims[0];
+    grid_desc->pidx[1] = handle->rank / grid_desc->config.pdims[0];
+    break;
+  case CUDECOMP_RANK_ORDER_DEFAULT:
+  case CUDECOMP_RANK_ORDER_ROW_MAJOR:
+  default:
+    grid_desc->pidx[0] = handle->rank / grid_desc->config.pdims[1];
+    grid_desc->pidx[1] = handle->rank % grid_desc->config.pdims[1];
+    break;
+  }
+}
+
 // Helper function to convert row or column rank to global rank
-static inline int getGlobalRank(const cudecompHandle_t handle, const cudecompGridDesc_t grid_desc,
-                                cudecompCommAxis axis, int axis_rank) {
-  if (handle->use_col_major_rank_order) {
-    // Column-major rank order
+static inline int getGlobalRank(const cudecompHandle_t, const cudecompGridDesc_t grid_desc, cudecompCommAxis axis,
+                                int axis_rank) {
+  switch (grid_desc->config.rank_order) {
+  case CUDECOMP_RANK_ORDER_COL_MAJOR:
     return (axis == CUDECOMP_COMM_ROW) ? grid_desc->pidx[0] + axis_rank * grid_desc->config.pdims[0]
                                        : grid_desc->config.pdims[0] * grid_desc->pidx[1] + axis_rank;
-  } else {
-    // Row-major rank order (default)
+  case CUDECOMP_RANK_ORDER_DEFAULT:
+  case CUDECOMP_RANK_ORDER_ROW_MAJOR:
+  default:
     return (axis == CUDECOMP_COMM_ROW) ? grid_desc->config.pdims[1] * grid_desc->pidx[0] + axis_rank
                                        : grid_desc->pidx[1] + axis_rank * grid_desc->config.pdims[1];
   }

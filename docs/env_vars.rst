@@ -95,6 +95,9 @@ CUDECOMP_USE_COL_MAJOR_RANK_ORDER
 --------------------------------------
 (since v0.6.0)
 
-:code:`CUDECOMP_USE_COL_MAJOR_RANK_ORDER` controls the rank assignment order in the process grid. By default, ranks are assigned in row-major order for consistency with :code:`MPI_Cart_*` routines. When enabled, ranks are assigned in column-major order.
+:code:`CUDECOMP_USE_COL_MAJOR_RANK_ORDER` is deprecated. Use the :code:`rank_order` field in
+:code:`cudecompGridDescConfig_t`/:code:`cudecompGridDescConfig` instead.
 
-Default setting is off (:code:`0`). Setting this variable to :code:`1` will enable column-major rank assignment.
+When :code:`rank_order` is left at :code:`CUDECOMP_RANK_ORDER_DEFAULT`, this environment variable is still honored for
+backward compatibility. Setting this variable to :code:`1` enables column-major rank assignment; otherwise rank assignment
+is row-major. Explicit :code:`rank_order` settings take precedence over this environment variable.

@@ -82,6 +82,16 @@ typedef enum {
 } cudecompAutotuneGridMode_t;
 
 /**
+ * @brief This enum defines rank assignment order options for the process grid.
+ */
+typedef enum {
+  CUDECOMP_RANK_ORDER_DEFAULT = 0,   ///< Use the default rank order. This resolves to row-major unless the
+                                     ///< deprecated CUDECOMP_USE_COL_MAJOR_RANK_ORDER environment variable is set.
+  CUDECOMP_RANK_ORDER_ROW_MAJOR = 1, ///< Assign ranks in row-major order (default)
+  CUDECOMP_RANK_ORDER_COL_MAJOR = 2  ///< Assign ranks in column-major order
+} cudecompRankOrder_t;
+
+/**
  * @brief This enum defines the possible values return values from cuDecomp. Most functions in the cuDecomp library
  * will return one of these values to indicate if an operation has completed successfully or an error occured.
  */
@@ -113,9 +123,11 @@ typedef struct cudecompGridDesc* cudecompGridDesc_t;
  */
 typedef struct {
   // Grid information
-  int32_t gdims[3];      ///< dimensions of global data grid
-  int32_t gdims_dist[3]; ///< dimensions of global data grid to use for distribution
-  int32_t pdims[2];      ///< dimensions of process grid
+  int32_t gdims[3];               ///< dimensions of global data grid
+  int32_t gdims_dist[3];          ///< dimensions of global data grid to use for distribution
+  int32_t pdims[2];               ///< dimensions of process grid
+  cudecompRankOrder_t rank_order; ///< process grid rank assignment order
+                                  ///< (default: CUDECOMP_RANK_ORDER_DEFAULT)
 
   // Transpose settings
   cudecompTransposeCommBackend_t transpose_comm_backend; ///< communication backend to use for transpose communication

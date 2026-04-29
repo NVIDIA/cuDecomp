@@ -96,6 +96,14 @@ __________________________
 
 ------
 
+.. _cudecompRankOrder_t-ref:
+
+cudecompRankOrder_t
+__________________
+.. doxygenenum :: cudecompRankOrder_t
+
+------
+
 .. _cudecompResult_t-ref:
 
 cudecompResult_t

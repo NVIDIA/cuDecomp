@@ -166,7 +166,7 @@ module transpose_CUDECOMP_DOUBLE_COMPLEX_mod
     integer :: padding_x(3), padding_y(3), padding_z(3)
     integer :: mem_order(3, 3)
     logical :: out_of_place, use_managed_memory
-    integer :: pr, pc
+    integer :: pr, pc, rank_order
 
     ! MPI
     integer :: local_rank, ierr
@@ -214,6 +214,7 @@ module transpose_CUDECOMP_DOUBLE_COMPLEX_mod
     gz = 256
     pr = 0
     pc = 0
+    rank_order = CUDECOMP_RANK_ORDER_DEFAULT
     comm_backend = 0
     axis_contiguous(:) = .false.
     gdims_dist(:) = 0
@@ -258,6 +259,10 @@ module transpose_CUDECOMP_DOUBLE_COMPLEX_mod
         case('--pc')
           read(args(i+1), *) arg
           read(arg, *) pc
+          skip_count = 1
+        case('--rank-order')
+          read(args(i+1), *) arg
+          read(arg, *) rank_order
           skip_count = 1
         case('--acx')
           read(args(i+1), *) arg
@@ -353,6 +358,7 @@ module transpose_CUDECOMP_DOUBLE_COMPLEX_mod
     ! Setup grid descriptor
     CHECK_CUDECOMP(cudecompGridDescConfigSetDefaults(config))
     config%pdims = pdims
+    config%rank_order = rank_order
     gdims = [gx, gy, gz]
     config%gdims = gdims
     config%gdims_dist = gdims_dist
