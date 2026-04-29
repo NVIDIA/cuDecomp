@@ -47,6 +47,7 @@ ________________________
   :f integer gdims(3): dimensions of global data grid
   :f integer gdims_dist(3): dimensions of global data grid to use for distribution
   :f integer pdims(2): dimensions of process grid
+  :f cudecompRankOrder rank_order: process grid rank assignment order (default: CUDECOMP_RANK_ORDER_DEFAULT)
   :f cudecompTransposeCommType transpose_comm_backend: communication backend to use for transpose communication (default: CUDECOMP_TRANSPOSE_COMM_MPI_P2P)
   :f logical transpose_axis_contiguous(3): flag (by axis) indicating if memory should be contiguous along pencil axis (default: [false, false, false])
   :f integer transpose_mem_order(3, 3): user-specified memory ordering by axis, overrides transpose_axis_contiguous setting; second index specifies axis,
@@ -142,6 +143,14 @@ See documention for equivalent C enumerator, :ref:`cudecompDataType_t-ref`.
 cudecompAutotuneGridMode
 __________________________
 See documention for equivalent C enumerator, :ref:`cudecompAutotuneGridMode_t-ref`.
+
+------
+
+.. _cudecompRankOrder_t-f-ref:
+
+cudecompRankOrder
+__________________
+See documention for equivalent C enumerator, :ref:`cudecompRankOrder_t-ref`.
 
 ------
 

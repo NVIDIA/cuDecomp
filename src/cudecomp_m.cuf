@@ -48,6 +48,13 @@ module cudecomp
     enumerator :: CUDECOMP_AUTOTUNE_GRID_HALO = 1
   end enum
 
+  ! enum for cuDecomp process grid rank order options
+  enum, bind(c) ! cudecompRankOrder
+    enumerator :: CUDECOMP_RANK_ORDER_DEFAULT = 0
+    enumerator :: CUDECOMP_RANK_ORDER_ROW_MAJOR = 1
+    enumerator :: CUDECOMP_RANK_ORDER_COL_MAJOR = 2
+  end enum
+
   ! enum for cuDecomp supported data types
   enum, bind(c) ! cudecompDataType
     enumerator :: CUDECOMP_FLOAT = -1
@@ -88,6 +95,7 @@ module cudecomp
     integer(c_int32_t) :: gdims(3) ! dimensions of data grid
     integer(c_int32_t) :: gdims_dist(3) ! dimensions of data grid for distribution
     integer(c_int32_t) :: pdims(2) ! dimensions of process grid
+    integer(c_int32_t) :: rank_order ! process grid rank assignment order
 
     ! Transpose Options
     integer(c_int32_t) :: transpose_comm_backend

@@ -85,6 +85,19 @@ and :code:`pdims[1]` corresponds to :math:`P_{\text{cols}}`. In this example, we
 
     config%pdims = [2, 2] ! [P_rows, P_cols]
 
+By default, ranks are assigned to the process grid in row-major order. To use column-major rank assignment, set
+:code:`rank_order` in the configuration structure.
+
+.. tabs::
+
+  .. code-tab:: c++
+
+    config.rank_order = CUDECOMP_RANK_ORDER_COL_MAJOR;
+
+  .. code-tab:: fortran
+
+    config%rank_order = CUDECOMP_RANK_ORDER_COL_MAJOR
+
 Next, we set the :code:`gdims` (global grid) entries in the configuration struct. These values correspond to the :math:`X`, :math:`Y`, and :math:`Z`
 dimensions of the global grid. In this example, we use a global grid with dimensions :math:`64 \times 64 \times 64`.
 

@@ -34,7 +34,8 @@ the *global grid*. The global grid is decomposed
 across :math:`N_{\text{GPU}}` processes in a 2D **process grid** with dimensions :math:`P_{\text{row}} \times P_{\text{col}}`. The processes
 are logically grouped by column and row index into :math:`P_{\text{row}}` *row* communicators and :math:`P_{\text{col}}` *column* communicators.
 By default, for consistency with :code:`MPI_Cart_*` routines, the ranks are assigned in a row-major ordering (i.e. row communicators
-are composed of sequential ranks). This can be changed to column-major ordering using the :code:`CUDECOMP_USE_COL_MAJOR_RANK_ORDER` environment variable (see :ref:`env-var-section-ref`).
+are composed of sequential ranks). This can be changed to column-major ordering using the :code:`rank_order` field in
+:code:`cudecompGridDescConfig_t`/:code:`cudecompGridDescConfig`.
 
 cuDecomp will distribute the global domain data so that each process is assigned a unique *pencil* of data, with three different
 pencil configurations corresponding to different transposed configurations of the global domain. The domain can be
@@ -62,4 +63,3 @@ shows the :math:`X`-pencil, :math:`Y`-pencil, and :math:`Z`-pencil configuration
 
 .. figure:: images/decomposition.png
   :align: center
-
