@@ -388,5 +388,6 @@ halo_test_ac_fortran:
 
 halo_test_rank_order_fortran:
   <<: *halo_test_rank_order
+  ax: [1, 2, 3]
   executable_prefix: 'fortran/halo_test'
   fortran_indexing: true
