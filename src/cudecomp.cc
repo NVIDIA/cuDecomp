@@ -440,6 +440,7 @@ cudecompResult_t cudecompInit(cudecompHandle_t* handle_in, MPI_Comm mpi_comm) {
   using namespace cudecomp;
   cudecompHandle_t handle = nullptr;
   try {
+    if (!handle_in) { THROW_INVALID_USAGE("handle argument cannot be null"); }
     if (cudecomp_initialized) {
       THROW_INVALID_USAGE("cuDecomp already initialized and multiple handles are not supported.");
     }
@@ -577,7 +578,6 @@ cudecompResult_t cudecompFinalize(cudecompHandle_t handle) {
 
     CHECK_NVML(nvmlShutdown());
 
-    handle = nullptr;
     delete handle;
 
     cudecomp_initialized = false;
