@@ -107,6 +107,23 @@ transpose_test_ac: &transpose_test_ac
 
   test_mem_order: False
 
+transpose_test_rank_order: &transpose_test_rank_order
+  <<: *transpose_test_base
+  args : ['backend',
+          'gx', 'gy', 'gz',
+          'gd',
+          'hex' ,'hey', 'hez',
+          'pdx', 'pdy', 'pdz',
+          'rank-order']
+
+  backend: [1] # Limit this testing to one backend
+  dtypes: ['R32'] # Limit to one data type
+  rank-order: [0, 1, 2]
+  out_of_place: [False]
+  managed_memory : [False]
+
+  test_mem_order: False
+
 transpose_test_cc:
   <<: *transpose_test
   executable_prefix: 'cc/transpose_test'
@@ -129,6 +146,10 @@ transpose_test_mix_cc:
 
 transpose_test_ac_cc:
   <<: *transpose_test_ac
+  executable_prefix: 'cc/transpose_test'
+
+transpose_test_rank_order_cc:
+  <<: *transpose_test_rank_order
   executable_prefix: 'cc/transpose_test'
 
 transpose_test_fortran:
@@ -158,6 +179,11 @@ transpose_test_mix_fortran:
 
 transpose_test_ac_fortran:
   <<: *transpose_test_ac
+  executable_prefix: 'fortran/transpose_test'
+  fortran_indexing: true
+
+transpose_test_rank_order_fortran:
+  <<: *transpose_test_rank_order
   executable_prefix: 'fortran/transpose_test'
   fortran_indexing: true
 
@@ -278,6 +304,24 @@ halo_test_ac: &halo_test_ac
 
   test_mem_order: False
 
+halo_test_rank_order: &halo_test_rank_order
+  <<: *halo_test_base
+  args : ['backend',
+          'gx', 'gy', 'gz',
+          'gd',
+          'hex' ,'hey', 'hez',
+          'hpx', 'hpy', 'hpz',
+          'pdx', 'pdy', 'pdz',
+          'ax',
+          'rank-order']
+
+  backend: [1] # Limit this testing to one backend
+  dtypes: ['R32'] # Limit to one data type
+  rank-order: [0, 1, 2]
+
+
+  test_mem_order: False
+
 halo_test_cc:
   <<: *halo_test
   executable_prefix: 'cc/halo_test'
@@ -300,6 +344,10 @@ halo_test_mix_cc:
 
 halo_test_ac_cc:
   <<: *halo_test_ac
+  executable_prefix: 'cc/halo_test'
+
+halo_test_rank_order_cc:
+  <<: *halo_test_rank_order
   executable_prefix: 'cc/halo_test'
 
 halo_test_fortran:
@@ -335,5 +383,10 @@ halo_test_mix_fortran:
 halo_test_ac_fortran:
   <<: *halo_test_ac
   ax: [1, 2, 3]
+  executable_prefix: 'fortran/halo_test'
+  fortran_indexing: true
+
+halo_test_rank_order_fortran:
+  <<: *halo_test_rank_order
   executable_prefix: 'fortran/halo_test'
   fortran_indexing: true
