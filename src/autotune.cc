@@ -16,6 +16,7 @@
  */
 
 #include <algorithm>
+#include <array>
 #include <numeric>
 #include <string>
 #include <vector>
@@ -48,6 +49,20 @@ static std::vector<int> getFactors(int N) {
   }
   std::sort(factors.begin(), factors.end());
   return factors;
+}
+
+static std::vector<std::array<int32_t, 2>> getPdimCandidates(int nranks, cudecompRankOrder_t rank_order) {
+  std::vector<std::array<int32_t, 2>> pdim_list;
+  auto factors = getFactors(nranks);
+  for (auto& factor : factors) {
+    // Grow the process-grid dimension mapped to contiguous ranks first, preserving the locality-first traversal.
+    if (rank_order == CUDECOMP_RANK_ORDER_COL_MAJOR) {
+      pdim_list.push_back({factor, nranks / factor});
+    } else {
+      pdim_list.push_back({nranks / factor, factor});
+    }
+  }
+  return pdim_list;
 }
 
 template <typename T> static std::vector<T> processTimings(cudecompHandle_t handle, std::vector<T> times, T scale = 1) {
@@ -122,11 +137,11 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
     if (!options->transpose_use_inplace_buffers[i]) need_data2 = true;
   }
 
-  std::vector<int> pdim1_list;
+  std::vector<std::array<int32_t, 2>> pdim_list;
   if (autotune_pdims) {
-    pdim1_list = getFactors(handle->nranks);
+    pdim_list = getPdimCandidates(handle->nranks, grid_desc->config.rank_order);
   } else {
-    pdim1_list = {grid_desc->config.pdims[1]};
+    pdim_list.push_back({grid_desc->config.pdims[0], grid_desc->config.pdims[1]});
   }
 
   int32_t pdims_best[2]{grid_desc->config.pdims[0], grid_desc->config.pdims[1]};
@@ -142,9 +157,9 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
   int64_t work_sz = 0;
 
   bool valid = false;
-  for (auto& pdim1 : pdim1_list) {
-    grid_desc->config.pdims[0] = handle->nranks / pdim1;
-    grid_desc->config.pdims[1] = pdim1;
+  for (auto& pdims : pdim_list) {
+    grid_desc->config.pdims[0] = pdims[0];
+    grid_desc->config.pdims[1] = pdims[1];
     setProcessGridIndex(handle, grid_desc);
 
     cudecompPencilInfo_t pinfo_x0, pinfo_x3;
@@ -598,11 +613,11 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
 #endif
   }
 
-  std::vector<int> pdim1_list;
+  std::vector<std::array<int32_t, 2>> pdim_list;
   if (autotune_pdims) {
-    pdim1_list = getFactors(handle->nranks);
+    pdim_list = getPdimCandidates(handle->nranks, grid_desc->config.rank_order);
   } else {
-    pdim1_list = {grid_desc->config.pdims[1]};
+    pdim_list.push_back({grid_desc->config.pdims[0], grid_desc->config.pdims[1]});
   }
 
   int32_t pdims_best[2]{grid_desc->config.pdims[0], grid_desc->config.pdims[1]};
@@ -617,9 +632,9 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
   int64_t work_sz = 0;
 
   bool valid = false;
-  for (auto& pdim1 : pdim1_list) {
-    grid_desc->config.pdims[0] = handle->nranks / pdim1;
-    grid_desc->config.pdims[1] = pdim1;
+  for (auto& pdims : pdim_list) {
+    grid_desc->config.pdims[0] = pdims[0];
+    grid_desc->config.pdims[1] = pdims[1];
     setProcessGridIndex(handle, grid_desc);
 
     cudecompPencilInfo_t pinfo;
