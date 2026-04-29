@@ -9,7 +9,7 @@ endif()
 
 # User-defined build options
 option(HIPDECOMP_BUILD_FORTRAN "Build Fortran bindings" ON)
-#option(HIPDECOMP_ENABLE_NVTX "Enable NVTX ranges" ON)
+option(HIPDECOMP_ENABLE_ROCTX "Enable ROCTx ranges" ON)
 #option(HIPDECOMP_ENABLE_NVSHMEM "Enable NVSHMEM" OFF)
 option(HIPDECOMP_BUILD_EXTRAS "Build benchmark, examples, and tests" OFF)
 
@@ -82,6 +82,11 @@ if (HIPDECOMP_ENABLE_ROCSHMEM)
   find_package(rocshmem REQUIRED)
 endif()
 
+if (HIPDECOMP_ENABLE_ROCTX)
+  # Get rocprofiler-sdk-roctx library
+  find_package(rocprofiler-sdk-roctx REQUIRED)
+endif()
+
 # Building HIPDECOMP shared lib
 add_library(hipdecomp SHARED)
 set_target_properties(hipdecomp PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
@@ -108,6 +113,9 @@ target_link_libraries(hipdecomp PUBLIC hip::host hip::device)
 target_link_libraries(hipdecomp PUBLIC MPI::MPI_CXX)
 target_link_libraries(hipdecomp PRIVATE hiptensor)
 target_link_libraries(hipdecomp PRIVATE rccl)
+if (HIPDECOMP_ENABLE_ROCTX)
+  target_link_libraries(hipdecomp PRIVATE rocprofiler-sdk-roctx)
+endif()
 if (CRAY_CC_BIN)
   # In Cray environments, add link to GTL lib for GPU-aware MPI support
   target_link_libraries(hipdecomp PRIVATE ${CRAY_MPI_GTL_HIP_LIBRARY})
@@ -124,9 +132,9 @@ if (NOT TEST_STD_FS_RESULT)
   target_link_libraries(HIPDECOMP PRIVATE -lstdc++fs)
 endif()
 
-# if (HIPDECOMP_ENABLE_NVTX)
-#   target_compile_definitions(hipdecomp PRIVATE ENABLE_NVTX)
-# endif()
+if (HIPDECOMP_ENABLE_ROCTX)
+  target_compile_definitions(hipdecomp PRIVATE ENABLE_ROCTX)
+endif()
 
 # if (HIPDECOMP_ENABLE_NVSHMEM)
 #   target_compile_definitions(hipdecomp PRIVATE ENABLE_NVSHMEM)

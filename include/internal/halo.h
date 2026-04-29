@@ -28,8 +28,8 @@
 #include "internal/checks.h"
 #include "internal/comm_routines.h"
 #include "internal/hipdecomp_kernels.h"
-#include "internal/nvtx.h"
 #include "internal/performance.h"
+#include "internal/roctx.h"
 #include "internal/utils.h"
 
 namespace hipdecomp {
@@ -305,10 +305,10 @@ void hipdecompUpdateHalosX(const hipdecompHandle_t handle, const hipdecompGridDe
                            const int32_t padding_ptr[], hipStream_t stream) {
   std::stringstream os;
   os << "hipdecompUpdateHalosX_" << dim;
-  nvtx::rangePush(os.str());
+  roctx::rangePush(os.str());
   hipdecompUpdateHalos_(0, handle, grid_desc, input, work, halo_extents_ptr, halo_periods_ptr, dim, padding_ptr,
                         stream);
-  nvtx::rangePop();
+  roctx::rangePop();
 }
 
 template <typename T>
@@ -317,10 +317,10 @@ void hipdecompUpdateHalosY(const hipdecompHandle_t handle, const hipdecompGridDe
                            const int32_t padding_ptr[], hipStream_t stream) {
   std::stringstream os;
   os << "hipdecompUpdateHalosY_" << dim;
-  nvtx::rangePush(os.str());
+  roctx::rangePush(os.str());
   hipdecompUpdateHalos_(1, handle, grid_desc, input, work, halo_extents_ptr, halo_periods_ptr, dim, padding_ptr,
                         stream);
-  nvtx::rangePop();
+  roctx::rangePop();
 }
 
 template <typename T>
@@ -329,10 +329,10 @@ void hipdecompUpdateHalosZ(const hipdecompHandle_t handle, const hipdecompGridDe
                            const int32_t padding_ptr[], hipStream_t stream) {
   std::stringstream os;
   os << "hipdecompUpdateHalosZ_" << dim;
-  nvtx::rangePush(os.str());
+  roctx::rangePush(os.str());
   hipdecompUpdateHalos_(2, handle, grid_desc, input, work, halo_extents_ptr, halo_periods_ptr, dim, padding_ptr,
                         stream);
-  nvtx::rangePop();
+  roctx::rangePop();
 }
 
 } // namespace hipdecomp

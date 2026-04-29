@@ -31,7 +31,7 @@
 
 #include "internal/checks.h"
 #include "internal/hipdecomp_kernels.h"
-#include "internal/nvtx.h"
+#include "internal/roctx.h"
 
 namespace hipdecomp {
 
@@ -190,7 +190,7 @@ static void hipdecompAlltoall(const hipdecompHandle_t& handle, const hipdecompGr
                               const std::vector<comm_count_t>& recv_offsets,
                               const std::vector<comm_count_t>& recv_offsets_nvshmem, hipdecompCommAxis comm_axis,
                               hipStream_t stream, hipdecompTransposePerformanceSample* current_sample = nullptr) {
-  nvtx::rangePush("hipdecompAlltoall");
+  roctx::rangePush("hipdecompAlltoall");
 
   if (handle->performance_report_enable) {
     CHECK_HIP(hipEventRecord(current_sample->alltoall_start_events[current_sample->alltoall_timing_count], stream));
@@ -313,7 +313,7 @@ static void hipdecompAlltoall(const hipdecompHandle_t& handle, const hipdecompGr
     current_sample->alltoall_timing_count++;
   }
 
-  nvtx::rangePop();
+  roctx::rangePop();
 }
 
 template <typename T>
@@ -335,7 +335,7 @@ hipdecompAlltoallPipelined(const hipdecompHandle_t& handle, const hipdecompGridD
     os << src_ranks[i] << "," << dst_ranks[i];
     if (i != src_ranks.size() - 1) os << "_";
   }
-  nvtx::rangePush(os.str());
+  roctx::rangePush(os.str());
 
   int self_rank = (comm_axis == HIPDECOMP_COMM_ROW) ? grid_desc->row_comm_info.rank : grid_desc->col_comm_info.rank;
   if (handle->performance_report_enable && src_ranks[0] != self_rank) {
@@ -521,7 +521,7 @@ hipdecompAlltoallPipelined(const hipdecompHandle_t& handle, const hipdecompGridD
         hipEventRecord(current_sample->alltoall_end_events[current_sample->alltoall_timing_count], handle->streams[0]));
     current_sample->alltoall_timing_count++;
   }
-  nvtx::rangePop();
+  roctx::rangePop();
 }
 
 template <typename T>
@@ -532,7 +532,7 @@ static void hipdecompSendRecvPair(const hipdecompHandle_t& handle, const hipdeco
                                   const std::array<comm_count_t, 2>& recv_counts,
                                   const std::array<size_t, 2>& recv_offsets, hipStream_t stream = 0,
                                   hipdecompHaloPerformanceSample* current_sample = nullptr) {
-  nvtx::rangePush("hipdecompSendRecvPair");
+  roctx::rangePush("hipdecompSendRecvPair");
 
   if (handle->performance_report_enable && current_sample) {
     CHECK_HIP(hipEventRecord(current_sample->sendrecv_start_event, stream));
@@ -664,7 +664,7 @@ static void hipdecompSendRecvPair(const hipdecompHandle_t& handle, const hipdeco
     CHECK_HIP(hipEventRecord(current_sample->sendrecv_end_event, stream));
   }
 
-  nvtx::rangePop();
+  roctx::rangePop();
 }
 
 } // namespace hipdecomp

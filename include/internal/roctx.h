@@ -16,45 +16,33 @@
  * limitations under the License.
  */
 
-#ifndef HIPDECOMP_NVTX_H
-#define HIPDECOMP_NVTX_H
+#ifndef HIPDECOMP_ROCTX_H
+#define HIPDECOMP_ROCTX_H
 
 #include <string>
 
-#ifdef ENABLE_NVTX
-#include <nvtx3/nvToolsExt.h>
+#ifdef ENABLE_ROCTX
+#include <rocprofiler-sdk-roctx/roctx.h>
 #endif
 
 namespace hipdecomp {
 
-// Helper class for NVTX ranges
-class nvtx {
+// Helper class for ROCTx ranges
+class roctx {
 public:
   static void rangePush(const std::string& range_name) {
-#ifdef ENABLE_NVTX
-    static constexpr int ncolors_ = 8;
-    static constexpr int colors_[ncolors_] = {0x3366CC, 0xDC3912, 0xFF9900, 0x109618,
-                                              0x990099, 0x3B3EAC, 0x0099C6, 0xDD4477};
-    std::hash<std::string> hash_fn;
-    int color = colors_[hash_fn(range_name) % ncolors_];
-    nvtxEventAttributes_t ev = {0};
-    ev.version = NVTX_VERSION;
-    ev.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE;
-    ev.colorType = NVTX_COLOR_ARGB;
-    ev.color = color;
-    ev.messageType = NVTX_MESSAGE_TYPE_ASCII;
-    ev.message.ascii = range_name.c_str();
-    nvtxRangePushEx(&ev);
+#ifdef ENABLE_ROCTX
+    roctxRangePush(range_name.c_str());
 #endif
   }
 
   static void rangePop() {
-#ifdef ENABLE_NVTX
-    nvtxRangePop();
+#ifdef ENABLE_ROCTX
+    roctxRangePop();
 #endif
   }
 };
 
 } // namespace hipdecomp
 
-#endif // HIPDECOMP_NVTX_H
+#endif // HIPDECOMP_ROCTX_H

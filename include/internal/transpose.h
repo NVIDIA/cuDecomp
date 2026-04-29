@@ -36,8 +36,8 @@
 #include "internal/checks.h"
 #include "internal/comm_routines.h"
 #include "internal/hipdecomp_kernels.h"
-#include "internal/nvtx.h"
 #include "internal/performance.h"
+#include "internal/roctx.h"
 #include "internal/utils.h"
 
 namespace hipdecomp {
@@ -840,10 +840,10 @@ void hipdecompTransposeXToY(const hipdecompHandle_t handle, const hipdecompGridD
                             const int32_t output_halo_extents_ptr[] = nullptr,
                             const int32_t input_padding_ptr[] = nullptr, const int32_t output_padding_ptr[] = nullptr,
                             hipStream_t stream = 0) {
-  nvtx::rangePush("hipdecompTransposeXToY");
+  roctx::rangePush("hipdecompTransposeXToY");
   hipdecompTranspose_(0, 1, handle, grid_desc, input, output, work, input_halo_extents_ptr, output_halo_extents_ptr,
                       input_padding_ptr, output_padding_ptr, stream);
-  nvtx::rangePop();
+  roctx::rangePop();
 }
 
 template <typename T>
@@ -852,10 +852,10 @@ void hipdecompTransposeYToZ(const hipdecompHandle_t handle, const hipdecompGridD
                             const int32_t output_halo_extents_ptr[] = nullptr,
                             const int32_t input_padding_ptr[] = nullptr, const int32_t output_padding_ptr[] = nullptr,
                             hipStream_t stream = 0) {
-  nvtx::rangePush("hipdecompTransposeYToZ");
+  roctx::rangePush("hipdecompTransposeYToZ");
   hipdecompTranspose_(1, 1, handle, grid_desc, input, output, work, input_halo_extents_ptr, output_halo_extents_ptr,
                       input_padding_ptr, output_padding_ptr, stream);
-  nvtx::rangePop();
+  roctx::rangePop();
 }
 
 template <typename T>
@@ -864,10 +864,10 @@ void hipdecompTransposeZToY(const hipdecompHandle_t handle, const hipdecompGridD
                             const int32_t output_halo_extents_ptr[] = nullptr,
                             const int32_t input_padding_ptr[] = nullptr, const int32_t output_padding_ptr[] = nullptr,
                             hipStream_t stream = 0) {
-  nvtx::rangePush("hipdecompTransposeZToY");
+  roctx::rangePush("hipdecompTransposeZToY");
   hipdecompTranspose_(2, -1, handle, grid_desc, input, output, work, input_halo_extents_ptr, output_halo_extents_ptr,
                       input_padding_ptr, output_padding_ptr, stream);
-  nvtx::rangePop();
+  roctx::rangePop();
 }
 
 template <typename T>
@@ -876,10 +876,10 @@ void hipdecompTransposeYToX(const hipdecompHandle_t handle, const hipdecompGridD
                             const int32_t output_halo_extents_ptr[] = nullptr,
                             const int32_t input_padding_ptr[] = nullptr, const int32_t output_padding_ptr[] = nullptr,
                             hipStream_t stream = 0) {
-  nvtx::rangePush("hipdecompTransposeYToX");
+  roctx::rangePush("hipdecompTransposeYToX");
   hipdecompTranspose_(1, -1, handle, grid_desc, input, output, work, input_halo_extents_ptr, output_halo_extents_ptr,
                       input_padding_ptr, output_padding_ptr, stream);
-  nvtx::rangePop();
+  roctx::rangePop();
 }
 
 } // namespace hipdecomp
