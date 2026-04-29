@@ -249,6 +249,8 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
               (need_nccl) ? CUDECOMP_TRANSPOSE_COMM_NCCL : CUDECOMP_TRANSPOSE_COMM_MPI_P2P;
           cudecompResult_t ret = cudecompMalloc(handle, grid_desc, reinterpret_cast<void**>(&work), work_sz);
           grid_desc->config.transpose_comm_backend = tmp;
+          // Check after restoring the temporary backend used to select the allocation path.
+          CHECK_CUDECOMP(ret);
         }
 #endif
       } else {
@@ -708,6 +710,8 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
           grid_desc->config.halo_comm_backend = (need_nccl) ? CUDECOMP_HALO_COMM_NCCL : CUDECOMP_HALO_COMM_MPI;
           cudecompResult_t ret = cudecompMalloc(handle, grid_desc, reinterpret_cast<void**>(&work), work_sz);
           grid_desc->config.halo_comm_backend = tmp;
+          // Check after restoring the temporary backend used to select the allocation path.
+          CHECK_CUDECOMP(ret);
         }
 #endif
       } else {
