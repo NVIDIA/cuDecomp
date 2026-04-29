@@ -318,7 +318,8 @@ halo_test_rank_order: &halo_test_rank_order
   backend: [1] # Limit this testing to one backend
   dtypes: ['R32'] # Limit to one data type
   rank-order: [0, 1, 2]
-
+  managed_memory : [False]
+  out_of_place : [False]
 
   test_mem_order: False
 
