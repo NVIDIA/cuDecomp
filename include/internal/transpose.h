@@ -18,8 +18,11 @@
 #ifndef TRANSPOSE_H
 #define TRANSPOSE_H
 
+#include <algorithm>
 #include <array>
+#include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <vector>
 
 #include <cuda/std/complex>

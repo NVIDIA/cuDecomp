@@ -19,6 +19,7 @@
 #define CUDECOMP_HASHES_H
 
 #include <array>
+#include <cstddef>
 #include <functional>
 #include <tuple>
 #include <utility>

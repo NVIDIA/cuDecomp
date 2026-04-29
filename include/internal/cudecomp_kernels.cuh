@@ -19,6 +19,8 @@
 #define CUDECOMP_KERNELS_CUH
 
 #include <algorithm>
+#include <cstddef>
+#include <cstdint>
 
 #ifdef ENABLE_NVSHMEM
 #include <nvshmem.h>

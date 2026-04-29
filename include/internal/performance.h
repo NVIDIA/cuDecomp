@@ -19,6 +19,7 @@
 #define CUDECOMP_PERFORMANCE_H
 
 #include <array>
+#include <cstdint>
 #include <string>
 #include <tuple>
 #include <unordered_map>

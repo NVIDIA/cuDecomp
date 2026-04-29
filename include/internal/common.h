@@ -18,20 +18,26 @@
 #ifndef CUDECOMP_COMMON_H
 #define CUDECOMP_COMMON_H
 
+#include <algorithm>
 #include <array>
 #include <complex>
+#include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <map>
 #include <memory>
 #include <sstream>
 #include <string>
+#include <tuple>
 #include <unordered_map>
 #include <utility>
 #include <vector>
 
 #include <cuda_runtime.h>
+#include <cutensor.h>
 #include <mpi.h>
 #include <nccl.h>
+#include <nvml.h>
 #ifdef ENABLE_NVSHMEM
 #include <nvshmem.h>
 #include <nvshmemx.h>

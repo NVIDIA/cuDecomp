@@ -18,7 +18,11 @@
 #ifndef HALO_H
 #define HALO_H
 
+#include <algorithm>
 #include <array>
+#include <cstddef>
+#include <cstdint>
+#include <sstream>
 #include <vector>
 
 #include <cuda_runtime.h>

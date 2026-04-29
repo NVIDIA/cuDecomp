@@ -18,8 +18,16 @@
 #ifndef COMM_ROUTINES_H
 #define COMM_ROUTINES_H
 
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <cstdio>
+#include <limits>
+#include <sstream>
+#include <string>
 #include <vector>
 
+#include <cuda/std/complex>
 #include <cuda_runtime.h>
 #include <mpi.h>
 #include <nccl.h>

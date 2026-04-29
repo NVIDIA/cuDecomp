@@ -24,6 +24,9 @@
 #ifndef CUDECOMP_H
 #define CUDECOMP_H
 
+#include <stdbool.h>
+#include <stdint.h>
+
 #include <cuda_runtime.h>
 #include <mpi.h>
 
@@ -34,9 +37,6 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#include <stdbool.h>
-#include <stdint.h>
 
 /**
  * @brief This enum lists the different available transpose backend options.

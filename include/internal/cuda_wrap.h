@@ -18,6 +18,8 @@
 #ifndef CUDECOMP_CUDA_WRAP_H
 #define CUDECOMP_CUDA_WRAP_H
 
+#include <cuda_runtime.h>
+
 #if CUDART_VERSION >= 11030
 #include <cudaTypedefs.h>
 #endif
