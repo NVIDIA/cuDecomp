@@ -579,6 +579,15 @@ cudecompResult_t cudecompFinalize(cudecompHandle_t handle) {
   try {
     checkHandle(handle);
 
+#if NCCL_VERSION_CODE >= NCCL_VERSION(2, 19, 0)
+    for (auto& entry : handle->nccl_ubr_handles) {
+      for (const auto& ubr_handle : entry.second) {
+        CHECK_NCCL(ncclCommDeregister(*ubr_handle.first, ubr_handle.second));
+      }
+    }
+    handle->nccl_ubr_handles.clear();
+#endif
+
     handle->nccl_comm.reset();
     handle->nccl_local_comm.reset();
 
@@ -1272,11 +1281,11 @@ cudecompResult_t cudecompMalloc(cudecompHandle_t handle, cudecompGridDesc_t grid
             void* nccl_ubr_handle;
             if (grid_desc->nccl_comm) {
               CHECK_NCCL(ncclCommRegister(*grid_desc->nccl_comm, *buffer, buffer_size_bytes, &nccl_ubr_handle));
-              handle->nccl_ubr_handles[*buffer].push_back(std::make_pair(*grid_desc->nccl_comm, nccl_ubr_handle));
+              handle->nccl_ubr_handles[*buffer].push_back(std::make_pair(grid_desc->nccl_comm, nccl_ubr_handle));
             }
             if (grid_desc->nccl_local_comm) {
               CHECK_NCCL(ncclCommRegister(*grid_desc->nccl_local_comm, *buffer, buffer_size_bytes, &nccl_ubr_handle));
-              handle->nccl_ubr_handles[*buffer].push_back(std::make_pair(*grid_desc->nccl_local_comm, nccl_ubr_handle));
+              handle->nccl_ubr_handles[*buffer].push_back(std::make_pair(grid_desc->nccl_local_comm, nccl_ubr_handle));
             }
           } catch (...) {
             cudecompFree(handle, grid_desc, *buffer);
@@ -1304,7 +1313,7 @@ cudecompResult_t cudecompFree(cudecompHandle_t handle, cudecompGridDesc_t grid_d
 #if NCCL_VERSION_CODE >= NCCL_VERSION(2, 19, 0)
     if (handle->nccl_ubr_handles.count(buffer) != 0) {
       for (const auto& entry : handle->nccl_ubr_handles[buffer]) {
-        CHECK_NCCL(ncclCommDeregister(entry.first, entry.second));
+        CHECK_NCCL(ncclCommDeregister(*entry.first, entry.second));
       }
       handle->nccl_ubr_handles.erase(buffer);
     }

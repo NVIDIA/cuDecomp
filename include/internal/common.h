@@ -69,7 +69,7 @@ struct cudecompHandle {
   cudecomp::ncclComm nccl_comm;       // NCCL communicator (global)
   cudecomp::ncclComm nccl_local_comm; // NCCL communicator (intra-node, or intra-clique on MNNVL systems)
   bool nccl_enable_ubr = false;       // Flag to control NCCL user buffer registration usage
-  std::unordered_map<void*, std::vector<std::pair<ncclComm_t, void*>>>
+  std::unordered_map<void*, std::vector<std::pair<cudecomp::ncclComm, void*>>>
       nccl_ubr_handles; // map of allocated buffer address to NCCL registration handle(s)
 
   std::vector<cudaStream_t> streams; // internal streams for concurrent scheduling
