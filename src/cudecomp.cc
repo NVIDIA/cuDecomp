@@ -1195,6 +1195,8 @@ cudecompResult_t cudecompMalloc(cudecompHandle_t handle, cudecompGridDesc_t grid
   try {
     checkHandle(handle);
     checkGridDesc(grid_desc);
+    if (!buffer) { THROW_INVALID_USAGE("buffer argument cannot be null"); }
+    if (buffer_size_bytes == 0) { THROW_INVALID_USAGE("buffer size cannot be zero"); }
 
     if (transposeBackendRequiresNvshmem(grid_desc->config.transpose_comm_backend) ||
         haloBackendRequiresNvshmem(grid_desc->config.halo_comm_backend)) {
@@ -1294,15 +1296,11 @@ cudecompResult_t cudecompFree(cudecompHandle_t handle, cudecompGridDesc_t grid_d
     checkGridDesc(grid_desc);
 
 #if NCCL_VERSION_CODE >= NCCL_VERSION(2, 19, 0)
-    if (transposeBackendRequiresNccl(grid_desc->config.transpose_comm_backend) ||
-        haloBackendRequiresNccl(grid_desc->config.halo_comm_backend)) {
-
-      if (handle->nccl_ubr_handles.count(buffer) != 0) {
-        for (const auto& entry : handle->nccl_ubr_handles[buffer]) {
-          CHECK_NCCL(ncclCommDeregister(entry.first, entry.second));
-        }
-        handle->nccl_ubr_handles.erase(buffer);
+    if (handle->nccl_ubr_handles.count(buffer) != 0) {
+      for (const auto& entry : handle->nccl_ubr_handles[buffer]) {
+        CHECK_NCCL(ncclCommDeregister(entry.first, entry.second));
       }
+      handle->nccl_ubr_handles.erase(buffer);
     }
 #endif
 
