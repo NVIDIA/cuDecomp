@@ -602,8 +602,8 @@ cudecompResult_t cudecompInit(cudecompHandle_t* handle_in, MPI_Comm mpi_comm) {
     cudecomp_initialized = true;
 
     *handle_in = handle;
-
-  } CUDECOMP_CATCH_C_API_ERRORS(if (handle) { delete handle; })
+  }
+  CUDECOMP_CATCH_C_API_ERRORS(if (handle) { delete handle; })
   return CUDECOMP_RESULT_SUCCESS;
 };
 
@@ -647,8 +647,8 @@ cudecompResult_t cudecompFinalize(cudecompHandle_t handle) {
     delete handle;
 
     cudecomp_initialized = false;
-
-  } CUDECOMP_CATCH_C_API_ERRORS()
+  }
+  CUDECOMP_CATCH_C_API_ERRORS()
   return CUDECOMP_RESULT_SUCCESS;
 }
 
@@ -657,7 +657,8 @@ cudecompResult_t cudecompInit_F(cudecompHandle_t* handle_in, MPI_Fint mpi_comm_f
   try {
     MPI_Comm mpi_comm = MPI_Comm_f2c(mpi_comm_f);
     return cudecompInit(handle_in, mpi_comm);
-  } CUDECOMP_CATCH_C_API_ERRORS()
+  }
+  CUDECOMP_CATCH_C_API_ERRORS()
 }
 
 cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDesc_t* grid_desc_in,
@@ -900,8 +901,8 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
         }
       }
     }
-
-  } CUDECOMP_CATCH_C_API_ERRORS(if (grid_desc) { delete grid_desc; })
+  }
+  CUDECOMP_CATCH_C_API_ERRORS(if (grid_desc) { delete grid_desc; })
   return CUDECOMP_RESULT_SUCCESS;
 }
 
@@ -994,8 +995,8 @@ cudecompResult_t cudecompGridDescDestroy(cudecompHandle_t handle, cudecompGridDe
 
     delete grid_desc;
     grid_desc = nullptr;
-
-  } CUDECOMP_CATCH_C_API_ERRORS()
+  }
+  CUDECOMP_CATCH_C_API_ERRORS()
   return CUDECOMP_RESULT_SUCCESS;
 }
 
@@ -1025,8 +1026,8 @@ cudecompResult_t cudecompGridDescConfigSetDefaults(cudecompGridDescConfig_t* con
 
     // Halo Options
     config->halo_comm_backend = CUDECOMP_HALO_COMM_MPI;
-
-  } CUDECOMP_CATCH_C_API_ERRORS()
+  }
+  CUDECOMP_CATCH_C_API_ERRORS()
   return CUDECOMP_RESULT_SUCCESS;
 }
 
@@ -1066,8 +1067,8 @@ cudecompResult_t cudecompGridDescAutotuneOptionsSetDefaults(cudecompGridDescAuto
       options->halo_periods[i] = false;
       options->halo_padding[i] = 0;
     }
-
-  } CUDECOMP_CATCH_C_API_ERRORS()
+  }
+  CUDECOMP_CATCH_C_API_ERRORS()
   return CUDECOMP_RESULT_SUCCESS;
 }
 
@@ -1125,8 +1126,8 @@ cudecompResult_t cudecompGetPencilInfo(cudecompHandle_t handle, cudecompGridDesc
       }
       pencil_info->size *= pencil_info->shape[ord];
     }
-
-  } CUDECOMP_CATCH_C_API_ERRORS()
+  }
+  CUDECOMP_CATCH_C_API_ERRORS()
   return CUDECOMP_RESULT_SUCCESS;
 }
 
@@ -1154,8 +1155,8 @@ cudecompResult_t cudecompGetGridDescConfig(cudecompHandle_t handle, cudecompGrid
         }
       }
     }
-
-  } CUDECOMP_CATCH_C_API_ERRORS()
+  }
+  CUDECOMP_CATCH_C_API_ERRORS()
   return CUDECOMP_RESULT_SUCCESS;
 }
 
@@ -1177,8 +1178,8 @@ cudecompResult_t cudecompGetTransposeWorkspaceSize(cudecompHandle_t handle, cude
     int64_t wsize_zy = alignCountToBytes(max_pencil_size_z, CUDECOMP_WORKSPACE_ALIGN_BYTES) + max_pencil_size_y;
 
     *workspace_size = std::max({wsize_xy, wsize_yx, wsize_yz, wsize_zy});
-
-  } CUDECOMP_CATCH_C_API_ERRORS()
+  }
+  CUDECOMP_CATCH_C_API_ERRORS()
   return CUDECOMP_RESULT_SUCCESS;
 }
 
@@ -1204,7 +1205,8 @@ cudecompResult_t cudecompGetHaloWorkspaceSize(cudecompHandle_t handle, cudecompG
         4 * alignCountToBytes(shape_g[0] * shape_g[1] * pinfo.halo_extents[2], CUDECOMP_WORKSPACE_ALIGN_BYTES);
 
     *workspace_size = std::max({halo_size_x, halo_size_y, halo_size_z});
-  } CUDECOMP_CATCH_C_API_ERRORS()
+  }
+  CUDECOMP_CATCH_C_API_ERRORS()
   return CUDECOMP_RESULT_SUCCESS;
 }
 
@@ -1306,8 +1308,8 @@ cudecompResult_t cudecompMalloc(cudecompHandle_t handle, cudecompGridDesc_t grid
       }
 #endif
     }
-
-  } CUDECOMP_CATCH_C_API_ERRORS()
+  }
+  CUDECOMP_CATCH_C_API_ERRORS()
   return CUDECOMP_RESULT_SUCCESS;
 }
 
@@ -1359,7 +1361,8 @@ cudecompResult_t cudecompFree(cudecompHandle_t handle, cudecompGridDesc_t grid_d
         if (buffer) { CHECK_CUDA(cudaFree(buffer)); }
       }
     }
-  } CUDECOMP_CATCH_C_API_ERRORS()
+  }
+  CUDECOMP_CATCH_C_API_ERRORS()
   return CUDECOMP_RESULT_SUCCESS;
 }
 
@@ -1399,8 +1402,8 @@ cudecompResult_t cudecompGetDataTypeSize(cudecompDataType_t dtype, int64_t* dtyp
     case CUDECOMP_FLOAT_COMPLEX: *dtype_size = 8; break;
     case CUDECOMP_DOUBLE_COMPLEX: *dtype_size = 16; break;
     }
-
-  } CUDECOMP_CATCH_C_API_ERRORS()
+  }
+  CUDECOMP_CATCH_C_API_ERRORS()
   return CUDECOMP_RESULT_SUCCESS;
 }
 
@@ -1441,8 +1444,8 @@ cudecompResult_t cudecompGetShiftedRank(cudecompHandle_t handle, cudecompGridDes
       int global_peer = getGlobalRank(handle, grid_desc, comm_axis, comm_peer);
       *shifted_rank = global_peer;
     }
-
-  } CUDECOMP_CATCH_C_API_ERRORS()
+  }
+  CUDECOMP_CATCH_C_API_ERRORS()
   return CUDECOMP_RESULT_SUCCESS;
 }
 
@@ -1482,7 +1485,8 @@ cudecompResult_t cudecompTransposeXToY(cudecompHandle_t handle, cudecompGridDesc
                             output_halo_extents, input_padding, output_padding, stream);
       break;
     }
-  } CUDECOMP_CATCH_C_API_ERRORS()
+  }
+  CUDECOMP_CATCH_C_API_ERRORS()
   return CUDECOMP_RESULT_SUCCESS;
 }
 
@@ -1522,7 +1526,8 @@ cudecompResult_t cudecompTransposeYToZ(cudecompHandle_t handle, cudecompGridDesc
                             output_halo_extents, input_padding, output_padding, stream);
       break;
     }
-  } CUDECOMP_CATCH_C_API_ERRORS()
+  }
+  CUDECOMP_CATCH_C_API_ERRORS()
   return CUDECOMP_RESULT_SUCCESS;
 }
 
@@ -1562,7 +1567,8 @@ cudecompResult_t cudecompTransposeZToY(cudecompHandle_t handle, cudecompGridDesc
                             output_halo_extents, input_padding, output_padding, stream);
       break;
     }
-  } CUDECOMP_CATCH_C_API_ERRORS()
+  }
+  CUDECOMP_CATCH_C_API_ERRORS()
   return CUDECOMP_RESULT_SUCCESS;
 }
 
@@ -1602,7 +1608,8 @@ cudecompResult_t cudecompTransposeYToX(cudecompHandle_t handle, cudecompGridDesc
                             output_halo_extents, input_padding, output_padding, stream);
       break;
     }
-  } CUDECOMP_CATCH_C_API_ERRORS()
+  }
+  CUDECOMP_CATCH_C_API_ERRORS()
   return CUDECOMP_RESULT_SUCCESS;
 }
 
@@ -1644,8 +1651,8 @@ cudecompResult_t cudecompUpdateHalosX(cudecompHandle_t handle, cudecompGridDesc_
                            padding, stream);
       break;
     }
-
-  } CUDECOMP_CATCH_C_API_ERRORS()
+  }
+  CUDECOMP_CATCH_C_API_ERRORS()
   return CUDECOMP_RESULT_SUCCESS;
 }
 
@@ -1687,8 +1694,8 @@ cudecompResult_t cudecompUpdateHalosY(cudecompHandle_t handle, cudecompGridDesc_
                            padding, stream);
       break;
     }
-
-  } CUDECOMP_CATCH_C_API_ERRORS()
+  }
+  CUDECOMP_CATCH_C_API_ERRORS()
   return CUDECOMP_RESULT_SUCCESS;
 }
 
@@ -1730,8 +1737,8 @@ cudecompResult_t cudecompUpdateHalosZ(cudecompHandle_t handle, cudecompGridDesc_
                            padding, stream);
       break;
     }
-
-  } CUDECOMP_CATCH_C_API_ERRORS()
+  }
+  CUDECOMP_CATCH_C_API_ERRORS()
   return CUDECOMP_RESULT_SUCCESS;
 }
 
