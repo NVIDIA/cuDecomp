@@ -635,6 +635,7 @@ cudecompResult_t cudecompFinalize(cudecompHandle_t handle) {
       CHECK_CUDA(cudaStreamDestroy(stream));
     }
 #ifdef ENABLE_NVSHMEM
+    if (handle->nvshmem_runtime) { handle->nvshmem_runtime->finalize(); }
     handle->nvshmem_allocations.clear();
     handle->nvshmem_allocation_size = 0;
     handle->nvshmem_runtime.reset();

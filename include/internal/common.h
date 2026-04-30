@@ -56,7 +56,16 @@ typedef std::pair<std::array<unsigned char, 1>, unsigned int> mnnvl_info;
 typedef std::shared_ptr<ncclComm_t> ncclComm;
 struct nvshmemRuntimeState {
 #ifdef ENABLE_NVSHMEM
-  ~nvshmemRuntimeState() { nvshmem_finalize(); }
+  ~nvshmemRuntimeState() { finalize(); }
+
+  void finalize() {
+    if (!finalized) {
+      nvshmem_finalize();
+      finalized = true;
+    }
+  }
+
+  bool finalized = false;
 #endif
 };
 typedef std::shared_ptr<nvshmemRuntimeState> nvshmemRuntime;
