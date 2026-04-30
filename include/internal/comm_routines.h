@@ -248,7 +248,7 @@ static void cudecompAlltoall(const cudecompHandle_t& handle, const cudecompGridD
   }
 
 #ifdef ENABLE_NVSHMEM
-  if (handle->rank == 0 && handle->nvshmem_initialized && !handle->nvshmem_mixed_buffer_warning_issued &&
+  if (handle->rank == 0 && handle->nvshmem_runtime && !handle->nvshmem_mixed_buffer_warning_issued &&
       transposeBackendRequiresMpi(grid_desc->config.transpose_comm_backend) &&
       (nvshmem_ptr(send_buff, handle->rank) || nvshmem_ptr(recv_buff, handle->rank))) {
     printf("CUDECOMP:WARN: A work buffer allocated with nvshmem_malloc (via cudecompMalloc) is "
@@ -429,7 +429,7 @@ cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cudecompGridDesc
   }
 
 #ifdef ENABLE_NVSHMEM
-  if (handle->rank == 0 && handle->nvshmem_initialized && !handle->nvshmem_mixed_buffer_warning_issued &&
+  if (handle->rank == 0 && handle->nvshmem_runtime && !handle->nvshmem_mixed_buffer_warning_issued &&
       transposeBackendRequiresMpi(grid_desc->config.transpose_comm_backend) &&
       (nvshmem_ptr(send_buff, handle->rank) || nvshmem_ptr(recv_buff, handle->rank))) {
     printf("CUDECOMP:WARN: A work buffer allocated with nvshmem_malloc (via cudecompMalloc) is "
@@ -625,7 +625,7 @@ static void cudecompSendRecvPair(const cudecompHandle_t& handle, const cudecompG
   }
 
 #ifdef ENABLE_NVSHMEM
-  if (handle->rank == 0 && handle->nvshmem_initialized && !handle->nvshmem_mixed_buffer_warning_issued &&
+  if (handle->rank == 0 && handle->nvshmem_runtime && !handle->nvshmem_mixed_buffer_warning_issued &&
       haloBackendRequiresMpi(grid_desc->config.halo_comm_backend) &&
       (nvshmem_ptr(send_buff, handle->rank) || nvshmem_ptr(recv_buff, handle->rank))) {
     printf("CUDECOMP:WARN: A work buffer allocated with nvshmem_malloc (via cudecompMalloc) is "

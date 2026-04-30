@@ -54,6 +54,12 @@ typedef std::pair<std::array<unsigned char, NVML_GPU_FABRIC_UUID_LEN>, unsigned 
 typedef std::pair<std::array<unsigned char, 1>, unsigned int> mnnvl_info;
 #endif
 typedef std::shared_ptr<ncclComm_t> ncclComm;
+struct nvshmemRuntimeState {
+#ifdef ENABLE_NVSHMEM
+  ~nvshmemRuntimeState() { nvshmem_finalize(); }
+#endif
+};
+typedef std::shared_ptr<nvshmemRuntimeState> nvshmemRuntime;
 } // namespace cudecomp
 
 // cuDecomp handle containing general information
@@ -92,8 +98,7 @@ struct cudecompHandle {
   bool initialized = false;
 
   // Entries for NVSHMEM management and warning generation
-  bool nvshmem_initialized = false;                      // Flag to track NVSHMEM initialization
-  int n_grid_descs_using_nvshmem = 0;                    // Count of grid descriptors using NVSHMEM
+  cudecomp::nvshmemRuntime nvshmem_runtime;              // Shared reference to initialized NVSHMEM runtime
   bool nvshmem_mixed_buffer_warning_issued = false;      // Warn once if NVSHMEM buffer is used with MPI
   size_t nvshmem_symmetric_size;                         // NVSHMEM symmetric size
   bool nvshmem_vmm;                                      // Flag to track if NVSHMEM is using VMM allocations
@@ -192,7 +197,8 @@ struct cudecompGridDesc {
   cudaEvent_t nvshmem_sync_event = nullptr; // NVSHMEM event used for synchronization
 
 #ifdef ENABLE_NVSHMEM
-  int* nvshmem_block_counters = nullptr; // device memory counters for SM alltoallv last-block detection
+  int* nvshmem_block_counters = nullptr;    // device memory counters for SM alltoallv last-block detection
+  cudecomp::nvshmemRuntime nvshmem_runtime; // Shared reference to initialized NVSHMEM runtime
 #endif
 
   cudecomp::graphCache graph_cache; // CUDA graph cache

@@ -492,6 +492,13 @@ static void checkNvshmemVersion(cudecompHandle_t& handle) {
     setenv("NVSHMEM_CUMEM_GRANULARITY", "2147483648", 1);
   }
 }
+
+static nvshmemRuntime createNvshmemRuntime(cudecompHandle_t& handle) {
+  checkNvshmemVersion(handle);
+  inspectNvshmemEnvVars(handle);
+  initNvshmemFromMPIComm(handle->mpi_comm);
+  return std::make_shared<nvshmemRuntimeState>();
+}
 #endif
 
 } // namespace
@@ -628,12 +635,9 @@ cudecompResult_t cudecompFinalize(cudecompHandle_t handle) {
       CHECK_CUDA(cudaStreamDestroy(stream));
     }
 #ifdef ENABLE_NVSHMEM
-    if (handle->nvshmem_initialized) {
-      nvshmem_finalize();
-      handle->nvshmem_initialized = false;
-      handle->nvshmem_allocations.clear();
-      handle->nvshmem_allocation_size = 0;
-    }
+    handle->nvshmem_allocations.clear();
+    handle->nvshmem_allocation_size = 0;
+    handle->nvshmem_runtime.reset();
 #endif
     CHECK_MPI(MPI_Comm_free(&handle->mpi_local_comm));
 
@@ -781,11 +785,8 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
     if (transposeBackendRequiresNvshmem(comm_backend) || haloBackendRequiresNvshmem(halo_comm_backend) ||
         ((autotune_transpose_backend || autotune_halo_backend) && !autotune_disable_nvshmem_backends)) {
 #ifdef ENABLE_NVSHMEM
-      if (!handle->nvshmem_initialized) {
-        checkNvshmemVersion(handle);
-        inspectNvshmemEnvVars(handle);
-        initNvshmemFromMPIComm(handle->mpi_comm);
-        handle->nvshmem_initialized = true;
+      if (!handle->nvshmem_runtime) {
+        handle->nvshmem_runtime = createNvshmemRuntime(handle);
         handle->nvshmem_allocation_size = 0;
       }
 #endif
@@ -850,13 +851,14 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
           cudaMemset(grid_desc->col_comm_info.nvshmem_signals, 0, grid_desc->col_comm_info.nranks * sizeof(uint64_t)));
       CHECK_CUDA(cudaMalloc(&grid_desc->nvshmem_block_counters, handle->nranks * sizeof(int)));
       CHECK_CUDA(cudaMemset(grid_desc->nvshmem_block_counters, 0, handle->nranks * sizeof(int)));
-      handle->n_grid_descs_using_nvshmem++;
+
+      // Set grid descriptor reference to NVSHMEM runtime
+      grid_desc->nvshmem_runtime = handle->nvshmem_runtime;
     } else {
-      // Finalize nvshmem to reclaim symmetric heap memory if not used
-      if (handle->nvshmem_initialized && handle->n_grid_descs_using_nvshmem == 0) {
-        nvshmem_finalize();
-        handle->nvshmem_initialized = false;
+      // If handle has the only remaining reference to the NVSHMEM runtime, destroy it to reclaim resources
+      if (handle->nvshmem_runtime && handle->nvshmem_runtime.use_count() == 1) {
         handle->nvshmem_allocations.clear();
+        handle->nvshmem_runtime.reset();
         handle->nvshmem_allocation_size = 0;
       }
     }
@@ -981,13 +983,13 @@ cudecompResult_t cudecompGridDescDestroy(cudecompHandle_t handle, cudecompGridDe
         nvshmem_free(grid_desc->col_comm_info.nvshmem_signals);
       }
       CHECK_CUDA(cudaFree(grid_desc->nvshmem_block_counters));
-      handle->n_grid_descs_using_nvshmem--;
+      // Release grid descriptor reference to NVSHMEM runtime
+      grid_desc->nvshmem_runtime.reset();
 
-      // Finalize nvshmem to reclaim symmetric heap memory if not used
-      if (handle->nvshmem_initialized && handle->n_grid_descs_using_nvshmem == 0) {
-        nvshmem_finalize();
-        handle->nvshmem_initialized = false;
+      // If handle has the only remaining reference to the NVSHMEM runtime, destroy it to reclaim resources
+      if (handle->nvshmem_runtime && handle->nvshmem_runtime.use_count() == 1) {
         handle->nvshmem_allocations.clear();
+        handle->nvshmem_runtime.reset();
         handle->nvshmem_allocation_size = 0;
       }
     }
