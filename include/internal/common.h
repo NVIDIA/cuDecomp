@@ -45,8 +45,8 @@
 
 #include "cudecomp.h"
 #include "internal/checks.h"
-#include "internal/cuda_event.h"
 #include "internal/graph.h"
+#include "internal/raii_wrappers.h"
 
 namespace cudecomp {
 #if NVML_API_VERSION >= 12 && CUDART_VERSION >= 12040
@@ -94,7 +94,7 @@ struct cudecompHandle {
   std::unordered_map<void*, std::vector<std::pair<cudecomp::ncclComm, void*>>>
       nccl_ubr_handles; // map of allocated buffer address to NCCL registration handle(s)
 
-  std::vector<cudaStream_t> streams; // internal streams for concurrent scheduling
+  std::vector<cudecomp::cudaStream> streams; // internal streams for concurrent scheduling
 
   cutensorHandle_t cutensor_handle; // cuTENSOR handle;
 #if CUTENSOR_MAJOR >= 2

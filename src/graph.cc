@@ -27,12 +27,7 @@
 
 namespace cudecomp {
 
-graphCache::graphCache() { CHECK_CUDA(cudaStreamCreateWithFlags(&graph_stream_, cudaStreamNonBlocking)); }
-
-graphCache::~graphCache() {
-  CHECK_CUDA(cudaStreamDestroy(graph_stream_));
-  this->clear();
-}
+graphCache::~graphCache() { this->clear(); }
 
 void graphCache::replay(const graphCache::key_type& key, cudaStream_t stream) const {
   CHECK_CUDA(cudaGraphLaunch(graph_cache_.at(key), stream));
