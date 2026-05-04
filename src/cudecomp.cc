@@ -804,12 +804,6 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
 
     // Create CUDA events for scheduling
     grid_desc->events.resize(handle->nranks);
-    for (auto& event : grid_desc->events) {
-      event.createWithFlags(cudaEventDisableTiming);
-    }
-#ifdef ENABLE_NVSHMEM
-    grid_desc->nvshmem_sync_event.createWithFlags(cudaEventDisableTiming);
-#endif
 
     // Run autotuning if requested
     if (options) {

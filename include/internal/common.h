@@ -159,10 +159,10 @@ struct cudecompCommInfo {
 
 // Structure to contain data for transpose performance sample
 struct cudecompTransposePerformanceSample {
-  cudecomp::cudaEvent transpose_start_event;
-  cudecomp::cudaEvent transpose_end_event;
-  std::vector<cudecomp::cudaEvent> alltoall_start_events;
-  std::vector<cudecomp::cudaEvent> alltoall_end_events;
+  cudecomp::cudaEventTimed transpose_start_event;
+  cudecomp::cudaEventTimed transpose_end_event;
+  std::vector<cudecomp::cudaEventTimed> alltoall_start_events;
+  std::vector<cudecomp::cudaEventTimed> alltoall_end_events;
   int32_t alltoall_timing_count = 0;
   size_t alltoall_bytes = 0;
   bool valid = false;
@@ -177,10 +177,10 @@ struct cudecompTransposePerformanceSampleCollection {
 
 // Structure to contain data for halo performance sample
 struct cudecompHaloPerformanceSample {
-  cudecomp::cudaEvent halo_start_event;
-  cudecomp::cudaEvent halo_end_event;
-  cudecomp::cudaEvent sendrecv_start_event;
-  cudecomp::cudaEvent sendrecv_end_event;
+  cudecomp::cudaEventTimed halo_start_event;
+  cudecomp::cudaEventTimed halo_end_event;
+  cudecomp::cudaEventTimed sendrecv_start_event;
+  cudecomp::cudaEventTimed sendrecv_end_event;
   size_t sendrecv_bytes = 0;
   bool valid = false;
 };
@@ -218,11 +218,11 @@ struct cudecompGridDesc {
       nccl_local_comm; // NCCL communicator (intra-node, or intra-clique on MNNVL systems), shared from handle
 
   // Performance reporting related entries
-  std::vector<cudecomp::cudaEvent> alltoall_start_events; // events for alltoall timing
-  std::vector<cudecomp::cudaEvent> alltoall_end_events;   // events for alltoall timing
-  int32_t alltoall_timing_count = 0;         // count of alltoall timing events pairs (for pipelined alltoall)
-  cudecomp::cudaEvent transpose_start_event; // event for transpose timing
-  cudecomp::cudaEvent transpose_end_event;   // event for transpose timing
+  std::vector<cudecomp::cudaEventTimed> alltoall_start_events; // events for alltoall timing
+  std::vector<cudecomp::cudaEventTimed> alltoall_end_events;   // events for alltoall timing
+  int32_t alltoall_timing_count = 0;              // count of alltoall timing events pairs (for pipelined alltoall)
+  cudecomp::cudaEventTimed transpose_start_event; // event for transpose timing
+  cudecomp::cudaEventTimed transpose_end_event;   // event for transpose timing
 
   std::unordered_map<std::tuple<int32_t, int32_t, std::array<int32_t, 3>, std::array<int32_t, 3>,
                                 std::array<int32_t, 3>, std::array<int32_t, 3>, bool, bool, cudecompDataType_t>,

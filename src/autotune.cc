@@ -101,10 +101,7 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
   double t_start = MPI_Wtime();
 
   // Create cuda_events for intermediate timings (5 events per trial: start + 4 op boundaries)
-  std::vector<cudaEvent> events(5 * options->n_trials);
-  for (auto& event : events) {
-    event.create();
-  }
+  std::vector<cudaEventTimed> events(5 * options->n_trials);
 
   bool autotune_comm = options->autotune_transpose_backend;
   bool autotune_pdims = (grid_desc->config.pdims[0] == 0 && grid_desc->config.pdims[1] == 0);
@@ -582,10 +579,7 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
   double t_start = MPI_Wtime();
 
   // Create cuda events for timing (one per trial boundary: n_trials + 1 total)
-  std::vector<cudaEvent> events(options->n_trials + 1);
-  for (auto& event : events) {
-    event.create();
-  }
+  std::vector<cudaEventTimed> events(options->n_trials + 1);
 
   bool autotune_comm = options->autotune_halo_backend;
   bool autotune_pdims = (grid_desc->config.pdims[0] == 0 && grid_desc->config.pdims[1] == 0);

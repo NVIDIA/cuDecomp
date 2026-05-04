@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,17 +26,17 @@
 
 namespace cudecomp {
 
-class cudaEvent {
+template <unsigned int flags> class cudaEventBase {
 public:
-  cudaEvent() = default;
-  ~cudaEvent() noexcept { resetNoThrow(); }
+  cudaEventBase() { CHECK_CUDA(cudaEventCreateWithFlags(&event_, flags)); }
+  ~cudaEventBase() noexcept { resetNoThrow(); }
 
-  cudaEvent(const cudaEvent&) = delete;
-  cudaEvent& operator=(const cudaEvent&) = delete;
+  cudaEventBase(const cudaEventBase&) = delete;
+  cudaEventBase& operator=(const cudaEventBase&) = delete;
 
-  cudaEvent(cudaEvent&& other) noexcept : event_(std::exchange(other.event_, nullptr)) {}
+  cudaEventBase(cudaEventBase&& other) noexcept : event_(std::exchange(other.event_, nullptr)) {}
 
-  cudaEvent& operator=(cudaEvent&& other) noexcept {
+  cudaEventBase& operator=(cudaEventBase&& other) noexcept {
     if (this != &other) {
       resetNoThrow();
       event_ = std::exchange(other.event_, nullptr);
@@ -44,27 +44,10 @@ public:
     return *this;
   }
 
-  void create() {
-    reset();
-    cudaEvent_t event = nullptr;
-    CHECK_CUDA(cudaEventCreate(&event));
-    event_ = event;
-  }
+  cudaEvent_t get() const noexcept { return event_; }
+  operator cudaEvent_t() const noexcept { return event_; }
 
-  void createWithFlags(unsigned int flags) {
-    reset();
-    cudaEvent_t event = nullptr;
-    CHECK_CUDA(cudaEventCreateWithFlags(&event, flags));
-    event_ = event;
-  }
-
-  void reset() {
-    if (event_) {
-      CHECK_CUDA(cudaEventDestroy(event_));
-      event_ = nullptr;
-    }
-  }
-
+private:
   void resetNoThrow() noexcept {
     if (event_) {
       cudaEventDestroy(event_);
@@ -72,12 +55,11 @@ public:
     }
   }
 
-  cudaEvent_t get() const noexcept { return event_; }
-  operator cudaEvent_t() const noexcept { return event_; }
-
-private:
   cudaEvent_t event_ = nullptr;
 };
+
+using cudaEvent = cudaEventBase<cudaEventDisableTiming>;
+using cudaEventTimed = cudaEventBase<cudaEventDefault>;
 
 } // namespace cudecomp
 
