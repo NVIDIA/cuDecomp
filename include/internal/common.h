@@ -74,6 +74,13 @@ typedef std::shared_ptr<nvshmemRuntimeState> nvshmemRuntime;
 
 // cuDecomp handle containing general information
 struct cudecompHandle {
+  cudecompHandle() = default;
+  ~cudecompHandle() noexcept;
+
+  cudecompHandle(const cudecompHandle&) = delete;
+  cudecompHandle& operator=(const cudecompHandle&) = delete;
+  cudecompHandle(cudecompHandle&&) = delete;
+  cudecompHandle& operator=(cudecompHandle&&) = delete;
 
   MPI_Comm mpi_comm = MPI_COMM_NULL; // MPI communicator
   int32_t rank;                      // MPI rank
@@ -96,10 +103,12 @@ struct cudecompHandle {
 
   std::vector<cudecomp::cudaStream> streams; // internal streams for concurrent scheduling
 
-  cutensorHandle_t cutensor_handle; // cuTENSOR handle;
 #if CUTENSOR_MAJOR >= 2
-  cutensorPlanPreference_t cutensor_plan_pref;  // cuTENSOR plan preference;
-  bool cutensor_needs_permute_chunking = false; // Flag to enable large tensor workaround
+  cutensorHandle_t cutensor_handle = nullptr;            // cuTENSOR handle;
+  cutensorPlanPreference_t cutensor_plan_pref = nullptr; // cuTENSOR plan preference;
+  bool cutensor_needs_permute_chunking = false;          // Flag to enable large tensor workaround
+#else
+  cutensorHandle_t cutensor_handle; // cuTENSOR handle;
 #endif
 
   std::vector<std::array<char, MPI_MAX_PROCESSOR_NAME>> hostnames; // list of hostnames by rank
@@ -134,6 +143,7 @@ struct cudecompHandle {
       ""; // directory to write CSV performance reports, empty means no file writing
 
   // Miscellaneous
+  bool nvml_initialized = false;                        // Flag to track NVML initialization
   int32_t device_p2p_ce_count = 0;                      // number of P2P CEs available
   int32_t device_num_sms = 0;                           // number of SMs on the device
   int32_t device_max_threads_per_sm = 0;                // maximum threads per SM
@@ -229,9 +239,7 @@ struct cudecompGridDesc {
     row_comm_info.reset();
     col_comm_info.reset();
 #ifdef ENABLE_NVSHMEM
-    if (nvshmem_block_counters) {
-      cudaFree(nvshmem_block_counters);
-    }
+    if (nvshmem_block_counters) { cudaFree(nvshmem_block_counters); }
 #endif
   }
 

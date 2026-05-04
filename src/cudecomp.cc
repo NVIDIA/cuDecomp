@@ -501,8 +501,53 @@ static nvshmemRuntime createNvshmemRuntime(cudecompHandle_t& handle) {
 }
 #endif
 
+static void releaseUnusedHandleResources(cudecompHandle_t handle, bool release_streams = false) noexcept {
+  if (!handle || !handle->initialized) { return; }
+
+  // Destroy NCCL communicators to reclaim resources if not used by other grid descriptors
+  if (handle->nccl_comm && handle->nccl_comm.use_count() == 1) { handle->nccl_comm.reset(); }
+  if (handle->nccl_local_comm && handle->nccl_local_comm.use_count() == 1) { handle->nccl_local_comm.reset(); }
+  if (release_streams) { handle->streams.clear(); }
+
+#ifdef ENABLE_NVSHMEM
+  // If handle has the only remaining reference to the NVSHMEM runtime, destroy it to reclaim resources
+  if (handle->nvshmem_runtime && handle->nvshmem_runtime.use_count() == 1) {
+    handle->nvshmem_allocations.clear();
+    handle->nvshmem_runtime.reset();
+    handle->nvshmem_allocation_size = 0;
+  }
+#endif
+}
+
+static void cleanupFailedGridDescCreate(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
+                                        bool release_streams) noexcept {
+  if (grid_desc) { delete grid_desc; }
+  releaseUnusedHandleResources(handle, release_streams);
+}
+
 } // namespace
 } // namespace cudecomp
+
+cudecompHandle::~cudecompHandle() noexcept {
+#if NCCL_VERSION_CODE >= NCCL_VERSION(2, 19, 0)
+  for (auto& entry : nccl_ubr_handles) {
+    for (const auto& ubr_handle : entry.second) {
+      ncclCommDeregister(*ubr_handle.first, ubr_handle.second);
+    }
+  }
+#endif
+
+  if (mpi_clique_comm != MPI_COMM_NULL) { MPI_Comm_free(&mpi_clique_comm); }
+
+  if (mpi_local_comm != MPI_COMM_NULL) { MPI_Comm_free(&mpi_local_comm); }
+
+#if CUTENSOR_MAJOR >= 2
+  if (cutensor_handle) { cutensorDestroy(cutensor_handle); }
+  if (cutensor_plan_pref) { cutensorDestroyPlanPreference(cutensor_plan_pref); }
+#endif
+
+  if (nvml_initialized) { cudecomp::nvmlFnTable.pfn_nvmlShutdown(); }
+}
 
 cudecompResult_t cudecompInit(cudecompHandle_t* handle_in, MPI_Comm mpi_comm) {
   using namespace cudecomp;
@@ -528,6 +573,7 @@ cudecompResult_t cudecompInit(cudecompHandle_t* handle_in, MPI_Comm mpi_comm) {
     initNvmlFunctionTable();
 
     CHECK_NVML(nvmlInit());
+    handle->nvml_initialized = true;
 
     // Initialize cuTENSOR library
 #if CUTENSOR_MAJOR >= 2
@@ -628,24 +674,6 @@ cudecompResult_t cudecompFinalize(cudecompHandle_t handle) {
     handle->nccl_ubr_handles.clear();
 #endif
 
-    handle->nccl_comm.reset();
-    handle->nccl_local_comm.reset();
-
-#ifdef ENABLE_NVSHMEM
-    if (handle->nvshmem_runtime) { handle->nvshmem_runtime->finalize(); }
-    handle->nvshmem_allocations.clear();
-    handle->nvshmem_allocation_size = 0;
-    handle->nvshmem_runtime.reset();
-#endif
-    CHECK_MPI(MPI_Comm_free(&handle->mpi_local_comm));
-
-#if CUTENSOR_MAJOR >= 2
-    CHECK_CUTENSOR(cutensorDestroy(handle->cutensor_handle));
-    CHECK_CUTENSOR(cutensorDestroyPlanPreference(handle->cutensor_plan_pref));
-#endif
-
-    CHECK_NVML(nvmlShutdown());
-
     delete handle;
 
     cudecomp_initialized = false;
@@ -669,6 +697,7 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
 
   using namespace cudecomp;
   cudecompGridDesc_t grid_desc = nullptr;
+  bool created_streams = false;
   try {
     checkHandle(handle);
     if (!grid_desc_in) { THROW_INVALID_USAGE("grid_desc argument cannot be null"); }
@@ -781,7 +810,10 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
 #endif
     }
 
-    if (handle->streams.empty()) { handle->streams.resize(handle->device_p2p_ce_count + 1); }
+    if (handle->streams.empty()) {
+      handle->streams.resize(handle->device_p2p_ce_count + 1);
+      created_streams = true;
+    }
 
     // Create CUDA events for scheduling
     grid_desc->events.resize(handle->nranks);
@@ -812,12 +844,6 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
       grid_desc->nvshmem_runtime = handle->nvshmem_runtime;
     }
 
-    // If handle has the only remaining reference to the NVSHMEM runtime, destroy it to reclaim resources
-    if (handle->nvshmem_runtime && handle->nvshmem_runtime.use_count() == 1) {
-      handle->nvshmem_allocations.clear();
-      handle->nvshmem_runtime.reset();
-      handle->nvshmem_allocation_size = 0;
-    }
 #endif
     if (transposeBackendRequiresNccl(grid_desc->config.transpose_comm_backend) ||
         haloBackendRequiresNccl(grid_desc->config.halo_comm_backend)) {
@@ -833,12 +859,9 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
       // Release grid descriptor references to NCCL communicators
       grid_desc->nccl_comm.reset();
       grid_desc->nccl_local_comm.reset();
-
     }
 
-    // Destroy NCCL communicators to reclaim resources if not used by other grid descriptors
-    if (handle->nccl_comm && handle->nccl_comm.use_count() == 1) { handle->nccl_comm.reset(); }
-    if (handle->nccl_local_comm && handle->nccl_local_comm.use_count() == 1) { handle->nccl_local_comm.reset(); }
+    releaseUnusedHandleResources(handle);
 
     *grid_desc_in = grid_desc;
     *config = grid_desc->config;
@@ -859,7 +882,7 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
       }
     }
   }
-  CUDECOMP_CATCH_C_API_ERRORS(if (grid_desc) { delete grid_desc; })
+  CUDECOMP_CATCH_C_API_ERRORS(cleanupFailedGridDescCreate(handle, grid_desc, created_streams))
   return CUDECOMP_RESULT_SUCCESS;
 }
 
@@ -875,18 +898,7 @@ cudecompResult_t cudecompGridDescDestroy(cudecompHandle_t handle, cudecompGridDe
     delete grid_desc;
     grid_desc = nullptr;
 
-    // Destroy NCCL communicators to reclaim resources if not used by other grid descriptors
-    if (handle->nccl_comm && handle->nccl_comm.use_count() == 1) { handle->nccl_comm.reset(); }
-    if (handle->nccl_local_comm && handle->nccl_local_comm.use_count() == 1) { handle->nccl_local_comm.reset(); }
-
-#ifdef ENABLE_NVSHMEM
-    // If handle has the only remaining reference to the NVSHMEM runtime, destroy it to reclaim resources
-    if (handle->nvshmem_runtime && handle->nvshmem_runtime.use_count() == 1) {
-      handle->nvshmem_allocations.clear();
-      handle->nvshmem_runtime.reset();
-      handle->nvshmem_allocation_size = 0;
-    }
-#endif
+    releaseUnusedHandleResources(handle);
   }
   CUDECOMP_CATCH_C_API_ERRORS()
   return CUDECOMP_RESULT_SUCCESS;
