@@ -142,9 +142,40 @@ struct cudecompHandle {
 
 // Structure with information about row/column communicator
 struct cudecompCommInfo {
+  cudecompCommInfo() = default;
+  ~cudecompCommInfo() noexcept { reset(); }
+
+  cudecompCommInfo(const cudecompCommInfo&) = delete;
+  cudecompCommInfo& operator=(const cudecompCommInfo&) = delete;
+  cudecompCommInfo(cudecompCommInfo&&) = delete;
+  cudecompCommInfo& operator=(cudecompCommInfo&&) = delete;
+
+  void reset() noexcept {
+    if (mpi_comm != MPI_COMM_NULL) {
+      MPI_Comm comm = mpi_comm;
+      mpi_comm = MPI_COMM_NULL;
+      MPI_Comm_free(&comm);
+    }
+#ifdef ENABLE_NVSHMEM
+    if (nvshmem_team != NVSHMEM_TEAM_INVALID) {
+      nvshmem_team_destroy(nvshmem_team);
+      nvshmem_team = NVSHMEM_TEAM_INVALID;
+    }
+    if (nvshmem_signals) {
+      nvshmem_free(nvshmem_signals);
+      nvshmem_signals = nullptr;
+    }
+#endif
+    rank = 0;
+    nranks = 0;
+    ngroups = 0;
+    npergroup = 0;
+    mnnvl_active = false;
+  }
+
   MPI_Comm mpi_comm = MPI_COMM_NULL;
-  int32_t rank;
-  int32_t nranks;
+  int32_t rank = 0;
+  int32_t nranks = 0;
 
   int32_t ngroups = 0;   // number of p2p groups (i.e. grouping of ranks with fast interconnect) in communicator
   int32_t npergroup = 0; // number of ranks per p2p group
@@ -194,6 +225,16 @@ struct cudecompHaloPerformanceSampleCollection {
 
 // cuDecomp grid descriptor containing grid-specific information
 struct cudecompGridDesc {
+  ~cudecompGridDesc() noexcept {
+    row_comm_info.reset();
+    col_comm_info.reset();
+#ifdef ENABLE_NVSHMEM
+    if (nvshmem_block_counters) {
+      cudaFree(nvshmem_block_counters);
+    }
+#endif
+  }
+
   cudecompGridDescConfig_t config;      // configuration struct
   bool gdims_dist_set = false;          // flag to record if gdims_dist was set to non-default values
   bool transpose_mem_order_set = false; // flag to record if transpose_mem_order was set to non-default values
@@ -355,6 +396,7 @@ static void setCommInfo(cudecompHandle_t& handle, cudecompGridDesc_t& grid_desc,
                         cudecompCommAxis comm_axis) {
   auto& info = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info : grid_desc->col_comm_info;
 
+  info.reset();
   info.mpi_comm = mpi_comm;
   CHECK_MPI(MPI_Comm_rank(info.mpi_comm, &info.rank));
   CHECK_MPI(MPI_Comm_size(info.mpi_comm, &info.nranks));
@@ -418,6 +460,43 @@ static void setCommInfo(cudecompHandle_t& handle, cudecompGridDesc_t& grid_desc,
 
   info.npergroup = count;
   info.ngroups = info.nranks / info.npergroup;
+}
+
+static void createCommInfo(cudecompHandle_t& handle, cudecompGridDesc_t& grid_desc, bool need_nvshmem = false) {
+  grid_desc->row_comm_info.reset();
+  grid_desc->col_comm_info.reset();
+
+  setProcessGridIndex(handle, grid_desc);
+
+  MPI_Comm row_comm;
+  CHECK_MPI(MPI_Comm_split(handle->mpi_comm, grid_desc->pidx[0], handle->rank, &row_comm));
+  setCommInfo(handle, grid_desc, row_comm, CUDECOMP_COMM_ROW);
+
+  MPI_Comm col_comm;
+  CHECK_MPI(MPI_Comm_split(handle->mpi_comm, grid_desc->pidx[1], handle->rank, &col_comm));
+  setCommInfo(handle, grid_desc, col_comm, CUDECOMP_COMM_COL);
+
+#ifdef ENABLE_NVSHMEM
+  if (need_nvshmem) {
+    nvshmem_team_config_t tmp;
+    nvshmem_team_split_2d(NVSHMEM_TEAM_WORLD, grid_desc->config.pdims[1], &tmp, 0,
+                          &grid_desc->row_comm_info.nvshmem_team, &tmp, 0, &grid_desc->col_comm_info.nvshmem_team);
+
+    grid_desc->row_comm_info.nvshmem_signals =
+        (uint64_t*)nvshmem_malloc(grid_desc->row_comm_info.nranks * sizeof(uint64_t));
+    if (!grid_desc->row_comm_info.nvshmem_signals) { THROW_NVSHMEM_ERROR("nvshmem_malloc failed"); }
+    CHECK_CUDA(
+        cudaMemset(grid_desc->row_comm_info.nvshmem_signals, 0, grid_desc->row_comm_info.nranks * sizeof(uint64_t)));
+
+    grid_desc->col_comm_info.nvshmem_signals =
+        (uint64_t*)nvshmem_malloc(grid_desc->col_comm_info.nranks * sizeof(uint64_t));
+    if (!grid_desc->col_comm_info.nvshmem_signals) { THROW_NVSHMEM_ERROR("nvshmem_malloc failed"); }
+    CHECK_CUDA(
+        cudaMemset(grid_desc->col_comm_info.nvshmem_signals, 0, grid_desc->col_comm_info.nranks * sizeof(uint64_t)));
+  }
+#else
+  if (need_nvshmem) { THROW_NOT_SUPPORTED("build does not support NVSHMEM communication backends."); }
+#endif
 }
 
 static inline void getAlltoallPeerRanks(cudecompGridDesc_t grid_desc, cudecompCommAxis comm_axis, int iter,

@@ -511,7 +511,7 @@ cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cudecompGridDesc
 #endif
   }
   case CUDECOMP_TRANSPOSE_COMM_NCCL_PL: {
-    auto comm_info = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info : grid_desc->col_comm_info;
+    const auto& comm_info = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info : grid_desc->col_comm_info;
     // For fully intra-group alltoall, use distinct NCCL local comm instead of global comm as it is faster.
     auto comm = (comm_info.ngroups == 1) ? *grid_desc->nccl_local_comm : *grid_desc->nccl_comm;
     auto pl_stream = handle->streams[0].get();

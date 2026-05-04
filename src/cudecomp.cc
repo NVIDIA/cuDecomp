@@ -740,16 +740,7 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
         if (grid_desc->config.pdims[0] > 0 && grid_desc->config.pdims[1] > 0) {
           // If pdims are set, temporarily set up comm info stuctures to determine if we need to create a local NCCL
           // communicator
-          setProcessGridIndex(handle, grid_desc);
-          int color_row = grid_desc->pidx[0];
-          MPI_Comm row_comm;
-          CHECK_MPI(MPI_Comm_split(handle->mpi_comm, color_row, handle->rank, &row_comm));
-          setCommInfo(handle, grid_desc, row_comm, CUDECOMP_COMM_ROW);
-
-          int color_col = grid_desc->pidx[1];
-          MPI_Comm col_comm;
-          CHECK_MPI(MPI_Comm_split(handle->mpi_comm, color_col, handle->rank, &col_comm));
-          setCommInfo(handle, grid_desc, col_comm, CUDECOMP_COMM_COL);
+          createCommInfo(handle, grid_desc);
 
           // Create local NCCL communicator if row or column communicator uses it
           int need_local_nccl_comm =
@@ -765,8 +756,8 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
             handle->nccl_local_comm = ncclCommFromMPIComm(
                 handle->mpi_clique_comm != MPI_COMM_NULL ? handle->mpi_clique_comm : handle->mpi_local_comm);
           }
-          CHECK_MPI(MPI_Comm_free(&row_comm));
-          CHECK_MPI(MPI_Comm_free(&col_comm));
+          grid_desc->row_comm_info.reset();
+          grid_desc->col_comm_info.reset();
         } else {
           // If pdims are not set, set up local NCCL communicator for use during autotuning
           handle->nccl_local_comm = ncclCommFromMPIComm(
@@ -808,44 +799,24 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
       }
     }
 
-    setProcessGridIndex(handle, grid_desc);
-
     // Setup final row and column communicators
-    int color_row = grid_desc->pidx[0];
-    MPI_Comm row_comm;
-    CHECK_MPI(MPI_Comm_split(handle->mpi_comm, color_row, handle->rank, &row_comm));
-    setCommInfo(handle, grid_desc, row_comm, CUDECOMP_COMM_ROW);
-
-    int color_col = grid_desc->pidx[1];
-    MPI_Comm col_comm;
-    CHECK_MPI(MPI_Comm_split(handle->mpi_comm, color_col, handle->rank, &col_comm));
-    setCommInfo(handle, grid_desc, col_comm, CUDECOMP_COMM_COL);
+    bool need_nvshmem = transposeBackendRequiresNvshmem(grid_desc->config.transpose_comm_backend) ||
+                        haloBackendRequiresNvshmem(grid_desc->config.halo_comm_backend);
+    createCommInfo(handle, grid_desc, need_nvshmem);
 #ifdef ENABLE_NVSHMEM
-    if (transposeBackendRequiresNvshmem(grid_desc->config.transpose_comm_backend) ||
-        haloBackendRequiresNvshmem(grid_desc->config.halo_comm_backend)) {
-      nvshmem_team_config_t tmp;
-      nvshmem_team_split_2d(NVSHMEM_TEAM_WORLD, grid_desc->config.pdims[1], &tmp, 0,
-                            &grid_desc->row_comm_info.nvshmem_team, &tmp, 0, &grid_desc->col_comm_info.nvshmem_team);
-      grid_desc->row_comm_info.nvshmem_signals =
-          (uint64_t*)nvshmem_malloc(grid_desc->row_comm_info.nranks * sizeof(uint64_t));
-      CHECK_CUDA(
-          cudaMemset(grid_desc->row_comm_info.nvshmem_signals, 0, grid_desc->row_comm_info.nranks * sizeof(uint64_t)));
-      grid_desc->col_comm_info.nvshmem_signals =
-          (uint64_t*)nvshmem_malloc(grid_desc->col_comm_info.nranks * sizeof(uint64_t));
-      CHECK_CUDA(
-          cudaMemset(grid_desc->col_comm_info.nvshmem_signals, 0, grid_desc->col_comm_info.nranks * sizeof(uint64_t)));
+    if (need_nvshmem) {
       CHECK_CUDA(cudaMalloc(&grid_desc->nvshmem_block_counters, handle->nranks * sizeof(int)));
       CHECK_CUDA(cudaMemset(grid_desc->nvshmem_block_counters, 0, handle->nranks * sizeof(int)));
 
       // Set grid descriptor reference to NVSHMEM runtime
       grid_desc->nvshmem_runtime = handle->nvshmem_runtime;
-    } else {
-      // If handle has the only remaining reference to the NVSHMEM runtime, destroy it to reclaim resources
-      if (handle->nvshmem_runtime && handle->nvshmem_runtime.use_count() == 1) {
-        handle->nvshmem_allocations.clear();
-        handle->nvshmem_runtime.reset();
-        handle->nvshmem_allocation_size = 0;
-      }
+    }
+
+    // If handle has the only remaining reference to the NVSHMEM runtime, destroy it to reclaim resources
+    if (handle->nvshmem_runtime && handle->nvshmem_runtime.use_count() == 1) {
+      handle->nvshmem_allocations.clear();
+      handle->nvshmem_runtime.reset();
+      handle->nvshmem_allocation_size = 0;
     }
 #endif
     if (transposeBackendRequiresNccl(grid_desc->config.transpose_comm_backend) ||
@@ -856,9 +827,6 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
         if ((grid_desc->row_comm_info.ngroups > 1 || grid_desc->row_comm_info.nranks == 1) &&
             (grid_desc->col_comm_info.ngroups > 1 || grid_desc->col_comm_info.nranks == 1)) {
           grid_desc->nccl_local_comm.reset();
-
-          // If handle has the only remaining reference to the local NCCL communicator, destroy it to reclaim resources
-          if (handle->nccl_local_comm.use_count() == 1) { handle->nccl_local_comm.reset(); }
         }
       }
     } else {
@@ -866,13 +834,15 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
       grid_desc->nccl_comm.reset();
       grid_desc->nccl_local_comm.reset();
 
-      // Destroy NCCL communicators to reclaim resources if not used by other grid descriptors
-      if (handle->nccl_comm && handle->nccl_comm.use_count() == 1) { handle->nccl_comm.reset(); }
-      if (handle->nccl_local_comm && handle->nccl_local_comm.use_count() == 1) { handle->nccl_local_comm.reset(); }
     }
+
+    // Destroy NCCL communicators to reclaim resources if not used by other grid descriptors
+    if (handle->nccl_comm && handle->nccl_comm.use_count() == 1) { handle->nccl_comm.reset(); }
+    if (handle->nccl_local_comm && handle->nccl_local_comm.use_count() == 1) { handle->nccl_local_comm.reset(); }
 
     *grid_desc_in = grid_desc;
     *config = grid_desc->config;
+
     // If gdims_dist was not set, return config with default values
     if (!grid_desc->gdims_dist_set) {
       config->gdims_dist[0] = 0;
@@ -899,53 +869,24 @@ cudecompResult_t cudecompGridDescDestroy(cudecompHandle_t handle, cudecompGridDe
     checkHandle(handle);
     checkGridDesc(grid_desc);
 
-    if (grid_desc->row_comm_info.mpi_comm != MPI_COMM_NULL) {
-      CHECK_MPI(MPI_Comm_free(&grid_desc->row_comm_info.mpi_comm));
-    }
-    if (grid_desc->col_comm_info.mpi_comm != MPI_COMM_NULL) {
-      CHECK_MPI(MPI_Comm_free(&grid_desc->col_comm_info.mpi_comm));
-    }
-
     // Print performance report if enabled
     if (handle->performance_report_enable) { printPerformanceReport(handle, grid_desc); }
 
-    if (transposeBackendRequiresNccl(grid_desc->config.transpose_comm_backend) ||
-        haloBackendRequiresNccl(grid_desc->config.halo_comm_backend)) {
-      // Release grid descriptor references to NCCL communicators
-      grid_desc->nccl_comm.reset();
-      grid_desc->nccl_local_comm.reset();
-
-      // Destroy NCCL communicators to reclaim resources if not used by other grid descriptors
-      if (handle->nccl_comm && handle->nccl_comm.use_count() == 1) { handle->nccl_comm.reset(); }
-      if (handle->nccl_local_comm && handle->nccl_local_comm.use_count() == 1) { handle->nccl_local_comm.reset(); }
-    }
-
-#ifdef ENABLE_NVSHMEM
-    if (transposeBackendRequiresNvshmem(grid_desc->config.transpose_comm_backend) ||
-        haloBackendRequiresNvshmem(grid_desc->config.halo_comm_backend)) {
-      if (grid_desc->row_comm_info.nvshmem_team != NVSHMEM_TEAM_INVALID) {
-        nvshmem_team_destroy(grid_desc->row_comm_info.nvshmem_team);
-        nvshmem_free(grid_desc->row_comm_info.nvshmem_signals);
-      }
-      if (grid_desc->col_comm_info.nvshmem_team != NVSHMEM_TEAM_INVALID) {
-        nvshmem_team_destroy(grid_desc->col_comm_info.nvshmem_team);
-        nvshmem_free(grid_desc->col_comm_info.nvshmem_signals);
-      }
-      CHECK_CUDA(cudaFree(grid_desc->nvshmem_block_counters));
-      // Release grid descriptor reference to NVSHMEM runtime
-      grid_desc->nvshmem_runtime.reset();
-
-      // If handle has the only remaining reference to the NVSHMEM runtime, destroy it to reclaim resources
-      if (handle->nvshmem_runtime && handle->nvshmem_runtime.use_count() == 1) {
-        handle->nvshmem_allocations.clear();
-        handle->nvshmem_runtime.reset();
-        handle->nvshmem_allocation_size = 0;
-      }
-    }
-#endif
-
     delete grid_desc;
     grid_desc = nullptr;
+
+    // Destroy NCCL communicators to reclaim resources if not used by other grid descriptors
+    if (handle->nccl_comm && handle->nccl_comm.use_count() == 1) { handle->nccl_comm.reset(); }
+    if (handle->nccl_local_comm && handle->nccl_local_comm.use_count() == 1) { handle->nccl_local_comm.reset(); }
+
+#ifdef ENABLE_NVSHMEM
+    // If handle has the only remaining reference to the NVSHMEM runtime, destroy it to reclaim resources
+    if (handle->nvshmem_runtime && handle->nvshmem_runtime.use_count() == 1) {
+      handle->nvshmem_allocations.clear();
+      handle->nvshmem_runtime.reset();
+      handle->nvshmem_allocation_size = 0;
+    }
+#endif
   }
   CUDECOMP_CATCH_C_API_ERRORS()
   return CUDECOMP_RESULT_SUCCESS;
