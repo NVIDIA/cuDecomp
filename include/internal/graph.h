@@ -26,6 +26,7 @@
 #include "cudecomp.h"
 #include "internal/checks.h"
 #include "internal/hashes.h"
+#include "internal/raii_wrappers.h"
 #include "internal/utils.h"
 
 namespace cudecomp {
@@ -34,7 +35,6 @@ class graphCache {
   using key_type = std::tuple<void*, void*, int, int, cudecompPencilInfo_t, cudecompPencilInfo_t, cudecompDataType_t>;
 
 public:
-  graphCache();
   ~graphCache();
   void replay(const key_type& key, cudaStream_t stream) const;
   cudaStream_t startCapture(const key_type& key, cudaStream_t stream) const;
@@ -44,7 +44,7 @@ public:
 
 private:
   std::unordered_map<key_type, cudaGraphExec_t> graph_cache_;
-  cudaStream_t graph_stream_;
+  cudaStream graph_stream_;
 };
 
 } // namespace cudecomp

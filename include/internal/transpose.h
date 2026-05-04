@@ -292,7 +292,7 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
     if (splits_a.size() != 1) {
       auto& comm_info = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info : grid_desc->col_comm_info;
       auto team = comm_info.nvshmem_team;
-      auto aux_stream = handle->streams[handle->device_p2p_ce_count];
+      auto aux_stream = handle->streams[handle->device_p2p_ce_count].get();
       CHECK_CUDA(cudaEventRecord(grid_desc->nvshmem_sync_event, stream));
       CHECK_CUDA(cudaStreamWaitEvent(aux_stream, grid_desc->nvshmem_sync_event));
       // Zero out signal buffer for this team here.

@@ -15,8 +15,8 @@
  * limitations under the License.
  */
 
-#ifndef CUDECOMP_CUDA_EVENT_H
-#define CUDECOMP_CUDA_EVENT_H
+#ifndef CUDECOMP_RAII_WRAPPERS_H
+#define CUDECOMP_RAII_WRAPPERS_H
 
 #include <utility>
 
@@ -61,6 +61,44 @@ private:
 using cudaEvent = cudaEventBase<cudaEventDisableTiming>;
 using cudaEventTimed = cudaEventBase<cudaEventDefault>;
 
+template <unsigned int flags> class cudaStreamBase {
+public:
+  cudaStreamBase() {
+    int greatest_priority;
+    CHECK_CUDA(cudaDeviceGetStreamPriorityRange(nullptr, &greatest_priority));
+    CHECK_CUDA(cudaStreamCreateWithPriority(&stream_, flags, greatest_priority));
+  }
+  ~cudaStreamBase() noexcept { resetNoThrow(); }
+
+  cudaStreamBase(const cudaStreamBase&) = delete;
+  cudaStreamBase& operator=(const cudaStreamBase&) = delete;
+
+  cudaStreamBase(cudaStreamBase&& other) noexcept : stream_(std::exchange(other.stream_, nullptr)) {}
+
+  cudaStreamBase& operator=(cudaStreamBase&& other) noexcept {
+    if (this != &other) {
+      resetNoThrow();
+      stream_ = std::exchange(other.stream_, nullptr);
+    }
+    return *this;
+  }
+
+  cudaStream_t get() const noexcept { return stream_; }
+  operator cudaStream_t() const noexcept { return stream_; }
+
+private:
+  void resetNoThrow() noexcept {
+    if (stream_) {
+      cudaStreamDestroy(stream_);
+      stream_ = nullptr;
+    }
+  }
+
+  cudaStream_t stream_ = nullptr;
+};
+
+using cudaStream = cudaStreamBase<cudaStreamNonBlocking>;
+
 } // namespace cudecomp
 
-#endif // CUDECOMP_CUDA_EVENT_H
+#endif // CUDECOMP_RAII_WRAPPERS_H

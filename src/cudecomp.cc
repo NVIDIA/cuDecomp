@@ -631,9 +631,6 @@ cudecompResult_t cudecompFinalize(cudecompHandle_t handle) {
     handle->nccl_comm.reset();
     handle->nccl_local_comm.reset();
 
-    for (auto& stream : handle->streams) {
-      CHECK_CUDA(cudaStreamDestroy(stream));
-    }
 #ifdef ENABLE_NVSHMEM
     if (handle->nvshmem_runtime) { handle->nvshmem_runtime->finalize(); }
     handle->nvshmem_allocations.clear();
@@ -793,14 +790,7 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
 #endif
     }
 
-    if (handle->streams.empty()) {
-      handle->streams.resize(handle->device_p2p_ce_count + 1);
-      int greatest_priority;
-      CHECK_CUDA(cudaDeviceGetStreamPriorityRange(nullptr, &greatest_priority));
-      for (auto& stream : handle->streams) {
-        CHECK_CUDA(cudaStreamCreateWithPriority(&stream, cudaStreamNonBlocking, greatest_priority));
-      }
-    }
+    if (handle->streams.empty()) { handle->streams.resize(handle->device_p2p_ce_count + 1); }
 
     // Create CUDA events for scheduling
     grid_desc->events.resize(handle->nranks);

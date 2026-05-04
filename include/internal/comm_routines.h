@@ -107,7 +107,7 @@ static void nvshmemAlltoallV(const cudecompHandle_t& handle, const cudecompGridD
   auto& comm_info = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info : grid_desc->col_comm_info;
   auto team = comm_info.nvshmem_team;
   int self_rank = comm_info.rank;
-  auto aux_stream = handle->streams[handle->device_p2p_ce_count];
+  auto aux_stream = handle->streams[handle->device_p2p_ce_count].get();
 
   // Enforce sync dependency between transpose operations
   CHECK_CUDA(cudaStreamWaitEvent(stream, grid_desc->nvshmem_sync_event));
@@ -445,7 +445,7 @@ cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cudecompGridDesc
 #ifdef ENABLE_NVSHMEM
     if (nvshmem_ptr(send_buff, handle->rank) && nvshmem_ptr(recv_buff, handle->rank)) {
       auto& comm_info = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info : grid_desc->col_comm_info;
-      auto pl_stream = handle->streams[0];
+      auto pl_stream = handle->streams[0].get();
       int self_rank = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info.rank : grid_desc->col_comm_info.rank;
 
       // Enforce sync dependency between transpose operations
@@ -514,7 +514,7 @@ cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cudecompGridDesc
     auto comm_info = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info : grid_desc->col_comm_info;
     // For fully intra-group alltoall, use distinct NCCL local comm instead of global comm as it is faster.
     auto comm = (comm_info.ngroups == 1) ? *grid_desc->nccl_local_comm : *grid_desc->nccl_comm;
-    auto pl_stream = handle->streams[0];
+    auto pl_stream = handle->streams[0].get();
     int self_rank = comm_info.rank;
 
     bool group_started = false;
