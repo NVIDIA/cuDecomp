@@ -45,6 +45,7 @@
 
 #include "cudecomp.h"
 #include "internal/checks.h"
+#include "internal/cuda_event.h"
 #include "internal/graph.h"
 
 namespace cudecomp {
@@ -158,10 +159,10 @@ struct cudecompCommInfo {
 
 // Structure to contain data for transpose performance sample
 struct cudecompTransposePerformanceSample {
-  cudaEvent_t transpose_start_event;
-  cudaEvent_t transpose_end_event;
-  std::vector<cudaEvent_t> alltoall_start_events;
-  std::vector<cudaEvent_t> alltoall_end_events;
+  cudecomp::cudaEventTimed transpose_start_event;
+  cudecomp::cudaEventTimed transpose_end_event;
+  std::vector<cudecomp::cudaEventTimed> alltoall_start_events;
+  std::vector<cudecomp::cudaEventTimed> alltoall_end_events;
   int32_t alltoall_timing_count = 0;
   size_t alltoall_bytes = 0;
   bool valid = false;
@@ -176,10 +177,10 @@ struct cudecompTransposePerformanceSampleCollection {
 
 // Structure to contain data for halo performance sample
 struct cudecompHaloPerformanceSample {
-  cudaEvent_t halo_start_event;
-  cudaEvent_t halo_end_event;
-  cudaEvent_t sendrecv_start_event;
-  cudaEvent_t sendrecv_end_event;
+  cudecomp::cudaEventTimed halo_start_event;
+  cudecomp::cudaEventTimed halo_end_event;
+  cudecomp::cudaEventTimed sendrecv_start_event;
+  cudecomp::cudaEventTimed sendrecv_end_event;
   size_t sendrecv_bytes = 0;
   bool valid = false;
 };
@@ -202,8 +203,8 @@ struct cudecompGridDesc {
   cudecompCommInfo row_comm_info; // row communicator information
   cudecompCommInfo col_comm_info; // column communicator information
 
-  std::vector<cudaEvent_t> events{nullptr}; // CUDA events used for scheduling
-  cudaEvent_t nvshmem_sync_event = nullptr; // NVSHMEM event used for synchronization
+  std::vector<cudecomp::cudaEvent> events; // CUDA events used for scheduling
+  cudecomp::cudaEvent nvshmem_sync_event;  // NVSHMEM event used for synchronization
 
 #ifdef ENABLE_NVSHMEM
   int* nvshmem_block_counters = nullptr;    // device memory counters for SM alltoallv last-block detection
@@ -217,11 +218,11 @@ struct cudecompGridDesc {
       nccl_local_comm; // NCCL communicator (intra-node, or intra-clique on MNNVL systems), shared from handle
 
   // Performance reporting related entries
-  std::vector<cudaEvent_t> alltoall_start_events; // events for alltoall timing
-  std::vector<cudaEvent_t> alltoall_end_events;   // events for alltoall timing
+  std::vector<cudecomp::cudaEventTimed> alltoall_start_events; // events for alltoall timing
+  std::vector<cudecomp::cudaEventTimed> alltoall_end_events;   // events for alltoall timing
   int32_t alltoall_timing_count = 0;              // count of alltoall timing events pairs (for pipelined alltoall)
-  cudaEvent_t transpose_start_event;              // event for transpose timing
-  cudaEvent_t transpose_end_event;                // event for transpose timing
+  cudecomp::cudaEventTimed transpose_start_event; // event for transpose timing
+  cudecomp::cudaEventTimed transpose_end_event;   // event for transpose timing
 
   std::unordered_map<std::tuple<int32_t, int32_t, std::array<int32_t, 3>, std::array<int32_t, 3>,
                                 std::array<int32_t, 3>, std::array<int32_t, 3>, bool, bool, cudecompDataType_t>,

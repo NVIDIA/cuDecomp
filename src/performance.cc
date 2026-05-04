@@ -207,21 +207,11 @@ getOrCreateTransposePerformanceSamples(const cudecompHandle_t handle, cudecompGr
     // Create new sample collection for this configuration
     cudecompTransposePerformanceSampleCollection collection;
     collection.samples.resize(handle->performance_report_samples);
-    collection.sample_idx = 0;
 
-    // Create events for each sample
+    // Create per-rank alltoall events for each sample
     for (auto& sample : collection.samples) {
-      CHECK_CUDA(cudaEventCreate(&sample.transpose_start_event));
-      CHECK_CUDA(cudaEventCreate(&sample.transpose_end_event));
       sample.alltoall_start_events.resize(handle->nranks);
       sample.alltoall_end_events.resize(handle->nranks);
-      for (auto& event : sample.alltoall_start_events) {
-        CHECK_CUDA(cudaEventCreate(&event));
-      }
-      for (auto& event : sample.alltoall_end_events) {
-        CHECK_CUDA(cudaEventCreate(&event));
-      }
-      sample.valid = false;
     }
 
     samples_map[config] = std::move(collection);
@@ -240,16 +230,6 @@ cudecompHaloPerformanceSampleCollection& getOrCreateHaloPerformanceSamples(const
     // Create new sample collection for this configuration
     cudecompHaloPerformanceSampleCollection collection;
     collection.samples.resize(handle->performance_report_samples);
-    collection.sample_idx = 0;
-
-    // Create events for each sample
-    for (auto& sample : collection.samples) {
-      CHECK_CUDA(cudaEventCreate(&sample.halo_start_event));
-      CHECK_CUDA(cudaEventCreate(&sample.halo_end_event));
-      CHECK_CUDA(cudaEventCreate(&sample.sendrecv_start_event));
-      CHECK_CUDA(cudaEventCreate(&sample.sendrecv_end_event));
-      sample.valid = false;
-    }
 
     samples_map[config] = std::move(collection);
   }
