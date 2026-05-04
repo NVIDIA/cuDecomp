@@ -805,10 +805,10 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
     // Create CUDA events for scheduling
     grid_desc->events.resize(handle->nranks);
     for (auto& event : grid_desc->events) {
-      CHECK_CUDA(cudaEventCreateWithFlags(&event, cudaEventDisableTiming));
+      event.createWithFlags(cudaEventDisableTiming);
     }
 #ifdef ENABLE_NVSHMEM
-    CHECK_CUDA(cudaEventCreateWithFlags(&grid_desc->nvshmem_sync_event, cudaEventDisableTiming));
+    grid_desc->nvshmem_sync_event.createWithFlags(cudaEventDisableTiming);
 #endif
 
     // Run autotuning if requested
@@ -922,43 +922,9 @@ cudecompResult_t cudecompGridDescDestroy(cudecompHandle_t handle, cudecompGridDe
       CHECK_MPI(MPI_Comm_free(&grid_desc->col_comm_info.mpi_comm));
     }
 
-    for (auto e : grid_desc->events) {
-      if (e) { CHECK_CUDA(cudaEventDestroy(e)); }
-    }
-
-#ifdef ENABLE_NVSHMEM
-    if (grid_desc->nvshmem_sync_event) { CHECK_CUDA(cudaEventDestroy(grid_desc->nvshmem_sync_event)); }
-#endif
-
+    // Print performance report if enabled
     if (handle->performance_report_enable) {
-      // Print performance report before destroying events
       printPerformanceReport(handle, grid_desc);
-
-      // Destroy all transpose performance sample events in the map
-      for (auto& entry : grid_desc->transpose_perf_samples_map) {
-        auto& collection = entry.second;
-        for (auto& sample : collection.samples) {
-          CHECK_CUDA(cudaEventDestroy(sample.transpose_start_event));
-          CHECK_CUDA(cudaEventDestroy(sample.transpose_end_event));
-          for (auto& event : sample.alltoall_start_events) {
-            CHECK_CUDA(cudaEventDestroy(event));
-          }
-          for (auto& event : sample.alltoall_end_events) {
-            CHECK_CUDA(cudaEventDestroy(event));
-          }
-        }
-      }
-
-      // Destroy all halo performance sample events in the map
-      for (auto& entry : grid_desc->halo_perf_samples_map) {
-        auto& collection = entry.second;
-        for (auto& sample : collection.samples) {
-          CHECK_CUDA(cudaEventDestroy(sample.halo_start_event));
-          CHECK_CUDA(cudaEventDestroy(sample.halo_end_event));
-          CHECK_CUDA(cudaEventDestroy(sample.sendrecv_start_event));
-          CHECK_CUDA(cudaEventDestroy(sample.sendrecv_end_event));
-        }
-      }
     }
 
     if (transposeBackendRequiresNccl(grid_desc->config.transpose_comm_backend) ||

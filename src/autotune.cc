@@ -101,9 +101,9 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
   double t_start = MPI_Wtime();
 
   // Create cuda_events for intermediate timings (5 events per trial: start + 4 op boundaries)
-  std::vector<cudaEvent_t> events(5 * options->n_trials);
+  std::vector<cudaEvent> events(5 * options->n_trials);
   for (auto& event : events) {
-    CHECK_CUDA(cudaEventCreate(&event));
+    event.create();
   }
 
   bool autotune_comm = options->autotune_transpose_backend;
@@ -536,11 +536,6 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
   CHECK_CUDA(cudaFree(data));
   if (need_data2) { CHECK_CUDA(cudaFree(data2)); }
 
-  // Delete cuda events
-  for (auto& event : events) {
-    CHECK_CUDA(cudaEventDestroy(event));
-  }
-
   // Set handle to best option (broadcast from rank 0 for consistency)
   CHECK_MPI(MPI_Bcast(&comm_backend_best, sizeof(cudecompTransposeCommBackend_t), MPI_CHAR, 0, handle->mpi_comm));
   CHECK_MPI(MPI_Bcast(pdims_best, 2 * sizeof(int), MPI_INT, 0, handle->mpi_comm));
@@ -587,9 +582,9 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
   double t_start = MPI_Wtime();
 
   // Create cuda events for timing (one per trial boundary: n_trials + 1 total)
-  std::vector<cudaEvent_t> events(options->n_trials + 1);
+  std::vector<cudaEvent> events(options->n_trials + 1);
   for (auto& event : events) {
-    CHECK_CUDA(cudaEventCreate(&event));
+    event.create();
   }
 
   bool autotune_comm = options->autotune_halo_backend;
@@ -900,11 +895,6 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
   }
 
   CHECK_CUDA(cudaFree(data));
-
-  // Delete cuda events
-  for (auto& event : events) {
-    CHECK_CUDA(cudaEventDestroy(event));
-  }
 
   // Set handle to best option (broadcast from rank 0 for consistency)
   CHECK_MPI(MPI_Bcast(&comm_backend_best, sizeof(cudecompHaloCommBackend_t), MPI_CHAR, 0, handle->mpi_comm));

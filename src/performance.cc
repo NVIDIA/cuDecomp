@@ -211,15 +211,15 @@ getOrCreateTransposePerformanceSamples(const cudecompHandle_t handle, cudecompGr
 
     // Create events for each sample
     for (auto& sample : collection.samples) {
-      CHECK_CUDA(cudaEventCreate(&sample.transpose_start_event));
-      CHECK_CUDA(cudaEventCreate(&sample.transpose_end_event));
+      sample.transpose_start_event.create();
+      sample.transpose_end_event.create();
       sample.alltoall_start_events.resize(handle->nranks);
       sample.alltoall_end_events.resize(handle->nranks);
       for (auto& event : sample.alltoall_start_events) {
-        CHECK_CUDA(cudaEventCreate(&event));
+        event.create();
       }
       for (auto& event : sample.alltoall_end_events) {
-        CHECK_CUDA(cudaEventCreate(&event));
+        event.create();
       }
       sample.valid = false;
     }
@@ -244,10 +244,10 @@ cudecompHaloPerformanceSampleCollection& getOrCreateHaloPerformanceSamples(const
 
     // Create events for each sample
     for (auto& sample : collection.samples) {
-      CHECK_CUDA(cudaEventCreate(&sample.halo_start_event));
-      CHECK_CUDA(cudaEventCreate(&sample.halo_end_event));
-      CHECK_CUDA(cudaEventCreate(&sample.sendrecv_start_event));
-      CHECK_CUDA(cudaEventCreate(&sample.sendrecv_end_event));
+      sample.halo_start_event.create();
+      sample.halo_end_event.create();
+      sample.sendrecv_start_event.create();
+      sample.sendrecv_end_event.create();
       sample.valid = false;
     }
 
