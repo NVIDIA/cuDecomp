@@ -21,6 +21,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <memory>
 #include <numeric>
 #include <string>
 #include <vector>
@@ -42,6 +43,42 @@
 
 namespace cudecomp {
 namespace {
+
+struct cudaBufferGuardDeleter {
+  void operator()(void* ptr) const noexcept {
+    if (ptr) { cudaFree(ptr); }
+  }
+};
+
+struct transposeWorkspaceGuardDeleter {
+  cudecompHandle_t handle = nullptr;
+  cudecompGridDesc_t grid_desc = nullptr;
+  cudecompTransposeCommBackend_t backend = CUDECOMP_TRANSPOSE_COMM_MPI_P2P;
+
+  void operator()(void* ptr) const noexcept {
+    if (!ptr) return;
+
+    grid_desc->config.transpose_comm_backend = backend;
+    cudecompFree(handle, grid_desc, ptr);
+  }
+};
+
+struct haloWorkspaceGuardDeleter {
+  cudecompHandle_t handle = nullptr;
+  cudecompGridDesc_t grid_desc = nullptr;
+  cudecompHaloCommBackend_t backend = CUDECOMP_HALO_COMM_MPI;
+
+  void operator()(void* ptr) const noexcept {
+    if (!ptr) return;
+
+    grid_desc->config.halo_comm_backend = backend;
+    cudecompFree(handle, grid_desc, ptr);
+  }
+};
+
+using cudaBufferGuard = std::unique_ptr<void, cudaBufferGuardDeleter>;
+using transposeWorkspaceGuard = std::unique_ptr<void, transposeWorkspaceGuardDeleter>;
+using haloWorkspaceGuard = std::unique_ptr<void, haloWorkspaceGuardDeleter>;
 
 static std::vector<int> getFactors(int N) {
   std::vector<int> factors;
@@ -154,6 +191,11 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
   void* work = nullptr;
   void* work_nvshmem = nullptr;
 
+  cudaBufferGuard data_guard;
+  cudaBufferGuard data2_guard;
+  transposeWorkspaceGuard work_guard;
+  transposeWorkspaceGuard work_nvshmem_guard;
+
   int64_t data_sz = 0;
   int64_t work_sz = 0;
 
@@ -213,11 +255,19 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
     int64_t work_sz_new = num_elements_work * dtype_size;
     if (data_sz_new > data_sz) {
       data_sz = data_sz_new;
-      if (data) CHECK_CUDA(cudaFree(data));
+      if (data) {
+        data_guard.release();
+        CHECK_CUDA(cudaFree(data));
+      }
       CHECK_CUDA(cudaMalloc(&data, data_sz));
+      data_guard.reset(data);
       if (need_data2) {
-        if (data2) CHECK_CUDA(cudaFree(data2));
+        if (data2) {
+          data2_guard.release();
+          CHECK_CUDA(cudaFree(data2));
+        }
         CHECK_CUDA(cudaMalloc(&data2, data_sz));
+        data2_guard.reset(data2);
       }
     }
 
@@ -232,15 +282,21 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
           auto tmp = grid_desc->config.transpose_comm_backend;
           grid_desc->config.transpose_comm_backend =
               (need_nccl) ? CUDECOMP_TRANSPOSE_COMM_NCCL : CUDECOMP_TRANSPOSE_COMM_MPI_P2P;
+          work_guard.release();
           CHECK_CUDECOMP(cudecompFree(handle, grid_desc, work));
           grid_desc->config.transpose_comm_backend = tmp;
         }
         // Temporarily set backend to force nvshmem_malloc path in cudecompMalloc/Free
         auto tmp = grid_desc->config.transpose_comm_backend;
         grid_desc->config.transpose_comm_backend = CUDECOMP_TRANSPOSE_COMM_NVSHMEM;
-        if (work_nvshmem) CHECK_CUDECOMP(cudecompFree(handle, grid_desc, work_nvshmem));
+        if (work_nvshmem) {
+          work_nvshmem_guard.release();
+          CHECK_CUDECOMP(cudecompFree(handle, grid_desc, work_nvshmem));
+        }
         CHECK_CUDECOMP(cudecompMalloc(handle, grid_desc, reinterpret_cast<void**>(&work_nvshmem), work_sz));
         grid_desc->config.transpose_comm_backend = tmp;
+        work_nvshmem_guard =
+            transposeWorkspaceGuard(work_nvshmem, {handle, grid_desc, CUDECOMP_TRANSPOSE_COMM_NVSHMEM});
 
         // Check if there is enough memory for separate non-NVSHMEM allocated work buffer
         auto ret = cudaMalloc(&work, work_sz);
@@ -254,22 +310,25 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
           cudaGetLastError(); // Reset CUDA error state
         } else {
           CHECK_CUDA(cudaFree(work));
-          auto tmp = grid_desc->config.transpose_comm_backend;
-          grid_desc->config.transpose_comm_backend =
-              (need_nccl) ? CUDECOMP_TRANSPOSE_COMM_NCCL : CUDECOMP_TRANSPOSE_COMM_MPI_P2P;
-          cudecompResult_t ret = cudecompMalloc(handle, grid_desc, reinterpret_cast<void**>(&work), work_sz);
+          auto backend = (need_nccl) ? CUDECOMP_TRANSPOSE_COMM_NCCL : CUDECOMP_TRANSPOSE_COMM_MPI_P2P;
+          tmp = grid_desc->config.transpose_comm_backend;
+          grid_desc->config.transpose_comm_backend = backend;
+          CHECK_CUDECOMP(cudecompMalloc(handle, grid_desc, reinterpret_cast<void**>(&work), work_sz));
           grid_desc->config.transpose_comm_backend = tmp;
-          // Check after restoring the temporary backend used to select the allocation path.
-          CHECK_CUDECOMP(ret);
+          work_guard = transposeWorkspaceGuard(work, {handle, grid_desc, backend});
         }
 #endif
       } else {
+        auto backend = (need_nccl) ? CUDECOMP_TRANSPOSE_COMM_NCCL : CUDECOMP_TRANSPOSE_COMM_MPI_P2P;
         auto tmp = grid_desc->config.transpose_comm_backend;
-        grid_desc->config.transpose_comm_backend =
-            (need_nccl) ? CUDECOMP_TRANSPOSE_COMM_NCCL : CUDECOMP_TRANSPOSE_COMM_MPI_P2P;
-        if (work) { CHECK_CUDECOMP(cudecompFree(handle, grid_desc, work)); }
+        grid_desc->config.transpose_comm_backend = backend;
+        if (work) {
+          work_guard.release();
+          CHECK_CUDECOMP(cudecompFree(handle, grid_desc, work));
+        }
         CHECK_CUDECOMP(cudecompMalloc(handle, grid_desc, reinterpret_cast<void**>(&work), work_sz));
         grid_desc->config.transpose_comm_backend = tmp;
+        work_guard = transposeWorkspaceGuard(work, {handle, grid_desc, backend});
       }
     }
 
@@ -490,6 +549,7 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
       auto tmp = grid_desc->config.transpose_comm_backend;
       grid_desc->config.transpose_comm_backend =
           (need_nccl) ? CUDECOMP_TRANSPOSE_COMM_NCCL : CUDECOMP_TRANSPOSE_COMM_MPI_P2P;
+      work_guard.release();
       CHECK_CUDECOMP(cudecompFree(handle, grid_desc, work));
       grid_desc->config.transpose_comm_backend = tmp;
     }
@@ -497,6 +557,7 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
     // Temporarily set backend to force nvshmem_malloc path in cudecompMalloc/Free
     auto tmp = grid_desc->config.transpose_comm_backend;
     grid_desc->config.transpose_comm_backend = CUDECOMP_TRANSPOSE_COMM_NVSHMEM;
+    work_nvshmem_guard.release();
     CHECK_CUDECOMP(cudecompFree(handle, grid_desc, work_nvshmem));
     grid_desc->config.transpose_comm_backend = tmp;
 #endif
@@ -504,12 +565,17 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
     auto tmp = grid_desc->config.transpose_comm_backend;
     grid_desc->config.transpose_comm_backend =
         (need_nccl) ? CUDECOMP_TRANSPOSE_COMM_NCCL : CUDECOMP_TRANSPOSE_COMM_MPI_P2P;
+    work_guard.release();
     CHECK_CUDECOMP(cudecompFree(handle, grid_desc, work));
     grid_desc->config.transpose_comm_backend = tmp;
   }
 
+  data_guard.release();
   CHECK_CUDA(cudaFree(data));
-  if (need_data2) { CHECK_CUDA(cudaFree(data2)); }
+  if (need_data2) {
+    data2_guard.release();
+    CHECK_CUDA(cudaFree(data2));
+  }
 
   // Set handle to best option (broadcast from rank 0 for consistency)
   CHECK_MPI(MPI_Bcast(&comm_backend_best, sizeof(cudecompTransposeCommBackend_t), MPI_CHAR, 0, handle->mpi_comm));
@@ -535,12 +601,17 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
   // registration handles on larger test data buffers. These stale registration handles can cause to delays in freeing
   // the test buffer GPU memory.
   char *tmp1, *tmp2;
+  cudaBufferGuard tmp1_guard, tmp2_guard;
   size_t per_rank_size = (1024 * 1024 + handle->nranks - 1) / handle->nranks;
   CHECK_CUDA(cudaMalloc(&tmp1, per_rank_size * handle->nranks * sizeof(*tmp1)));
+  tmp1_guard.reset(tmp1);
   CHECK_CUDA(cudaMalloc(&tmp2, per_rank_size * handle->nranks * sizeof(*tmp2)));
+  tmp2_guard.reset(tmp2);
   CHECK_MPI(MPI_Alltoall(tmp1, per_rank_size, MPI_CHAR, tmp2, per_rank_size, MPI_CHAR, handle->mpi_comm));
   CHECK_MPI(MPI_Barrier(handle->mpi_comm));
+  tmp1_guard.release();
   CHECK_CUDA(cudaFree(tmp1));
+  tmp2_guard.release();
   CHECK_CUDA(cudaFree(tmp2));
 
   // Reset performance samples after autotuning
@@ -601,6 +672,10 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
   void* work = nullptr;
   void* work_nvshmem = nullptr;
 
+  cudaBufferGuard data_guard;
+  haloWorkspaceGuard work_guard;
+  haloWorkspaceGuard work_nvshmem_guard;
+
   int64_t data_sz = 0;
   int64_t work_sz = 0;
 
@@ -644,8 +719,12 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
     int64_t work_sz_new = num_elements_work * dtype_size;
     if (data_sz_new > data_sz) {
       data_sz = data_sz_new;
-      if (data) CHECK_CUDA(cudaFree(data));
+      if (data) {
+        data_guard.release();
+        CHECK_CUDA(cudaFree(data));
+      }
       CHECK_CUDA(cudaMalloc(&data, data_sz));
+      data_guard.reset(data);
     }
 
     // For nvshmem, buffers must be the same size. Find global maximums.
@@ -658,15 +737,20 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
         if (work && work != work_nvshmem) {
           auto tmp = grid_desc->config.halo_comm_backend;
           grid_desc->config.halo_comm_backend = (need_nccl) ? CUDECOMP_HALO_COMM_NCCL : CUDECOMP_HALO_COMM_MPI;
+          work_guard.release();
           CHECK_CUDECOMP(cudecompFree(handle, grid_desc, work));
           grid_desc->config.halo_comm_backend = tmp;
         }
         // Temporarily set backend to force nvshmem_malloc path in cudecompMalloc/Free
         auto tmp = grid_desc->config.halo_comm_backend;
         grid_desc->config.halo_comm_backend = CUDECOMP_HALO_COMM_NVSHMEM;
-        if (work_nvshmem) CHECK_CUDECOMP(cudecompFree(handle, grid_desc, work_nvshmem));
+        if (work_nvshmem) {
+          work_nvshmem_guard.release();
+          CHECK_CUDECOMP(cudecompFree(handle, grid_desc, work_nvshmem));
+        }
         CHECK_CUDECOMP(cudecompMalloc(handle, grid_desc, reinterpret_cast<void**>(&work_nvshmem), work_sz));
         grid_desc->config.halo_comm_backend = tmp;
+        work_nvshmem_guard = haloWorkspaceGuard(work_nvshmem, {handle, grid_desc, CUDECOMP_HALO_COMM_NVSHMEM});
 
         // Check if there is enough memory for separate non-NVSHMEM allocated work buffer
         auto ret = cudaMalloc(&work, work_sz);
@@ -680,20 +764,25 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
           cudaGetLastError(); // Reset CUDA error state
         } else {
           CHECK_CUDA(cudaFree(work));
-          auto tmp = grid_desc->config.halo_comm_backend;
-          grid_desc->config.halo_comm_backend = (need_nccl) ? CUDECOMP_HALO_COMM_NCCL : CUDECOMP_HALO_COMM_MPI;
-          cudecompResult_t ret = cudecompMalloc(handle, grid_desc, reinterpret_cast<void**>(&work), work_sz);
+          auto backend = (need_nccl) ? CUDECOMP_HALO_COMM_NCCL : CUDECOMP_HALO_COMM_MPI;
+          tmp = grid_desc->config.halo_comm_backend;
+          grid_desc->config.halo_comm_backend = backend;
+          CHECK_CUDECOMP(cudecompMalloc(handle, grid_desc, reinterpret_cast<void**>(&work), work_sz));
           grid_desc->config.halo_comm_backend = tmp;
-          // Check after restoring the temporary backend used to select the allocation path.
-          CHECK_CUDECOMP(ret);
+          work_guard = haloWorkspaceGuard(work, {handle, grid_desc, backend});
         }
 #endif
       } else {
+        auto backend = (need_nccl) ? CUDECOMP_HALO_COMM_NCCL : CUDECOMP_HALO_COMM_MPI;
         auto tmp = grid_desc->config.halo_comm_backend;
-        grid_desc->config.halo_comm_backend = (need_nccl) ? CUDECOMP_HALO_COMM_NCCL : CUDECOMP_HALO_COMM_MPI;
-        if (work) { CHECK_CUDECOMP(cudecompFree(handle, grid_desc, work)); }
+        grid_desc->config.halo_comm_backend = backend;
+        if (work) {
+          work_guard.release();
+          CHECK_CUDECOMP(cudecompFree(handle, grid_desc, work));
+        }
         CHECK_CUDECOMP(cudecompMalloc(handle, grid_desc, reinterpret_cast<void**>(&work), work_sz));
         grid_desc->config.halo_comm_backend = tmp;
+        work_guard = haloWorkspaceGuard(work, {handle, grid_desc, backend});
       }
     }
 
@@ -827,6 +916,7 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
     if (work != work_nvshmem) {
       auto tmp = grid_desc->config.halo_comm_backend;
       grid_desc->config.halo_comm_backend = (need_nccl) ? CUDECOMP_HALO_COMM_NCCL : CUDECOMP_HALO_COMM_MPI;
+      work_guard.release();
       CHECK_CUDECOMP(cudecompFree(handle, grid_desc, work));
       grid_desc->config.halo_comm_backend = tmp;
     }
@@ -834,16 +924,19 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
     // Temporarily set backend to force nvshmem_malloc path in cudecompMalloc/Free
     auto tmp = grid_desc->config.halo_comm_backend;
     grid_desc->config.halo_comm_backend = CUDECOMP_HALO_COMM_NVSHMEM;
+    work_nvshmem_guard.release();
     CHECK_CUDECOMP(cudecompFree(handle, grid_desc, work_nvshmem));
     grid_desc->config.halo_comm_backend = tmp;
 #endif
   } else {
     auto tmp = grid_desc->config.halo_comm_backend;
     grid_desc->config.halo_comm_backend = (need_nccl) ? CUDECOMP_HALO_COMM_NCCL : CUDECOMP_HALO_COMM_MPI;
+    work_guard.release();
     CHECK_CUDECOMP(cudecompFree(handle, grid_desc, work));
     grid_desc->config.halo_comm_backend = tmp;
   }
 
+  data_guard.release();
   CHECK_CUDA(cudaFree(data));
 
   // Set handle to best option (broadcast from rank 0 for consistency)
