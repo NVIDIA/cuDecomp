@@ -923,9 +923,7 @@ cudecompResult_t cudecompGridDescDestroy(cudecompHandle_t handle, cudecompGridDe
     }
 
     // Print performance report if enabled
-    if (handle->performance_report_enable) {
-      printPerformanceReport(handle, grid_desc);
-    }
+    if (handle->performance_report_enable) { printPerformanceReport(handle, grid_desc); }
 
     if (transposeBackendRequiresNccl(grid_desc->config.transpose_comm_backend) ||
         haloBackendRequiresNccl(grid_desc->config.halo_comm_backend)) {

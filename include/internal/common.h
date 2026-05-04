@@ -203,8 +203,8 @@ struct cudecompGridDesc {
   cudecompCommInfo row_comm_info; // row communicator information
   cudecompCommInfo col_comm_info; // column communicator information
 
-  std::vector<cudecomp::cudaEvent> events;        // CUDA events used for scheduling
-  cudecomp::cudaEvent nvshmem_sync_event;         // NVSHMEM event used for synchronization
+  std::vector<cudecomp::cudaEvent> events; // CUDA events used for scheduling
+  cudecomp::cudaEvent nvshmem_sync_event;  // NVSHMEM event used for synchronization
 
 #ifdef ENABLE_NVSHMEM
   int* nvshmem_block_counters = nullptr;    // device memory counters for SM alltoallv last-block detection
@@ -220,9 +220,9 @@ struct cudecompGridDesc {
   // Performance reporting related entries
   std::vector<cudecomp::cudaEvent> alltoall_start_events; // events for alltoall timing
   std::vector<cudecomp::cudaEvent> alltoall_end_events;   // events for alltoall timing
-  int32_t alltoall_timing_count = 0;              // count of alltoall timing events pairs (for pipelined alltoall)
-  cudecomp::cudaEvent transpose_start_event;      // event for transpose timing
-  cudecomp::cudaEvent transpose_end_event;        // event for transpose timing
+  int32_t alltoall_timing_count = 0;         // count of alltoall timing events pairs (for pipelined alltoall)
+  cudecomp::cudaEvent transpose_start_event; // event for transpose timing
+  cudecomp::cudaEvent transpose_end_event;   // event for transpose timing
 
   std::unordered_map<std::tuple<int32_t, int32_t, std::array<int32_t, 3>, std::array<int32_t, 3>,
                                 std::array<int32_t, 3>, std::array<int32_t, 3>, bool, bool, cudecompDataType_t>,
