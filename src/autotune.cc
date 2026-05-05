@@ -24,6 +24,7 @@
 #include <memory>
 #include <numeric>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include <cuda_runtime.h>
@@ -50,35 +51,26 @@ struct cudaBufferGuardDeleter {
   }
 };
 
-struct transposeWorkspaceGuardDeleter {
-  cudecompHandle_t handle = nullptr;
-  cudecompGridDesc_t grid_desc = nullptr;
-  cudecompTransposeCommBackend_t backend = CUDECOMP_TRANSPOSE_COMM_MPI_P2P;
+template <typename Backend> struct workspaceGuardDeleter {
+  cudecompHandle_t handle;
+  cudecompGridDesc_t grid_desc;
+  Backend backend;
 
   void operator()(void* ptr) const noexcept {
     if (!ptr) return;
 
-    grid_desc->config.transpose_comm_backend = backend;
-    cudecompFree(handle, grid_desc, ptr);
-  }
-};
-
-struct haloWorkspaceGuardDeleter {
-  cudecompHandle_t handle = nullptr;
-  cudecompGridDesc_t grid_desc = nullptr;
-  cudecompHaloCommBackend_t backend = CUDECOMP_HALO_COMM_MPI;
-
-  void operator()(void* ptr) const noexcept {
-    if (!ptr) return;
-
-    grid_desc->config.halo_comm_backend = backend;
+    if constexpr (std::is_same_v<Backend, cudecompTransposeCommBackend_t>) {
+      grid_desc->config.transpose_comm_backend = backend;
+    } else {
+      grid_desc->config.halo_comm_backend = backend;
+    }
     cudecompFree(handle, grid_desc, ptr);
   }
 };
 
 using cudaBufferGuard = std::unique_ptr<void, cudaBufferGuardDeleter>;
-using transposeWorkspaceGuard = std::unique_ptr<void, transposeWorkspaceGuardDeleter>;
-using haloWorkspaceGuard = std::unique_ptr<void, haloWorkspaceGuardDeleter>;
+using transposeWorkspaceGuard = std::unique_ptr<void, workspaceGuardDeleter<cudecompTransposeCommBackend_t>>;
+using haloWorkspaceGuard = std::unique_ptr<void, workspaceGuardDeleter<cudecompHaloCommBackend_t>>;
 
 static std::vector<int> getFactors(int N) {
   std::vector<int> factors;
@@ -193,8 +185,8 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
 
   cudaBufferGuard data_guard;
   cudaBufferGuard data2_guard;
-  transposeWorkspaceGuard work_guard;
-  transposeWorkspaceGuard work_nvshmem_guard;
+  transposeWorkspaceGuard work_guard(nullptr, {handle, grid_desc, CUDECOMP_TRANSPOSE_COMM_MPI_P2P});
+  transposeWorkspaceGuard work_nvshmem_guard(nullptr, {handle, grid_desc, CUDECOMP_TRANSPOSE_COMM_NVSHMEM});
 
   int64_t data_sz = 0;
   int64_t work_sz = 0;
@@ -673,8 +665,8 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
   void* work_nvshmem = nullptr;
 
   cudaBufferGuard data_guard;
-  haloWorkspaceGuard work_guard;
-  haloWorkspaceGuard work_nvshmem_guard;
+  haloWorkspaceGuard work_guard(nullptr, {handle, grid_desc, CUDECOMP_HALO_COMM_MPI});
+  haloWorkspaceGuard work_nvshmem_guard(nullptr, {handle, grid_desc, CUDECOMP_HALO_COMM_NVSHMEM});
 
   int64_t data_sz = 0;
   int64_t work_sz = 0;
