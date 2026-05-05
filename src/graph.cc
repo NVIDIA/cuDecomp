@@ -17,6 +17,7 @@
 
 #include <tuple>
 #include <unordered_map>
+#include <utility>
 
 #include <cuda_runtime.h>
 
@@ -27,10 +28,10 @@
 
 namespace cudecomp {
 
-graphCache::~graphCache() noexcept { clearNoThrow(); }
+graphCache::~graphCache() noexcept { clear(); }
 
 void graphCache::replay(const graphCache::key_type& key, cudaStream_t stream) const {
-  CHECK_CUDA(cudaGraphLaunch(graph_cache_.at(key), stream));
+  CHECK_CUDA(cudaGraphLaunch(graph_cache_.at(key).get(), stream));
 }
 
 cudaStream_t graphCache::startCapture(const graphCache::key_type& key, cudaStream_t stream) const {
@@ -39,31 +40,16 @@ cudaStream_t graphCache::startCapture(const graphCache::key_type& key, cudaStrea
 }
 
 void graphCache::endCapture(const graphCache::key_type& key) {
-  cudaGraph_t graph;
-  cudaGraphExec_t graph_exec;
-  CHECK_CUDA(cudaStreamEndCapture(graph_stream_, &graph));
-  CHECK_CUDA(cudaGraphInstantiate(&graph_exec, graph, nullptr, nullptr, 0));
-  CHECK_CUDA(cudaGraphDestroy(graph));
+  cudaGraph graph;
+  cudaGraphExec graph_exec;
+  CHECK_CUDA(cudaStreamEndCapture(graph_stream_, graph.put()));
+  CHECK_CUDA(cudaGraphInstantiate(graph_exec.put(), graph.get(), nullptr, nullptr, 0));
 
-  graph_cache_[key] = graph_exec;
+  graph_cache_[key] = std::move(graph_exec);
 }
 
 bool graphCache::cached(const graphCache::key_type& key) const { return graph_cache_.count(key) > 0; }
 
-void graphCache::clear() {
-  for (auto& entry : graph_cache_) {
-    CHECK_CUDA(cudaGraphExecDestroy(entry.second));
-  }
-
-  graph_cache_.clear();
-}
-
-void graphCache::clearNoThrow() noexcept {
-  for (auto& entry : graph_cache_) {
-    cudaGraphExecDestroy(entry.second);
-  }
-
-  graph_cache_.clear();
-}
+void graphCache::clear() noexcept { graph_cache_.clear(); }
 
 } // namespace cudecomp
