@@ -27,7 +27,7 @@
 
 namespace cudecomp {
 
-graphCache::~graphCache() { this->clear(); }
+graphCache::~graphCache() noexcept { clearNoThrow(); }
 
 void graphCache::replay(const graphCache::key_type& key, cudaStream_t stream) const {
   CHECK_CUDA(cudaGraphLaunch(graph_cache_.at(key), stream));
@@ -53,6 +53,14 @@ bool graphCache::cached(const graphCache::key_type& key) const { return graph_ca
 void graphCache::clear() {
   for (auto& entry : graph_cache_) {
     CHECK_CUDA(cudaGraphExecDestroy(entry.second));
+  }
+
+  graph_cache_.clear();
+}
+
+void graphCache::clearNoThrow() noexcept {
+  for (auto& entry : graph_cache_) {
+    cudaGraphExecDestroy(entry.second);
   }
 
   graph_cache_.clear();

@@ -35,7 +35,7 @@ class graphCache {
   using key_type = std::tuple<void*, void*, int, int, cudecompPencilInfo_t, cudecompPencilInfo_t, cudecompDataType_t>;
 
 public:
-  ~graphCache();
+  ~graphCache() noexcept;
   void replay(const key_type& key, cudaStream_t stream) const;
   cudaStream_t startCapture(const key_type& key, cudaStream_t stream) const;
   void endCapture(const key_type& key);
@@ -43,6 +43,8 @@ public:
   void clear();
 
 private:
+  void clearNoThrow() noexcept;
+
   std::unordered_map<key_type, cudaGraphExec_t> graph_cache_;
   cudaStream graph_stream_;
 };
