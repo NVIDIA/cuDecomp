@@ -26,6 +26,44 @@
 
 namespace cudecomp {
 
+template <typename T, auto destroy_fn> class uniqueHandle {
+public:
+  uniqueHandle() = default;
+  explicit uniqueHandle(T handle) : handle_(handle) {}
+  ~uniqueHandle() noexcept { resetNoThrow(); }
+
+  uniqueHandle(const uniqueHandle&) = delete;
+  uniqueHandle& operator=(const uniqueHandle&) = delete;
+
+  uniqueHandle(uniqueHandle&& other) noexcept : handle_(std::exchange(other.handle_, T{})) {}
+
+  uniqueHandle& operator=(uniqueHandle&& other) noexcept {
+    if (this != &other) {
+      resetNoThrow();
+      handle_ = std::exchange(other.handle_, T{});
+    }
+    return *this;
+  }
+
+  T get() const noexcept { return handle_; }
+  T* put() noexcept {
+    resetNoThrow();
+    return &handle_;
+  }
+  T release() noexcept { return std::exchange(handle_, T{}); }
+  operator T() const noexcept { return handle_; }
+
+private:
+  void resetNoThrow() noexcept {
+    if (handle_) {
+      destroy_fn(handle_);
+      handle_ = T{};
+    }
+  }
+
+  T handle_{};
+};
+
 template <unsigned int flags> class cudaEventBase {
 public:
   cudaEventBase() { CHECK_CUDA(cudaEventCreateWithFlags(&event_, flags)); }

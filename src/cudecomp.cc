@@ -525,6 +525,31 @@ static void cleanupFailedGridDescCreate(cudecompHandle_t handle, cudecompGridDes
   releaseUnusedHandleResources(handle, release_streams);
 }
 
+#if CUDART_VERSION >= 12030
+struct cuMemAllocationGuard {
+  ~cuMemAllocationGuard() noexcept {
+    if (!active) return;
+    if (mapped) { cuFnTable.pfn_cuMemUnmap(ptr, size); }
+    if (address_reserved) { cuFnTable.pfn_cuMemAddressFree(ptr, size); }
+    if (handle_created) { cuFnTable.pfn_cuMemRelease(handle); }
+  }
+
+  cuMemAllocationGuard() = default;
+  cuMemAllocationGuard(const cuMemAllocationGuard&) = delete;
+  cuMemAllocationGuard& operator=(const cuMemAllocationGuard&) = delete;
+
+  void release() noexcept { active = false; }
+
+  CUmemGenericAllocationHandle handle = 0;
+  CUdeviceptr ptr = 0;
+  size_t size = 0;
+  bool handle_created = false;
+  bool address_reserved = false;
+  bool mapped = false;
+  bool active = true;
+};
+#endif
+
 } // namespace
 } // namespace cudecomp
 
@@ -1173,17 +1198,24 @@ cudecompResult_t cudecompMalloc(cudecompHandle_t handle, cudecompGridDesc_t grid
         buffer_size_bytes = (buffer_size_bytes + granularity - 1) / granularity * granularity;
 
         // Allocate memory
-        CUmemGenericAllocationHandle cumem_handle;
-        CHECK_CUDA_DRV(cuMemCreate(&cumem_handle, buffer_size_bytes, &prop, 0));
-        CHECK_CUDA_DRV(cuMemAddressReserve((CUdeviceptr*)buffer, buffer_size_bytes, granularity, 0, 0));
-        CHECK_CUDA_DRV(cuMemMap((CUdeviceptr)*buffer, buffer_size_bytes, 0, cumem_handle, 0));
+        cuMemAllocationGuard cumem_guard;
+        cumem_guard.size = buffer_size_bytes;
+        CHECK_CUDA_DRV(cuMemCreate(&cumem_guard.handle, buffer_size_bytes, &prop, 0));
+        cumem_guard.handle_created = true;
+        CHECK_CUDA_DRV(cuMemAddressReserve(&cumem_guard.ptr, buffer_size_bytes, granularity, 0, 0));
+        cumem_guard.address_reserved = true;
+        CHECK_CUDA_DRV(cuMemMap(cumem_guard.ptr, buffer_size_bytes, 0, cumem_guard.handle, 0));
+        cumem_guard.mapped = true;
 
         // Set read/write access
         CUmemAccessDesc accessDesc = {};
         accessDesc.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
         accessDesc.location.id = cu_dev;
         accessDesc.flags = CU_MEM_ACCESS_FLAGS_PROT_READWRITE;
-        CHECK_CUDA_DRV(cuMemSetAccess((CUdeviceptr)*buffer, buffer_size_bytes, &accessDesc, 1));
+        CHECK_CUDA_DRV(cuMemSetAccess(cumem_guard.ptr, buffer_size_bytes, &accessDesc, 1));
+
+        *buffer = reinterpret_cast<void*>(cumem_guard.ptr);
+        cumem_guard.release();
 #endif
       } else {
         CHECK_CUDA(cudaMalloc(buffer, buffer_size_bytes));

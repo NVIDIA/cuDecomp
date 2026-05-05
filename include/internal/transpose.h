@@ -35,6 +35,7 @@
 #include "internal/cudecomp_kernels.h"
 #include "internal/nvtx.h"
 #include "internal/performance.h"
+#include "internal/raii_wrappers.h"
 #include "internal/utils.h"
 
 namespace cudecomp {
@@ -71,6 +72,10 @@ template <typename T> static inline uint32_t getAlignment(const T* ptr) {
   }
   return 1;
 }
+
+using cutensorTensorDesc = uniqueHandle<cutensorTensorDescriptor_t, cutensorDestroyTensorDescriptor>;
+using cutensorOperationDesc = uniqueHandle<cutensorOperationDescriptor_t, cutensorDestroyOperationDescriptor>;
+using cutensorPlan = uniqueHandle<cutensorPlan_t, cutensorDestroyPlan>;
 
 template <typename T>
 static void localPermute(const cudecompHandle_t handle, const std::array<int64_t, 3>& extent_in,
@@ -132,28 +137,23 @@ static void localPermute(const cudecompHandle_t handle, const std::array<int64_t
   auto strides_in_ptr = anyNonzeros(strides_in) ? strides_in.data() : nullptr;
   auto strides_out_ptr = anyNonzeros(strides_out) ? strides_out.data() : nullptr;
 
-  cutensorTensorDescriptor_t desc_in;
-  CHECK_CUTENSOR(cutensorCreateTensorDescriptor(handle->cutensor_handle, &desc_in, 3, extent_in.data(), strides_in_ptr,
-                                                cutensor_type, getAlignment(input)));
-  cutensorTensorDescriptor_t desc_out;
-  CHECK_CUTENSOR(cutensorCreateTensorDescriptor(handle->cutensor_handle, &desc_out, 3, extent_out.data(),
+  cutensorTensorDesc desc_in;
+  CHECK_CUTENSOR(cutensorCreateTensorDescriptor(handle->cutensor_handle, desc_in.put(), 3, extent_in.data(),
+                                                strides_in_ptr, cutensor_type, getAlignment(input)));
+  cutensorTensorDesc desc_out;
+  CHECK_CUTENSOR(cutensorCreateTensorDescriptor(handle->cutensor_handle, desc_out.put(), 3, extent_out.data(),
                                                 strides_out_ptr, cutensor_type, getAlignment(output)));
 
-  cutensorOperationDescriptor_t desc_op;
-  CHECK_CUTENSOR(cutensorCreatePermutation(handle->cutensor_handle, &desc_op, desc_in, order_in.data(),
-                                           CUTENSOR_OP_IDENTITY, desc_out, order_out.data(),
+  cutensorOperationDesc desc_op;
+  CHECK_CUTENSOR(cutensorCreatePermutation(handle->cutensor_handle, desc_op.put(), desc_in.get(), order_in.data(),
+                                           CUTENSOR_OP_IDENTITY, desc_out.get(), order_out.data(),
                                            getCutensorComputeType(cutensor_type)));
 
-  cutensorPlan_t plan;
-  CHECK_CUTENSOR(cutensorCreatePlan(handle->cutensor_handle, &plan, desc_op, handle->cutensor_plan_pref, 0));
+  cutensorPlan plan;
+  CHECK_CUTENSOR(cutensorCreatePlan(handle->cutensor_handle, plan.put(), desc_op.get(), handle->cutensor_plan_pref, 0));
 
   T one(1);
-  CHECK_CUTENSOR(cutensorPermute(handle->cutensor_handle, plan, &one, input, output, stream));
-
-  CHECK_CUTENSOR(cutensorDestroyTensorDescriptor(desc_in));
-  CHECK_CUTENSOR(cutensorDestroyTensorDescriptor(desc_out));
-  CHECK_CUTENSOR(cutensorDestroyOperationDescriptor(desc_op));
-  CHECK_CUTENSOR(cutensorDestroyPlan(plan));
+  CHECK_CUTENSOR(cutensorPermute(handle->cutensor_handle, plan.get(), &one, input, output, stream));
 }
 
 #else
