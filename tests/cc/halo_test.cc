@@ -510,7 +510,13 @@ int main(int argc, char** argv) {
   MPI_Comm_split_type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL, &local_comm);
   int local_rank;
   MPI_Comm_rank(local_comm, &local_rank);
-  CHECK_CUDA_EXIT(cudaSetDevice(local_rank));
+  int num_devices = 0;
+  CHECK_CUDA_EXIT(cudaGetDeviceCount(&num_devices));
+  if (num_devices <= 0) {
+    fprintf(stderr, "No CUDA devices available.\n");
+    exit(EXIT_FAILURE);
+  }
+  CHECK_CUDA_EXIT(cudaSetDevice(local_rank % num_devices));
 
   // Check if test file was provided
   std::string testfile;
