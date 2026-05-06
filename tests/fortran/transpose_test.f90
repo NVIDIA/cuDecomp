@@ -554,7 +554,7 @@ program main
 
   integer :: i, idx
   real(real64) :: t0
-  integer :: local_rank, ierr
+  integer :: local_rank, ierr, num_devices
   integer :: local_comm
   integer :: res, retcode
   logical :: using_testfile
@@ -571,7 +571,12 @@ program main
 
   call MPI_Comm_split_Type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL, local_comm, ierr)
   call MPI_Comm_rank(local_comm, local_rank, ierr)
-  CHECK_CUDA_EXIT(cudaSetDevice(local_rank))
+  CHECK_CUDA_EXIT(cudaGetDeviceCount(num_devices))
+  if (num_devices <= 0) then
+    print*, 'No CUDA devices available.'
+    call exit(1)
+  endif
+  CHECK_CUDA_EXIT(cudaSetDevice(mod(local_rank, num_devices)))
 
   using_testfile = .false.
   do i = 1, command_argument_count()
