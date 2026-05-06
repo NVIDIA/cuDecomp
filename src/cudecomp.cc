@@ -1354,6 +1354,11 @@ cudecompResult_t cudecompGetShiftedRank(cudecompHandle_t handle, cudecompGridDes
     if (dim < 0 || dim > 2) { THROW_INVALID_USAGE("dim argument out of range"); }
     if (!shifted_rank) { THROW_INVALID_USAGE("shifted_rank argument cannot be null."); }
 
+    if (displacement == 0) {
+      *shifted_rank = handle->rank;
+      return CUDECOMP_RESULT_SUCCESS;
+    }
+
     if (dim == axis) {
       *shifted_rank = periodic ? handle->rank : -1;
       return CUDECOMP_RESULT_SUCCESS;
