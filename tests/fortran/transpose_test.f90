@@ -19,30 +19,35 @@
 
 #ifdef R32
 #define ARRTYPE real(real32)
+#define ARRTYPESIZE 4
 #define DTYPE HIPDECOMP_FLOAT
 module transpose_HIPDECOMP_FLOAT_mod
 #endif
 
 #ifdef R64
 #define ARRTYPE real(real64)
+#define ARRTYPESIZE 8
 #define DTYPE HIPDECOMP_DOUBLE
 module transpose_HIPDECOMP_DOUBLE_mod
 #endif
 
 #ifdef C32
 #define ARRTYPE complex(real32)
+#define ARRTYPESIZE 8
 #define DTYPE HIPDECOMP_FLOAT_COMPLEX
 module transpose_HIPDECOMP_FLOAT_COMPLEX_mod
 #endif
 
 #ifdef C64
 #define ARRTYPE complex(real64)
+#define ARRTYPESIZE 16
 #define DTYPE HIPDECOMP_DOUBLE_COMPLEX
 module transpose_HIPDECOMP_DOUBLE_COMPLEX_mod
 #endif
 
   use, intrinsic :: iso_fortran_env, only: real32, real64
-  use hipfort, only : hipSuccess,hipSetDevice
+  use hipfort, only : hipFree,hipMalloc,hipMallocManaged,hipSuccess,hipSetDevice
+  use hipfort_types, only: hipMemAttachGlobal
   use hipdecomp
   use mpi
 
@@ -102,15 +107,27 @@ module transpose_HIPDECOMP_DOUBLE_COMPLEX_mod
     enddo
   end subroutine initialize_pencil
 
-  subroutine flat_copy(src, dst, count)
+  subroutine flat_copy_htod(src, dst, count)
+    use hipfort, only: hipMemcpy,hipMemcpyHostToDevice
     implicit none
-    ARRTYPE :: src(*)
-    ARRTYPE :: dst(*)
+    ARRTYPE, target :: src(*)
+    ARRTYPE, target :: dst(*)
     integer(8) :: count
 
-    dst(1:count) = src(1:count)
+    CHECK_HIP_EXIT(hipMemcpy(c_loc(dst), c_loc(src), count * ARRTYPESIZE, hipMemcpyHostToDevice))
 
-  end subroutine flat_copy
+  end subroutine flat_copy_htod
+
+  subroutine flat_copy_dtoh(src, dst, count)
+    use hipfort, only: hipMemcpy,hipMemcpyDeviceToHost
+    implicit none
+    ARRTYPE, target :: src(*)
+    ARRTYPE, target :: dst(*)
+    integer(8) :: count
+
+    CHECK_HIP_EXIT(hipMemcpy(c_loc(dst), c_loc(src), count * ARRTYPESIZE, hipMemcpyDeviceToHost))
+
+  end subroutine flat_copy_dtoh
 
   subroutine read_testfile(filename, testcases)
     implicit none
@@ -184,8 +201,8 @@ module transpose_HIPDECOMP_DOUBLE_COMPLEX_mod
 
     ! data
     ARRTYPE, allocatable :: xref(:, :, :), yref(:, :, :), zref(:, :, :), data(:)
-    ARRTYPE, allocatable, target:: data_d(:), data_2_d(:)
-    ARRTYPE, allocatable, target:: data_m(:), data_2_m(:)
+    ARRTYPE, pointer :: data_d(:), data_2_d(:)
+    ARRTYPE, pointer :: data_m(:), data_2_m(:)
     ARRTYPE, pointer:: input(:), output(:)
     integer :: dtype = DTYPE
 
@@ -400,9 +417,9 @@ module transpose_HIPDECOMP_DOUBLE_COMPLEX_mod
     call initialize_pencil(zref, pinfo_z, gdims)
 
     if (use_managed_memory) then
-      allocate(data_m(data_num_elements))
+      CHECK_HIP_EXIT(hipMallocManaged(data_m, data_num_elements, hipMemAttachGlobal))
     else
-      allocate(data_d(data_num_elements))
+      CHECK_HIP_EXIT(hipMalloc(data_d, data_num_elements))
     endif
 
     ! Allocate workspace (reuse exising workspace if able)
@@ -422,9 +439,9 @@ module transpose_HIPDECOMP_DOUBLE_COMPLEX_mod
 
     if (out_of_place) then
       if (use_managed_memory) then
-        allocate(data_2_m(data_num_elements))
+        CHECK_HIP_EXIT(hipMallocManaged(data_2_m, data_num_elements, hipMemAttachGlobal))
       else
-        allocate(data_2_d(data_num_elements))
+        CHECK_HIP_EXIT(hipMalloc(data_2_d, data_num_elements))
       endif
     endif
 
@@ -433,9 +450,9 @@ module transpose_HIPDECOMP_DOUBLE_COMPLEX_mod
 
     ! Initialize data to reference x-pencil data
     if (use_managed_memory) then
-      call flat_copy(xref, data_m, pinfo_x%size)
+      call flat_copy_htod(xref, data_m, pinfo_x%size)
     else
-      call flat_copy(xref, data_d, pinfo_x%size)
+      call flat_copy_htod(xref, data_d, pinfo_x%size)
     endif
 
     if (use_managed_memory) then
@@ -450,7 +467,7 @@ module transpose_HIPDECOMP_DOUBLE_COMPLEX_mod
 
     work_d = 0
     CHECK_HIPDECOMP(hipdecompTransposeXToY(handle, grid_desc, input, output, work_d, dtype, pinfo_x%halo_extents, pinfo_y%halo_extents, pinfo_x%padding, pinfo_y%padding))
-    data = output
+    call flat_copy_dtoh(output, data, pinfo_x%size)
     if (compare_pencils(yref, data, pinfo_y)) then
       print*, "FAILED hipdecompTranposeXToY"
       res = 1
@@ -469,7 +486,7 @@ module transpose_HIPDECOMP_DOUBLE_COMPLEX_mod
 
     work_d = 0
     CHECK_HIPDECOMP(hipdecompTransposeYToZ(handle, grid_desc, input, output, work_d, dtype, pinfo_y%halo_extents, pinfo_z%halo_extents, pinfo_y%padding, pinfo_z%padding))
-    data = output
+    call flat_copy_dtoh(output, data, pinfo_y%size)
     if (compare_pencils(zref, data, pinfo_z)) then
       print*, "FAILED hipdecompTranposeYToZ"
       res = 1
@@ -488,7 +505,7 @@ module transpose_HIPDECOMP_DOUBLE_COMPLEX_mod
 
     work_d = 0
     CHECK_HIPDECOMP(hipdecompTransposeZToY(handle, grid_desc, input, output, work_d, dtype, pinfo_z%halo_extents, pinfo_y%halo_extents, pinfo_z%padding, pinfo_y%padding))
-    data = output
+    call flat_copy_dtoh(output, data, pinfo_z%size)
     if (compare_pencils(yref, data, pinfo_y)) then
       print*, "FAILED hipdecompTranposeZToY"
       res = 1
@@ -507,7 +524,7 @@ module transpose_HIPDECOMP_DOUBLE_COMPLEX_mod
 
     work_d = 0
     CHECK_HIPDECOMP(hipdecompTransposeYToX(handle, grid_desc, input, output, work_d, dtype, pinfo_y%halo_extents, pinfo_x%halo_extents, pinfo_y%padding, pinfo_x%padding))
-    data = output
+    call flat_copy_dtoh(output, data, pinfo_y%size)
     if (compare_pencils(xref, data, pinfo_x)) then
       print*, "FAILED hipdecompTranposeYToX"
       res = 1
@@ -515,11 +532,15 @@ module transpose_HIPDECOMP_DOUBLE_COMPLEX_mod
     endif
 
     if (use_managed_memory) then
-      deallocate(data_m)
-      if (out_of_place) deallocate(data_2_m)
+      CHECK_HIP_EXIT(hipFree(data_m))
+      if (out_of_place) then
+        CHECK_HIP_EXIT(hipFree(data_2_m))
+      endif
     else
-      deallocate(data_d)
-      if (out_of_place) deallocate(data_2_d)
+      CHECK_HIP_EXIT(hipFree(data_d))
+      if (out_of_place) then
+        CHECK_HIP_EXIT(hipFree(data_2_d))
+      endif
     endif
 
   end function run_test

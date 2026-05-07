@@ -13,6 +13,16 @@
 ! See the License for the specific language governing permissions and
 ! limitations under the License.
 
+! Simple subroutine to check HIP errors
+subroutine CHECK_HIP_EXIT(istat)
+  use hipfort
+  integer :: istat
+  if (istat /= hipSuccess) then
+    print*, "HIP Error. Exiting."
+    call exit(1)
+  endif
+end subroutine CHECK_HIP_EXIT
+
 ! Simple subroutine to check hipDecomp errors
 subroutine CHECK_HIPDECOMP_EXIT(istat)
   use hipdecomp
@@ -24,16 +34,16 @@ subroutine CHECK_HIPDECOMP_EXIT(istat)
 end subroutine CHECK_HIPDECOMP_EXIT
 
 program main
-  use cudafor
+  use hipfort
   use mpi
   use hipdecomp
-  use, intrinsic :: iso_fortran_env, only: real64
+  use, intrinsic :: iso_fortran_env, only: real32
 
   implicit none
 
   ! MPI
   integer :: rank, local_rank, nranks, ierr
-  integer :: local_comm
+  integer :: local_comm, device_count
 
   ! hipdecomp
   type(hipdecompHandle) :: handle
@@ -42,13 +52,14 @@ program main
   type(hipdecompGridDesc) :: grid_desc
   type(hipdecompPencilInfo) :: pinfo_x, pinfo_y, pinfo_z
   integer :: istat
+  logical :: disable_nccl_backends
 
   ! data
-  real(real64), allocatable, target :: data(:)
-  real(real64), allocatable, device, target :: data_d(:)
-  real(real64), pointer, device, contiguous :: transpose_work_d(:), halo_work_d(:)
-  real(real64), pointer, contiguous :: data_x(:,:,:), data_y(:,:,:), data_z(:,:,:)
-  real(real64), pointer, device, contiguous :: data_x_d(:,:,:), data_y_d(:,:,:), data_z_d(:,:,:)
+  real(real32), allocatable, target :: data(:)
+  real(real32), pointer :: data_d(:)
+  real(real32), pointer, contiguous :: transpose_work_d(:), halo_work_d(:)
+  real(real32), pointer, contiguous :: data_x(:,:,:), data_y(:,:,:), data_z(:,:,:)
+  real(real32), pointer :: data_x_d(:,:,:), data_y_d(:,:,:), data_z_d(:,:,:)
   integer(8) :: data_num_elements, transpose_work_num_elements, halo_work_num_elements
   logical :: halo_periods(3)
 
@@ -62,7 +73,14 @@ program main
 
   call MPI_Comm_split_Type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL, local_comm, ierr)
   call MPI_Comm_rank(local_comm, local_rank, ierr)
-  ierr = hipSetDevice(local_rank)
+
+  ierr = hipGetDeviceCount(device_count)
+  ierr = hipSetDevice(mod(local_rank, device_count))
+
+  ! Cannot use NCCL if multiple ranks run on the same GPU
+  disable_nccl_backends = .false.
+  if (local_rank >= device_count) disable_nccl_backends = .true.
+  call MPI_Allreduce(MPI_IN_PLACE, disable_nccl_backends, 1, MPI_LOGICAL, MPI_LOR, MPI_COMM_WORLD, ierr)
 
   istat = hipdecompInit(handle, MPI_COMM_WORLD)
   call CHECK_HIPDECOMP_EXIT(istat)
@@ -86,8 +104,8 @@ program main
   ! General options
   options%n_warmup_trials = 3
   options%n_trials = 5
-  options%dtype = HIPDECOMP_DOUBLE
-  options%disable_nccl_backends = .false.
+  options%dtype = HIPDECOMP_FLOAT
+  options%disable_nccl_backends = disable_nccl_backends
   options%disable_nvshmem_backends = .false.
   options%skip_threshold = 0.0
 
@@ -148,7 +166,7 @@ program main
   data_num_elements = max(pinfo_x%size, pinfo_y%size, pinfo_z%size)
 
   ! Allocate device buffer
-  allocate(data_d(data_num_elements))
+  call CHECK_HIP_EXIT(hipMalloc(data_d, data_num_elements))
 
   ! Allocate host buffer
   allocate(data(data_num_elements))
@@ -191,7 +209,7 @@ program main
   enddo
 
   ! Copy host data to device
-  data_d = data
+  call CHECK_HIP_EXIT(hipMemcpy(data_d, data, size(data), hipMemcpyHostToDevice))
 
   ! Initialize on device
   !$acc parallel loop collapse(3) private(gx)
@@ -229,7 +247,7 @@ program main
   call CHECK_HIPDECOMP_EXIT(istat)
 
   ! Allocate using hipdecompMalloc
-  ! Note: *_work_d arrays are of type consistent with hipdecompDataType to be used (HIPDECOMP_DOUBLE). Otherwise,
+  ! Note: *_work_d arrays are of type consistent with hipdecompDataType to be used (HIPDECOMP_FLOAT). Otherwise,
   ! must adjust workspace_num_elements to allocate enough workspace.
   istat = hipdecompMalloc(handle, grid_desc, transpose_work_d, transpose_work_num_elements)
   call CHECK_HIPDECOMP_EXIT(istat)
@@ -239,19 +257,19 @@ program main
   ! Transposing data
 
   ! Transpose from X-pencils to Y-pencils.
-  istat = hipdecompTransposeXToY(handle, grid_desc, data_d, data_d, transpose_work_d, HIPDECOMP_DOUBLE, pinfo_x%halo_extents, [0,0,0])
+  istat = hipdecompTransposeXToY(handle, grid_desc, data_d, data_d, transpose_work_d, HIPDECOMP_FLOAT, pinfo_x%halo_extents, [0,0,0])
   call CHECK_HIPDECOMP_EXIT(istat)
 
   ! Transpose from Y-pencils to Z-pencils.
-  istat = hipdecompTransposeYToZ(handle, grid_desc, data_d, data_d, transpose_work_d, HIPDECOMP_DOUBLE)
+  istat = hipdecompTransposeYToZ(handle, grid_desc, data_d, data_d, transpose_work_d, HIPDECOMP_FLOAT)
   call CHECK_HIPDECOMP_EXIT(istat)
 
   ! Transpose from Z-pencils to Y-pencils.
-  istat = hipdecompTransposeZToY(handle, grid_desc, data_d, data_d, transpose_work_d, HIPDECOMP_DOUBLE)
+  istat = hipdecompTransposeZToY(handle, grid_desc, data_d, data_d, transpose_work_d, HIPDECOMP_FLOAT)
   call CHECK_HIPDECOMP_EXIT(istat)
 
   ! Transpose from Y-pencils to X-pencils.
-  istat = hipdecompTransposeYToX(handle, grid_desc, data_d, data_d, transpose_work_d, HIPDECOMP_DOUBLE, [0,0,0], pinfo_x%halo_extents)
+  istat = hipdecompTransposeYToX(handle, grid_desc, data_d, data_d, transpose_work_d, HIPDECOMP_FLOAT, [0,0,0], pinfo_x%halo_extents)
   call CHECK_HIPDECOMP_EXIT(istat)
 
 
@@ -261,20 +279,20 @@ program main
   halo_periods = [.true., .true., .true.]
 
   ! Update X-pencil halos in X direction
-  istat = hipdecompUpdateHalosX(handle, grid_desc, data_d, halo_work_d, HIPDECOMP_DOUBLE, pinfo_x%halo_extents, halo_periods, 1)
+  istat = hipdecompUpdateHalosX(handle, grid_desc, data_d, halo_work_d, HIPDECOMP_FLOAT, pinfo_x%halo_extents, halo_periods, 1)
   call CHECK_HIPDECOMP_EXIT(istat)
 
   ! Update X-pencil halos in Y direction
-  istat = hipdecompUpdateHalosX(handle, grid_desc, data_d, halo_work_d, HIPDECOMP_DOUBLE, pinfo_x%halo_extents, halo_periods, 2)
+  istat = hipdecompUpdateHalosX(handle, grid_desc, data_d, halo_work_d, HIPDECOMP_FLOAT, pinfo_x%halo_extents, halo_periods, 2)
   call CHECK_HIPDECOMP_EXIT(istat)
 
   ! Update X-pencil halos in Z direction
-  istat = hipdecompUpdateHalosX(handle, grid_desc, data_d, halo_work_d, HIPDECOMP_DOUBLE, pinfo_x%halo_extents, halo_periods, 3)
+  istat = hipdecompUpdateHalosX(handle, grid_desc, data_d, halo_work_d, HIPDECOMP_FLOAT, pinfo_x%halo_extents, halo_periods, 3)
   call CHECK_HIPDECOMP_EXIT(istat)
 
   ! Cleanup resources
   deallocate(data)
-  deallocate(data_d)
+  call CHECK_HIP_EXIT(hipFree(data_d))
   istat = hipdecompFree(handle, grid_desc, transpose_work_d)
   call CHECK_HIPDECOMP_EXIT(istat)
   istat = hipdecompFree(handle, grid_desc, halo_work_d)

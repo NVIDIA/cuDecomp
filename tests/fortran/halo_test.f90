@@ -19,30 +19,35 @@
 
 #ifdef R32
 #define ARRTYPE real(real32)
+#define ARRTYPESIZE 4
 #define DTYPE HIPDECOMP_FLOAT
 module halo_HIPDECOMP_FLOAT_mod
 #endif
 
 #ifdef R64
 #define ARRTYPE real(real64)
+#define ARRTYPESIZE 8
 #define DTYPE HIPDECOMP_DOUBLE
 module halo_HIPDECOMP_DOUBLE_mod
 #endif
 
 #ifdef C32
 #define ARRTYPE complex(real32)
+#define ARRTYPESIZE 8
 #define DTYPE HIPDECOMP_FLOAT_COMPLEX
 module halo_HIPDECOMP_FLOAT_COMPLEX_mod
 #endif
 
 #ifdef C64
 #define ARRTYPE complex(real64)
+#define ARRTYPESIZE 16
 #define DTYPE HIPDECOMP_DOUBLE_COMPLEX
 module halo_HIPDECOMP_DOUBLE_COMPLEX_mod
 #endif
 
   use, intrinsic :: iso_fortran_env, only: real32, real64
-  use hipfort, only: hipSuccess,hipSetDevice
+  use hipfort, only: hipFree,hipMalloc,hipMallocManaged,hipSuccess,hipSetDevice
+  use hipfort_types, only: hipMemAttachGlobal
   use hipdecomp
   use mpi
 
@@ -151,15 +156,27 @@ module halo_HIPDECOMP_DOUBLE_COMPLEX_mod
     end do
   end subroutine initialize_reference
 
-  subroutine flat_copy(src, dst, count)
+  subroutine flat_copy_htod(src, dst, count)
+    use hipfort, only: hipMemcpy,hipMemcpyHostToDevice
     implicit none
-    ARRTYPE :: src(*)
-    ARRTYPE :: dst(*)
+    ARRTYPE, target :: src(*)
+    ARRTYPE, target :: dst(*)
     integer(8) :: count
 
-    dst(1:count) = src(1:count)
+    CHECK_HIP_EXIT(hipMemcpy(c_loc(dst), c_loc(src), count * ARRTYPESIZE, hipMemcpyHostToDevice))
 
-  end subroutine flat_copy
+  end subroutine flat_copy_htod
+
+  subroutine flat_copy_dtoh(src, dst, count)
+    use hipfort, only: hipMemcpy,hipMemcpyDeviceToHost
+    implicit none
+    ARRTYPE, target :: src(*)
+    ARRTYPE, target :: dst(*)
+    integer(8) :: count
+
+    CHECK_HIP_EXIT(hipMemcpy(c_loc(dst), c_loc(src), count * ARRTYPESIZE, hipMemcpyDeviceToHost))
+
+  end subroutine flat_copy_dtoh
 
   subroutine read_testfile(filename, testcases)
     implicit none
@@ -235,8 +252,8 @@ module halo_HIPDECOMP_DOUBLE_COMPLEX_mod
 
     ! data
     ARRTYPE, allocatable :: ref(:, :, :), init(:, :, :), data(:)
-    ARRTYPE, allocatable, target:: data_d(:)
-    ARRTYPE, allocatable, target:: data_m(:)
+    ARRTYPE, pointer :: data_d(:)
+    ARRTYPE, pointer :: data_m(:)
     ARRTYPE, pointer:: input(:)
     integer :: dtype = DTYPE
 
@@ -440,9 +457,9 @@ module halo_HIPDECOMP_DOUBLE_COMPLEX_mod
     call initialize_reference(ref, pinfo, gdims, halo_periods)
 
     if (use_managed_memory) then
-      allocate(data_m(data_num_elements))
+      CHECK_HIP_EXIT(hipMallocManaged(data_m, data_num_elements, hipMemAttachGlobal))
     else
-      allocate(data_d(data_num_elements))
+      CHECK_HIP_EXIT(hipMalloc(data_d, data_num_elements))
     endif
 
     ! Allocate workspace (reuse exising workspace if able)
@@ -466,9 +483,9 @@ module halo_HIPDECOMP_DOUBLE_COMPLEX_mod
 
     ! Initialize data to initial pencil data
     if (use_managed_memory) then
-      call flat_copy(init, data_m, pinfo%size)
+      call flat_copy_htod(init, data_m, pinfo%size)
     else
-      call flat_copy(init, data_d, pinfo%size)
+      call flat_copy_htod(init, data_d, pinfo%size)
     endif
 
     if (use_managed_memory) then
@@ -488,7 +505,8 @@ module halo_HIPDECOMP_DOUBLE_COMPLEX_mod
       end select
     end do
 
-    data = input
+    call flat_copy_dtoh(input, data, pinfo%size)
+
     if (compare_pencils(ref, data, pinfo)) then
       print*, "FAILED hipdecompUpdateHalos"
       res = 1
@@ -496,9 +514,9 @@ module halo_HIPDECOMP_DOUBLE_COMPLEX_mod
     endif
 
     if (use_managed_memory) then
-      deallocate(data_m)
+      CHECK_HIP_EXIT(hipFree(data_m))
     else
-      deallocate(data_d)
+      CHECK_HIP_EXIT(hipFree(data_d))
     endif
 
   end function

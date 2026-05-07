@@ -24,10 +24,10 @@ foreach(tgt ${basic_usage_targets_f})
     ${MPI_Fortran_INCLUDE_DIRS}
   )
   target_link_libraries(${tgt} PRIVATE MPI::MPI_Fortran)
+  target_link_libraries(${tgt} PRIVATE hipfort::hip)
   target_link_libraries(${tgt} PRIVATE hipdecomp)
   target_link_libraries(${tgt} PRIVATE hipdecomp_fort)
-  target_compile_options(${tgt} PRIVATE $<$<COMPILE_LANGUAGE:Fortran>:-cpp -cuda -gpu=${CUF_GPU_ARG}>)
-  target_link_options(${tgt} PRIVATE $<$<COMPILE_LANGUAGE:Fortran>:-cpp -cuda -gpu=${CUF_GPU_ARG}>)
+  target_compile_options(${tgt} PRIVATE $<$<COMPILE_LANGUAGE:Fortran>:-cpp>)
 endforeach()
 
 install(

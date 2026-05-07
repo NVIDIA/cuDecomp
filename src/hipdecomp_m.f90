@@ -351,7 +351,7 @@ module hipdecomp
       integer(c_int), value :: dtype
       integer(c_int32_t) :: input_halo_extents(3), output_halo_extents(3)
       integer(c_int32_t) :: input_padding(3), output_padding(3)
-      integer(c_intptr_t), value :: stream
+      type(c_ptr), value :: stream
       integer(c_int) :: res
     end function hipdecompTransposeXToY_C
   end interface
@@ -369,7 +369,7 @@ module hipdecomp
       integer(c_int), value :: dtype
       integer(c_int32_t) :: input_halo_extents(3), output_halo_extents(3)
       integer(c_int32_t) :: input_padding(3), output_padding(3)
-      integer(c_intptr_t), value :: stream
+      type(c_ptr), value :: stream
       integer(c_int) :: res
     end function hipdecompTransposeYToZ_C
   end interface
@@ -387,7 +387,7 @@ module hipdecomp
       integer(c_int), value :: dtype
       integer(c_int32_t) :: input_halo_extents(3), output_halo_extents(3)
       integer(c_int32_t) :: input_padding(3), output_padding(3)
-      integer(c_intptr_t), value :: stream
+      type(c_ptr), value :: stream
       integer(c_int) :: res
     end function hipdecompTransposeZToY_C
   end interface
@@ -405,7 +405,7 @@ module hipdecomp
       integer(c_int), value :: dtype
       integer(c_int32_t) :: input_halo_extents(3), output_halo_extents(3)
       integer(c_int32_t) :: input_padding(3), output_padding(3)
-      integer(c_intptr_t), value :: stream
+      type(c_ptr), value :: stream
       integer(c_int) :: res
     end function hipdecompTransposeYToX_C
   end interface
@@ -425,7 +425,7 @@ module hipdecomp
       logical(c_bool) :: halo_periods(3)
       integer(c_int32_t), value :: dim
       integer(c_int32_t) :: padding(3)
-      integer(c_intptr_t), value :: stream
+      type(c_ptr), value :: stream
       integer(c_int) :: res
     end function hipdecompUpdateHalosX_C
   end interface
@@ -444,7 +444,7 @@ module hipdecomp
       logical(c_bool) :: halo_periods(3)
       integer(c_int32_t), value :: dim
       integer(c_int32_t) :: padding(3)
-      integer(c_intptr_t), value :: stream
+      type(c_ptr), value :: stream
       integer(c_int) :: res
     end function hipdecompUpdateHalosY_C
   end interface
@@ -463,7 +463,7 @@ module hipdecomp
       logical(c_bool) :: halo_periods(3)
       integer(c_int32_t), value :: dim
       integer(c_int32_t) :: padding(3)
-      integer(c_intptr_t), value :: stream
+      type(c_ptr), value :: stream
       integer(c_int) :: res
     end function hipdecompUpdateHalosZ_C
   end interface
@@ -746,20 +746,20 @@ contains
     !dir$ ignore_tkr input, output, work
     real(c_float) :: input(*), output(*), work(*)
     integer :: dtype
-    integer(c_intptr_t), optional :: stream
+    type(c_ptr), value, optional :: stream
     integer, optional :: input_halo_extents(3)
     integer, optional :: output_halo_extents(3)
     integer, optional :: input_padding(3)
     integer, optional :: output_padding(3)
     integer(c_int) :: res
 
-    integer(c_intptr_t) :: stream_
+    type(c_ptr) :: stream_
     integer :: input_halo_extents_(3)
     integer :: output_halo_extents_(3)
     integer :: input_padding_(3)
     integer :: output_padding_(3)
 
-    stream_ = 0
+    stream_ = C_NULL_PTR
     input_halo_extents_(:) = [0, 0, 0]
     output_halo_extents_(:) = [0, 0, 0]
     input_padding_(:) = [0, 0, 0]
@@ -783,20 +783,20 @@ contains
     !dir$ ignore_tkr input, output, work
     real(c_float) :: input(*), output(*), work(*)
     integer :: dtype
-    integer(c_intptr_t), optional :: stream
+    type(c_ptr), value, optional :: stream
     integer, optional :: input_halo_extents(3)
     integer, optional :: output_halo_extents(3)
     integer, optional :: input_padding(3)
     integer, optional :: output_padding(3)
     integer(c_int) :: res
 
-    integer(c_intptr_t) :: stream_
+    type(c_ptr) :: stream_
     integer :: input_halo_extents_(3)
     integer :: output_halo_extents_(3)
     integer :: input_padding_(3)
     integer :: output_padding_(3)
 
-    stream_ = 0
+    stream_ = C_NULL_PTR
     input_halo_extents_(:) = [0, 0, 0]
     output_halo_extents_(:) = [0, 0, 0]
     input_padding_(:) = [0, 0, 0]
@@ -820,20 +820,20 @@ contains
     !dir$ ignore_tkr input, output, work
     real(c_float) :: input(*), output(*), work(*)
     integer :: dtype
-    integer(c_intptr_t), optional :: stream
+    type(c_ptr), value, optional :: stream
     integer, optional :: input_halo_extents(3)
     integer, optional :: output_halo_extents(3)
     integer, optional :: input_padding(3)
     integer, optional :: output_padding(3)
     integer(c_int) :: res
 
-    integer(c_intptr_t) :: stream_
+    type(c_ptr) :: stream_
     integer :: input_halo_extents_(3)
     integer :: output_halo_extents_(3)
     integer :: input_padding_(3)
     integer :: output_padding_(3)
 
-    stream_ = 0
+    stream_ = C_NULL_PTR
     input_halo_extents_(:) = [0, 0, 0]
     output_halo_extents_(:) = [0, 0, 0]
     input_padding_(:) = [0, 0, 0]
@@ -857,20 +857,20 @@ contains
     !dir$ ignore_tkr input, output, work
     real(c_float) :: input(*), output(*), work(*)
     integer :: dtype
-    integer(c_intptr_t), optional :: stream
+    type(c_ptr), value, optional :: stream
     integer, optional :: input_halo_extents(3)
     integer, optional :: output_halo_extents(3)
     integer, optional :: input_padding(3)
     integer, optional :: output_padding(3)
     integer(c_int) :: res
 
-    integer(c_intptr_t) :: stream_
+    type(c_ptr) :: stream_
     integer :: input_halo_extents_(3)
     integer :: output_halo_extents_(3)
     integer :: input_padding_(3)
     integer :: output_padding_(3)
 
-    stream_ = 0
+    stream_ = C_NULL_PTR
     input_halo_extents_(:) = [0, 0, 0]
     output_halo_extents_(:) = [0, 0, 0]
     input_padding_(:) = [0, 0, 0]
@@ -899,16 +899,16 @@ contains
     logical :: halo_periods(3)
     integer :: dim
     integer, optional :: padding(3)
-    integer(c_intptr_t), optional :: stream
+    type(c_ptr), value, optional :: stream
     integer(c_int) :: res
 
-    integer(c_intptr_t) :: stream_
+    type(c_ptr) :: stream_
     logical(c_bool) :: halo_periods_c(3)
     integer :: padding_(3)
 
     halo_periods_c(:) = halo_periods
 
-    stream_ = 0
+    stream_ = C_NULL_PTR
     padding_ = [0, 0, 0]
     if (present(stream)) stream_ = stream
     if (present(padding)) padding_ = padding
@@ -930,16 +930,16 @@ contains
     logical :: halo_periods(3)
     integer :: dim
     integer, optional :: padding(3)
-    integer(c_intptr_t), optional :: stream
+    type(c_ptr), value, optional :: stream
     integer(c_int) :: res
 
-    integer(c_intptr_t) :: stream_
+    type(c_ptr) :: stream_
     logical(c_bool) :: halo_periods_c(3)
     integer :: padding_(3)
 
     halo_periods_c(:) = halo_periods
 
-    stream_ = 0
+    stream_ = C_NULL_PTR
     padding_ = [0, 0, 0]
     if (present(stream)) stream_ = stream
     if (present(padding)) padding_ = padding
@@ -961,22 +961,22 @@ contains
     logical :: halo_periods(3)
     integer :: dim
     integer, optional :: padding(3)
-    integer(c_intptr_t), optional :: stream
+    type(c_ptr), value, optional :: stream
     integer(c_int) :: res
 
-    integer(c_intptr_t) :: stream_
+    type(c_ptr) :: stream_
     logical(c_bool) :: halo_periods_c(3)
     integer :: padding_(3)
 
     halo_periods_c(:) = halo_periods
 
-    stream_ = 0
+    stream_ = C_NULL_PTR
     padding_ = [0, 0, 0]
     if (present(stream)) stream_ = stream
     if (present(padding)) padding_ = padding
     res = hipdecompUpdateHalosZ_C(handle, grid_desc, &
           input, work, dtype, halo_extents, halo_periods_c, &
-          dim - 1, padding, stream_)
+          dim - 1, padding_, stream_)
   end function hipdecompUpdateHalosZ
 
   ! Helper function to copy string

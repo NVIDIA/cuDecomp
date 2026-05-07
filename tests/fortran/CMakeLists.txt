@@ -36,7 +36,8 @@ foreach(tgt ${transpose_test_targets_f} ${halo_test_targets_f})
     ${CMAKE_BINARY_DIR}/include
     ${MPI_Fortran_INCLUDE_DIRS}
   )
-  target_link_libraries(${tgt} PRIVATE MPI::MPI_Fortran hipfort::hip)
+  target_link_libraries(${tgt} PRIVATE MPI::MPI_Fortran)
+  target_link_libraries(${tgt} PRIVATE hipfort::hip)
   target_link_libraries(${tgt} PUBLIC hipdecomp)
   target_link_libraries(${tgt} PUBLIC hipdecomp_fort)
   target_compile_options(${tgt} PRIVATE $<$<COMPILE_LANGUAGE:Fortran>:-cpp>)
