@@ -21,6 +21,7 @@
 
 #include <array>
 #include <cstdint>
+#include <iostream>
 #include <vector>
 
 #include <complex>
@@ -79,28 +80,44 @@ template <typename T>
 static void localPermute(const hipdecompHandle_t handle, const std::array<int64_t, 3>& extent_in,
                          const std::array<int32_t, 3>& order_out, const std::array<int64_t, 3>& strides_in,
                          const std::array<int64_t, 3>& strides_out, T* input, T* output, hipStream_t stream) {
-  hiptensorDataType_t hiptensor_type = getHiptensorDataType<T>();
+  // hipTensor only supports float for permutations
+  // handle this by adding an axis to the tensor that stays in place
+  // hiptensorDataType_t hiptensor_type = getHiptensorDataType<T>();
+  hiptensorDataType_t hiptensor_type = getHiptensorDataType<float>();
 
-  std::array<int32_t, 3> order_in{0, 1, 2};
-  std::array<int64_t, 3> extent_out;
+  std::array<int32_t, 4> order_in{0, 1, 2, 3};
+  std::array<int32_t, 4> order_out_;
+  std::array<int64_t, 4> extent_in_;
+  std::array<int64_t, 4> extent_out;
+  std::array<int64_t, 4> strides_in_;
+  std::array<int64_t, 4> strides_out_;
   for (int i = 0; i < 3; ++i) {
     extent_out[i] = extent_in[order_out[i]];
     if (extent_out[i] == 0) return;
+    extent_in_[i] = extent_in[i];
+    order_out_[i] = order_out[i];
+    strides_in_[i] = strides_in[i];
+    strides_out_[i] = strides_out[i];
   }
+  extent_out[3] = sizeof(T) / sizeof(float);
+  extent_in_[3] = sizeof(T) / sizeof(float);
+  order_out_[3] = order_in[3];
+  strides_in_[3] = 0;
+  strides_out_[3] = 0;
 
-  auto strides_in_ptr = anyNonzeros(strides_in) ? strides_in.data() : nullptr;
-  auto strides_out_ptr = anyNonzeros(strides_out) ? strides_out.data() : nullptr;
+  auto strides_in_ptr = anyNonzeros(strides_in_) ? strides_in_.data() : nullptr;
+  auto strides_out_ptr = anyNonzeros(strides_out_) ? strides_out_.data() : nullptr;
 
   hiptensorTensorDescriptor_t desc_in;
-  CHECK_HIPTENSOR(hiptensorCreateTensorDescriptor(handle->hiptensor_handle, &desc_in, 3, extent_in.data(),
+  CHECK_HIPTENSOR(hiptensorCreateTensorDescriptor(handle->hiptensor_handle, &desc_in, 4, extent_in_.data(),
                                                   strides_in_ptr, hiptensor_type, getAlignment(input)));
   hiptensorTensorDescriptor_t desc_out;
-  CHECK_HIPTENSOR(hiptensorCreateTensorDescriptor(handle->hiptensor_handle, &desc_out, 3, extent_out.data(),
+  CHECK_HIPTENSOR(hiptensorCreateTensorDescriptor(handle->hiptensor_handle, &desc_out, 4, extent_out.data(),
                                                   strides_out_ptr, hiptensor_type, getAlignment(output)));
 
   hiptensorOperationDescriptor_t desc_op;
   CHECK_HIPTENSOR(hiptensorCreatePermutation(handle->hiptensor_handle, &desc_op, desc_in, order_in.data(),
-                                             HIPTENSOR_OP_IDENTITY, desc_out, order_out.data(),
+                                             HIPTENSOR_OP_IDENTITY, desc_out, order_out_.data(),
                                              getHiptensorComputeType(hiptensor_type)));
 
   hiptensorPlan_t plan;
@@ -127,21 +144,37 @@ template <typename T>
 static void localPermute(const hipdecompHandle_t handle, const std::array<int64_t, 3>& extent_in,
                          const std::array<int32_t, 3>& order_out, const std::array<int64_t, 3>& strides_in,
                          const std::array<int64_t, 3>& strides_out, T* input, T* output, hipStream_t stream) {
-  hipDataType hip_type = getHipDataType<T>();
+  // hipTensor only supports float for permutations
+  // handle this by adding an axis to the tensor that stays in place
+  // hipDataType hip_type = getHipDataType<T>();
+  hipDataType hip_type = getHipDataType<float>();
 
-  std::array<int32_t, 3> order_in{0, 1, 2};
-  std::array<int64_t, 3> extent_out;
+  std::array<int32_t, 4> order_in{0, 1, 2, 3};
+  std::array<int32_t, 4> order_out_;
+  std::array<int64_t, 4> extent_in_;
+  std::array<int64_t, 4> extent_out;
+  std::array<int64_t, 4> strides_in_;
+  std::array<int64_t, 4> strides_out_;
   for (int i = 0; i < 3; ++i) {
     extent_out[i] = extent_in[order_out[i]];
     if (extent_out[i] == 0) return;
+    extent_in_[i] = extent_in[i];
+    order_out_[i] = order_out[i];
+    strides_in_[i] = strides_in[i];
+    strides_out_[i] = strides_out[i];
   }
+  extent_out[3] = sizeof(T) / sizeof(float);
+  extent_in_[3] = sizeof(T) / sizeof(float);
+  order_out_[3] = order_in[3];
+  strides_in_[3] = 0;
+  strides_out_[3] = 0;
 
-  auto strides_in_ptr = anyNonzeros(strides_in) ? strides_in.data() : nullptr;
-  auto strides_out_ptr = anyNonzeros(strides_out) ? strides_out.data() : nullptr;
+  auto strides_in_ptr = anyNonzeros(strides_in_) ? strides_in_.data() : nullptr;
+  auto strides_out_ptr = anyNonzeros(strides_out_) ? strides_out_.data() : nullptr;
 
   hiptensorTensorDescriptor_t desc_in;
-  CHECK_HIPTENSOR(hiptensorInitTensorDescriptor(handle->hiptensor_handle, &desc_in, 3, extent_in.data(), strides_in_ptr,
-                                                hip_type, HIPTENSOR_OP_IDENTITY));
+  CHECK_HIPTENSOR(hiptensorInitTensorDescriptor(handle->hiptensor_handle, &desc_in, 3, extent_in_.data(),
+                                                strides_in_ptr, hip_type, HIPTENSOR_OP_IDENTITY));
 
   hiptensorTensorDescriptor_t desc_out;
   CHECK_HIPTENSOR(hiptensorInitTensorDescriptor(handle->hiptensor_handle, &desc_out, 3, extent_out.data(),
@@ -149,7 +182,7 @@ static void localPermute(const hipdecompHandle_t handle, const std::array<int64_
 
   T one(1);
   CHECK_HIPTENSOR(hiptensorPermutation(handle->hiptensor_handle, &one, input, &desc_in, order_in.data(), output,
-                                       &desc_out, order_out.data(), hip_type, stream));
+                                       &desc_out, order_out_.data(), hip_type, stream));
 }
 #endif
 

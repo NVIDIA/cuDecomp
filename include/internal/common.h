@@ -415,6 +415,10 @@ template <typename T> static inline bool anyNonzeros(const std::array<T, 3>& arr
   return (arr[0] != T(0) || arr[1] != T(0) || arr[2] != T(0));
 }
 
+template <typename T> static inline bool anyNonzeros(const std::array<T, 4>& arr) {
+  return (arr[0] != T(0) || arr[1] != T(0) || arr[2] != T(0) || arr[3] != T(0));
+}
+
 // Assigns an integer ID to every unique value in a vector
 template <typename T> std::unordered_map<T, unsigned int> getUniqueIds(const std::vector<T>& v) {
   std::unordered_map<T, unsigned int> ids;
