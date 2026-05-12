@@ -37,7 +37,7 @@ program main
   use hipfort
   use mpi
   use hipdecomp
-  use, intrinsic :: iso_fortran_env, only: real32
+  use, intrinsic :: iso_fortran_env, only: real64
 
   implicit none
 
@@ -54,11 +54,11 @@ program main
   integer :: istat
 
   ! data
-  real(real32), allocatable, target :: data(:)
-  real(real32), pointer :: data_d(:)
-  real(real32), pointer, contiguous :: transpose_work_d(:), halo_work_d(:)
-  real(real32), pointer, contiguous :: data_x(:,:,:), data_y(:,:,:), data_z(:,:,:)
-  real(real32), pointer :: data_x_d(:,:,:), data_y_d(:,:,:), data_z_d(:,:,:)
+  real(real64), allocatable, target :: data(:)
+  real(real64), pointer :: data_d(:)
+  real(real64), pointer, contiguous :: transpose_work_d(:), halo_work_d(:)
+  real(real64), pointer, contiguous :: data_x(:,:,:), data_y(:,:,:), data_z(:,:,:)
+  real(real64), pointer :: data_x_d(:,:,:), data_y_d(:,:,:), data_z_d(:,:,:)
   integer(8) :: data_num_elements, transpose_work_num_elements, halo_work_num_elements
   logical :: halo_periods(3)
 
@@ -206,7 +206,7 @@ program main
   call CHECK_HIPDECOMP_EXIT(istat)
 
   ! Allocate using hipdecompMalloc
-  ! Note: *_work_d arrays are of type consistent with hipdecompDataType to be used (HIPDECOMP_FLOAT). Otherwise,
+  ! Note: *_work_d arrays are of type consistent with hipdecompDataType to be used (HIPDECOMP_DOUBLE). Otherwise,
   ! must adjust workspace_num_elements to allocate enough workspace.
   istat = hipdecompMalloc(handle, grid_desc, transpose_work_d, transpose_work_num_elements)
   call CHECK_HIPDECOMP_EXIT(istat)
@@ -216,19 +216,19 @@ program main
   ! Transposing data
 
   ! Transpose from X-pencils to Y-pencils.
-  istat = hipdecompTransposeXToY(handle, grid_desc, data_d, data_d, transpose_work_d, HIPDECOMP_FLOAT, pinfo_x%halo_extents, [0,0,0])
+  istat = hipdecompTransposeXToY(handle, grid_desc, data_d, data_d, transpose_work_d, HIPDECOMP_DOUBLE, pinfo_x%halo_extents, [0,0,0])
   call CHECK_HIPDECOMP_EXIT(istat)
 
   ! Transpose from Y-pencils to Z-pencils.
-  istat = hipdecompTransposeYToZ(handle, grid_desc, data_d, data_d, transpose_work_d, HIPDECOMP_FLOAT)
+  istat = hipdecompTransposeYToZ(handle, grid_desc, data_d, data_d, transpose_work_d, HIPDECOMP_DOUBLE)
   call CHECK_HIPDECOMP_EXIT(istat)
 
   ! Transpose from Z-pencils to Y-pencils.
-  istat = hipdecompTransposeZToY(handle, grid_desc, data_d, data_d, transpose_work_d, HIPDECOMP_FLOAT)
+  istat = hipdecompTransposeZToY(handle, grid_desc, data_d, data_d, transpose_work_d, HIPDECOMP_DOUBLE)
   call CHECK_HIPDECOMP_EXIT(istat)
 
   ! Transpose from Y-pencils to X-pencils.
-  istat = hipdecompTransposeYToX(handle, grid_desc, data_d, data_d, transpose_work_d, HIPDECOMP_FLOAT, [0,0,0], pinfo_x%halo_extents)
+  istat = hipdecompTransposeYToX(handle, grid_desc, data_d, data_d, transpose_work_d, HIPDECOMP_DOUBLE, [0,0,0], pinfo_x%halo_extents)
   call CHECK_HIPDECOMP_EXIT(istat)
 
 
@@ -238,15 +238,15 @@ program main
   halo_periods = [.true., .true., .true.]
 
   ! Update X-pencil halos in X direction
-  istat = hipdecompUpdateHalosX(handle, grid_desc, data_d, halo_work_d, HIPDECOMP_FLOAT, pinfo_x%halo_extents, halo_periods, 1)
+  istat = hipdecompUpdateHalosX(handle, grid_desc, data_d, halo_work_d, HIPDECOMP_DOUBLE, pinfo_x%halo_extents, halo_periods, 1)
   call CHECK_HIPDECOMP_EXIT(istat)
 
   ! Update X-pencil halos in Y direction
-  istat = hipdecompUpdateHalosX(handle, grid_desc, data_d, halo_work_d, HIPDECOMP_FLOAT, pinfo_x%halo_extents, halo_periods, 2)
+  istat = hipdecompUpdateHalosX(handle, grid_desc, data_d, halo_work_d, HIPDECOMP_DOUBLE, pinfo_x%halo_extents, halo_periods, 2)
   call CHECK_HIPDECOMP_EXIT(istat)
 
   ! Update X-pencil halos in Z direction
-  istat = hipdecompUpdateHalosX(handle, grid_desc, data_d, halo_work_d, HIPDECOMP_FLOAT, pinfo_x%halo_extents, halo_periods, 3)
+  istat = hipdecompUpdateHalosX(handle, grid_desc, data_d, halo_work_d, HIPDECOMP_DOUBLE, pinfo_x%halo_extents, halo_periods, 3)
   call CHECK_HIPDECOMP_EXIT(istat)
 
   ! Cleanup resources
