@@ -107,6 +107,11 @@ int main(int argc, char** argv) {
   CHECK_HIP_EXIT(hipGetDeviceCount(&device_count));
   CHECK_HIP_EXIT(hipSetDevice(local_rank % device_count));
 
+  // Cannot use NCCL if multiple ranks run on the same GPU
+  bool disable_nccl_backends = false;
+  if (local_rank >= device_count) disable_nccl_backends = true;
+  CHECK_MPI_EXIT(MPI_Allreduce(MPI_IN_PLACE, &disable_nccl_backends, 1, MPI_LOGICAL, MPI_LOR, MPI_COMM_WORLD));
+
   hipdecompHandle_t handle;
   CHECK_HIPDECOMP_EXIT(hipdecompInit(&handle, MPI_COMM_WORLD));
 
@@ -134,7 +139,7 @@ int main(int argc, char** argv) {
   options.n_warmup_trials = 3;
   options.n_trials = 5;
   options.dtype = HIPDECOMP_DOUBLE;
-  options.disable_nccl_backends = false;
+  options.disable_nccl_backends = disable_nccl_backends;
   options.disable_nvshmem_backends = false;
   options.skip_threshold = 0.0;
 

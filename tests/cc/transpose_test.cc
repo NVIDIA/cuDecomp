@@ -364,7 +364,7 @@ static void cache_grid_desc(const hipdecompGridDesc_t& grid_desc, hipdecompTrans
   grid_desc_cache[backend] = grid_desc;
 }
 
-static int run_test(const std::string& arguments, bool silent) {
+static int run_test(const std::string& arguments, bool silent, bool disable_nccl_backends) {
   try {
     transposeTestArgs args = parse_arguments(arguments);
 
@@ -399,6 +399,7 @@ static int run_test(const std::string& arguments, bool silent) {
     hipdecompGridDescAutotuneOptions_t options;
     CHECK_HIPDECOMP(hipdecompGridDescAutotuneOptionsSetDefaults(&options));
     options.dtype = get_hipdecomp_datatype(real_t(0));
+    options.disable_nccl_backends = disable_nccl_backends;
     for (int i = 0; i < 4; ++i) {
       options.transpose_use_inplace_buffers[i] = !args.out_of_place;
     }
@@ -574,6 +575,11 @@ int main(int argc, char** argv) {
   CHECK_HIP_EXIT(hipGetDeviceCount(&device_count));
   CHECK_HIP_EXIT(hipSetDevice(local_rank % device_count));
 
+  // Cannot use NCCL if multiple ranks run on the same GPU
+  bool disable_nccl_backends = false;
+  if (local_rank >= device_count) disable_nccl_backends = true;
+  CHECK_MPI_EXIT(MPI_Allreduce(MPI_IN_PLACE, &disable_nccl_backends, 1, MPI_LOGICAL, MPI_LOR, MPI_COMM_WORLD));
+
   // Check if test file was provided
   std::string testfile;
   bool using_testfile = false;
@@ -605,7 +611,7 @@ int main(int argc, char** argv) {
   if (using_testfile && rank == 0) printf("Running %d tests...\n", static_cast<int>(testcases.size()));
   for (int i = 0; i < testcases.size(); ++i) {
     if (using_testfile && rank == 0) printf("command: %s %s\n", argv[0], testcases[i].c_str());
-    int res = run_test(testcases[i], using_testfile);
+    int res = run_test(testcases[i], using_testfile, disable_nccl_backends);
     CHECK_MPI_EXIT(MPI_Reduce((rank == 0) ? MPI_IN_PLACE : &res, &res, 1, MPI_INT, MPI_MAX, 0, MPI_COMM_WORLD));
     if (using_testfile && rank == 0) {
       if (res != 0) {

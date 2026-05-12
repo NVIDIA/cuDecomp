@@ -46,13 +46,14 @@ module transpose_HIPDECOMP_DOUBLE_COMPLEX_mod
 #endif
 
   use, intrinsic :: iso_fortran_env, only: real32, real64
-  use hipfort, only : hipFree,hipMalloc,hipMallocManaged,hipSuccess,hipSetDevice
+  use hipfort, only : hipFree,hipGetDeviceCount,hipMalloc,hipMallocManaged,hipSuccess,hipSetDevice
   use hipfort_types, only: hipMemAttachGlobal
   use hipdecomp
   use mpi
 
   type(hipdecompHandle) :: handle
   integer :: rank, nranks
+  logical :: disable_nccl_backends
   type(hipdecompGridDesc) :: grid_desc_cache(7)
   logical :: grid_desc_cache_set(7) = .false.
   ARRTYPE, pointer, contiguous :: work_d(:)
@@ -378,6 +379,7 @@ module transpose_HIPDECOMP_DOUBLE_COMPLEX_mod
 
     CHECK_HIPDECOMP(hipdecompGridDescAutotuneOptionsSetDefaults(options))
     options%dtype = dtype
+    options%disable_nccl_backends = disable_nccl_backends
     options%transpose_use_inplace_buffers = .not. out_of_place
 
     if (comm_backend /= 0) then
@@ -570,7 +572,7 @@ program main
   integer :: i, idx
   real(real64) :: t0
   integer :: local_rank, ierr
-  integer :: local_comm
+  integer :: local_comm, device_count
   integer :: res, retcode
   logical :: using_testfile
   character(len=16) :: arg
@@ -586,7 +588,14 @@ program main
 
   call MPI_Comm_split_Type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL, local_comm, ierr)
   call MPI_Comm_rank(local_comm, local_rank, ierr)
-  CHECK_HIP_EXIT(hipSetDevice(local_rank))
+
+  CHECK_HIP_EXIT(hipGetDeviceCount(device_count))
+  CHECK_HIP_EXIT(hipSetDevice(mod(local_rank, device_count)))
+
+  ! Cannot use NCCL if multiple ranks run on the same GPU
+  disable_nccl_backends = .false.
+  if (local_rank >= device_count) disable_nccl_backends = .true.
+  call MPI_Allreduce(MPI_IN_PLACE, disable_nccl_backends, 1, MPI_LOGICAL, MPI_LOR, MPI_COMM_WORLD, ierr)
 
   using_testfile = .false.
   do i = 1, command_argument_count()

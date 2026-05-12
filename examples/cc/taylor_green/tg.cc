@@ -351,6 +351,11 @@ public:
     CHECK_HIP_EXIT(hipGetDeviceCount(&device_count));
     CHECK_HIP_EXIT(hipSetDevice(local_rank % device_count));
 
+    // Cannot use NCCL if multiple ranks run on the same GPU
+    bool disable_nccl_backends = false;
+    if (local_rank >= device_count) disable_nccl_backends = true;
+    CHECK_MPI_EXIT(MPI_Allreduce(MPI_IN_PLACE, &disable_nccl_backends, 1, MPI_LOGICAL, MPI_LOR, MPI_COMM_WORLD));
+
     if (rank == 0) printf("running on %d x %d x %d spatial grid...\n", (int)N, (int)N, (int)N);
 
     // Initialize hipDecomp
@@ -368,6 +373,7 @@ public:
     hipdecompGridDescAutotuneOptions_t options;
     hipdecompGridDescAutotuneOptionsSetDefaults(&options);
     options.dtype = get_hipdecomp_datatype(complex_t(0));
+    options.disable_nccl_backends = disable_nccl_backends;
     options.autotune_transpose_backend = true;
 
     std::array<int, 3> gdim_c{(int)N / 2 + 1, (int)N, (int)N};
