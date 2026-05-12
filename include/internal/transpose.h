@@ -21,12 +21,10 @@
 
 #include <array>
 #include <cstdint>
-#include <iostream>
 #include <vector>
 
 #include <complex>
 #include <hip/hip_runtime.h>
-// ToDo: select hiptensor header through CMake
 #if HIP_VERSION_MAJOR < 7
 #include <hiptensor/hiptensor.hpp>
 #else
