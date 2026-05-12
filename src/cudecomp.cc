@@ -767,8 +767,6 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
       }
     }
 
-    grid_desc->config.transpose_axis_contiguous[0] = false; // For x-axis, always set to false.
-
     if (grid_desc->config.gdims_dist[0] > grid_desc->config.gdims[0] ||
         grid_desc->config.gdims_dist[1] > grid_desc->config.gdims[1] ||
         grid_desc->config.gdims_dist[2] > grid_desc->config.gdims[2]) {
