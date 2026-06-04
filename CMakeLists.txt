@@ -16,6 +16,8 @@ endif()
 option(CUDECOMP_BUILD_FORTRAN "Build Fortran bindings" ON)
 option(CUDECOMP_ENABLE_NVTX "Enable NVTX ranges" ON)
 option(CUDECOMP_ENABLE_NVSHMEM "Enable NVSHMEM" OFF)
+option(CUDECOMP_BUILD_TESTS "Build tests" OFF)
+option(CUDECOMP_TEST_FETCH_GTEST "Fetch GoogleTest if a system installation is unavailable" OFF)
 option(CUDECOMP_BUILD_EXTRAS "Build benchmark, examples, and tests" OFF)
 set(CUDECOMP_NCCL_HOME CACHE STRING "Path to search for NCCL installation. Use to override NVHPC provided NCCL version.")
 set(CUDECOMP_NVSHMEM_HOME CACHE STRING "Path to search for NVSHMEM installation. Use to override NVHPC provided NVSHMEM version.")
@@ -72,6 +74,10 @@ if (CRAY_CC_BIN)
 endif()
 
 # MPI
+if (CUDECOMP_BUILD_TESTS)
+  # The CTest launcher defaults use MPI_CXX_LIBRARY_VERSION_STRING to identify Open MPI.
+  set(MPI_DETERMINE_LIBRARY_VERSION ON)
+endif()
 find_package(MPI REQUIRED)
 
 if (CRAY_CC_BIN)
@@ -290,18 +296,28 @@ if (CUDECOMP_BUILD_FORTRAN)
    install(FILES ${CMAKE_BINARY_DIR}/include/cudecomp.mod DESTINATION ${CMAKE_INSTALL_PREFIX}/include)
 endif()
 
+if (CUDECOMP_BUILD_TESTS OR CUDECOMP_BUILD_EXTRAS)
+  enable_testing()
+  add_subdirectory(tests/cc)
+
+  if (CUDECOMP_BUILD_FORTRAN)
+    add_subdirectory(tests/fortran)
+  endif()
+
+  if (CUDECOMP_BUILD_TESTS)
+    add_subdirectory(tests/ctest)
+  endif()
+endif()
+
 if (CUDECOMP_BUILD_EXTRAS)
   add_subdirectory(benchmark)
 
-  add_subdirectory(tests/cc)
   add_subdirectory(examples/cc/basic_usage)
   add_subdirectory(examples/cc/taylor_green)
 
   if (CUDECOMP_BUILD_FORTRAN)
-    add_subdirectory(tests/fortran)
     add_subdirectory(examples/fortran/basic_usage)
     add_subdirectory(examples/fortran/poisson)
     add_subdirectory(examples/fortran/taylor_green)
   endif()
 endif()
-
