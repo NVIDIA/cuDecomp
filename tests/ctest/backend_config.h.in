@@ -1,0 +1,11 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+#ifndef CUDECOMP_TEST_BACKEND_CONFIG_H
+#define CUDECOMP_TEST_BACKEND_CONFIG_H
+
+#cmakedefine01 CUDECOMP_TEST_ENABLE_NVSHMEM
+
+#endif
