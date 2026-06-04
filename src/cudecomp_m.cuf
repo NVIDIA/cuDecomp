@@ -987,7 +987,7 @@ contains
     if (present(padding)) padding_ = padding
     res = cudecompUpdateHalosZ_C(handle, grid_desc, &
           input, work, dtype, halo_extents, halo_periods_c, &
-          dim - 1, padding, stream_)
+          dim - 1, padding_, stream_)
   end function cudecompUpdateHalosZ
 
   ! Helper function to copy string
