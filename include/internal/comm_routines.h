@@ -48,6 +48,15 @@ static inline MPI_Datatype getMpiDataType(cuda::std::complex<float>) { return MP
 static inline MPI_Datatype getMpiDataType(cuda::std::complex<double>) { return MPI_C_DOUBLE_COMPLEX; }
 template <typename T> static inline MPI_Datatype getMpiDataType() { return getMpiDataType(T(0)); }
 
+static inline bool ncclAlltoAllRuntimeAvailable() {
+#if NCCL_VERSION_CODE >= NCCL_VERSION(2, 28, 3)
+  int version = 0;
+  return ncclGetVersion(&version) == ncclSuccess && version >= NCCL_VERSION(2, 28, 3);
+#else
+  return false;
+#endif
+}
+
 static inline bool canUseMpiAlltoall(const std::vector<comm_count_t>& send_counts,
                                      const std::vector<comm_count_t>& send_offsets,
                                      const std::vector<comm_count_t>& recv_counts,
@@ -68,6 +77,30 @@ static inline bool canUseMpiAlltoall(const std::vector<comm_count_t>& send_count
   }
   for (int i = 0; i < recv_offsets.size(); ++i) {
     if (recv_offsets[i] != i * rcount) { return false; }
+  }
+
+  return true;
+}
+
+static inline bool canUseNcclAlltoAll(const cudecompHandle_t& handle, const cudecompGridDesc_t& grid_desc,
+                                      const std::vector<comm_count_t>& send_counts,
+                                      const std::vector<comm_count_t>& send_offsets,
+                                      const std::vector<comm_count_t>& recv_counts,
+                                      const std::vector<comm_count_t>& recv_offsets, cudecompCommAxis comm_axis) {
+  if (!canUseMpiAlltoall(send_counts, send_offsets, recv_counts, recv_offsets)) { return false; }
+  if (send_counts[0] != recv_counts[0]) { return false; }
+
+  const auto& comm_info = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info : grid_desc->col_comm_info;
+  int nccl_comm_size = handle->nranks;
+  if (comm_info.ngroups == 1) {
+    nccl_comm_size = (handle->mpi_clique_comm != MPI_COMM_NULL) ? handle->clique_nranks : handle->local_nranks;
+  }
+  if (nccl_comm_size != static_cast<int>(send_counts.size())) { return false; }
+
+  for (int i = 0; i < static_cast<int>(send_counts.size()); ++i) {
+    int peer_rank = getGlobalRank(handle, grid_desc, comm_axis, i);
+    if (comm_info.ngroups == 1) { peer_rank = handle->rank_to_clique_rank[peer_rank]; }
+    if (peer_rank != i) { return false; }
   }
 
   return true;
@@ -280,6 +313,14 @@ static void cudecompAlltoall(const cudecompHandle_t& handle, const cudecompGridD
     auto& comm_info = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info : grid_desc->col_comm_info;
     // For fully intra-group alltoall, use distinct NCCL local comm instead of global comm as it is faster.
     auto comm = (comm_info.ngroups == 1) ? *grid_desc->nccl_local_comm : *grid_desc->nccl_comm;
+
+#if NCCL_VERSION_CODE >= NCCL_VERSION(2, 28, 3)
+    if (ncclAlltoAllRuntimeAvailable() &&
+        canUseNcclAlltoAll(handle, grid_desc, send_counts, send_offsets, recv_counts, recv_offsets, comm_axis)) {
+      CHECK_NCCL(ncclAlltoAll(send_buff, recv_buff, send_counts[0] * sizeof(T), ncclChar, comm, stream));
+      break;
+    }
+#endif
 
     CHECK_NCCL(ncclGroupStart());
     for (int i = 0; i < send_counts.size(); ++i) {

@@ -187,6 +187,13 @@ void appendBaselineCases(std::vector<TransposeCase>& cases, const cudecomp_test:
   }
 }
 
+void appendNcclNativeAlltoAllCases(std::vector<TransposeCase>& cases, const cudecomp_test::TransposeBackend& backend) {
+  if (backend.backend != CUDECOMP_TRANSPOSE_COMM_NCCL) return;
+
+  cases.push_back(
+      makeCase(backend, "NativeAlltoAllFastPath", TransposeOperation::YToZ, {8, 8, 8}, {1, 4}, CUDECOMP_FLOAT, true));
+}
+
 void appendCoverageCases(std::vector<TransposeCase>& cases, const cudecomp_test::TransposeBackend& backend) {
   // Coverage cases select explicit memory orders, nonzero halo/padding, dtypes, rank order, and rank counts to reach
   // transpose paths not guaranteed by the baseline sweep. These are not inherently MPI-only, but running them in the
@@ -271,6 +278,7 @@ std::vector<TransposeCase> transposeCasesForLabel(const char* label) {
     if (std::string(backend.label) != label) continue;
 
     appendBaselineCases(cases, backend);
+    if (std::string(label) == "nccl") { appendNcclNativeAlltoAllCases(cases, backend); }
     if (std::string(label) == "mpi") { appendCoverageCases(cases, backend); }
   }
   return cases;
