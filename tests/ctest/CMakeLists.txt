@@ -61,6 +61,16 @@ target_include_directories(cudecomp_test_support
   ${NVHPC_CUDA_INCLUDE_DIR}
   ${NCCL_INCLUDE_DIR}
 )
+if (CUDECOMP_ENABLE_NVSHMEM)
+  target_compile_definitions(cudecomp_test_support
+    PUBLIC
+    ENABLE_NVSHMEM
+  )
+  target_include_directories(cudecomp_test_support
+    PUBLIC
+    ${NVSHMEM_INCLUDE_DIR}
+  )
+endif()
 target_link_libraries(cudecomp_test_support
   PUBLIC
   MPI::MPI_CXX
