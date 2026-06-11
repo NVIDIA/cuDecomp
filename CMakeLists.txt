@@ -165,7 +165,6 @@ else()
   set_target_properties(cudecomp PROPERTIES CUDA_ARCHITECTURES "${CUDECOMP_CUDA_CC_LIST}")
 endif()
 
-target_compile_options(cudecomp PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:--ptxas-options=-v >)
 target_compile_options(cudecomp PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-Wno-deprecated-gpu-targets >)
 
 target_sources(cudecomp
