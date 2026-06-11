@@ -191,7 +191,7 @@ void appendNcclNativeAlltoAllCases(std::vector<TransposeCase>& cases, const cude
   if (backend.backend != CUDECOMP_TRANSPOSE_COMM_NCCL) return;
 
   cases.push_back(
-      makeCase(backend, "NativeAlltoAllFastPath", TransposeOperation::YToZ, {8, 8, 8}, {1, 4}, CUDECOMP_FLOAT, true));
+      makeCase(backend, "NativeAlltoAllPath", TransposeOperation::YToZ, {8, 8, 8}, {1, 4}, CUDECOMP_FLOAT, true));
 }
 
 void appendCoverageCases(std::vector<TransposeCase>& cases, const cudecomp_test::TransposeBackend& backend) {
