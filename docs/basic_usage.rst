@@ -395,7 +395,7 @@ access pattern as the flattened array example above:
 
     int64_t l = blockIdx.x * blockDim.x + threadIdx.x;
 
-    if (l > pinfo.size) return;
+    if (l >= pinfo.size) return;
 
     int i = l % pinfo.shape[0];
     int j = l / pinfo.shape[0] % pinfo.shape[1];
@@ -410,7 +410,7 @@ access pattern as the flattened array example above:
     gx[pinfo.order[1]] -=  pinfo.halo_extents[pinfo.order[1]];
     gx[pinfo.order[2]] -=  pinfo.halo_extents[pinfo.order[2]];
 
-    data[i] = gx[0] + gx[1] + gx[2];
+    data[l] = gx[0] + gx[1] + gx[2];
 
   }
 
