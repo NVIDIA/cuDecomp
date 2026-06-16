@@ -135,9 +135,11 @@ void expectNvshmemInitialized(const cudecomp_test::MpiTestComm& comm) {
 
 void expectNvshmemNotInitialized(const cudecomp_test::MpiTestComm& comm) {
   const int local_status = nvshmemx_init_status();
-  int all_ranks_match = local_status == NVSHMEM_STATUS_NOT_INITIALIZED ? 1 : 0;
+  // NVSHMEM may leave the bootstrap layer active after nvshmem_finalize().
+  int all_ranks_match = local_status < NVSHMEM_STATUS_IS_INITIALIZED ? 1 : 0;
   EXPECT_EQ(MPI_SUCCESS, MPI_Allreduce(MPI_IN_PLACE, &all_ranks_match, 1, MPI_INT, MPI_MIN, comm.mpiComm()));
-  EXPECT_EQ(1, all_ranks_match) << "local NVSHMEM init status is " << local_status << ", expected not initialized";
+  EXPECT_EQ(1, all_ranks_match) << "local NVSHMEM init status is " << local_status
+                                << ", expected below initialized";
 }
 #endif
 
