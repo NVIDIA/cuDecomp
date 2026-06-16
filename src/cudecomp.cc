@@ -28,6 +28,7 @@
 #include <memory>
 #include <set>
 #include <string>
+#include <type_traits>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -203,6 +204,18 @@ static void checkHandle(cudecompHandle_t handle) {
 static void checkGridDesc(cudecompHandle_t handle, cudecompGridDesc_t grid_desc) {
   if (!grid_desc || !grid_desc->initialized) { THROW_INVALID_USAGE("invalid grid descriptor"); }
   if (grid_desc->handle != handle) { THROW_INVALID_USAGE("grid descriptor belongs to a different handle"); }
+}
+
+static MPI_Datatype mpiSizeTDatatype() {
+  if constexpr (std::is_same_v<size_t, unsigned int>) {
+    return MPI_UNSIGNED;
+  } else if constexpr (std::is_same_v<size_t, unsigned long>) {
+    return MPI_UNSIGNED_LONG;
+  } else if constexpr (std::is_same_v<size_t, unsigned long long>) {
+    return MPI_UNSIGNED_LONG_LONG;
+  } else {
+    THROW_NOT_SUPPORTED("unsupported size_t type for MPI reduction");
+  }
 }
 
 static cudecompResult_t handleException(const BaseException& e) {
@@ -1217,7 +1230,7 @@ cudecompResult_t cudecompMalloc(cudecompHandle_t handle, cudecompGridDesc_t grid
         haloBackendRequiresNvshmem(grid_desc->config.halo_comm_backend)) {
 #ifdef ENABLE_NVSHMEM
       // NVSHMEM requires allocations to be the same size for all ranks. Find maximum.
-      CHECK_MPI(MPI_Allreduce(MPI_IN_PLACE, &buffer_size_bytes, 1, MPI_LONG_LONG_INT, MPI_MAX, handle->mpi_comm));
+      CHECK_MPI(MPI_Allreduce(MPI_IN_PLACE, &buffer_size_bytes, 1, mpiSizeTDatatype(), MPI_MAX, handle->mpi_comm));
 
       auto nvshmem_runtime = grid_desc->nvshmem_runtime;
       if (!nvshmem_runtime || !nvshmem_runtime->initialized) { THROW_INVALID_USAGE("NVSHMEM runtime is unavailable"); }
@@ -1228,7 +1241,7 @@ cudecompResult_t cudecompMalloc(cudecompHandle_t handle, cudecompGridDesc_t grid
       }
       if (!nvshmem_runtime->nvshmem_vmm && handle->rank == 0 && buffer_size_bytes > nvshmem_free_size) {
         fprintf(stderr,
-                "CUDECOMP:WARN: Attempting an NVSHMEM allocation of %lld bytes but *approximately* "
+                "CUDECOMP:WARN: Attempting an NVSHMEM allocation of %zu bytes but *approximately* "
                 "%zu free bytes of %zu total bytes of symmetric heap space available. If the allocation fails, "
                 "set NVSHMEM_SYMMETRIC_SIZE >= %zu and try again.\n",
                 buffer_size_bytes, nvshmem_free_size, nvshmem_runtime->nvshmem_symmetric_size,
