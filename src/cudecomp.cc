@@ -25,7 +25,7 @@
 #include <cstring>
 #include <exception>
 #include <iostream>
-#include <numeric>
+#include <memory>
 #include <set>
 #include <string>
 #include <unordered_map>
@@ -55,9 +55,6 @@
 namespace cudecomp {
 namespace {
 
-// Static flag to disable multiple handle creation
-static bool cudecomp_initialized = false;
-
 static cudecomp::ncclComm ncclCommFromMPIComm(MPI_Comm mpi_comm) {
   int rank, nranks;
   CHECK_MPI(MPI_Comm_rank(mpi_comm, &rank));
@@ -74,6 +71,46 @@ static cudecomp::ncclComm ncclCommFromMPIComm(MPI_Comm mpi_comm) {
 }
 
 #ifdef ENABLE_NVSHMEM
+static nvshmemProcessState process_nvshmem_state;
+
+static std::vector<int> getCommWorldRanks(MPI_Comm mpi_comm) {
+  int nranks;
+  CHECK_MPI(MPI_Comm_size(mpi_comm, &nranks));
+
+  std::vector<int> comm_ranks(nranks);
+  std::vector<int> world_ranks(nranks);
+  for (int i = 0; i < nranks; ++i) {
+    comm_ranks[i] = i;
+  }
+
+  MPI_Group comm_group = MPI_GROUP_NULL;
+  MPI_Group world_group = MPI_GROUP_NULL;
+  CHECK_MPI(MPI_Comm_group(mpi_comm, &comm_group));
+  CHECK_MPI(MPI_Comm_group(MPI_COMM_WORLD, &world_group));
+  CHECK_MPI(MPI_Group_translate_ranks(comm_group, nranks, comm_ranks.data(), world_group, world_ranks.data()));
+  CHECK_MPI(MPI_Group_free(&world_group));
+  CHECK_MPI(MPI_Group_free(&comm_group));
+
+  return world_ranks;
+}
+
+static std::vector<int> checkNvshmemCommCongruent(MPI_Comm mpi_comm) {
+  auto world_ranks = getCommWorldRanks(mpi_comm);
+
+  int local_noncongruent = 0;
+  if (!process_nvshmem_state.init_world_ranks.empty()) {
+    local_noncongruent = process_nvshmem_state.init_world_ranks != world_ranks;
+  }
+
+  // In overlapping communicator cases, some ranks may not have prior process-local NVSHMEM state.
+  // Agree on incompatibility before any rank reuses or initializes the process-global runtime.
+  int any_noncongruent = 0;
+  CHECK_MPI(MPI_Allreduce(&local_noncongruent, &any_noncongruent, 1, MPI_INT, MPI_MAX, mpi_comm));
+
+  if (any_noncongruent) { THROW_INVALID_USAGE("Multiple NVSHMEM-backed handles require congruent MPI communicators"); }
+  return world_ranks;
+}
+
 static void initNvshmemFromMPIComm(MPI_Comm mpi_comm) {
   int rank, nranks;
   CHECK_MPI(MPI_Comm_rank(mpi_comm, &rank));
@@ -163,8 +200,9 @@ static void checkHandle(cudecompHandle_t handle) {
   if (!handle || !handle->initialized) { THROW_INVALID_USAGE("invalid handle"); }
 }
 
-static void checkGridDesc(cudecompGridDesc_t grid_desc) {
+static void checkGridDesc(cudecompHandle_t handle, cudecompGridDesc_t grid_desc) {
   if (!grid_desc || !grid_desc->initialized) { THROW_INVALID_USAGE("invalid grid descriptor"); }
+  if (grid_desc->handle != handle) { THROW_INVALID_USAGE("grid descriptor belongs to a different handle"); }
 }
 
 static cudecompResult_t handleException(const BaseException& e) {
@@ -435,11 +473,11 @@ static void resolveRankOrder(cudecompHandle_t handle, cudecompGridDesc_t grid_de
 }
 
 #ifdef ENABLE_NVSHMEM
-static void inspectNvshmemEnvVars(cudecompHandle_t& handle) {
+static void inspectNvshmemEnvVars(nvshmemRuntimeState& runtime) {
   // Check NVSHMEM_DISABLE_CUDA_VMM
-  handle->nvshmem_vmm = true;
+  runtime.nvshmem_vmm = true;
   char* vmm_str = std::getenv("NVSHMEM_DISABLE_CUDA_VMM");
-  if (vmm_str) { handle->nvshmem_vmm = std::strtol(vmm_str, nullptr, 10) == 0; }
+  if (vmm_str) { runtime.nvshmem_vmm = std::strtol(vmm_str, nullptr, 10) == 0; }
 
   // Check NVSHMEM_SYMMETRIC_SIZE
   char* symmetric_size_str = std::getenv("NVSHMEM_SYMMETRIC_SIZE");
@@ -456,10 +494,10 @@ static void inspectNvshmemEnvVars(cudecompHandle_t& handle) {
     } else {
       scale = 0;
     }
-    handle->nvshmem_symmetric_size = std::ceil(std::strtod(symmetric_size_str, nullptr) * (1ull << scale));
+    runtime.nvshmem_symmetric_size = std::ceil(std::strtod(symmetric_size_str, nullptr) * (1ull << scale));
   } else {
     // NVSHMEM symmetric size defaults to 1 GiB
-    handle->nvshmem_symmetric_size = 1ull << 30;
+    runtime.nvshmem_symmetric_size = 1ull << 30;
   }
 }
 
@@ -493,11 +531,30 @@ static void checkNvshmemVersion(cudecompHandle_t& handle) {
   }
 }
 
-static nvshmemRuntime createNvshmemRuntime(cudecompHandle_t& handle) {
-  checkNvshmemVersion(handle);
-  inspectNvshmemEnvVars(handle);
-  initNvshmemFromMPIComm(handle->mpi_comm);
-  return std::make_shared<nvshmemRuntimeState>();
+static nvshmemRuntime acquireNvshmemRuntime(cudecompHandle_t& handle) {
+  auto world_ranks = checkNvshmemCommCongruent(handle->mpi_comm);
+  auto runtime = process_nvshmem_state.active_runtime.lock();
+  if (!runtime) {
+    runtime = std::make_shared<nvshmemRuntimeState>();
+    inspectNvshmemEnvVars(*runtime);
+    if (process_nvshmem_state.init_world_ranks.empty()) {
+      process_nvshmem_state.init_world_ranks = std::move(world_ranks);
+    }
+    checkNvshmemVersion(handle);
+    initNvshmemFromMPIComm(handle->mpi_comm);
+    runtime->initialized = true;
+    process_nvshmem_state.active_runtime = runtime;
+    return runtime;
+  }
+
+  if (!runtime->initialized) {
+    runtime->finalize();
+    inspectNvshmemEnvVars(*runtime);
+    checkNvshmemVersion(handle);
+    initNvshmemFromMPIComm(handle->mpi_comm);
+    runtime->initialized = true;
+  }
+  return runtime;
 }
 #endif
 
@@ -508,15 +565,6 @@ static void releaseUnusedHandleResources(cudecompHandle_t handle, bool release_s
   if (handle->nccl_comm && handle->nccl_comm.use_count() == 1) { handle->nccl_comm.reset(); }
   if (handle->nccl_local_comm && handle->nccl_local_comm.use_count() == 1) { handle->nccl_local_comm.reset(); }
   if (release_streams) { handle->streams.clear(); }
-
-#ifdef ENABLE_NVSHMEM
-  // If handle has the only remaining reference to the NVSHMEM runtime, destroy it to reclaim resources
-  if (handle->nvshmem_runtime && handle->nvshmem_runtime.use_count() == 1) {
-    handle->nvshmem_allocations.clear();
-    handle->nvshmem_runtime.reset();
-    handle->nvshmem_allocation_size = 0;
-  }
-#endif
 }
 
 static void cleanupFailedGridDescCreate(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
@@ -553,6 +601,26 @@ struct cuMemAllocationGuard {
 } // namespace
 } // namespace cudecomp
 
+#ifdef ENABLE_NVSHMEM
+namespace cudecomp {
+void warnIfNvshmemBufferUsedWithMpi(cudecompHandle_t handle, const void* send_buff, const void* recv_buff) {
+  auto runtime = process_nvshmem_state.active_runtime.lock();
+  if (!handle || handle->rank != 0 || !runtime || !runtime->initialized ||
+      process_nvshmem_state.mixed_buffer_warning_issued) {
+    return;
+  }
+
+  if (nvshmem_ptr(send_buff, handle->rank) || nvshmem_ptr(recv_buff, handle->rank)) {
+    printf("CUDECOMP:WARN: A work buffer allocated with nvshmem_malloc (via cudecompMalloc) is "
+           "being used with an MPI communication backend. This may cause issues with some MPI "
+           "implementations. See the documentation for additional details and possible workarounds "
+           "if you encounter issues.\n");
+    process_nvshmem_state.mixed_buffer_warning_issued = true;
+  }
+}
+} // namespace cudecomp
+#endif
+
 cudecompHandle::~cudecompHandle() noexcept {
 #if NCCL_VERSION_CODE >= NCCL_VERSION(2, 19, 0)
   for (auto& entry : nccl_ubr_handles) {
@@ -579,9 +647,6 @@ cudecompResult_t cudecompInit(cudecompHandle_t* handle_in, MPI_Comm mpi_comm) {
   cudecompHandle_t handle = nullptr;
   try {
     if (!handle_in) { THROW_INVALID_USAGE("handle argument cannot be null"); }
-    if (cudecomp_initialized) {
-      THROW_INVALID_USAGE("cuDecomp already initialized and multiple handles are not supported.");
-    }
     handle = new cudecompHandle;
     handle->mpi_comm = mpi_comm;
     CHECK_MPI(MPI_Comm_rank(mpi_comm, &handle->rank));
@@ -677,7 +742,6 @@ cudecompResult_t cudecompInit(cudecompHandle_t* handle_in, MPI_Comm mpi_comm) {
     CHECK_CUDA(cudaDeviceGetAttribute(&handle->device_max_threads_per_sm, cudaDevAttrMaxThreadsPerMultiProcessor, dev));
 
     handle->initialized = true;
-    cudecomp_initialized = true;
 
     *handle_in = handle;
   }
@@ -700,8 +764,6 @@ cudecompResult_t cudecompFinalize(cudecompHandle_t handle) {
 #endif
 
     delete handle;
-
-    cudecomp_initialized = false;
   }
   CUDECOMP_CATCH_C_API_ERRORS()
   return CUDECOMP_RESULT_SUCCESS;
@@ -723,6 +785,9 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
   using namespace cudecomp;
   cudecompGridDesc_t grid_desc = nullptr;
   bool created_streams = false;
+#ifdef ENABLE_NVSHMEM
+  nvshmemRuntime nvshmem_runtime;
+#endif
   try {
     checkHandle(handle);
     if (!grid_desc_in) { THROW_INVALID_USAGE("grid_desc argument cannot be null"); }
@@ -747,6 +812,7 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
 
     grid_desc = new cudecompGridDesc;
     grid_desc->initialized = true;
+    grid_desc->handle = handle;
     grid_desc->config = *config;
     resolveRankOrder(handle, grid_desc);
     auto comm_backend = grid_desc->config.transpose_comm_backend;
@@ -826,10 +892,8 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
     if (transposeBackendRequiresNvshmem(comm_backend) || haloBackendRequiresNvshmem(halo_comm_backend) ||
         ((autotune_transpose_backend || autotune_halo_backend) && !autotune_disable_nvshmem_backends)) {
 #ifdef ENABLE_NVSHMEM
-      if (!handle->nvshmem_runtime) {
-        handle->nvshmem_runtime = createNvshmemRuntime(handle);
-        handle->nvshmem_allocation_size = 0;
-      }
+      nvshmem_runtime = acquireNvshmemRuntime(handle);
+      grid_desc->nvshmem_runtime = nvshmem_runtime;
 #endif
     }
 
@@ -860,11 +924,14 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
     createCommInfo(handle, grid_desc, need_nvshmem);
 #ifdef ENABLE_NVSHMEM
     if (need_nvshmem) {
+      if (!nvshmem_runtime || !nvshmem_runtime->initialized) { nvshmem_runtime = acquireNvshmemRuntime(handle); }
       CHECK_CUDA(cudaMalloc(&grid_desc->nvshmem_block_counters, handle->nranks * sizeof(int)));
       CHECK_CUDA(cudaMemset(grid_desc->nvshmem_block_counters, 0, handle->nranks * sizeof(int)));
 
       // Set grid descriptor reference to NVSHMEM runtime
-      grid_desc->nvshmem_runtime = handle->nvshmem_runtime;
+      grid_desc->nvshmem_runtime = nvshmem_runtime;
+    } else {
+      grid_desc->nvshmem_runtime.reset();
     }
 
 #endif
@@ -913,7 +980,7 @@ cudecompResult_t cudecompGridDescDestroy(cudecompHandle_t handle, cudecompGridDe
   using namespace cudecomp;
   try {
     checkHandle(handle);
-    checkGridDesc(grid_desc);
+    checkGridDesc(handle, grid_desc);
 
     // Print performance report if enabled
     if (handle->performance_report_enable) { printPerformanceReport(handle, grid_desc); }
@@ -1005,7 +1072,7 @@ cudecompResult_t cudecompGetPencilInfo(cudecompHandle_t handle, cudecompGridDesc
   using namespace cudecomp;
   try {
     checkHandle(handle);
-    checkGridDesc(grid_desc);
+    checkGridDesc(handle, grid_desc);
     if (!pencil_info) { THROW_INVALID_USAGE("pencil_info argument cannot be null."); }
     if (axis < 0 || axis > 2) { THROW_INVALID_USAGE("axis argument out of range"); }
 
@@ -1063,7 +1130,7 @@ cudecompResult_t cudecompGetGridDescConfig(cudecompHandle_t handle, cudecompGrid
   using namespace cudecomp;
   try {
     checkHandle(handle);
-    checkGridDesc(grid_desc);
+    checkGridDesc(handle, grid_desc);
     if (!config) { THROW_INVALID_USAGE("config argument cannot be null."); }
 
     *config = grid_desc->config;
@@ -1092,7 +1159,7 @@ cudecompResult_t cudecompGetTransposeWorkspaceSize(cudecompHandle_t handle, cude
   using namespace cudecomp;
   try {
     checkHandle(handle);
-    checkGridDesc(grid_desc);
+    checkGridDesc(handle, grid_desc);
     if (!workspace_size) { THROW_INVALID_USAGE("workspace_size argument cannot be null."); }
     int64_t max_pencil_size_x = getGlobalMaxPencilSize(handle, grid_desc, 0);
     int64_t max_pencil_size_y = getGlobalMaxPencilSize(handle, grid_desc, 1);
@@ -1115,7 +1182,7 @@ cudecompResult_t cudecompGetHaloWorkspaceSize(cudecompHandle_t handle, cudecompG
   using namespace cudecomp;
   try {
     checkHandle(handle);
-    checkGridDesc(grid_desc);
+    checkGridDesc(handle, grid_desc);
     if (axis < 0 || axis > 2) { THROW_INVALID_USAGE("axis argument out of range"); }
     if (!halo_extents) { THROW_INVALID_USAGE("halo_extents argument cannot be null."); }
     if (!workspace_size) { THROW_INVALID_USAGE("workspace_size argument cannot be null."); }
@@ -1142,7 +1209,7 @@ cudecompResult_t cudecompMalloc(cudecompHandle_t handle, cudecompGridDesc_t grid
   using namespace cudecomp;
   try {
     checkHandle(handle);
-    checkGridDesc(grid_desc);
+    checkGridDesc(handle, grid_desc);
     if (!buffer) { THROW_INVALID_USAGE("buffer argument cannot be null"); }
     if (buffer_size_bytes == 0) { THROW_INVALID_USAGE("buffer size cannot be zero"); }
 
@@ -1152,21 +1219,27 @@ cudecompResult_t cudecompMalloc(cudecompHandle_t handle, cudecompGridDesc_t grid
       // NVSHMEM requires allocations to be the same size for all ranks. Find maximum.
       CHECK_MPI(MPI_Allreduce(MPI_IN_PLACE, &buffer_size_bytes, 1, MPI_LONG_LONG_INT, MPI_MAX, handle->mpi_comm));
 
-      size_t nvshmem_free_size = handle->nvshmem_symmetric_size - handle->nvshmem_allocation_size;
-      if (!handle->nvshmem_vmm && handle->rank == 0 && buffer_size_bytes > nvshmem_free_size) {
+      auto nvshmem_runtime = grid_desc->nvshmem_runtime;
+      if (!nvshmem_runtime || !nvshmem_runtime->initialized) { THROW_INVALID_USAGE("NVSHMEM runtime is unavailable"); }
+
+      size_t nvshmem_free_size = 0;
+      if (nvshmem_runtime->nvshmem_symmetric_size > nvshmem_runtime->nvshmem_allocation_size) {
+        nvshmem_free_size = nvshmem_runtime->nvshmem_symmetric_size - nvshmem_runtime->nvshmem_allocation_size;
+      }
+      if (!nvshmem_runtime->nvshmem_vmm && handle->rank == 0 && buffer_size_bytes > nvshmem_free_size) {
         fprintf(stderr,
                 "CUDECOMP:WARN: Attempting an NVSHMEM allocation of %lld bytes but *approximately* "
                 "%zu free bytes of %zu total bytes of symmetric heap space available. If the allocation fails, "
                 "set NVSHMEM_SYMMETRIC_SIZE >= %zu and try again.\n",
-                buffer_size_bytes, nvshmem_free_size, handle->nvshmem_symmetric_size,
-                handle->nvshmem_symmetric_size + (buffer_size_bytes - nvshmem_free_size));
+                buffer_size_bytes, nvshmem_free_size, nvshmem_runtime->nvshmem_symmetric_size,
+                nvshmem_runtime->nvshmem_symmetric_size + (buffer_size_bytes - nvshmem_free_size));
       }
 
       *buffer = nvshmem_malloc(buffer_size_bytes);
       if (buffer_size_bytes != 0 && *buffer == nullptr) { THROW_NVSHMEM_ERROR("nvshmem_malloc failed"); }
       // Record NVSHMEM allocation details
-      handle->nvshmem_allocations[*buffer] = buffer_size_bytes;
-      handle->nvshmem_allocation_size += buffer_size_bytes;
+      nvshmem_runtime->nvshmem_allocations[*buffer] = buffer_size_bytes;
+      nvshmem_runtime->nvshmem_allocation_size += buffer_size_bytes;
 #else
       THROW_NOT_SUPPORTED("build does not support NVSHMEM communication backends.");
 #endif
@@ -1251,7 +1324,7 @@ cudecompResult_t cudecompFree(cudecompHandle_t handle, cudecompGridDesc_t grid_d
   using namespace cudecomp;
   try {
     checkHandle(handle);
-    checkGridDesc(grid_desc);
+    checkGridDesc(handle, grid_desc);
 
 #if NCCL_VERSION_CODE >= NCCL_VERSION(2, 19, 0)
     if (handle->nccl_ubr_handles.count(buffer) != 0) {
@@ -1266,12 +1339,19 @@ cudecompResult_t cudecompFree(cudecompHandle_t handle, cudecompGridDesc_t grid_d
         haloBackendRequiresNvshmem(grid_desc->config.halo_comm_backend)) {
 #ifdef ENABLE_NVSHMEM
       if (buffer) {
+        auto nvshmem_runtime = grid_desc->nvshmem_runtime;
+        if (!nvshmem_runtime || !nvshmem_runtime->initialized) {
+          THROW_INVALID_USAGE("NVSHMEM runtime is unavailable");
+        }
+
         nvshmem_free(buffer);
 
         // Record NVSHMEM deallocation details
-        size_t buffer_size_bytes = handle->nvshmem_allocations[buffer];
-        handle->nvshmem_allocation_size -= buffer_size_bytes;
-        handle->nvshmem_allocations.erase(buffer);
+        auto entry = nvshmem_runtime->nvshmem_allocations.find(buffer);
+        if (entry != nvshmem_runtime->nvshmem_allocations.end()) {
+          nvshmem_runtime->nvshmem_allocation_size -= entry->second;
+          nvshmem_runtime->nvshmem_allocations.erase(entry);
+        }
       }
 #else
       THROW_NOT_SUPPORTED("build does not support NVSHMEM communication backends.");
@@ -1347,7 +1427,7 @@ cudecompResult_t cudecompGetShiftedRank(cudecompHandle_t handle, cudecompGridDes
 
   try {
     checkHandle(handle);
-    checkGridDesc(grid_desc);
+    checkGridDesc(handle, grid_desc);
     if (axis < 0 || axis > 2) { THROW_INVALID_USAGE("axis argument out of range"); }
     if (dim < 0 || dim > 2) { THROW_INVALID_USAGE("dim argument out of range"); }
     if (!shifted_rank) { THROW_INVALID_USAGE("shifted_rank argument cannot be null."); }
@@ -1395,7 +1475,7 @@ cudecompResult_t cudecompTransposeXToY(cudecompHandle_t handle, cudecompGridDesc
   using namespace cudecomp;
   try {
     checkHandle(handle);
-    checkGridDesc(grid_desc);
+    checkGridDesc(handle, grid_desc);
     checkDataType(dtype);
     if (!input) { THROW_INVALID_USAGE("input argument cannot be null"); }
     if (!output) { THROW_INVALID_USAGE("output argument cannot be null"); }
@@ -1436,7 +1516,7 @@ cudecompResult_t cudecompTransposeYToZ(cudecompHandle_t handle, cudecompGridDesc
   using namespace cudecomp;
   try {
     checkHandle(handle);
-    checkGridDesc(grid_desc);
+    checkGridDesc(handle, grid_desc);
     checkDataType(dtype);
     if (!input) { THROW_INVALID_USAGE("input argument cannot be null"); }
     if (!output) { THROW_INVALID_USAGE("output argument cannot be null"); }
@@ -1477,7 +1557,7 @@ cudecompResult_t cudecompTransposeZToY(cudecompHandle_t handle, cudecompGridDesc
   using namespace cudecomp;
   try {
     checkHandle(handle);
-    checkGridDesc(grid_desc);
+    checkGridDesc(handle, grid_desc);
     checkDataType(dtype);
     if (!input) { THROW_INVALID_USAGE("input argument cannot be null"); }
     if (!output) { THROW_INVALID_USAGE("output argument cannot be null"); }
@@ -1518,7 +1598,7 @@ cudecompResult_t cudecompTransposeYToX(cudecompHandle_t handle, cudecompGridDesc
   using namespace cudecomp;
   try {
     checkHandle(handle);
-    checkGridDesc(grid_desc);
+    checkGridDesc(handle, grid_desc);
     checkDataType(dtype);
     if (!input) { THROW_INVALID_USAGE("input argument cannot be null"); }
     if (!output) { THROW_INVALID_USAGE("output argument cannot be null"); }
@@ -1558,7 +1638,7 @@ cudecompResult_t cudecompUpdateHalosX(cudecompHandle_t handle, cudecompGridDesc_
   using namespace cudecomp;
   try {
     checkHandle(handle);
-    checkGridDesc(grid_desc);
+    checkGridDesc(handle, grid_desc);
     checkDataType(dtype);
     if (!halo_extents) { THROW_INVALID_USAGE("halo_extents argument cannot be null"); }
     if (halo_extents[0] == 0 && halo_extents[1] == 0 && halo_extents[2] == 0) {
@@ -1601,7 +1681,7 @@ cudecompResult_t cudecompUpdateHalosY(cudecompHandle_t handle, cudecompGridDesc_
   using namespace cudecomp;
   try {
     checkHandle(handle);
-    checkGridDesc(grid_desc);
+    checkGridDesc(handle, grid_desc);
     checkDataType(dtype);
     if (!halo_extents) { THROW_INVALID_USAGE("halo_extents argument cannot be null"); }
     if (halo_extents[0] == 0 && halo_extents[1] == 0 && halo_extents[2] == 0) {
@@ -1644,7 +1724,7 @@ cudecompResult_t cudecompUpdateHalosZ(cudecompHandle_t handle, cudecompGridDesc_
   using namespace cudecomp;
   try {
     checkHandle(handle);
-    checkGridDesc(grid_desc);
+    checkGridDesc(handle, grid_desc);
     checkDataType(dtype);
     if (!halo_extents) { THROW_INVALID_USAGE("halo_extents argument cannot be null"); }
     if (halo_extents[0] == 0 && halo_extents[1] == 0 && halo_extents[2] == 0) {

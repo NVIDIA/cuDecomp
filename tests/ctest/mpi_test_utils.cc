@@ -65,6 +65,20 @@ MpiTestComm MpiTestComm::split(const MpiTestComm& parent_comm, int requested_ran
   return result;
 }
 
+MpiTestComm MpiTestComm::splitRange(const MpiTestComm& parent_comm, int first_rank, int requested_ranks) {
+  const bool valid_request =
+      requested_ranks > 0 && first_rank >= 0 && first_rank + requested_ranks <= parent_comm.size();
+  const bool active =
+      valid_request && parent_comm.rank() >= first_rank && parent_comm.rank() < first_rank + requested_ranks;
+
+  MPI_Comm comm = MPI_COMM_NULL;
+  MPI_Comm_split(parent_comm.mpiComm(), active ? 0 : MPI_UNDEFINED, parent_comm.rank(), &comm);
+
+  MpiTestComm result = fromComm(comm);
+  if (comm != MPI_COMM_NULL) { MPI_Comm_free(&comm); }
+  return result;
+}
+
 MpiTestComm MpiTestComm::fromComm(MPI_Comm comm) { return MpiTestComm(comm); }
 
 MPI_Comm MpiTestComm::mpiComm() const { return comm_; }

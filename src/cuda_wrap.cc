@@ -15,6 +15,8 @@
  * limitations under the License.
  */
 
+#include <mutex>
+
 #include <cuda_runtime.h>
 
 #include "internal/checks.h"
@@ -48,21 +50,24 @@ namespace cudecomp {
 cuFunctionTable cuFnTable; // global table of required CUDA driver functions
 
 void initCuFunctionTable() {
+  static std::once_flag init_once;
+  std::call_once(init_once, []() {
 #if CUDART_VERSION >= 11030
-  LOAD_SYM(cuDeviceGet, 2000);
-  LOAD_SYM(cuDeviceGetAttribute, 2000);
-  LOAD_SYM(cuGetErrorString, 6000);
-  LOAD_SYM(cuMemAddressFree, 10020);
-  LOAD_SYM(cuMemAddressReserve, 10020);
-  LOAD_SYM(cuMemCreate, 10020);
-  LOAD_SYM(cuMemGetAddressRange, 3020);
-  LOAD_SYM(cuMemGetAllocationGranularity, 10020);
-  LOAD_SYM(cuMemMap, 10020);
-  LOAD_SYM(cuMemRetainAllocationHandle, 11000);
-  LOAD_SYM(cuMemRelease, 10020);
-  LOAD_SYM(cuMemSetAccess, 10020);
-  LOAD_SYM(cuMemUnmap, 10020);
+    LOAD_SYM(cuDeviceGet, 2000);
+    LOAD_SYM(cuDeviceGetAttribute, 2000);
+    LOAD_SYM(cuGetErrorString, 6000);
+    LOAD_SYM(cuMemAddressFree, 10020);
+    LOAD_SYM(cuMemAddressReserve, 10020);
+    LOAD_SYM(cuMemCreate, 10020);
+    LOAD_SYM(cuMemGetAddressRange, 3020);
+    LOAD_SYM(cuMemGetAllocationGranularity, 10020);
+    LOAD_SYM(cuMemMap, 10020);
+    LOAD_SYM(cuMemRetainAllocationHandle, 11000);
+    LOAD_SYM(cuMemRelease, 10020);
+    LOAD_SYM(cuMemSetAccess, 10020);
+    LOAD_SYM(cuMemUnmap, 10020);
 #endif
+  });
 }
 
 } // namespace cudecomp

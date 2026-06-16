@@ -57,19 +57,36 @@ typedef std::pair<std::array<unsigned char, 1>, unsigned int> mnnvl_info;
 typedef std::shared_ptr<ncclComm_t> ncclComm;
 struct nvshmemRuntimeState {
 #ifdef ENABLE_NVSHMEM
-  ~nvshmemRuntimeState() { finalize(); }
+  ~nvshmemRuntimeState() noexcept { finalize(); }
 
-  void finalize() {
-    if (!finalized) {
+  void finalize() noexcept {
+    if (initialized) {
       nvshmem_finalize();
-      finalized = true;
+      initialized = false;
     }
+    nvshmem_allocations.clear();
+    nvshmem_allocation_size = 0;
   }
 
-  bool finalized = false;
+  bool initialized = false;                              // Flag to track NVSHMEM initialization
+  size_t nvshmem_symmetric_size = 0;                     // NVSHMEM symmetric size
+  bool nvshmem_vmm = true;                               // Flag to track if NVSHMEM is using VMM allocations
+  std::unordered_map<void*, size_t> nvshmem_allocations; // Table to record NVSHMEM allocations
+  size_t nvshmem_allocation_size = 0;                    // Total of NVSHMEM allocations
 #endif
 };
 typedef std::shared_ptr<nvshmemRuntimeState> nvshmemRuntime;
+#ifdef ENABLE_NVSHMEM
+struct nvshmemProcessState {
+  // NVSHMEM fixes the PE mapping at initialization and does not support reinitializing
+  // on a different set or order of ranks, even after nvshmem_finalize().
+  std::vector<int> init_world_ranks;
+  std::weak_ptr<nvshmemRuntimeState> active_runtime;
+  bool mixed_buffer_warning_issued = false;
+};
+
+void warnIfNvshmemBufferUsedWithMpi(cudecompHandle_t handle, const void* send_buff, const void* recv_buff);
+#endif
 } // namespace cudecomp
 
 // cuDecomp handle containing general information
@@ -115,14 +132,6 @@ struct cudecompHandle {
   std::vector<int32_t> rank_to_local_rank;                         // list of local rank mappings
 
   bool initialized = false;
-
-  // Entries for NVSHMEM management and warning generation
-  cudecomp::nvshmemRuntime nvshmem_runtime;              // Shared reference to initialized NVSHMEM runtime
-  bool nvshmem_mixed_buffer_warning_issued = false;      // Warn once if NVSHMEM buffer is used with MPI
-  size_t nvshmem_symmetric_size;                         // NVSHMEM symmetric size
-  bool nvshmem_vmm;                                      // Flag to track if NVSHMEM is using VMM allocations
-  std::unordered_map<void*, size_t> nvshmem_allocations; // Table to record NVSHMEM allocations
-  size_t nvshmem_allocation_size = 0;                    // Total of NVSHMEM allocations
 
   // Multi-node NVLINK (MNNVL)
   bool cuda_cumem_enable = false; // Flag to control whether cuMem* APIs are used for cudecompMalloc/Free
@@ -243,6 +252,7 @@ struct cudecompGridDesc {
 #endif
   }
 
+  cudecompHandle_t handle = nullptr;    // owning cuDecomp handle
   cudecompGridDescConfig_t config;      // configuration struct
   bool gdims_dist_set = false;          // flag to record if gdims_dist was set to non-default values
   bool transpose_mem_order_set = false; // flag to record if transpose_mem_order was set to non-default values
