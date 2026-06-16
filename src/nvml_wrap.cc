@@ -15,8 +15,10 @@
  * limitations under the License.
  */
 
-#include <cuda_runtime.h>
 #include <dlfcn.h>
+#include <mutex>
+
+#include <cuda_runtime.h>
 
 #include "internal/checks.h"
 #include "internal/exceptions.h"
@@ -34,19 +36,22 @@ namespace cudecomp {
 nvmlFunctionTable nvmlFnTable; // global table of required NVML functions
 
 void initNvmlFunctionTable() {
-  void* nvml_handle = dlopen("libnvidia-ml.so.1", RTLD_NOW);
-  if (!nvml_handle) { THROW_INVALID_USAGE("Could not dlopen libnvidia-ml.so.1"); }
-  LOAD_SYM(nvmlInit);
-  LOAD_SYM(nvmlShutdown);
-  LOAD_SYM(nvmlErrorString);
-  LOAD_SYM(nvmlDeviceGetFieldValues);
-  LOAD_SYM(nvmlDeviceGetHandleByPciBusId);
+  static std::once_flag init_once;
+  std::call_once(init_once, []() {
+    void* nvml_handle = dlopen("libnvidia-ml.so.1", RTLD_NOW);
+    if (!nvml_handle) { THROW_INVALID_USAGE("Could not dlopen libnvidia-ml.so.1"); }
+    LOAD_SYM(nvmlInit);
+    LOAD_SYM(nvmlShutdown);
+    LOAD_SYM(nvmlErrorString);
+    LOAD_SYM(nvmlDeviceGetFieldValues);
+    LOAD_SYM(nvmlDeviceGetHandleByPciBusId);
 #if NVML_API_VERSION >= 12 && CUDART_VERSION >= 12040
-  LOAD_SYM(nvmlDeviceGetGpuFabricInfoV);
+    LOAD_SYM(nvmlDeviceGetGpuFabricInfoV);
 #endif
-  LOAD_SYM(nvmlDeviceGetNvLinkCapability);
-  LOAD_SYM(nvmlDeviceGetNvLinkState);
-  LOAD_SYM(nvmlDeviceGetNvLinkRemotePciInfo);
+    LOAD_SYM(nvmlDeviceGetNvLinkCapability);
+    LOAD_SYM(nvmlDeviceGetNvLinkState);
+    LOAD_SYM(nvmlDeviceGetNvLinkRemotePciInfo);
+  });
 }
 
 bool nvmlHasFabricSupport() {

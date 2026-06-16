@@ -70,6 +70,10 @@ if (CUDECOMP_ENABLE_NVSHMEM)
     PUBLIC
     ${NVSHMEM_INCLUDE_DIR}
   )
+  target_link_libraries(cudecomp_test_support
+    PUBLIC
+    ${NVSHMEM_LIBRARY_DIR}/libnvshmem_host.so
+  )
 endif()
 target_link_libraries(cudecomp_test_support
   PUBLIC
@@ -105,6 +109,11 @@ set_tests_properties(cudecomp_api PROPERTIES
   LABELS "api;mpi"
   TIMEOUT ${CUDECOMP_TEST_TIMEOUT}
 )
+if (CUDECOMP_ENABLE_NVSHMEM)
+  set_tests_properties(cudecomp_api PROPERTIES
+    ENVIRONMENT "NVSHMEM_DISABLE_NCCL=1"
+  )
+endif()
 
 add_executable(cudecomp_test_transpose)
 target_sources(cudecomp_test_transpose

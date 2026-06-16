@@ -21,6 +21,7 @@ public:
 
   static MpiTestComm world();
   static MpiTestComm split(const MpiTestComm& parent_comm, int requested_ranks);
+  static MpiTestComm splitRange(const MpiTestComm& parent_comm, int first_rank, int requested_ranks);
   static MpiTestComm fromComm(MPI_Comm comm);
 
   MPI_Comm mpiComm() const;

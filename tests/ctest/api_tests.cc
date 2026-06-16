@@ -11,6 +11,9 @@
 
 #include <cuda_runtime.h>
 #include <gtest/gtest.h>
+#ifdef ENABLE_NVSHMEM
+#include <nvshmemx.h>
+#endif
 
 #include "cudecomp.h"
 
@@ -27,6 +30,9 @@ constexpr std::array<int32_t, 2> kPdims{2, 2};
 constexpr std::array<int32_t, 3> kHaloExtents{1, 2, 1};
 constexpr std::array<int32_t, 3> kPadding{1, 0, 2};
 constexpr std::array<bool, 3> kHaloPeriods{false, true, false};
+#ifdef ENABLE_NVSHMEM
+constexpr int kNvshmemTestRanks = 2;
+#endif
 
 struct ExpectedPencilInfo {
   std::array<int32_t, 3> shape;
@@ -108,6 +114,32 @@ void setDistributedConfig(cudecompGridDescConfig_t& config) {
   config.pdims[0] = kPdims[0];
   config.pdims[1] = kPdims[1];
 }
+
+#ifdef ENABLE_NVSHMEM
+void setNvshmemTestConfig(cudecompGridDescConfig_t& config) {
+  config.gdims[0] = kGdims[0];
+  config.gdims[1] = kGdims[1];
+  config.gdims[2] = kGdims[2];
+  config.pdims[0] = 1;
+  config.pdims[1] = kNvshmemTestRanks;
+  config.transpose_comm_backend = CUDECOMP_TRANSPOSE_COMM_NVSHMEM;
+}
+
+void expectNvshmemInitialized(const cudecomp_test::MpiTestComm& comm) {
+  const int local_status = nvshmemx_init_status();
+  int all_ranks_match =
+      (local_status >= NVSHMEM_STATUS_IS_INITIALIZED && local_status < NVSHMEM_STATUS_INVALID) ? 1 : 0;
+  EXPECT_EQ(MPI_SUCCESS, MPI_Allreduce(MPI_IN_PLACE, &all_ranks_match, 1, MPI_INT, MPI_MIN, comm.mpiComm()));
+  EXPECT_EQ(1, all_ranks_match) << "local NVSHMEM init status is " << local_status << ", expected initialized";
+}
+
+void expectNvshmemNotInitialized(const cudecomp_test::MpiTestComm& comm) {
+  const int local_status = nvshmemx_init_status();
+  int all_ranks_match = local_status == NVSHMEM_STATUS_NOT_INITIALIZED ? 1 : 0;
+  EXPECT_EQ(MPI_SUCCESS, MPI_Allreduce(MPI_IN_PLACE, &all_ranks_match, 1, MPI_INT, MPI_MIN, comm.mpiComm()));
+  EXPECT_EQ(1, all_ranks_match) << "local NVSHMEM init status is " << local_status << ", expected not initialized";
+}
+#endif
 
 void setMemOrder(cudecompGridDescConfig_t& config, const std::array<int32_t, 3>& order) {
   for (int axis = 0; axis < 3; ++axis) {
@@ -355,11 +387,464 @@ class ApiTransposeTest : public ApiMpiTestBase {};
 class ApiHaloTest : public ApiMpiTestBase {};
 
 TEST_F(ApiInitTest, RejectsInvalidArguments) {
-  cudecompHandle_t second_handle = nullptr;
-  EXPECT_EQ(CUDECOMP_RESULT_INVALID_USAGE, cudecompInit(&second_handle, active_comm_.mpiComm()));
-  EXPECT_EQ(nullptr, second_handle);
   EXPECT_EQ(CUDECOMP_RESULT_INVALID_USAGE, cudecompInit(nullptr, active_comm_.mpiComm()));
 }
+
+TEST_F(ApiInitTest, SupportsMultipleLiveHandlesWithIndependentResources) {
+  cudecompHandle_t second_handle = nullptr;
+  const cudecompResult_t second_init_result = cudecompInit(&second_handle, active_comm_.mpiComm());
+  auto second_handle_guard = std::make_unique<cudecomp_test::cudecompHandleGuard>(second_handle);
+  CHECK_CUDECOMP_GLOBAL(active_comm_, second_init_result);
+
+  auto config = distributedConfig();
+  cudecompGridDesc_t grid_desc = nullptr;
+  CHECK_CUDECOMP_GLOBAL(active_comm_, cudecompGridDescCreate(handle_, &grid_desc, &config, nullptr));
+  cudecomp_test::gridDescGuard grid_desc_guard(handle_, grid_desc);
+
+  auto second_config = distributedConfig();
+  second_config.rank_order = CUDECOMP_RANK_ORDER_COL_MAJOR;
+  cudecompGridDesc_t second_grid_desc = nullptr;
+  CHECK_CUDECOMP_GLOBAL(active_comm_,
+                        cudecompGridDescCreate(second_handle, &second_grid_desc, &second_config, nullptr));
+  cudecomp_test::gridDescGuard second_grid_desc_guard(second_handle, second_grid_desc);
+
+  cudecompGridDescConfig_t queried_config;
+  EXPECT_EQ(CUDECOMP_RESULT_INVALID_USAGE, cudecompGetGridDescConfig(second_handle, grid_desc, &queried_config));
+  EXPECT_EQ(CUDECOMP_RESULT_INVALID_USAGE, cudecompGridDescDestroy(second_handle, grid_desc));
+
+  void* buffer = nullptr;
+  CHECK_CUDECOMP_GLOBAL(active_comm_, cudecompMalloc(handle_, grid_desc, &buffer, 1024));
+  cudecomp_test::cudecompBufferGuard buffer_guard(handle_, grid_desc, buffer);
+
+  void* second_buffer = nullptr;
+  CHECK_CUDECOMP_GLOBAL(active_comm_, cudecompMalloc(second_handle, second_grid_desc, &second_buffer, 2048));
+  cudecomp_test::cudecompBufferGuard second_buffer_guard(second_handle, second_grid_desc, second_buffer);
+
+  void* unused_buffer = nullptr;
+  EXPECT_EQ(CUDECOMP_RESULT_INVALID_USAGE, cudecompMalloc(second_handle, grid_desc, &unused_buffer, 1024));
+  EXPECT_EQ(nullptr, unused_buffer);
+}
+
+TEST_F(ApiInitTest, FinalizesMultipleHandlesInCreationOrder) {
+  cudecompHandle_t second_handle = nullptr;
+  const cudecompResult_t second_init_result = cudecompInit(&second_handle, active_comm_.mpiComm());
+  auto second_handle_guard = std::make_unique<cudecomp_test::cudecompHandleGuard>(second_handle);
+  CHECK_CUDECOMP_GLOBAL(active_comm_, second_init_result);
+
+  {
+    auto config = distributedConfig();
+    cudecompGridDesc_t grid_desc = nullptr;
+    CHECK_CUDECOMP_GLOBAL(active_comm_, cudecompGridDescCreate(handle_, &grid_desc, &config, nullptr));
+    cudecomp_test::gridDescGuard grid_desc_guard(handle_, grid_desc);
+
+    auto second_config = distributedConfig();
+    cudecompGridDesc_t second_grid_desc = nullptr;
+    CHECK_CUDECOMP_GLOBAL(active_comm_,
+                          cudecompGridDescCreate(second_handle, &second_grid_desc, &second_config, nullptr));
+    cudecomp_test::gridDescGuard second_grid_desc_guard(second_handle, second_grid_desc);
+  }
+
+  handle_guard_.reset();
+  handle_ = nullptr;
+  second_handle_guard.reset();
+}
+
+TEST_F(ApiInitTest, SupportsMultipleNcclBackedHandles) {
+  const auto setup_decision = cudecomp_test::initializeGpuForTest(active_comm_, true);
+  ASSERT_FALSE(setup_decision.fail) << setup_decision.reason;
+  if (setup_decision.skip) { GTEST_SKIP() << setup_decision.reason; }
+
+  cudecompHandle_t second_handle = nullptr;
+  const cudecompResult_t second_init_result = cudecompInit(&second_handle, active_comm_.mpiComm());
+  auto second_handle_guard = std::make_unique<cudecomp_test::cudecompHandleGuard>(second_handle);
+  CHECK_CUDECOMP_GLOBAL(active_comm_, second_init_result);
+
+  auto config = distributedConfig();
+  config.transpose_comm_backend = CUDECOMP_TRANSPOSE_COMM_NCCL;
+  cudecompGridDesc_t grid_desc = nullptr;
+  CHECK_CUDECOMP_GLOBAL(active_comm_, cudecompGridDescCreate(handle_, &grid_desc, &config, nullptr));
+  cudecomp_test::gridDescGuard grid_desc_guard(handle_, grid_desc);
+
+  auto second_config = config;
+  cudecompGridDesc_t second_grid_desc = nullptr;
+  CHECK_CUDECOMP_GLOBAL(active_comm_,
+                        cudecompGridDescCreate(second_handle, &second_grid_desc, &second_config, nullptr));
+  cudecomp_test::gridDescGuard second_grid_desc_guard(second_handle, second_grid_desc);
+}
+
+#ifdef ENABLE_NVSHMEM
+TEST(ApiNvshmemInitTest, SupportsMultipleBackedHandlesWithCongruentCommunicators) {
+  auto world_comm = cudecomp_test::MpiTestComm::world();
+  if (world_comm.size() < kApiTestRanks) {
+    GTEST_SKIP() << "NVSHMEM API tests require " << kApiTestRanks << " ranks, launched with " << world_comm.size();
+  }
+
+  const auto setup_decision = cudecomp_test::initializeGpuForTest(world_comm);
+  ASSERT_FALSE(setup_decision.fail) << setup_decision.reason;
+  if (setup_decision.skip) { GTEST_SKIP() << setup_decision.reason; }
+
+  auto nvshmem_comm = cudecomp_test::MpiTestComm::splitRange(world_comm, 0, kNvshmemTestRanks);
+  if (!nvshmem_comm.valid()) return;
+
+  cudecompHandle_t handle = nullptr;
+  const cudecompResult_t init_result = cudecompInit(&handle, nvshmem_comm.mpiComm());
+  auto handle_guard = std::make_unique<cudecomp_test::cudecompHandleGuard>(handle);
+  CHECK_CUDECOMP_GLOBAL(nvshmem_comm, init_result);
+
+  cudecompHandle_t second_handle = nullptr;
+  const cudecompResult_t second_init_result = cudecompInit(&second_handle, nvshmem_comm.mpiComm());
+  auto second_handle_guard = std::make_unique<cudecomp_test::cudecompHandleGuard>(second_handle);
+  CHECK_CUDECOMP_GLOBAL(nvshmem_comm, second_init_result);
+
+  cudecompGridDescConfig_t config;
+  EXPECT_EQ(CUDECOMP_RESULT_SUCCESS, cudecompGridDescConfigSetDefaults(&config));
+  setNvshmemTestConfig(config);
+  cudecompGridDesc_t grid_desc = nullptr;
+  CHECK_CUDECOMP_GLOBAL(nvshmem_comm, cudecompGridDescCreate(handle, &grid_desc, &config, nullptr));
+  cudecomp_test::gridDescGuard grid_desc_guard(handle, grid_desc);
+
+  cudecompGridDescConfig_t second_config;
+  EXPECT_EQ(CUDECOMP_RESULT_SUCCESS, cudecompGridDescConfigSetDefaults(&second_config));
+  setNvshmemTestConfig(second_config);
+  cudecompGridDesc_t second_grid_desc = nullptr;
+  CHECK_CUDECOMP_GLOBAL(nvshmem_comm,
+                        cudecompGridDescCreate(second_handle, &second_grid_desc, &second_config, nullptr));
+  cudecomp_test::gridDescGuard second_grid_desc_guard(second_handle, second_grid_desc);
+
+  void* buffer = nullptr;
+  CHECK_CUDECOMP_GLOBAL(nvshmem_comm, cudecompMalloc(handle, grid_desc, &buffer, 1024));
+  cudecomp_test::cudecompBufferGuard buffer_guard(handle, grid_desc, buffer);
+
+  void* second_buffer = nullptr;
+  CHECK_CUDECOMP_GLOBAL(nvshmem_comm, cudecompMalloc(second_handle, second_grid_desc, &second_buffer, 2048));
+  cudecomp_test::cudecompBufferGuard second_buffer_guard(second_handle, second_grid_desc, second_buffer);
+}
+
+TEST(ApiNvshmemInitTest, FinalizesAfterLastGridDescAcrossHandles) {
+  auto world_comm = cudecomp_test::MpiTestComm::world();
+  if (world_comm.size() < kApiTestRanks) {
+    GTEST_SKIP() << "NVSHMEM API tests require " << kApiTestRanks << " ranks, launched with " << world_comm.size();
+  }
+
+  const auto setup_decision = cudecomp_test::initializeGpuForTest(world_comm);
+  ASSERT_FALSE(setup_decision.fail) << setup_decision.reason;
+  if (setup_decision.skip) { GTEST_SKIP() << setup_decision.reason; }
+
+  auto nvshmem_comm = cudecomp_test::MpiTestComm::splitRange(world_comm, 0, kNvshmemTestRanks);
+  if (!nvshmem_comm.valid()) return;
+
+  cudecompHandle_t handle = nullptr;
+  const cudecompResult_t init_result = cudecompInit(&handle, nvshmem_comm.mpiComm());
+  auto handle_guard = std::make_unique<cudecomp_test::cudecompHandleGuard>(handle);
+  CHECK_CUDECOMP_GLOBAL(nvshmem_comm, init_result);
+
+  cudecompHandle_t second_handle = nullptr;
+  const cudecompResult_t second_init_result = cudecompInit(&second_handle, nvshmem_comm.mpiComm());
+  auto second_handle_guard = std::make_unique<cudecomp_test::cudecompHandleGuard>(second_handle);
+  CHECK_CUDECOMP_GLOBAL(nvshmem_comm, second_init_result);
+
+  cudecompGridDescConfig_t config;
+  EXPECT_EQ(CUDECOMP_RESULT_SUCCESS, cudecompGridDescConfigSetDefaults(&config));
+  setNvshmemTestConfig(config);
+  cudecompGridDesc_t grid_desc = nullptr;
+  CHECK_CUDECOMP_GLOBAL(nvshmem_comm, cudecompGridDescCreate(handle, &grid_desc, &config, nullptr));
+  expectNvshmemInitialized(nvshmem_comm);
+
+  cudecompGridDescConfig_t second_config;
+  EXPECT_EQ(CUDECOMP_RESULT_SUCCESS, cudecompGridDescConfigSetDefaults(&second_config));
+  setNvshmemTestConfig(second_config);
+  cudecompGridDesc_t second_grid_desc = nullptr;
+  CHECK_CUDECOMP_GLOBAL(nvshmem_comm,
+                        cudecompGridDescCreate(second_handle, &second_grid_desc, &second_config, nullptr));
+  expectNvshmemInitialized(nvshmem_comm);
+
+  CHECK_CUDECOMP_GLOBAL(nvshmem_comm, cudecompGridDescDestroy(handle, grid_desc));
+  grid_desc = nullptr;
+  expectNvshmemInitialized(nvshmem_comm);
+
+  CHECK_CUDECOMP_GLOBAL(nvshmem_comm, cudecompGridDescDestroy(second_handle, second_grid_desc));
+  second_grid_desc = nullptr;
+  expectNvshmemNotInitialized(nvshmem_comm);
+}
+
+TEST(ApiNvshmemInitTest, FinalizesAfterLastGridDescAndReinitializes) {
+  auto world_comm = cudecomp_test::MpiTestComm::world();
+  if (world_comm.size() < kApiTestRanks) {
+    GTEST_SKIP() << "NVSHMEM API tests require " << kApiTestRanks << " ranks, launched with " << world_comm.size();
+  }
+
+  const auto setup_decision = cudecomp_test::initializeGpuForTest(world_comm);
+  ASSERT_FALSE(setup_decision.fail) << setup_decision.reason;
+  if (setup_decision.skip) { GTEST_SKIP() << setup_decision.reason; }
+
+  auto nvshmem_comm = cudecomp_test::MpiTestComm::splitRange(world_comm, 0, kNvshmemTestRanks);
+  if (!nvshmem_comm.valid()) return;
+
+  {
+    cudecompHandle_t handle = nullptr;
+    const cudecompResult_t init_result = cudecompInit(&handle, nvshmem_comm.mpiComm());
+    auto handle_guard = std::make_unique<cudecomp_test::cudecompHandleGuard>(handle);
+    CHECK_CUDECOMP_GLOBAL(nvshmem_comm, init_result);
+
+    cudecompGridDescConfig_t config;
+    EXPECT_EQ(CUDECOMP_RESULT_SUCCESS, cudecompGridDescConfigSetDefaults(&config));
+    setNvshmemTestConfig(config);
+
+    cudecompGridDesc_t first_grid_desc = nullptr;
+    CHECK_CUDECOMP_GLOBAL(nvshmem_comm, cudecompGridDescCreate(handle, &first_grid_desc, &config, nullptr));
+    expectNvshmemInitialized(nvshmem_comm);
+
+    cudecompGridDesc_t second_grid_desc = nullptr;
+    CHECK_CUDECOMP_GLOBAL(nvshmem_comm, cudecompGridDescCreate(handle, &second_grid_desc, &config, nullptr));
+    expectNvshmemInitialized(nvshmem_comm);
+
+    CHECK_CUDECOMP_GLOBAL(nvshmem_comm, cudecompGridDescDestroy(handle, first_grid_desc));
+    first_grid_desc = nullptr;
+    expectNvshmemInitialized(nvshmem_comm);
+
+    CHECK_CUDECOMP_GLOBAL(nvshmem_comm, cudecompGridDescDestroy(handle, second_grid_desc));
+    second_grid_desc = nullptr;
+    expectNvshmemNotInitialized(nvshmem_comm);
+  }
+
+  expectNvshmemNotInitialized(nvshmem_comm);
+
+  {
+    cudecompHandle_t handle = nullptr;
+    const cudecompResult_t init_result = cudecompInit(&handle, nvshmem_comm.mpiComm());
+    auto handle_guard = std::make_unique<cudecomp_test::cudecompHandleGuard>(handle);
+    CHECK_CUDECOMP_GLOBAL(nvshmem_comm, init_result);
+
+    cudecompGridDescConfig_t config;
+    EXPECT_EQ(CUDECOMP_RESULT_SUCCESS, cudecompGridDescConfigSetDefaults(&config));
+    setNvshmemTestConfig(config);
+
+    cudecompGridDesc_t grid_desc = nullptr;
+    CHECK_CUDECOMP_GLOBAL(nvshmem_comm, cudecompGridDescCreate(handle, &grid_desc, &config, nullptr));
+    expectNvshmemInitialized(nvshmem_comm);
+
+    CHECK_CUDECOMP_GLOBAL(nvshmem_comm, cudecompGridDescDestroy(handle, grid_desc));
+    grid_desc = nullptr;
+    expectNvshmemNotInitialized(nvshmem_comm);
+  }
+}
+
+TEST(ApiNvshmemInitTest, RejectsBackedHandleWithNonCongruentCommunicator) {
+  auto world_comm = cudecomp_test::MpiTestComm::world();
+  if (world_comm.size() < kApiTestRanks) {
+    GTEST_SKIP() << "NVSHMEM API tests require " << kApiTestRanks << " ranks, launched with " << world_comm.size();
+  }
+
+  const auto setup_decision = cudecomp_test::initializeGpuForTest(world_comm);
+  ASSERT_FALSE(setup_decision.fail) << setup_decision.reason;
+  if (setup_decision.skip) { GTEST_SKIP() << setup_decision.reason; }
+
+  auto nvshmem_comm = cudecomp_test::MpiTestComm::splitRange(world_comm, 0, kNvshmemTestRanks);
+  if (!nvshmem_comm.valid()) return;
+
+  cudecompHandle_t handle = nullptr;
+  const cudecompResult_t init_result = cudecompInit(&handle, nvshmem_comm.mpiComm());
+  auto handle_guard = std::make_unique<cudecomp_test::cudecompHandleGuard>(handle);
+  CHECK_CUDECOMP_GLOBAL(nvshmem_comm, init_result);
+
+  cudecompGridDescConfig_t config;
+  EXPECT_EQ(CUDECOMP_RESULT_SUCCESS, cudecompGridDescConfigSetDefaults(&config));
+  setNvshmemTestConfig(config);
+  cudecompGridDesc_t grid_desc = nullptr;
+  CHECK_CUDECOMP_GLOBAL(nvshmem_comm, cudecompGridDescCreate(handle, &grid_desc, &config, nullptr));
+  cudecomp_test::gridDescGuard grid_desc_guard(handle, grid_desc);
+
+  MPI_Comm reversed_raw_comm = MPI_COMM_NULL;
+  CHECK_MPI_GLOBAL(nvshmem_comm, MPI_Comm_split(nvshmem_comm.mpiComm(), 0,
+                                                nvshmem_comm.size() - 1 - nvshmem_comm.rank(), &reversed_raw_comm));
+  auto reversed_comm = cudecomp_test::MpiTestComm::fromComm(reversed_raw_comm);
+  if (reversed_raw_comm != MPI_COMM_NULL) { CHECK_MPI_GLOBAL(nvshmem_comm, MPI_Comm_free(&reversed_raw_comm)); }
+
+  cudecompHandle_t reversed_handle = nullptr;
+  const cudecompResult_t reversed_init_result = cudecompInit(&reversed_handle, reversed_comm.mpiComm());
+  auto reversed_handle_guard = std::make_unique<cudecomp_test::cudecompHandleGuard>(reversed_handle);
+  CHECK_CUDECOMP_GLOBAL(reversed_comm, reversed_init_result);
+
+  cudecompGridDescConfig_t reversed_config;
+  EXPECT_EQ(CUDECOMP_RESULT_SUCCESS, cudecompGridDescConfigSetDefaults(&reversed_config));
+  setNvshmemTestConfig(reversed_config);
+  cudecompGridDesc_t reversed_grid_desc = nullptr;
+  EXPECT_EQ(CUDECOMP_RESULT_INVALID_USAGE,
+            cudecompGridDescCreate(reversed_handle, &reversed_grid_desc, &reversed_config, nullptr));
+  if (reversed_grid_desc) { (void)cudecompGridDescDestroy(reversed_handle, reversed_grid_desc); }
+}
+
+TEST(ApiNvshmemInitTest, RejectsOverlappingNonCongruentCommunicatorCollectively) {
+  auto world_comm = cudecomp_test::MpiTestComm::world();
+  if (world_comm.size() < kApiTestRanks) {
+    GTEST_SKIP() << "NVSHMEM API tests require " << kApiTestRanks << " ranks, launched with " << world_comm.size();
+  }
+
+  const auto setup_decision = cudecomp_test::initializeGpuForTest(world_comm);
+  ASSERT_FALSE(setup_decision.fail) << setup_decision.reason;
+  if (setup_decision.skip) { GTEST_SKIP() << setup_decision.reason; }
+
+  auto first_comm = cudecomp_test::MpiTestComm::splitRange(world_comm, 0, kNvshmemTestRanks);
+
+  cudecompHandle_t first_handle = nullptr;
+  std::unique_ptr<cudecomp_test::cudecompHandleGuard> first_handle_guard;
+  std::unique_ptr<cudecomp_test::gridDescGuard> first_grid_desc_guard;
+  int first_ready = 1;
+  if (first_comm.valid()) {
+    const cudecompResult_t first_init_result = cudecompInit(&first_handle, first_comm.mpiComm());
+    first_handle_guard = std::make_unique<cudecomp_test::cudecompHandleGuard>(first_handle);
+
+    int first_init_ok = first_init_result == CUDECOMP_RESULT_SUCCESS ? 1 : 0;
+    EXPECT_EQ(MPI_SUCCESS, MPI_Allreduce(MPI_IN_PLACE, &first_init_ok, 1, MPI_INT, MPI_MIN, first_comm.mpiComm()));
+    if (first_init_ok) {
+      cudecompGridDescConfig_t first_config;
+      EXPECT_EQ(CUDECOMP_RESULT_SUCCESS, cudecompGridDescConfigSetDefaults(&first_config));
+      setNvshmemTestConfig(first_config);
+
+      cudecompGridDesc_t first_grid_desc = nullptr;
+      const cudecompResult_t first_create_result =
+          cudecompGridDescCreate(first_handle, &first_grid_desc, &first_config, nullptr);
+      int first_create_ok = first_create_result == CUDECOMP_RESULT_SUCCESS ? 1 : 0;
+      EXPECT_EQ(MPI_SUCCESS, MPI_Allreduce(MPI_IN_PLACE, &first_create_ok, 1, MPI_INT, MPI_MIN, first_comm.mpiComm()));
+      if (first_create_ok) {
+        first_grid_desc_guard = std::make_unique<cudecomp_test::gridDescGuard>(first_handle, first_grid_desc);
+      }
+      first_ready = first_create_ok;
+    } else {
+      first_ready = 0;
+    }
+  }
+
+  EXPECT_EQ(MPI_SUCCESS, MPI_Allreduce(MPI_IN_PLACE, &first_ready, 1, MPI_INT, MPI_MIN, world_comm.mpiComm()));
+  ASSERT_EQ(1, first_ready) << "initial NVSHMEM communicator setup failed";
+
+  auto candidate_comm = cudecomp_test::MpiTestComm::splitRange(world_comm, 1, kNvshmemTestRanks);
+
+  cudecompHandle_t candidate_handle = nullptr;
+  std::unique_ptr<cudecomp_test::cudecompHandleGuard> candidate_handle_guard;
+  int candidate_init_ready = 1;
+  int candidate_rejected = 1;
+  if (candidate_comm.valid()) {
+    const cudecompResult_t candidate_init_result = cudecompInit(&candidate_handle, candidate_comm.mpiComm());
+    candidate_handle_guard = std::make_unique<cudecomp_test::cudecompHandleGuard>(candidate_handle);
+
+    candidate_init_ready = candidate_init_result == CUDECOMP_RESULT_SUCCESS ? 1 : 0;
+    EXPECT_EQ(MPI_SUCCESS,
+              MPI_Allreduce(MPI_IN_PLACE, &candidate_init_ready, 1, MPI_INT, MPI_MIN, candidate_comm.mpiComm()));
+    if (candidate_init_ready) {
+      cudecompGridDescConfig_t candidate_config;
+      EXPECT_EQ(CUDECOMP_RESULT_SUCCESS, cudecompGridDescConfigSetDefaults(&candidate_config));
+      setNvshmemTestConfig(candidate_config);
+
+      cudecompGridDesc_t candidate_grid_desc = nullptr;
+      const cudecompResult_t candidate_create_result =
+          cudecompGridDescCreate(candidate_handle, &candidate_grid_desc, &candidate_config, nullptr);
+      candidate_rejected = candidate_create_result == CUDECOMP_RESULT_INVALID_USAGE ? 1 : 0;
+
+      int candidate_create_succeeded = candidate_create_result == CUDECOMP_RESULT_SUCCESS ? 1 : 0;
+      EXPECT_EQ(MPI_SUCCESS, MPI_Allreduce(MPI_IN_PLACE, &candidate_create_succeeded, 1, MPI_INT, MPI_MIN,
+                                           candidate_comm.mpiComm()));
+      if (candidate_create_succeeded && candidate_grid_desc) {
+        EXPECT_EQ(CUDECOMP_RESULT_SUCCESS, cudecompGridDescDestroy(candidate_handle, candidate_grid_desc));
+      }
+    }
+  }
+
+  EXPECT_EQ(MPI_SUCCESS, MPI_Allreduce(MPI_IN_PLACE, &candidate_init_ready, 1, MPI_INT, MPI_MIN, world_comm.mpiComm()));
+  EXPECT_EQ(MPI_SUCCESS, MPI_Allreduce(MPI_IN_PLACE, &candidate_rejected, 1, MPI_INT, MPI_MIN, world_comm.mpiComm()));
+  ASSERT_EQ(1, candidate_init_ready) << "candidate communicator initialization failed before NVSHMEM check";
+  EXPECT_EQ(1, candidate_rejected);
+}
+
+TEST(ApiNvshmemInitTest, RejectsNonCongruentCommunicatorAfterRuntimeFinalize) {
+  auto world_comm = cudecomp_test::MpiTestComm::world();
+  if (world_comm.size() < kApiTestRanks) {
+    GTEST_SKIP() << "NVSHMEM API tests require " << kApiTestRanks << " ranks, launched with " << world_comm.size();
+  }
+
+  const auto setup_decision = cudecomp_test::initializeGpuForTest(world_comm);
+  ASSERT_FALSE(setup_decision.fail) << setup_decision.reason;
+  if (setup_decision.skip) { GTEST_SKIP() << setup_decision.reason; }
+
+  auto first_comm = cudecomp_test::MpiTestComm::splitRange(world_comm, 0, kNvshmemTestRanks);
+
+  cudecompHandle_t first_handle = nullptr;
+  std::unique_ptr<cudecomp_test::cudecompHandleGuard> first_handle_guard;
+  int first_ready = 1;
+  int first_finalized = 1;
+  if (first_comm.valid()) {
+    const cudecompResult_t first_init_result = cudecompInit(&first_handle, first_comm.mpiComm());
+    first_handle_guard = std::make_unique<cudecomp_test::cudecompHandleGuard>(first_handle);
+
+    int first_init_ok = first_init_result == CUDECOMP_RESULT_SUCCESS ? 1 : 0;
+    EXPECT_EQ(MPI_SUCCESS, MPI_Allreduce(MPI_IN_PLACE, &first_init_ok, 1, MPI_INT, MPI_MIN, first_comm.mpiComm()));
+    if (first_init_ok) {
+      cudecompGridDescConfig_t first_config;
+      EXPECT_EQ(CUDECOMP_RESULT_SUCCESS, cudecompGridDescConfigSetDefaults(&first_config));
+      setNvshmemTestConfig(first_config);
+
+      cudecompGridDesc_t first_grid_desc = nullptr;
+      const cudecompResult_t first_create_result =
+          cudecompGridDescCreate(first_handle, &first_grid_desc, &first_config, nullptr);
+      int first_create_ok = first_create_result == CUDECOMP_RESULT_SUCCESS ? 1 : 0;
+      EXPECT_EQ(MPI_SUCCESS, MPI_Allreduce(MPI_IN_PLACE, &first_create_ok, 1, MPI_INT, MPI_MIN, first_comm.mpiComm()));
+      first_ready = first_create_ok;
+      if (first_create_ok) {
+        const cudecompResult_t first_destroy_result = cudecompGridDescDestroy(first_handle, first_grid_desc);
+        int first_destroy_ok = first_destroy_result == CUDECOMP_RESULT_SUCCESS ? 1 : 0;
+        EXPECT_EQ(MPI_SUCCESS,
+                  MPI_Allreduce(MPI_IN_PLACE, &first_destroy_ok, 1, MPI_INT, MPI_MIN, first_comm.mpiComm()));
+        first_finalized = first_destroy_ok;
+        if (first_destroy_ok) { expectNvshmemNotInitialized(first_comm); }
+      }
+    } else {
+      first_ready = 0;
+    }
+  }
+
+  EXPECT_EQ(MPI_SUCCESS, MPI_Allreduce(MPI_IN_PLACE, &first_ready, 1, MPI_INT, MPI_MIN, world_comm.mpiComm()));
+  EXPECT_EQ(MPI_SUCCESS, MPI_Allreduce(MPI_IN_PLACE, &first_finalized, 1, MPI_INT, MPI_MIN, world_comm.mpiComm()));
+  ASSERT_EQ(1, first_ready) << "initial NVSHMEM communicator setup failed";
+  ASSERT_EQ(1, first_finalized) << "initial NVSHMEM runtime did not finalize cleanly";
+
+  auto candidate_comm = cudecomp_test::MpiTestComm::splitRange(world_comm, 1, kNvshmemTestRanks);
+
+  cudecompHandle_t candidate_handle = nullptr;
+  std::unique_ptr<cudecomp_test::cudecompHandleGuard> candidate_handle_guard;
+  int candidate_init_ready = 1;
+  int candidate_rejected = 1;
+  if (candidate_comm.valid()) {
+    const cudecompResult_t candidate_init_result = cudecompInit(&candidate_handle, candidate_comm.mpiComm());
+    candidate_handle_guard = std::make_unique<cudecomp_test::cudecompHandleGuard>(candidate_handle);
+
+    candidate_init_ready = candidate_init_result == CUDECOMP_RESULT_SUCCESS ? 1 : 0;
+    EXPECT_EQ(MPI_SUCCESS,
+              MPI_Allreduce(MPI_IN_PLACE, &candidate_init_ready, 1, MPI_INT, MPI_MIN, candidate_comm.mpiComm()));
+    if (candidate_init_ready) {
+      cudecompGridDescConfig_t candidate_config;
+      EXPECT_EQ(CUDECOMP_RESULT_SUCCESS, cudecompGridDescConfigSetDefaults(&candidate_config));
+      setNvshmemTestConfig(candidate_config);
+
+      cudecompGridDesc_t candidate_grid_desc = nullptr;
+      const cudecompResult_t candidate_create_result =
+          cudecompGridDescCreate(candidate_handle, &candidate_grid_desc, &candidate_config, nullptr);
+      candidate_rejected = candidate_create_result == CUDECOMP_RESULT_INVALID_USAGE ? 1 : 0;
+
+      int candidate_create_succeeded = candidate_create_result == CUDECOMP_RESULT_SUCCESS ? 1 : 0;
+      EXPECT_EQ(MPI_SUCCESS, MPI_Allreduce(MPI_IN_PLACE, &candidate_create_succeeded, 1, MPI_INT, MPI_MIN,
+                                           candidate_comm.mpiComm()));
+      if (candidate_create_succeeded && candidate_grid_desc) {
+        EXPECT_EQ(CUDECOMP_RESULT_SUCCESS, cudecompGridDescDestroy(candidate_handle, candidate_grid_desc));
+      }
+    }
+  }
+
+  EXPECT_EQ(MPI_SUCCESS, MPI_Allreduce(MPI_IN_PLACE, &candidate_init_ready, 1, MPI_INT, MPI_MIN, world_comm.mpiComm()));
+  EXPECT_EQ(MPI_SUCCESS, MPI_Allreduce(MPI_IN_PLACE, &candidate_rejected, 1, MPI_INT, MPI_MIN, world_comm.mpiComm()));
+  ASSERT_EQ(1, candidate_init_ready) << "candidate communicator initialization failed before NVSHMEM check";
+  EXPECT_EQ(1, candidate_rejected);
+}
+#endif
 
 TEST_F(ApiFinalizeTest, RejectsInvalidArguments) {
   EXPECT_EQ(CUDECOMP_RESULT_INVALID_USAGE, cudecompFinalize(nullptr));
