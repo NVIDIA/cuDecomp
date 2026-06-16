@@ -240,7 +240,9 @@ static void checkConfig(cudecompHandle_t handle, const cudecompGridDescConfig_t*
   if (!autotune_halos) { checkHaloCommBackend(config->halo_comm_backend); }
   checkRankOrder(config->rank_order);
 
-  int pdims_prod = config->pdims[0] * config->pdims[1];
+  if (config->pdims[0] < 0 || config->pdims[1] < 0) { THROW_INVALID_USAGE("pdims values are invalid"); }
+
+  int64_t pdims_prod = static_cast<int64_t>(config->pdims[0]) * config->pdims[1];
   if (pdims_prod == 0) {
     if (config->pdims[0] != 0 || config->pdims[1] != 0) { THROW_INVALID_USAGE("pdims values are invalid"); }
   } else if (pdims_prod != handle->nranks) {
