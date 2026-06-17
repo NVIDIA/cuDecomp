@@ -28,7 +28,6 @@
 #include <memory>
 #include <set>
 #include <string>
-#include <type_traits>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -204,18 +203,6 @@ static void checkHandle(cudecompHandle_t handle) {
 static void checkGridDesc(cudecompHandle_t handle, cudecompGridDesc_t grid_desc) {
   if (!grid_desc || !grid_desc->initialized) { THROW_INVALID_USAGE("invalid grid descriptor"); }
   if (grid_desc->handle != handle) { THROW_INVALID_USAGE("grid descriptor belongs to a different handle"); }
-}
-
-static MPI_Datatype mpiSizeTDatatype() {
-  if constexpr (std::is_same_v<size_t, unsigned int>) {
-    return MPI_UNSIGNED;
-  } else if constexpr (std::is_same_v<size_t, unsigned long>) {
-    return MPI_UNSIGNED_LONG;
-  } else if constexpr (std::is_same_v<size_t, unsigned long long>) {
-    return MPI_UNSIGNED_LONG_LONG;
-  } else {
-    THROW_NOT_SUPPORTED("unsupported size_t type for MPI reduction");
-  }
 }
 
 static cudecompResult_t handleException(const BaseException& e) {

@@ -29,6 +29,7 @@
 #include <sstream>
 #include <string>
 #include <tuple>
+#include <type_traits>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -301,6 +302,18 @@ namespace cudecomp {
 using comm_count_t = int64_t;
 
 enum cudecompCommAxis { CUDECOMP_COMM_COL = 0, CUDECOMP_COMM_ROW = 1 };
+
+static inline MPI_Datatype mpiSizeTDatatype() {
+  if constexpr (std::is_same_v<size_t, unsigned int>) {
+    return MPI_UNSIGNED;
+  } else if constexpr (std::is_same_v<size_t, unsigned long>) {
+    return MPI_UNSIGNED_LONG;
+  } else if constexpr (std::is_same_v<size_t, unsigned long long>) {
+    return MPI_UNSIGNED_LONG_LONG;
+  } else {
+    THROW_NOT_SUPPORTED("unsupported size_t type for MPI reduction");
+  }
+}
 
 static inline void setProcessGridIndex(const cudecompHandle_t handle, cudecompGridDesc_t grid_desc) {
   switch (grid_desc->config.rank_order) {
