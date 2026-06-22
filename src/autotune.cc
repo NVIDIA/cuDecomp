@@ -188,8 +188,8 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
   transposeWorkspaceGuard work_guard(nullptr, {handle, grid_desc, CUDECOMP_TRANSPOSE_COMM_MPI_P2P});
   transposeWorkspaceGuard work_nvshmem_guard(nullptr, {handle, grid_desc, CUDECOMP_TRANSPOSE_COMM_NVSHMEM});
 
-  int64_t data_sz = 0;
-  int64_t work_sz = 0;
+  size_t data_sz = 0;
+  size_t work_sz = 0;
 
   bool valid = false;
   for (auto& pdims : pdim_list) {
@@ -243,8 +243,9 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
     int64_t size_x = std::max(pinfo_x0.size, pinfo_x3.size);
     int64_t size_y = std::max(std::max(std::max(pinfo_y0.size, pinfo_y1.size), pinfo_y2.size), pinfo_y3.size);
     int64_t size_z = std::max(pinfo_z1.size, pinfo_z2.size);
-    int64_t data_sz_new = std::max(std::max(size_x, size_y), size_z) * dtype_size;
-    int64_t work_sz_new = num_elements_work * dtype_size;
+    size_t data_sz_new =
+        static_cast<size_t>(std::max(std::max(size_x, size_y), size_z)) * static_cast<size_t>(dtype_size);
+    size_t work_sz_new = static_cast<size_t>(num_elements_work) * static_cast<size_t>(dtype_size);
     if (data_sz_new > data_sz) {
       data_sz = data_sz_new;
       if (data) {
@@ -264,7 +265,7 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
     }
 
     // For nvshmem, buffers must be the same size. Find global maximums.
-    CHECK_MPI(MPI_Allreduce(MPI_IN_PLACE, &work_sz_new, 1, MPI_LONG_LONG_INT, MPI_MAX, handle->mpi_comm));
+    CHECK_MPI(MPI_Allreduce(MPI_IN_PLACE, &work_sz_new, 1, mpiSizeTDatatype(), MPI_MAX, handle->mpi_comm));
 
     if (work_sz_new > work_sz) {
       work_sz = work_sz_new;
@@ -668,8 +669,8 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
   haloWorkspaceGuard work_guard(nullptr, {handle, grid_desc, CUDECOMP_HALO_COMM_MPI});
   haloWorkspaceGuard work_nvshmem_guard(nullptr, {handle, grid_desc, CUDECOMP_HALO_COMM_NVSHMEM});
 
-  int64_t data_sz = 0;
-  int64_t work_sz = 0;
+  size_t data_sz = 0;
+  size_t work_sz = 0;
 
   bool valid = false;
   for (auto& pdims : pdim_list) {
@@ -707,8 +708,8 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
         cudecompGetHaloWorkspaceSize(handle, grid_desc, options->halo_axis, options->halo_extents, &num_elements_work));
     int64_t dtype_size;
     CHECK_CUDECOMP(cudecompGetDataTypeSize(options->dtype, &dtype_size));
-    int64_t data_sz_new = pinfo.size * dtype_size;
-    int64_t work_sz_new = num_elements_work * dtype_size;
+    size_t data_sz_new = static_cast<size_t>(pinfo.size) * static_cast<size_t>(dtype_size);
+    size_t work_sz_new = static_cast<size_t>(num_elements_work) * static_cast<size_t>(dtype_size);
     if (data_sz_new > data_sz) {
       data_sz = data_sz_new;
       if (data) {
@@ -720,7 +721,7 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
     }
 
     // For nvshmem, buffers must be the same size. Find global maximums.
-    CHECK_MPI(MPI_Allreduce(MPI_IN_PLACE, &work_sz_new, 1, MPI_LONG_LONG_INT, MPI_MAX, handle->mpi_comm));
+    CHECK_MPI(MPI_Allreduce(MPI_IN_PLACE, &work_sz_new, 1, mpiSizeTDatatype(), MPI_MAX, handle->mpi_comm));
 
     if (work_sz_new > work_sz) {
       work_sz = work_sz_new;

@@ -1217,7 +1217,7 @@ cudecompResult_t cudecompMalloc(cudecompHandle_t handle, cudecompGridDesc_t grid
         haloBackendRequiresNvshmem(grid_desc->config.halo_comm_backend)) {
 #ifdef ENABLE_NVSHMEM
       // NVSHMEM requires allocations to be the same size for all ranks. Find maximum.
-      CHECK_MPI(MPI_Allreduce(MPI_IN_PLACE, &buffer_size_bytes, 1, MPI_LONG_LONG_INT, MPI_MAX, handle->mpi_comm));
+      CHECK_MPI(MPI_Allreduce(MPI_IN_PLACE, &buffer_size_bytes, 1, mpiSizeTDatatype(), MPI_MAX, handle->mpi_comm));
 
       auto nvshmem_runtime = grid_desc->nvshmem_runtime;
       if (!nvshmem_runtime || !nvshmem_runtime->initialized) { THROW_INVALID_USAGE("NVSHMEM runtime is unavailable"); }
@@ -1228,7 +1228,7 @@ cudecompResult_t cudecompMalloc(cudecompHandle_t handle, cudecompGridDesc_t grid
       }
       if (!nvshmem_runtime->nvshmem_vmm && handle->rank == 0 && buffer_size_bytes > nvshmem_free_size) {
         fprintf(stderr,
-                "CUDECOMP:WARN: Attempting an NVSHMEM allocation of %lld bytes but *approximately* "
+                "CUDECOMP:WARN: Attempting an NVSHMEM allocation of %zu bytes but *approximately* "
                 "%zu free bytes of %zu total bytes of symmetric heap space available. If the allocation fails, "
                 "set NVSHMEM_SYMMETRIC_SIZE >= %zu and try again.\n",
                 buffer_size_bytes, nvshmem_free_size, nvshmem_runtime->nvshmem_symmetric_size,
