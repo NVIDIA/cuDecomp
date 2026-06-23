@@ -598,7 +598,8 @@ cudecompResult_t cudecompUpdateHalosX(cudecompHandle_t handle, cudecompGridDesc_
  * i-th global domain axis. Symmetric halos are assumed (e.g. a value of one in halo_extents means there are 2 halo
  * elements, one element on each side)
  * @param[in] halo_periods An array of three booleans to define halo periodicity of the input data, in global order.
- * If the i-th entry in this array is true, the domain is treated periodically along the i-th global domain axis.
+ * If the i-th entry in this array is true, the domain is treated periodically along the i-th global domain axis. A NULL
+ * pointer can be provided if none of the domain axes are periodic.
  * @param[in] dim Which pencil dimension (global indexed) to perform the halo update
  * @param[in] padding An array of three integers to define padding of the input data, in global order. The i-th entry
  * in this array should contain the number of elements to treat as padding in the i-th global domain axis. If the input
@@ -624,7 +625,8 @@ cudecompResult_t cudecompUpdateHalosY(cudecompHandle_t handle, cudecompGridDesc_
  * i-th global domain axis. Symmetric halos are assumed (e.g. a value of one in halo_extents means there are 2 halo
  * elements, one element on each side)
  * @param[in] halo_periods An array of three booleans to define halo periodicity of the input data, in global order.
- * If the i-th entry in this array is true, the domain is treated periodically along the i-th global domain axis.
+ * If the i-th entry in this array is true, the domain is treated periodically along the i-th global domain axis. A NULL
+ * pointer can be provided if none of the domain axes are periodic.
  * @param[in] dim Which pencil dimension (global indexed) to perform the halo update
  * @param[in] padding An array of three integers to define padding of the input data, in global order. The i-th entry
  * in this array should contain the number of elements to treat as padding in the i-th global domain axis. If the input
