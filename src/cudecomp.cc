@@ -25,6 +25,7 @@
 #include <cstring>
 #include <exception>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <set>
 #include <string>
@@ -270,6 +271,31 @@ static void checkConfig(cudecompHandle_t handle, const cudecompGridDescConfig_t*
       }
     }
   }
+}
+
+static int32_t getNonnegativePencilExtent(const int32_t extents[], int dim, const char* name) {
+  int32_t value = extents ? extents[dim] : 0;
+  if (value < 0) {
+    std::string message = std::string(name) + " values must be non-negative";
+    THROW_INVALID_USAGE(message.c_str());
+  }
+  return value;
+}
+
+static int32_t checkedPencilShape(int64_t shape) {
+  if (shape < 0) { THROW_INVALID_USAGE("computed pencil shape values must be non-negative"); }
+  if (shape > std::numeric_limits<int32_t>::max()) {
+    THROW_INVALID_USAGE("computed pencil shape exceeds int32_t limit");
+  }
+  return static_cast<int32_t>(shape);
+}
+
+static int64_t checkedPencilSizeProduct(int64_t size, int64_t shape) {
+  if (size == 0 || shape == 0) { return 0; }
+  if (shape > std::numeric_limits<int64_t>::max() / size) {
+    THROW_INVALID_USAGE("computed pencil size exceeds int64_t limit");
+  }
+  return size * shape;
 }
 
 static void gatherGlobalMPIInfo(cudecompHandle_t& handle) {
@@ -1093,34 +1119,29 @@ cudecompResult_t cudecompGetPencilInfo(cudecompHandle_t handle, cudecompGridDesc
       if (i != axis) {
         int64_t d = grid_desc->config.gdims_dist[i] / grid_desc->config.pdims[j];
         int64_t mod = grid_desc->config.gdims_dist[i] % grid_desc->config.pdims[j];
-        pencil_info->shape[ord] = d;
-        pencil_info->shape[ord] += (grid_desc->pidx[j] < mod) ? 1 : 0;
+        int64_t shape = d;
+        shape += (grid_desc->pidx[j] < mod) ? 1 : 0;
         if (grid_desc->pidx[j] == std::min(grid_desc->config.pdims[j], grid_desc->config.gdims_dist[i]) - 1) {
           // Tack any difference in gdim and gdims_dist to last pencil in gdims_dist decomposition
-          pencil_info->shape[ord] += (grid_desc->config.gdims[i] - grid_desc->config.gdims_dist[i]);
+          shape += (grid_desc->config.gdims[i] - grid_desc->config.gdims_dist[i]);
         }
+        pencil_info->shape[ord] = checkedPencilShape(shape);
         pencil_info->lo[ord] = (grid_desc->pidx[j] * d + std::min((int64_t)grid_desc->pidx[j], mod));
         j++;
       } else {
-        pencil_info->shape[ord] = grid_desc->config.gdims[i];
+        pencil_info->shape[ord] = checkedPencilShape(grid_desc->config.gdims[i]);
         pencil_info->lo[ord] = 0;
       }
       pencil_info->hi[ord] = pencil_info->lo[ord] + pencil_info->shape[ord] - 1;
 
-      if (halo_extents) {
-        pencil_info->shape[ord] += 2 * halo_extents[i];
-        pencil_info->halo_extents[i] = halo_extents[i];
-      } else {
-        pencil_info->halo_extents[i] = 0;
-      }
+      pencil_info->halo_extents[i] = getNonnegativePencilExtent(halo_extents, i, "halo_extents");
+      pencil_info->padding[i] = getNonnegativePencilExtent(padding, i, "padding");
 
-      if (padding) {
-        pencil_info->shape[ord] += padding[i];
-        pencil_info->padding[i] = padding[i];
-      } else {
-        pencil_info->padding[i] = 0;
-      }
-      pencil_info->size *= pencil_info->shape[ord];
+      int64_t shape_with_halo_padding = static_cast<int64_t>(pencil_info->shape[ord]) +
+                                        2 * static_cast<int64_t>(pencil_info->halo_extents[i]) +
+                                        pencil_info->padding[i];
+      pencil_info->shape[ord] = checkedPencilShape(shape_with_halo_padding);
+      pencil_info->size = checkedPencilSizeProduct(pencil_info->size, pencil_info->shape[ord]);
     }
   }
   CUDECOMP_CATCH_C_API_ERRORS()
