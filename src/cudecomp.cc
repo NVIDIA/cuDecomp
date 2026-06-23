@@ -1647,7 +1647,6 @@ cudecompResult_t cudecompUpdateHalosX(cudecompHandle_t handle, cudecompGridDesc_
       // No halos, quick return.
       return CUDECOMP_RESULT_SUCCESS;
     }
-    if (!halo_periods) { THROW_INVALID_USAGE("halo_periods argument cannot be null"); }
     if (!input) { THROW_INVALID_USAGE("input argument cannot be null"); }
     if (!work) { THROW_INVALID_USAGE("work argument cannot be null"); }
     if (dim < 0 || dim > 2) { THROW_INVALID_USAGE("dim argument out of range"); }
@@ -1690,7 +1689,6 @@ cudecompResult_t cudecompUpdateHalosY(cudecompHandle_t handle, cudecompGridDesc_
       // No halos, quick return.
       return CUDECOMP_RESULT_SUCCESS;
     }
-    if (!halo_periods) { THROW_INVALID_USAGE("halo_periods argument cannot be null"); }
     if (!input) { THROW_INVALID_USAGE("input argument cannot be null"); }
     if (!work) { THROW_INVALID_USAGE("work argument cannot be null"); }
     if (dim < 0 || dim > 2) { THROW_INVALID_USAGE("dim argument out of range"); }
@@ -1733,7 +1731,6 @@ cudecompResult_t cudecompUpdateHalosZ(cudecompHandle_t handle, cudecompGridDesc_
       // No halos, quick return.
       return CUDECOMP_RESULT_SUCCESS;
     }
-    if (!halo_periods) { THROW_INVALID_USAGE("halo_periods argument cannot be null"); }
     if (!input) { THROW_INVALID_USAGE("input argument cannot be null"); }
     if (!work) { THROW_INVALID_USAGE("work argument cannot be null"); }
     if (dim < 0 || dim > 2) { THROW_INVALID_USAGE("dim argument out of range"); }

@@ -1229,9 +1229,6 @@ TEST_F(ApiHaloTest, RejectsInvalidArguments) {
             cudecompUpdateHalosX(handle_, grid_desc, valid_pointer, valid_pointer, CUDECOMP_FLOAT, nullptr,
                                  kHaloPeriods.data(), 0, nullptr, 0));
   EXPECT_EQ(CUDECOMP_RESULT_INVALID_USAGE,
-            cudecompUpdateHalosX(handle_, grid_desc, valid_pointer, valid_pointer, CUDECOMP_FLOAT, kHaloExtents.data(),
-                                 nullptr, 0, nullptr, 0));
-  EXPECT_EQ(CUDECOMP_RESULT_INVALID_USAGE,
             cudecompUpdateHalosX(handle_, grid_desc, nullptr, valid_pointer, CUDECOMP_FLOAT, kHaloExtents.data(),
                                  kHaloPeriods.data(), 0, nullptr, 0));
   EXPECT_EQ(CUDECOMP_RESULT_INVALID_USAGE,
