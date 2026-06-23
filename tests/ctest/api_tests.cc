@@ -864,6 +864,11 @@ TEST_F(ApiGridDescCreateTest, RejectsInvalidConfigs) {
   expectGridDescCreateInvalid(config);
 
   config = distributedConfig();
+  config.pdims[0] = -2;
+  config.pdims[1] = -2;
+  expectGridDescCreateInvalid(config);
+
+  config = distributedConfig();
   config.rank_order = static_cast<cudecompRankOrder_t>(999);
   expectGridDescCreateInvalid(config);
 
