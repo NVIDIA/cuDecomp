@@ -481,10 +481,10 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
               size_t shift_b = offsets_b[src_rank];
               for (int i = 0; i < 3; ++i) {
                 if (pinfo_b_h.order[i] == ax_b) break;
-                shift *= shape_g_b_h[pinfo_b_h.order[i]];
+                shift_b *= shape_g_b_h[pinfo_b_h.order[i]];
               }
 
-              dst = o1 + shift + getPencilPtrOffset(pinfo_b_h, output_halo_extents);
+              dst = o1 + shift_b + getPencilPtrOffset(pinfo_b_h, output_halo_extents);
             }
 
             for (int i = 0; i < 3; ++i) {
