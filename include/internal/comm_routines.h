@@ -445,6 +445,7 @@ cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cudecompGridDesc
                           cudecompTransposePerformanceSample* current_sample = nullptr) {
 
   // If there are no transfers to complete, quick return
+  if (src_ranks.empty()) { return; }
   if (send_counts.size() == 0 && recv_counts.size() == 0) { return; }
 
   std::ostringstream os;
