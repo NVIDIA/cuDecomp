@@ -465,7 +465,10 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
           for (int j = 1; j < splits_a.size() + 1; ++j) {
             int src_rank, dst_rank;
             getAlltoallPeerRanks(grid_desc, comm_axis, j, src_rank, dst_rank);
-            if (j == splits_a.size()) dst_rank = comm_rank;
+            if (j == splits_a.size()) {
+              src_rank = comm_rank;
+              dst_rank = comm_rank;
+            }
 
             size_t shift = offsets_a[dst_rank];
             for (int i = 0; i < 3; ++i) {
@@ -541,7 +544,10 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
         for (int j = 1; j < splits_a.size() + 1; ++j) {
           int src_rank, dst_rank;
           getAlltoallPeerRanks(grid_desc, comm_axis, j, src_rank, dst_rank);
-          if (j == splits_a.size()) dst_rank = comm_rank;
+          if (j == splits_a.size()) {
+            src_rank = comm_rank;
+            dst_rank = comm_rank;
+          }
 
           size_t shift = offsets_a[dst_rank];
           for (int i = 0; i < 3; ++i) {
