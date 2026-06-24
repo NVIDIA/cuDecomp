@@ -5,6 +5,7 @@
 
 #include <array>
 #include <cstdint>
+#include <limits>
 #include <memory>
 
 #include <mpi.h>
@@ -1050,6 +1051,24 @@ TEST_F(ApiGetPencilInfoTest, MatchesExpectedGdimsDistDecomposition) {
   }
 }
 
+TEST_F(ApiGetPencilInfoTest, DescribesEmptyPencils) {
+  auto config = emptyPencilConfig();
+  cudecompGridDesc_t grid_desc = nullptr;
+  CHECK_CUDECOMP_GLOBAL(active_comm_, cudecompGridDescCreate(handle_, &grid_desc, &config, nullptr));
+  cudecomp_test::gridDescGuard grid_desc_guard(handle_, grid_desc);
+
+  for (int axis = 0; axis < 3; ++axis) {
+    cudecompPencilInfo_t pinfo;
+    CHECK_CUDECOMP_GLOBAL(active_comm_, cudecompGetPencilInfo(handle_, grid_desc, &pinfo, axis, nullptr, nullptr));
+
+    bool has_empty_shape = false;
+    for (int i = 0; i < 3; ++i) {
+      if (pinfo.shape[i] == 0) { has_empty_shape = true; }
+    }
+    if (has_empty_shape) { EXPECT_EQ(0, pinfo.size); }
+  }
+}
+
 TEST_F(ApiGetPencilInfoTest, RejectsInvalidArguments) {
   auto config = distributedConfig();
   cudecompGridDesc_t grid_desc = nullptr;
@@ -1057,8 +1076,35 @@ TEST_F(ApiGetPencilInfoTest, RejectsInvalidArguments) {
   cudecomp_test::gridDescGuard grid_desc_guard(handle_, grid_desc);
 
   cudecompPencilInfo_t pinfo;
+  const std::array<int32_t, 3> negative_halo_extents{-1, 0, 0};
+  const std::array<int32_t, 3> negative_padding{0, -1, 0};
+  const std::array<int32_t, 3> oversized_halo_extents{std::numeric_limits<int32_t>::max(), 0, 0};
+  const std::array<int32_t, 3> oversized_padding{std::numeric_limits<int32_t>::max(), 0, 0};
+
   EXPECT_EQ(CUDECOMP_RESULT_INVALID_USAGE, cudecompGetPencilInfo(handle_, grid_desc, nullptr, 0, nullptr, nullptr));
   EXPECT_EQ(CUDECOMP_RESULT_INVALID_USAGE, cudecompGetPencilInfo(handle_, grid_desc, &pinfo, -1, nullptr, nullptr));
+  EXPECT_EQ(CUDECOMP_RESULT_INVALID_USAGE,
+            cudecompGetPencilInfo(handle_, grid_desc, &pinfo, 0, negative_halo_extents.data(), nullptr));
+  EXPECT_EQ(CUDECOMP_RESULT_INVALID_USAGE,
+            cudecompGetPencilInfo(handle_, grid_desc, &pinfo, 0, nullptr, negative_padding.data()));
+  EXPECT_EQ(CUDECOMP_RESULT_INVALID_USAGE,
+            cudecompGetPencilInfo(handle_, grid_desc, &pinfo, 0, oversized_halo_extents.data(), nullptr));
+  EXPECT_EQ(CUDECOMP_RESULT_INVALID_USAGE,
+            cudecompGetPencilInfo(handle_, grid_desc, &pinfo, 0, nullptr, oversized_padding.data()));
+}
+
+TEST_F(ApiGetPencilInfoTest, RejectsSizeOverflow) {
+  auto config = distributedConfig();
+  for (int i = 0; i < 3; ++i) {
+    config.gdims[i] = std::numeric_limits<int32_t>::max();
+  }
+
+  cudecompGridDesc_t grid_desc = nullptr;
+  CHECK_CUDECOMP_GLOBAL(active_comm_, cudecompGridDescCreate(handle_, &grid_desc, &config, nullptr));
+  cudecomp_test::gridDescGuard grid_desc_guard(handle_, grid_desc);
+
+  cudecompPencilInfo_t pinfo;
+  EXPECT_EQ(CUDECOMP_RESULT_INVALID_USAGE, cudecompGetPencilInfo(handle_, grid_desc, &pinfo, 0, nullptr, nullptr));
 }
 
 TEST_F(ApiGetTransposeWorkspaceSizeTest, RejectsInvalidArguments) {
