@@ -322,7 +322,7 @@ cudecompResult_t cudecompGetPencilInfo(cudecompHandle_t handle, cudecompGridDesc
 /**
  * @brief Queries the required transpose workspace size, in elements, for a provided grid descriptor.
  * @details This function queries the required workspace size, in elements, for transposition communication using
- * a provided grid descriptor. This workspace is required to faciliate local transposition/packing/unpacking operations,
+ * a provided grid descriptor. This workspace is required to facilitate local transposition/packing/unpacking operations,
  * or for use as a staging buffer.
  * @param[in] handle The initialized cuDecomp library handle
  * @param[in] grid_desc A cuDecomp grid descriptor
@@ -336,7 +336,7 @@ cudecompResult_t cudecompGetTransposeWorkspaceSize(cudecompHandle_t handle, cude
 /**
  * @brief Queries the required halo workspace size, in elements, for a provided grid descriptor.
  * @details This function queries the required workspace size, in elements, for halo communication using
- * a provided grid descriptor. This workspace is required to faciliate local packing operations for halo regions that
+ * a provided grid descriptor. This workspace is required to facilitate local packing operations for halo regions that
  * are not contiguous in memory, or for use as a staging buffer.
  * @param[in] handle The initialized cuDecomp library handle
  * @param[in] grid_desc A cuDecomp grid descriptor
