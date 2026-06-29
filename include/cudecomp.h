@@ -322,8 +322,8 @@ cudecompResult_t cudecompGetPencilInfo(cudecompHandle_t handle, cudecompGridDesc
 /**
  * @brief Queries the required transpose workspace size, in elements, for a provided grid descriptor.
  * @details This function queries the required workspace size, in elements, for transposition communication using
- * a provided grid descriptor. This workspace is required to facilitate local transposition/packing/unpacking operations,
- * or for use as a staging buffer.
+ * a provided grid descriptor. This workspace is required to facilitate local transposition/packing/unpacking
+ * operations, or for use as a staging buffer.
  * @param[in] handle The initialized cuDecomp library handle
  * @param[in] grid_desc A cuDecomp grid descriptor
  * @param[out] workspace_size A pointer to a 64-bit integer to write the workspace size
