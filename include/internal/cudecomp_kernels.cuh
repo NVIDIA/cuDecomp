@@ -22,11 +22,22 @@
 #include <cstddef>
 #include <cstdint>
 
+// Keep NVSHMEM device headers out of non-RDC CUDA translation units.
+#if defined(ENABLE_NVSHMEM) && defined(CUDECOMP_NVSHMEM_HOST_ONLY) && !defined(NVSHMEM_HOSTLIB_ONLY)
+#define CUDECOMP_UNDEF_NVSHMEM_HOSTLIB_ONLY
+#define NVSHMEM_HOSTLIB_ONLY
+#endif
+
 #ifdef ENABLE_NVSHMEM
 #include <nvshmem.h>
 #endif
 
 #include "internal/cudecomp_kernels.h"
+
+#ifdef CUDECOMP_UNDEF_NVSHMEM_HOSTLIB_ONLY
+#undef NVSHMEM_HOSTLIB_ONLY
+#undef CUDECOMP_UNDEF_NVSHMEM_HOSTLIB_ONLY
+#endif
 
 #define CUDECOMP_CUDA_NTHREADS (128)
 #define CUDECOMP_UNROLL_FACTOR (4)
@@ -36,7 +47,7 @@
 
 namespace cudecomp {
 
-#ifdef ENABLE_NVSHMEM
+#if defined(ENABLE_NVSHMEM) && !defined(CUDECOMP_NVSHMEM_HOST_ONLY)
 template <typename T>
 __launch_bounds__(CUDECOMP_CUDA_NTHREADS) __global__
     void cudecomp_nvshmem_alltoallv_k(cudecompNvshmemA2AParams<T> params) {

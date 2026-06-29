@@ -18,7 +18,11 @@
 #include <cuda/std/complex>
 
 #include "internal/checks.h"
+
+// This non-RDC translation unit only instantiates generic CUDA kernels.
+#define CUDECOMP_NVSHMEM_HOST_ONLY
 #include "internal/cudecomp_kernels.cuh"
+#undef CUDECOMP_NVSHMEM_HOST_ONLY
 
 namespace cudecomp {
 
