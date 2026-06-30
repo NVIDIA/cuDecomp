@@ -29,12 +29,12 @@ and `--gz` options define the number of GPUs to run on (should be equivalent to 
 and Z dimensions of the domain to perform the FFT. `--csvfile` is the name of the file for the benchmark runner script to record results.
 The final positional option is the configuration name (from `benchmark_config.yaml`) to use for the run.
 
-To visualize the benchmark results, a [`plot_heatmaps.py`](heatmap_scripts/plot_heatmaps.py) script to plot heatmaps from the data captured in the csv files. Running the script on the a csv file like the following:
+To visualize the benchmark results, use the [`plot_heatmaps.py`](heatmap_scripts/plot_heatmaps.py) script to plot heatmaps from the data captured in the CSV files. Running the script on a CSV file like the following:
 ```
 python plot_heatmaps.py --csvfile benchmark_c2c.dgxa100.8gpu.n1024.csv --output_prefix benchmark_c2c.dgxa100.8gpu.n1024
 ```
 will generate one or more image files `benchmark_c2c.dgxa100.8gpu.n1024_*.png` that contain heatmap plots, with each file corresponding to a distinct set of options (e.g. precision, axis-contiguous settings, in-place or out-of-place, etc.), which are listed in the plot title.
-Several sample csv files and generated heatmap plots for 2048^3 C2C FFTs on a DGX A100 (80GB) system using NVHPC SDK 22.5, can be found in the [samples](heatmap_scripts/samples) directory.
+Several sample CSV files and generated heatmap plots for 2048^3 C2C FFTs on a DGX A100 (80GB) system using NVHPC SDK 22.5 can be found in the [sample](heatmap_scripts/sample) directory.
 
 We can examine one of the sample plots ([`benchmark_c2c.dgxa100.8gpu.n2048_1.png`](heatmap_scripts/sample/benchmark_c2c.dgxa100.8gpu.n2048_1.png)), shown below, to explain the content.
 ![heatmap_example](heatmap_scripts/sample/benchmark_c2c.dgxa100.8gpu.n2048_1.png?raw=true)

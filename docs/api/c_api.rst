@@ -63,7 +63,7 @@ Communication Backends
 
 .. _cudecompTransposeCommBackend_t-ref:
 
-cudecompTranposeCommBackend_t
+cudecompTransposeCommBackend_t
 _____________________________
 .. doxygenenum :: cudecompTransposeCommBackend_t
 
@@ -233,7 +233,7 @@ _____________________
 
 .. _cudecompTransposeCommBackendToString-ref:
 
-cudecompTranposeCommBackendToString
+cudecompTransposeCommBackendToString
 ___________________________________
 .. doxygenfunction:: cudecompTransposeCommBackendToString
 

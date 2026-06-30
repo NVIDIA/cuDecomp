@@ -113,9 +113,9 @@ Communication Backends
 
 .. _cudecompTransposeCommBackend_t-f-ref:
 
-cudecompTranposeCommBackend
+cudecompTransposeCommBackend
 _____________________________
-See documention for equivalent C enumerator, :ref:`cudecompTransposeCommBackend_t-ref`.
+See documentation for equivalent C enumerator, :ref:`cudecompTransposeCommBackend_t-ref`.
 
 ------
 
@@ -123,7 +123,7 @@ See documention for equivalent C enumerator, :ref:`cudecompTransposeCommBackend_
 
 cudecompHaloCommBackend
 _________________________
-See documention for equivalent C enumerator, :ref:`cudecompHaloCommBackend_t-ref`.
+See documentation for equivalent C enumerator, :ref:`cudecompHaloCommBackend_t-ref`.
 
 ------
 
@@ -134,7 +134,7 @@ Additional Enumerators
 
 cudecompDataType
 __________________
-See documention for equivalent C enumerator, :ref:`cudecompDataType_t-ref`.
+See documentation for equivalent C enumerator, :ref:`cudecompDataType_t-ref`.
 
 ------
 
@@ -142,7 +142,7 @@ See documention for equivalent C enumerator, :ref:`cudecompDataType_t-ref`.
 
 cudecompAutotuneGridMode
 __________________________
-See documention for equivalent C enumerator, :ref:`cudecompAutotuneGridMode_t-ref`.
+See documentation for equivalent C enumerator, :ref:`cudecompAutotuneGridMode_t-ref`.
 
 ------
 
@@ -150,7 +150,7 @@ See documention for equivalent C enumerator, :ref:`cudecompAutotuneGridMode_t-re
 
 cudecompRankOrder
 __________________
-See documention for equivalent C enumerator, :ref:`cudecompRankOrder_t-ref`.
+See documentation for equivalent C enumerator, :ref:`cudecompRankOrder_t-ref`.
 
 ------
 
@@ -158,7 +158,7 @@ See documention for equivalent C enumerator, :ref:`cudecompRankOrder_t-ref`.
 
 cudecompResult
 ________________
-See documention for equivalent C enumerator, :ref:`cudecompResult_t-ref`.
+See documentation for equivalent C enumerator, :ref:`cudecompResult_t-ref`.
 
 Functions
 ==========================
@@ -273,7 +273,7 @@ _________________________________
 
   Queries the required transpose workspace size, in elements, for a provided grid descriptor.
 
-  This function queries the required workspace size, in elements, for transposition communication using a provided grid descriptor. This workspace is required to faciliate local transposition/packing/unpacking operations, or for use as a staging buffer.
+  This function queries the required workspace size, in elements, for transposition communication using a provided grid descriptor. This workspace is required to facilitate local transposition/packing/unpacking operations, or for use as a staging buffer.
 
   :p cudecompHandle handle [in]: The initialized cuDecomp library handle
   :p cudecompGridDesc grid_desc [in]: A cuDecomp grid descriptor.
@@ -288,9 +288,9 @@ cudecompGetHaloWorkspaceSize
 ____________________________
 .. f:function:: cudecompGetHaloWorkspaceSize(handle, grid_desc, axis, halo_extents, workspace_size)
 
-  Queries the required transpose workspace size, in elements, for a provided grid descriptor.
+  Queries the required halo workspace size, in elements, for a provided grid descriptor.
 
-  This function queries the required workspace size, in elements, for transposition communication using a provided grid descriptor. This workspace is required to faciliate local transposition/packing/unpacking operations, or for use as a staging buffer.
+  This function queries the required workspace size, in elements, for halo communication using a provided grid descriptor. This workspace is required to facilitate local packing operations for halo regions that are not contiguous in memory, or for use as a staging buffer.
 
   :p cudecompHandle handle [in]: The initialized cuDecomp library handle
   :p cudecompGridDesc grid_desc [in]: A cuDecomp grid descriptor.
@@ -378,14 +378,14 @@ _____________________
 
 .. _cudecompTransposeCommBackendToString-f-ref:
 
-cudecompTranposeCommBackendToString
+cudecompTransposeCommBackendToString
 ___________________________________
 
 .. f:function:: cudecompTransposeCommBackendToString(comm_backend)
 
   Function to get string name of transpose communication backend.
 
-  :p cudecompTransposeCommBackend comm_backend [in]: A cuDecompTranposeCommBackend value.
+  :p cudecompTransposeCommBackend comm_backend [in]: A cudecompTransposeCommBackend value.
   :r character(:) res: A string representation of the transpose communication backend. Will return string “ERROR” if invalid backend value is provided.
 
 ------
