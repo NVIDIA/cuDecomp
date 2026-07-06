@@ -52,7 +52,8 @@ program main
   real(8), allocatable :: kx(:), ky(:), kz(:)
   real(8), device, allocatable :: kx_d(:), ky_d(:), kz_d(:)
 
-  complex(8), allocatable :: phi(:), ua(:,:,:)
+  complex(8), allocatable, target :: phi(:)
+  complex(8), allocatable :: ua(:,:,:)
   complex(8), device, allocatable :: phi_d(:)
   complex(8), pointer, device, contiguous :: work_d(:)
 
