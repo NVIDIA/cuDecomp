@@ -48,6 +48,15 @@
     }                                                                                                                  \
   } while (false)
 
+#define CHECK_CUDA_LAUNCH_EXIT()                                                                                       \
+  do {                                                                                                                 \
+    cudaError_t err = cudaGetLastError();                                                                              \
+    if (cudaSuccess != err) {                                                                                          \
+      fprintf(stderr, "%s:%d CUDA error. (%s)\n", __FILE__, __LINE__, cudaGetErrorString(err));                        \
+      exit(EXIT_FAILURE);                                                                                              \
+    }                                                                                                                  \
+  } while (false)
+
 #define CHECK_MPI_EXIT(call)                                                                                           \
   {                                                                                                                    \
     int err = call;                                                                                                    \
@@ -207,6 +216,7 @@ int main(int argc, char** argv) {
   int threads_per_block = 256;
   int nblocks = (pinfo_x.size + threads_per_block - 1) / threads_per_block;
   initialize_pencil<<<nblocks, threads_per_block>>>(data_d, pinfo_x);
+  CHECK_CUDA_LAUNCH_EXIT();
 
   // Allocating cuDecomp workspace
 
