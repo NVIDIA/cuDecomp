@@ -593,10 +593,12 @@ int main(int argc, char** argv) {
     // Note: excluding scaling from timing
 #ifdef R2C
     scale<<<(pinfo_x_r.size + 1024 - 1) / 1024, 1024>>>(output_r, 1.0 / fftsize, pinfo_x_r);
+    CHECK_CUDA_LAUNCH_EXIT();
     if (out_of_place) std::swap(input, output);
     if (out_of_place) std::swap(input_r, output_r);
 #else
     scale<<<(pinfo_x_c.size + 1024 - 1) / 1024, 1024>>>(output, 1.0 / fftsize, pinfo_x_c);
+    CHECK_CUDA_LAUNCH_EXIT();
     if (out_of_place) std::swap(input, output);
 #endif
 
