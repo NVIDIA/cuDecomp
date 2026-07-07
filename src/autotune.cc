@@ -292,16 +292,23 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
             transposeWorkspaceGuard(work_nvshmem, {handle, grid_desc, CUDECOMP_TRANSPOSE_COMM_NVSHMEM});
 
         // Check if there is enough memory for separate non-NVSHMEM allocated work buffer
+        const bool allow_nvshmem_workspace_fallback = !handle->cuda_cumem_enable && !handle->nccl_enable_ubr;
         auto ret = cudaMalloc(&work, work_sz);
         if (ret == cudaErrorMemoryAllocation) {
+          cudaGetLastError(); // Reset CUDA error state
+          if (!allow_nvshmem_workspace_fallback) {
+            THROW_CUDA_ERROR(
+                "Cannot allocate separate non-NVSHMEM workspace during autotuning while cuMem or NCCL user buffer "
+                "registration is enabled.");
+          }
           if (handle->rank == 0) {
             printf("CUDECOMP:WARN: Cannot allocate separate workspace for non-NVSHMEM backends during "
                    "autotuning. Using NVSHMEM allocated workspace for all backends, which may cause issues "
                    "for some MPI implementations. See documentation for more details and suggested workarounds.\n");
           }
           work = work_nvshmem;
-          cudaGetLastError(); // Reset CUDA error state
         } else {
+          CHECK_CUDA(ret);
           CHECK_CUDA(cudaFree(work));
           auto backend = (need_nccl) ? CUDECOMP_TRANSPOSE_COMM_NCCL : CUDECOMP_TRANSPOSE_COMM_MPI_P2P;
           tmp = grid_desc->config.transpose_comm_backend;
@@ -746,16 +753,23 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
         work_nvshmem_guard = haloWorkspaceGuard(work_nvshmem, {handle, grid_desc, CUDECOMP_HALO_COMM_NVSHMEM});
 
         // Check if there is enough memory for separate non-NVSHMEM allocated work buffer
+        const bool allow_nvshmem_workspace_fallback = !handle->cuda_cumem_enable && !handle->nccl_enable_ubr;
         auto ret = cudaMalloc(&work, work_sz);
         if (ret == cudaErrorMemoryAllocation) {
+          cudaGetLastError(); // Reset CUDA error state
+          if (!allow_nvshmem_workspace_fallback) {
+            THROW_CUDA_ERROR(
+                "Cannot allocate separate non-NVSHMEM workspace during autotuning while cuMem or NCCL user buffer "
+                "registration is enabled.");
+          }
           if (handle->rank == 0) {
             printf("CUDECOMP:WARN: Cannot allocate separate workspace for non-NVSHMEM backends during "
                    "autotuning. Using NVSHMEM allocated workspace for all backends, which may cause issues "
                    "for some MPI implementations. See documentation for more details and suggested workarounds.\n");
           }
           work = work_nvshmem;
-          cudaGetLastError(); // Reset CUDA error state
         } else {
+          CHECK_CUDA(ret);
           CHECK_CUDA(cudaFree(work));
           auto backend = (need_nccl) ? CUDECOMP_HALO_COMM_NCCL : CUDECOMP_HALO_COMM_MPI;
           tmp = grid_desc->config.halo_comm_backend;

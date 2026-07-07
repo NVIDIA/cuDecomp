@@ -148,6 +148,7 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
   bool input_has_padding = anyNonzeros(padding);
 
   if (c == 2 && (input_has_padding || haloBackendRequiresNvshmem(grid_desc->config.halo_comm_backend) ||
+                 (haloBackendRequiresNccl(grid_desc->config.halo_comm_backend) && handle->nccl_enable_ubr) ||
                  (managed && haloBackendRequiresMpi(grid_desc->config.halo_comm_backend)) ||
                  (handle->cuda_cumem_enable && comm_info.mnnvl_active &&
                   haloBackendRequiresMpi(grid_desc->config.halo_comm_backend)))) {
@@ -155,6 +156,7 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
     // For managed memory, always stage to work space if using MPI.
     // If using MPI and communicator has MNNVL connections, stage to work space if fabric-allocated.
     // For any memory, always stage to workspace if using NVSHMEM.
+    // For NCCL user buffer registration, stage to the registered workspace instead of application input.
     // Can revisit for NVSHMEM if input is NVSHMEM allocated.
     c = 1;
   }

@@ -374,6 +374,11 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
       // in to workspace (which should be nvshmem allocated). Can revisit support for input/output
       // arrays allocated with nvshmem.
       enable = false;
+    } else if (transposeBackendRequiresNccl(grid_desc->config.transpose_comm_backend) && handle->nccl_enable_ubr) {
+      // Note: NCCL user buffer registration requires both the source and destination buffers to be registered.
+      // cuDecomp only registers the workspace, so keep NCCL communication staged through workspace instead of
+      // directly using input/output buffers that may not be registered.
+      enable = false;
     } else if (transposeBackendRequiresMpi(grid_desc->config.transpose_comm_backend)) {
       // Note: For MPI, disable special cases if input or output pointers are to managed memory
       // since MPI performance directly from managed memory is not great

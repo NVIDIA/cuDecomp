@@ -389,44 +389,43 @@ static void gatherGlobalMPIInfo(cudecompHandle_t& handle) {
 
 static void getCudecompEnvVars(cudecompHandle_t& handle) {
   // Check CUDECOMP_ENABLE_NCCL_UBR (NCCL user buffer registration)
-  handle->nccl_enable_ubr = checkEnvVar("CUDECOMP_ENABLE_NCCL_UBR");
+  bool nccl_ubr_requested = checkEnvVar("CUDECOMP_ENABLE_NCCL_UBR");
 
   // Check CUDECOMP_ENABLE_CUMEM (CUDA VMM allocations for work buffers)
-  handle->cuda_cumem_enable = checkEnvVar("CUDECOMP_ENABLE_CUMEM");
+  bool cuda_cumem_requested = checkEnvVar("CUDECOMP_ENABLE_CUMEM");
+  handle->cuda_cumem_enable = cuda_cumem_requested || nccl_ubr_requested;
   if (handle->cuda_cumem_enable) {
-#if CUDART_VERSION < 12030
+#if CUDART_VERSION < 11030
     if (handle->rank == 0) {
-      printf("CUDECOMP:WARN: CUDECOMP_ENABLE_CUMEM is set but CUDA version used for compilation does not "
-             "support fabric allocations. Disabling this feature.\n");
+      if (cuda_cumem_requested) {
+        printf("CUDECOMP:WARN: CUDECOMP_ENABLE_CUMEM is set but CUDA version used for compilation does not "
+               "support CUDA VMM allocations. Disabling this feature.\n");
+      }
+      if (nccl_ubr_requested) {
+        printf("CUDECOMP:WARN: CUDECOMP_ENABLE_NCCL_UBR is set but CUDA version used for compilation does not "
+               "support CUDA VMM allocations. Disabling this feature.\n");
+      }
     }
     handle->cuda_cumem_enable = false;
 #else
     int driverVersion;
     CHECK_CUDA(cudaDriverGetVersion(&driverVersion));
-    if (driverVersion < 12030) {
+    if (driverVersion < 11030) {
       if (handle->rank == 0) {
-        printf("CUDECOMP:WARN: CUDECOMP_ENABLE_CUMEM is set but installed driver does not "
-               "support fabric allocations. Disabling this feature.\n");
+        if (cuda_cumem_requested) {
+          printf("CUDECOMP:WARN: CUDECOMP_ENABLE_CUMEM is set but installed driver does not "
+                 "support CUDA VMM allocations. Disabling this feature.\n");
+        }
+        if (nccl_ubr_requested) {
+          printf("CUDECOMP:WARN: CUDECOMP_ENABLE_NCCL_UBR is set but installed driver does not "
+                 "support CUDA VMM allocations. Disabling this feature.\n");
+        }
       }
       handle->cuda_cumem_enable = false;
-    } else {
-      // Check if fabric allocation type is supported
-      int dev;
-      CUdevice cu_dev;
-      CHECK_CUDA(cudaGetDevice(&dev));
-      CHECK_CUDA_DRV(cuDeviceGet(&cu_dev, dev));
-      int flag = 0;
-      CHECK_CUDA_DRV(cuDeviceGetAttribute(&flag, CU_DEVICE_ATTRIBUTE_HANDLE_TYPE_FABRIC_SUPPORTED, cu_dev));
-      if (!flag) {
-        if (handle->rank == 0) {
-          printf("CUDECOMP:WARN: CUDECOMP_ENABLE_CUMEM is set but device does not "
-                 "support fabric allocations. Disabling this feature.\n");
-        }
-        handle->cuda_cumem_enable = false;
-      }
     }
 #endif
   }
+  handle->nccl_enable_ubr = nccl_ubr_requested && handle->cuda_cumem_enable;
 
   // Check CUDECOMP_ENABLE_CUDA_GRAPHS (CUDA Graphs usage in pipelined backends)
   handle->cuda_graphs_enable = checkEnvVar("CUDECOMP_ENABLE_CUDA_GRAPHS");
@@ -601,7 +600,7 @@ static void cleanupFailedGridDescCreate(cudecompHandle_t handle, cudecompGridDes
   releaseUnusedHandleResources(handle, release_streams);
 }
 
-#if CUDART_VERSION >= 12030
+#if CUDART_VERSION >= 11030
 struct cuMemAllocationGuard {
   ~cuMemAllocationGuard() noexcept {
     if (!active) return;
@@ -1268,16 +1267,28 @@ cudecompResult_t cudecompMalloc(cudecompHandle_t handle, cudecompGridDesc_t grid
 #endif
     } else {
       if (handle->cuda_cumem_enable) {
-#if CUDART_VERSION >= 12030
+#if CUDART_VERSION >= 11030
         int dev;
         CUdevice cu_dev;
         CHECK_CUDA(cudaGetDevice(&dev));
         CHECK_CUDA_DRV(cuDeviceGet(&cu_dev, dev));
 
+        int requestedHandleTypes = CU_MEM_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR;
+#if CUDART_VERSION >= 12030
+        int driverVersion;
+        CHECK_CUDA(cudaDriverGetVersion(&driverVersion));
+        if (driverVersion >= 12030) {
+          int fabric_supported = 0;
+          CHECK_CUDA_DRV(
+              cuDeviceGetAttribute(&fabric_supported, CU_DEVICE_ATTRIBUTE_HANDLE_TYPE_FABRIC_SUPPORTED, cu_dev));
+          if (fabric_supported) requestedHandleTypes |= CU_MEM_HANDLE_TYPE_FABRIC;
+        }
+#endif
+
         CUmemAllocationProp prop = {};
         prop.type = CU_MEM_ALLOCATION_TYPE_PINNED;
         prop.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
-        prop.requestedHandleTypes = CU_MEM_HANDLE_TYPE_FABRIC;
+        prop.requestedHandleTypes = static_cast<CUmemAllocationHandleType>(requestedHandleTypes);
         prop.location.id = cu_dev;
 
         // Check for RDMA support
@@ -1286,15 +1297,35 @@ cudecompResult_t cudecompMalloc(cudecompHandle_t handle, cudecompGridDesc_t grid
             cuDeviceGetAttribute(&flag, CU_DEVICE_ATTRIBUTE_GPU_DIRECT_RDMA_WITH_CUDA_VMM_SUPPORTED, cu_dev));
         if (flag) prop.allocFlags.gpuDirectRDMACapable = 1;
 
-        // Align allocation size to required granularity
+        // Keep the caller-requested size so any retry can realign from the original value.
+        size_t original_buffer_size_bytes = buffer_size_bytes;
         size_t granularity;
-        CHECK_CUDA_DRV(cuMemGetAllocationGranularity(&granularity, &prop, CU_MEM_ALLOC_GRANULARITY_MINIMUM));
-        buffer_size_bytes = (buffer_size_bytes + granularity - 1) / granularity * granularity;
+        CHECK_CUDA_DRV(cuMemGetAllocationGranularity(&granularity, &prop, CU_MEM_ALLOC_GRANULARITY_RECOMMENDED));
+        buffer_size_bytes = (original_buffer_size_bytes + granularity - 1) / granularity * granularity;
 
         // Allocate memory
         cuMemAllocationGuard cumem_guard;
         cumem_guard.size = buffer_size_bytes;
-        CHECK_CUDA_DRV(cuMemCreate(&cumem_guard.handle, buffer_size_bytes, &prop, 0));
+        CUresult err = cuFnTable.pfn_cuMemCreate(&cumem_guard.handle, buffer_size_bytes, &prop, 0);
+#if CUDART_VERSION >= 12030
+        if ((requestedHandleTypes & CU_MEM_HANDLE_TYPE_FABRIC) &&
+            (err == CUDA_ERROR_NOT_PERMITTED || err == CUDA_ERROR_NOT_SUPPORTED)) {
+          // Fabric handles are useful when the platform supports them, but regular NCCL user buffer registration only
+          // requires POSIX FD export support. If Fabric creation is unavailable at runtime, keep VMM enabled and fall
+          // back to a POSIX-FD-only allocation.
+          requestedHandleTypes &= ~CU_MEM_HANDLE_TYPE_FABRIC;
+          prop.requestedHandleTypes = static_cast<CUmemAllocationHandleType>(requestedHandleTypes);
+          CHECK_CUDA_DRV(cuMemGetAllocationGranularity(&granularity, &prop, CU_MEM_ALLOC_GRANULARITY_RECOMMENDED));
+          buffer_size_bytes = (original_buffer_size_bytes + granularity - 1) / granularity * granularity;
+          cumem_guard.size = buffer_size_bytes;
+          err = cuFnTable.pfn_cuMemCreate(&cumem_guard.handle, buffer_size_bytes, &prop, 0);
+        }
+#endif
+        if (CUDA_SUCCESS != err) {
+          const char* error_str;
+          cuFnTable.pfn_cuGetErrorString(err, &error_str);
+          throw cudecomp::CudaError(__FILE__, __LINE__, error_str);
+        }
         cumem_guard.handle_created = true;
         CHECK_CUDA_DRV(cuMemAddressReserve(&cumem_guard.ptr, buffer_size_bytes, granularity, 0, 0));
         cumem_guard.address_reserved = true;
@@ -1382,7 +1413,7 @@ cudecompResult_t cudecompFree(cudecompHandle_t handle, cudecompGridDesc_t grid_d
 
     } else {
       if (handle->cuda_cumem_enable) {
-#if CUDART_VERSION >= 12030
+#if CUDART_VERSION >= 11030
         if (buffer) {
           CUmemGenericAllocationHandle cumem_handle;
           CHECK_CUDA_DRV(cuMemRetainAllocationHandle(&cumem_handle, buffer));
