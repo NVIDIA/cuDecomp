@@ -588,7 +588,7 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
 
   // Set handle to best option (broadcast from rank 0 for consistency)
   CHECK_MPI(MPI_Bcast(&comm_backend_best, sizeof(cudecompTransposeCommBackend_t), MPI_CHAR, 0, handle->mpi_comm));
-  CHECK_MPI(MPI_Bcast(pdims_best, 2 * sizeof(int), MPI_INT, 0, handle->mpi_comm));
+  CHECK_MPI(MPI_Bcast(pdims_best, 2, MPI_INT, 0, handle->mpi_comm));
 
   grid_desc->config.transpose_comm_backend = comm_backend_best;
   grid_desc->config.pdims[0] = pdims_best[0];
@@ -966,7 +966,7 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
 
   // Set handle to best option (broadcast from rank 0 for consistency)
   CHECK_MPI(MPI_Bcast(&comm_backend_best, sizeof(cudecompHaloCommBackend_t), MPI_CHAR, 0, handle->mpi_comm));
-  CHECK_MPI(MPI_Bcast(pdims_best, 2 * sizeof(int), MPI_INT, 0, handle->mpi_comm));
+  CHECK_MPI(MPI_Bcast(pdims_best, 2, MPI_INT, 0, handle->mpi_comm));
 
   grid_desc->config.halo_comm_backend = comm_backend_best;
   grid_desc->config.pdims[0] = pdims_best[0];
