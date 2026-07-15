@@ -422,6 +422,29 @@ static void getCudecompEnvVars(cudecompHandle_t& handle) {
         }
       }
       handle->cuda_cumem_enable = false;
+    } else {
+      int dev;
+      CUdevice cu_dev;
+      CHECK_CUDA(cudaGetDevice(&dev));
+      CHECK_CUDA_DRV(cuDeviceGet(&cu_dev, dev));
+
+      int vmm_supported = 0;
+      int posix_fd_supported = 0;
+      CHECK_CUDA_DRV(
+          cuDeviceGetAttribute(&vmm_supported, CU_DEVICE_ATTRIBUTE_VIRTUAL_ADDRESS_MANAGEMENT_SUPPORTED, cu_dev));
+      CHECK_CUDA_DRV(cuDeviceGetAttribute(&posix_fd_supported,
+                                          CU_DEVICE_ATTRIBUTE_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR_SUPPORTED, cu_dev));
+      handle->cuda_cumem_enable = vmm_supported && posix_fd_supported;
+      if (!handle->cuda_cumem_enable && handle->rank == 0) {
+        if (cuda_cumem_requested) {
+          printf("CUDECOMP:WARN: CUDECOMP_ENABLE_CUMEM is set but the current device does not support CUDA VMM "
+                 "allocations with POSIX file-descriptor handles. Disabling this feature.\n");
+        }
+        if (nccl_ubr_requested) {
+          printf("CUDECOMP:WARN: CUDECOMP_ENABLE_NCCL_UBR is set but the current device does not support CUDA VMM "
+                 "allocations with POSIX file-descriptor handles. Disabling this feature.\n");
+        }
+      }
     }
 #endif
   }

@@ -294,8 +294,17 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
         // Check if there is enough memory for separate non-NVSHMEM allocated work buffer
         const bool allow_nvshmem_workspace_fallback = !handle->cuda_cumem_enable && !handle->nccl_enable_ubr;
         auto ret = cudaMalloc(&work, work_sz);
-        if (ret == cudaErrorMemoryAllocation) {
-          cudaGetLastError(); // Reset CUDA error state
+        int any_oom = (ret == cudaErrorMemoryAllocation);
+        CHECK_MPI(MPI_Allreduce(MPI_IN_PLACE, &any_oom, 1, MPI_INT, MPI_LOR, handle->mpi_comm));
+        if (any_oom) {
+          if (ret == cudaSuccess) {
+            CHECK_CUDA(cudaFree(work));
+            work = nullptr;
+          } else if (ret == cudaErrorMemoryAllocation) {
+            cudaGetLastError(); // Reset CUDA error state
+          } else {
+            CHECK_CUDA(ret);
+          }
           if (!allow_nvshmem_workspace_fallback) {
             THROW_CUDA_ERROR(
                 "Cannot allocate separate non-NVSHMEM workspace during autotuning while cuMem or NCCL user buffer "
@@ -755,8 +764,17 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
         // Check if there is enough memory for separate non-NVSHMEM allocated work buffer
         const bool allow_nvshmem_workspace_fallback = !handle->cuda_cumem_enable && !handle->nccl_enable_ubr;
         auto ret = cudaMalloc(&work, work_sz);
-        if (ret == cudaErrorMemoryAllocation) {
-          cudaGetLastError(); // Reset CUDA error state
+        int any_oom = (ret == cudaErrorMemoryAllocation);
+        CHECK_MPI(MPI_Allreduce(MPI_IN_PLACE, &any_oom, 1, MPI_INT, MPI_LOR, handle->mpi_comm));
+        if (any_oom) {
+          if (ret == cudaSuccess) {
+            CHECK_CUDA(cudaFree(work));
+            work = nullptr;
+          } else if (ret == cudaErrorMemoryAllocation) {
+            cudaGetLastError(); // Reset CUDA error state
+          } else {
+            CHECK_CUDA(ret);
+          }
           if (!allow_nvshmem_workspace_fallback) {
             THROW_CUDA_ERROR(
                 "Cannot allocate separate non-NVSHMEM workspace during autotuning while cuMem or NCCL user buffer "
