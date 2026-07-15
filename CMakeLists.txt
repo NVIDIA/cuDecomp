@@ -35,13 +35,6 @@ endif()
 string(REPLACE "compilers/bin/nvc++" "cmake" NVHPC_CMAKE_DIR ${NVHPC_CXX_BIN})
 set(CMAKE_PREFIX_PATH ${NVHPC_CMAKE_DIR})
 
-# Limit optimization levels of CPU code compilation
-set(CMAKE_CXX_FLAGS_RELEASE "-O1 -DNDEBUG")
-set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O1 -g -DNDEBUG")
-set(CMAKE_Fortran_FLAGS_RELEASE "-O1 -DNDEBUG")
-# Note: Removing "-g" flag from Fortran RelWithDebInfo to enable mixed compilation with cc100 and older compute capabilities
-set(CMAKE_Fortran_FLAGS_RELWITHDEBINFO "-O1 -DNDEBUG")
-
 if (CUDECOMP_BUILD_FORTRAN)
   set(LANGS CXX CUDA Fortran)
 else()
@@ -49,6 +42,12 @@ else()
 endif()
 
 project(cudecomp LANGUAGES ${LANGS})
+
+if (CUDECOMP_BUILD_FORTRAN)
+  # Remove debug information to enable mixed Fortran compilation with cc100 and older compute capabilities.
+  string(REGEX REPLACE "(^| )-g(opt)?($| )" "\\3" CMAKE_Fortran_FLAGS_RELWITHDEBINFO
+                       "${CMAKE_Fortran_FLAGS_RELWITHDEBINFO}")
+endif()
 
 # Set up CUDA compute capabilities by CUDA version. Users can override defaults with CUDECOMP_CUDA_CC_LIST
 if (NOT CUDECOMP_CUDA_CC_LIST)
