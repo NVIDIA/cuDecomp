@@ -12,15 +12,18 @@ CUDECOMP_ENABLE_NCCL_UBR
 :code:`CUDECOMP_ENABLE_NCCL_UBR` controls whether cuDecomp registers its communication buffers with the NCCL library using :code:`ncclCommRegister`/:code:`ncclCommDeregister` (i.e., user buffer registration).
 Registration can improve NCCL send/receive performance in some scenarios. See the `User Buffer Registration <https://docs.nvidia.com/deeplearning/nccl/user-guide/docs/usage/bufferreg.html>`_
 section of the NCCL documentation for more details.
+This option requires CUDA VMM workspace allocations. Setting :code:`CUDECOMP_ENABLE_NCCL_UBR` also requests the cuMem allocation path used by :code:`cudecompMalloc`; if cuMem support is unavailable, NCCL user buffer registration is disabled. See :code:`CUDECOMP_ENABLE_CUMEM` for more details on cuMem workspace allocations.
 
-Default setting is off (:code:`0`). Setting this variable to :code:`1` will enable this feature.
+Default setting is off (:code:`0`). Setting this variable to :code:`1` will enable this feature when cuMem support is available.
 
 CUDECOMP_ENABLE_CUMEM
 ------------------------
-(since v0.5.0, requires CUDA 12.3 driver/toolkit or newer)
+(since v0.5.0, requires CUDA 11.3 driver/toolkit or newer)
 
-:code:`CUDECOMP_ENABLE_CUMEM` controls whether cuDecomp uses :code:`cuMem*` APIs to allocate fabric-registered workspace buffers via :code:`cudecompMalloc`. This option can improve the performance of
-some MPI distributions on multi-node NVLink (MNNVL) capable systems.
+:code:`CUDECOMP_ENABLE_CUMEM` controls whether cuDecomp uses :code:`cuMem*` APIs to allocate VMM workspace buffers via :code:`cudecompMalloc`.
+The allocations always request POSIX file-descriptor export support.
+When built with CUDA 12.3 or newer, running with a CUDA 12.3 or newer driver, and running on a device that supports fabric handles, cuDecomp also requests fabric export support.
+This option can improve the performance of some MPI distributions on multi-node NVLink (MNNVL) capable systems.
 
 Default setting is off (:code:`0`). Setting this variable to :code:`1` will enable this feature.
 
