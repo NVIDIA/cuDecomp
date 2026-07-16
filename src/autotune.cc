@@ -254,12 +254,12 @@ getAutotuneHaloBackendCandidates(const cudecompGridDescAutotuneOptions_t* option
 
 std::vector<std::array<int32_t, 2>> getAutotunePdimCandidates(int nranks, cudecompRankOrder_t rank_order) {
   auto candidates = getPdimCandidates(nranks, rank_order);
-  const char* rows_value = std::getenv("CUDECOMP_AUTOTUNE_P_ROWS_RANGE");
-  const char* cols_value = std::getenv("CUDECOMP_AUTOTUNE_P_COLS_RANGE");
+  const char* rows_value = std::getenv("CUDECOMP_AUTOTUNE_P_ROW_RANGE");
+  const char* cols_value = std::getenv("CUDECOMP_AUTOTUNE_P_COL_RANGE");
   std::pair<int32_t, int32_t> rows{1, INT32_MAX};
   std::pair<int32_t, int32_t> cols{1, INT32_MAX};
-  if (rows_value) rows = parsePdimRange("CUDECOMP_AUTOTUNE_P_ROWS_RANGE");
-  if (cols_value) cols = parsePdimRange("CUDECOMP_AUTOTUNE_P_COLS_RANGE");
+  if (rows_value) rows = parsePdimRange("CUDECOMP_AUTOTUNE_P_ROW_RANGE");
+  if (cols_value) cols = parsePdimRange("CUDECOMP_AUTOTUNE_P_COL_RANGE");
   candidates.erase(std::remove_if(candidates.begin(), candidates.end(),
                                   [&](const auto& pdims) {
                                     return pdims[0] < rows.first || pdims[0] > rows.second || pdims[1] < cols.first ||

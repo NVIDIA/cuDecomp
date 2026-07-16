@@ -405,20 +405,20 @@ TEST(AutotuneCandidateFilterTest, RejectsMalformedAndEmptyBackendSets) {
 
 TEST(AutotuneCandidateFilterTest, FiltersProcessGridRanges) {
   {
-    ScopedEnvVar rows("CUDECOMP_AUTOTUNE_P_ROWS_RANGE", "2,4");
+    ScopedEnvVar rows("CUDECOMP_AUTOTUNE_P_ROW_RANGE", "2,4");
     auto candidates = cudecomp::getAutotunePdimCandidates(4, CUDECOMP_RANK_ORDER_ROW_MAJOR);
     std::vector<std::array<int32_t, 2>> expected{{4, 1}, {2, 2}};
     expectSameCandidates(candidates, expected);
   }
   {
-    ScopedEnvVar cols("CUDECOMP_AUTOTUNE_P_COLS_RANGE", "2,4");
+    ScopedEnvVar cols("CUDECOMP_AUTOTUNE_P_COL_RANGE", "2,4");
     auto candidates = cudecomp::getAutotunePdimCandidates(4, CUDECOMP_RANK_ORDER_ROW_MAJOR);
     std::vector<std::array<int32_t, 2>> expected{{2, 2}, {1, 4}};
     expectSameCandidates(candidates, expected);
   }
   {
-    ScopedEnvVar rows("CUDECOMP_AUTOTUNE_P_ROWS_RANGE", "2,2");
-    ScopedEnvVar cols("CUDECOMP_AUTOTUNE_P_COLS_RANGE", "2,2");
+    ScopedEnvVar rows("CUDECOMP_AUTOTUNE_P_ROW_RANGE", "2,2");
+    ScopedEnvVar cols("CUDECOMP_AUTOTUNE_P_COL_RANGE", "2,2");
     EXPECT_EQ((std::vector<std::array<int32_t, 2>>{{2, 2}}),
               cudecomp::getAutotunePdimCandidates(4, CUDECOMP_RANK_ORDER_ROW_MAJOR));
   }
@@ -426,11 +426,11 @@ TEST(AutotuneCandidateFilterTest, FiltersProcessGridRanges) {
 
 TEST(AutotuneCandidateFilterTest, RejectsMalformedAndEmptyProcessGridRanges) {
   {
-    ScopedEnvVar rows("CUDECOMP_AUTOTUNE_P_ROWS_RANGE", "2,1");
+    ScopedEnvVar rows("CUDECOMP_AUTOTUNE_P_ROW_RANGE", "2,1");
     EXPECT_THROW(cudecomp::getAutotunePdimCandidates(4, CUDECOMP_RANK_ORDER_ROW_MAJOR), cudecomp::InvalidUsage);
   }
   {
-    ScopedEnvVar cols("CUDECOMP_AUTOTUNE_P_COLS_RANGE", "3,3");
+    ScopedEnvVar cols("CUDECOMP_AUTOTUNE_P_COL_RANGE", "3,3");
     EXPECT_THROW(cudecomp::getAutotunePdimCandidates(4, CUDECOMP_RANK_ORDER_ROW_MAJOR), cudecomp::InvalidUsage);
   }
 }
@@ -1095,8 +1095,8 @@ TEST_F(ApiGridDescCreateTest, IgnoresAutotuneEnvironmentFiltersForFixedSelection
   auto options = fastAutotuneOptions();
   ScopedEnvVar transpose_backends("CUDECOMP_AUTOTUNE_TRANSPOSE_BACKENDS", "invalid");
   ScopedEnvVar halo_backends("CUDECOMP_AUTOTUNE_HALO_BACKENDS", "invalid");
-  ScopedEnvVar rows("CUDECOMP_AUTOTUNE_P_ROWS_RANGE", "invalid");
-  ScopedEnvVar cols("CUDECOMP_AUTOTUNE_P_COLS_RANGE", "invalid");
+  ScopedEnvVar rows("CUDECOMP_AUTOTUNE_P_ROW_RANGE", "invalid");
+  ScopedEnvVar cols("CUDECOMP_AUTOTUNE_P_COL_RANGE", "invalid");
 
   cudecompGridDesc_t grid_desc = nullptr;
   CHECK_CUDECOMP_GLOBAL(active_comm_, cudecompGridDescCreate(handle_, &grid_desc, &config, &options));

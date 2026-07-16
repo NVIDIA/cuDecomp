@@ -127,20 +127,20 @@ and :code:`NVSHMEM_BLOCKING`.
 
 Default setting is unset (no additional backend filtering).
 
-CUDECOMP_AUTOTUNE_P_ROWS_RANGE
+CUDECOMP_AUTOTUNE_P_ROW_RANGE
 ------------------------------
 (since v0.7.0)
 
-:code:`CUDECOMP_AUTOTUNE_P_ROWS_RANGE` restricts process-grid autotuning to row dimensions in the inclusive range
+:code:`CUDECOMP_AUTOTUNE_P_ROW_RANGE` restricts process-grid autotuning to row dimensions in the inclusive range
 :code:`<min>,<max>`.
 
 Default setting is unset (no row-dimension restriction).
 
-CUDECOMP_AUTOTUNE_P_COLS_RANGE
+CUDECOMP_AUTOTUNE_P_COL_RANGE
 ------------------------------
 (since v0.7.0)
 
-:code:`CUDECOMP_AUTOTUNE_P_COLS_RANGE` restricts process-grid autotuning to column dimensions in the inclusive range
+:code:`CUDECOMP_AUTOTUNE_P_COL_RANGE` restricts process-grid autotuning to column dimensions in the inclusive range
 :code:`<min>,<max>`.
 
 Default setting is unset (no column-dimension restriction).
