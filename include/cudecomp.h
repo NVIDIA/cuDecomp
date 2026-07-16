@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -158,6 +158,7 @@ typedef struct {
   cudecompDataType_t dtype;             ///< datatype to use during autotuning (default: CUDECOMP_DOUBLE)
   bool allow_uneven_decompositions; ///< flag to control whether autotuning allows process grids that result in uneven
                                     ///< distributions of elements across processes (default: true)
+  bool disable_mpi_backends;        ///< flag to disable MPI backend options during autotuning (default: false)
   bool disable_nccl_backends;       ///< flag to disable NCCL backend options during autotuning (default: false)
   bool disable_nvshmem_backends;    ///< flag to disable NVSHMEM backend options during autotuning (default: false)
   double skip_threshold;            ///< threshold used to skip testing slow configurations; skip configuration

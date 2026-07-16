@@ -117,19 +117,22 @@ The :code:`dtype` entry in the options struct controls which data type cuDecomp 
 
     options%dtype = CUDECOMP_DOUBLE
 
-The :code:`disable_nccl_backends` and :code:`disable_nvshmem_backends` entries are boolean flags controlling whether
-the autotuner will test transpose and halo communication backends using the NCCL or NVSHMEM libraries respectively.
-By default, these flags are set to false and NCCL and NVSHMEM backends are enabled.
+The :code:`disable_mpi_backends`, :code:`disable_nccl_backends`, and :code:`disable_nvshmem_backends` entries are
+boolean flags controlling whether the autotuner will test transpose and halo communication backends using the MPI,
+NCCL, or NVSHMEM libraries respectively. These exclusions are applied after any backend environment-variable filter.
+By default, these flags are set to false and all three backend families are enabled.
 
 .. tabs::
 
   .. code-tab:: c++
 
+    options.disable_mpi_backends = false;
     options.disable_nccl_backends = false;
     options.disable_nvshmem_backends = false;
 
   .. code-tab:: fortran
 
+    options%disable_mpi_backends = .false.
     options%disable_nccl_backends = .false.
     options%disable_nvshmem_backends = .false.
 

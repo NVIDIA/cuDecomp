@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,9 +18,19 @@
 #ifndef CUDECOMP_AUTOTUNE_H
 #define CUDECOMP_AUTOTUNE_H
 
+#include <array>
+#include <cstdint>
+#include <vector>
+
 #include "cudecomp.h"
 
 namespace cudecomp {
+std::vector<cudecompTransposeCommBackend_t>
+getAutotuneTransposeBackendCandidates(const cudecompGridDescAutotuneOptions_t* options);
+std::vector<cudecompHaloCommBackend_t>
+getAutotuneHaloBackendCandidates(const cudecompGridDescAutotuneOptions_t* options);
+std::vector<std::array<int32_t, 2>> getAutotunePdimCandidates(int nranks, cudecompRankOrder_t rank_order);
+
 void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
                               const cudecompGridDescAutotuneOptions_t* options);
 void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
