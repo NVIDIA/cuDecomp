@@ -109,6 +109,9 @@ contains
     call expect_equal_int(options%dtype, CUDECOMP_DOUBLE, "default autotune dtype")
     call expect_equal_int(options%halo_axis, 1, "default Fortran halo axis")
     if (.not. options%allow_uneven_decompositions) call record_failure("default uneven decompositions flag is false")
+    if (options%disable_mpi_backends) call record_failure("default disable MPI backends flag is true")
+    if (options%disable_nccl_backends) call record_failure("default disable NCCL backends flag is true")
+    if (options%disable_nvshmem_backends) call record_failure("default disable NVSHMEM backends flag is true")
     if (options%autotune_transpose_backend) call record_failure("default transpose backend autotune flag is true")
     if (options%autotune_halo_backend) call record_failure("default halo backend autotune flag is true")
   end subroutine test_default_values
@@ -141,6 +144,7 @@ contains
     options%n_warmup_trials = 0
     options%n_trials = 1
     options%dtype = CUDECOMP_FLOAT
+    options%disable_mpi_backends = .true.
     options%disable_nccl_backends = .true.
     options%disable_nvshmem_backends = .true.
     options%halo_axis = 3

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -846,13 +846,9 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
     // Check some autotuning options
     bool autotune_transpose_backend = false;
     bool autotune_halo_backend = false;
-    bool autotune_disable_nccl_backends = false;
-    bool autotune_disable_nvshmem_backends = false;
     if (options) {
       autotune_transpose_backend = options->autotune_transpose_backend;
       autotune_halo_backend = options->autotune_halo_backend;
-      autotune_disable_nccl_backends = options->disable_nccl_backends;
-      autotune_disable_nvshmem_backends = options->disable_nvshmem_backends;
     }
 
     checkConfig(handle, config, autotune_transpose_backend, autotune_halo_backend);
@@ -867,6 +863,25 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
     resolveRankOrder(handle, grid_desc);
     auto comm_backend = grid_desc->config.transpose_comm_backend;
     auto halo_comm_backend = grid_desc->config.halo_comm_backend;
+
+    std::vector<cudecompTransposeCommBackend_t> autotune_transpose_candidates;
+    std::vector<cudecompHaloCommBackend_t> autotune_halo_candidates;
+    if (autotune_transpose_backend) { autotune_transpose_candidates = getAutotuneTransposeBackendCandidates(options); }
+    if (autotune_halo_backend) { autotune_halo_candidates = getAutotuneHaloBackendCandidates(options); }
+    if (autotune_pdims) { (void)getAutotunePdimCandidates(handle->nranks, grid_desc->config.rank_order); }
+
+    bool need_nccl =
+        (!autotune_transpose_backend && transposeBackendRequiresNccl(comm_backend)) ||
+        (!autotune_halo_backend && haloBackendRequiresNccl(halo_comm_backend)) ||
+        std::any_of(autotune_transpose_candidates.begin(), autotune_transpose_candidates.end(),
+                    transposeBackendRequiresNccl) ||
+        std::any_of(autotune_halo_candidates.begin(), autotune_halo_candidates.end(), haloBackendRequiresNccl);
+    bool need_nvshmem =
+        (!autotune_transpose_backend && transposeBackendRequiresNvshmem(comm_backend)) ||
+        (!autotune_halo_backend && haloBackendRequiresNvshmem(halo_comm_backend)) ||
+        std::any_of(autotune_transpose_candidates.begin(), autotune_transpose_candidates.end(),
+                    transposeBackendRequiresNvshmem) ||
+        std::any_of(autotune_halo_candidates.begin(), autotune_halo_candidates.end(), haloBackendRequiresNvshmem);
 
     // If transpose_mem_order not used, set based on transpose_axis_contiguous settings)
     grid_desc->transpose_mem_order_set = (config->transpose_mem_order[0][0] >= 0);
@@ -901,8 +916,7 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
     }
 
     // Initialize NCCL communicator if needed
-    if (transposeBackendRequiresNccl(comm_backend) || haloBackendRequiresNccl(halo_comm_backend) ||
-        ((autotune_transpose_backend || autotune_halo_backend) && !autotune_disable_nccl_backends)) {
+    if (need_nccl) {
       if (!handle->nccl_comm) { handle->nccl_comm = ncclCommFromMPIComm(handle->mpi_comm); }
       if (!handle->nccl_local_comm) {
         if (grid_desc->config.pdims[0] > 0 && grid_desc->config.pdims[1] > 0) {
@@ -939,8 +953,7 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
     }
 
     // Initialize NVSHMEM if needed
-    if (transposeBackendRequiresNvshmem(comm_backend) || haloBackendRequiresNvshmem(halo_comm_backend) ||
-        ((autotune_transpose_backend || autotune_halo_backend) && !autotune_disable_nvshmem_backends)) {
+    if (need_nvshmem) {
 #ifdef ENABLE_NVSHMEM
       nvshmem_runtime = acquireNvshmemRuntime(handle);
       grid_desc->nvshmem_runtime = nvshmem_runtime;
@@ -969,11 +982,11 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
     }
 
     // Setup final row and column communicators
-    bool need_nvshmem = transposeBackendRequiresNvshmem(grid_desc->config.transpose_comm_backend) ||
-                        haloBackendRequiresNvshmem(grid_desc->config.halo_comm_backend);
-    createCommInfo(handle, grid_desc, need_nvshmem);
+    bool final_need_nvshmem = transposeBackendRequiresNvshmem(grid_desc->config.transpose_comm_backend) ||
+                              haloBackendRequiresNvshmem(grid_desc->config.halo_comm_backend);
+    createCommInfo(handle, grid_desc, final_need_nvshmem);
 #ifdef ENABLE_NVSHMEM
-    if (need_nvshmem) {
+    if (final_need_nvshmem) {
       if (!nvshmem_runtime || !nvshmem_runtime->initialized) { nvshmem_runtime = acquireNvshmemRuntime(handle); }
       CHECK_CUDA(cudaMalloc(&grid_desc->nvshmem_block_counters, handle->nranks * sizeof(int)));
       CHECK_CUDA(cudaMemset(grid_desc->nvshmem_block_counters, 0, handle->nranks * sizeof(int)));
@@ -1086,6 +1099,7 @@ cudecompResult_t cudecompGridDescAutotuneOptionsSetDefaults(cudecompGridDescAuto
     options->grid_mode = CUDECOMP_AUTOTUNE_GRID_TRANSPOSE;
     options->dtype = CUDECOMP_DOUBLE;
     options->allow_uneven_decompositions = true;
+    options->disable_mpi_backends = false;
     options->disable_nccl_backends = false;
     options->disable_nvshmem_backends = false;
     options->skip_threshold = 0.0;

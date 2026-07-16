@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,14 +17,18 @@
 
 #include <algorithm>
 #include <array>
+#include <charconv>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <memory>
 #include <numeric>
 #include <string>
+#include <string_view>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 #include <cuda_runtime.h>
@@ -38,11 +42,14 @@
 #include "cudecomp.h"
 #include "internal/checks.h"
 #include "internal/common.h"
+#include "internal/exceptions.h"
 #include "internal/halo.h"
 #include "internal/performance.h"
 #include "internal/transpose.h"
 
 namespace cudecomp {
+using namespace std::string_view_literals;
+
 namespace {
 
 struct cudaBufferGuardDeleter {
@@ -98,6 +105,65 @@ static std::vector<std::array<int32_t, 2>> getPdimCandidates(int nranks, cudecom
   return pdim_list;
 }
 
+template <typename Backend, size_t N>
+static std::vector<Backend>
+filterBackendCandidates(const char* env_name, const std::array<std::pair<std::string_view, Backend>, N>& supported,
+                        std::vector<Backend> available) {
+  const char* env_value = std::getenv(env_name);
+  if (!env_value) return available;
+
+  std::string_view value(env_value);
+  bool exclude = !value.empty() && value.front() == '^';
+  if (exclude) value.remove_prefix(1);
+
+  std::vector<Backend> listed;
+  size_t start = 0;
+  while (start <= value.size()) {
+    size_t end = value.find(',', start);
+    if (end == std::string_view::npos) end = value.size();
+    auto name = value.substr(start, end - start);
+    auto match =
+        std::find_if(supported.begin(), supported.end(), [name](const auto& entry) { return entry.first == name; });
+    if (match == supported.end()) {
+      std::string message =
+          std::string(env_name) + " contains unknown or empty backend name '" + std::string(name) + "'";
+      THROW_INVALID_USAGE(message.c_str());
+    }
+    listed.push_back(match->second);
+    if (end == value.size()) break;
+    start = end + 1;
+  }
+
+  available.erase(std::remove_if(available.begin(), available.end(),
+                                 [&](Backend backend) {
+                                   bool is_listed = std::find(listed.begin(), listed.end(), backend) != listed.end();
+                                   return exclude ? is_listed : !is_listed;
+                                 }),
+                  available.end());
+  return available;
+}
+
+static std::pair<int32_t, int32_t> parsePdimRange(const char* env_name) {
+  std::string_view value(std::getenv(env_name));
+  size_t comma = value.find(',');
+  int32_t min = 0;
+  int32_t max = 0;
+  bool valid = comma != std::string_view::npos && comma > 0 && comma + 1 < value.size() &&
+               value.find(',', comma + 1) == std::string_view::npos;
+  if (valid) {
+    auto min_result = std::from_chars(value.data(), value.data() + comma, min);
+    auto max_result = std::from_chars(value.data() + comma + 1, value.data() + value.size(), max);
+    valid = min_result.ec == std::errc() && min_result.ptr == value.data() + comma && max_result.ec == std::errc() &&
+            max_result.ptr == value.data() + value.size() && min >= 0 && max > 0 && min <= max;
+  }
+  if (!valid) {
+    std::string message =
+        std::string(env_name) + " must be comma-separated nonnegative min and positive max with min <= max";
+    THROW_INVALID_USAGE(message.c_str());
+  }
+  return {min, max};
+}
+
 template <typename T> static std::vector<T> processTimings(cudecompHandle_t handle, std::vector<T> times, T scale = 1) {
   std::sort(times.begin(), times.end());
   double t_min = times[0];
@@ -123,6 +189,89 @@ template <typename T> static std::vector<T> processTimings(cudecompHandle_t hand
 
 } // namespace
 
+std::vector<cudecompTransposeCommBackend_t>
+getAutotuneTransposeBackendCandidates(const cudecompGridDescAutotuneOptions_t* options) {
+  static constexpr std::array supported{
+      std::pair{"MPI_P2P"sv, CUDECOMP_TRANSPOSE_COMM_MPI_P2P},
+      std::pair{"MPI_P2P_PL"sv, CUDECOMP_TRANSPOSE_COMM_MPI_P2P_PL},
+      std::pair{"MPI_A2A"sv, CUDECOMP_TRANSPOSE_COMM_MPI_A2A},
+      std::pair{"NCCL"sv, CUDECOMP_TRANSPOSE_COMM_NCCL},
+      std::pair{"NCCL_PL"sv, CUDECOMP_TRANSPOSE_COMM_NCCL_PL},
+      std::pair{"NVSHMEM"sv, CUDECOMP_TRANSPOSE_COMM_NVSHMEM},
+      std::pair{"NVSHMEM_PL"sv, CUDECOMP_TRANSPOSE_COMM_NVSHMEM_PL},
+      std::pair{"NVSHMEM_SM"sv, CUDECOMP_TRANSPOSE_COMM_NVSHMEM_SM},
+  };
+  std::vector<cudecompTransposeCommBackend_t> candidates{CUDECOMP_TRANSPOSE_COMM_MPI_P2P,
+                                                         CUDECOMP_TRANSPOSE_COMM_MPI_P2P_PL,
+                                                         CUDECOMP_TRANSPOSE_COMM_MPI_A2A, CUDECOMP_TRANSPOSE_COMM_NCCL,
+                                                         CUDECOMP_TRANSPOSE_COMM_NCCL_PL};
+#ifdef ENABLE_NVSHMEM
+  candidates.insert(candidates.end(), {CUDECOMP_TRANSPOSE_COMM_NVSHMEM, CUDECOMP_TRANSPOSE_COMM_NVSHMEM_PL,
+                                       CUDECOMP_TRANSPOSE_COMM_NVSHMEM_SM});
+#endif
+  candidates = filterBackendCandidates("CUDECOMP_AUTOTUNE_TRANSPOSE_BACKENDS", supported, std::move(candidates));
+  candidates.erase(std::remove_if(candidates.begin(), candidates.end(),
+                                  [&](auto backend) {
+                                    return (options->disable_mpi_backends && transposeBackendRequiresMpi(backend)) ||
+                                           (options->disable_nccl_backends && transposeBackendRequiresNccl(backend)) ||
+                                           (options->disable_nvshmem_backends &&
+                                            transposeBackendRequiresNvshmem(backend));
+                                  }),
+                   candidates.end());
+  if (candidates.empty()) {
+    THROW_INVALID_USAGE("Transpose backend autotuning has no usable candidates after applying filters");
+  }
+  return candidates;
+}
+
+std::vector<cudecompHaloCommBackend_t>
+getAutotuneHaloBackendCandidates(const cudecompGridDescAutotuneOptions_t* options) {
+  static constexpr std::array supported{
+      std::pair{"MPI"sv, CUDECOMP_HALO_COMM_MPI},
+      std::pair{"MPI_BLOCKING"sv, CUDECOMP_HALO_COMM_MPI_BLOCKING},
+      std::pair{"NCCL"sv, CUDECOMP_HALO_COMM_NCCL},
+      std::pair{"NVSHMEM"sv, CUDECOMP_HALO_COMM_NVSHMEM},
+      std::pair{"NVSHMEM_BLOCKING"sv, CUDECOMP_HALO_COMM_NVSHMEM_BLOCKING},
+  };
+  std::vector<cudecompHaloCommBackend_t> candidates{CUDECOMP_HALO_COMM_MPI, CUDECOMP_HALO_COMM_MPI_BLOCKING,
+                                                    CUDECOMP_HALO_COMM_NCCL};
+#ifdef ENABLE_NVSHMEM
+  candidates.insert(candidates.end(), {CUDECOMP_HALO_COMM_NVSHMEM, CUDECOMP_HALO_COMM_NVSHMEM_BLOCKING});
+#endif
+  candidates = filterBackendCandidates("CUDECOMP_AUTOTUNE_HALO_BACKENDS", supported, std::move(candidates));
+  candidates.erase(std::remove_if(candidates.begin(), candidates.end(),
+                                  [&](auto backend) {
+                                    return (options->disable_mpi_backends && haloBackendRequiresMpi(backend)) ||
+                                           (options->disable_nccl_backends && haloBackendRequiresNccl(backend)) ||
+                                           (options->disable_nvshmem_backends && haloBackendRequiresNvshmem(backend));
+                                  }),
+                   candidates.end());
+  if (candidates.empty()) {
+    THROW_INVALID_USAGE("Halo backend autotuning has no usable candidates after applying filters");
+  }
+  return candidates;
+}
+
+std::vector<std::array<int32_t, 2>> getAutotunePdimCandidates(int nranks, cudecompRankOrder_t rank_order) {
+  auto candidates = getPdimCandidates(nranks, rank_order);
+  const char* rows_value = std::getenv("CUDECOMP_AUTOTUNE_P_ROW_RANGE");
+  const char* cols_value = std::getenv("CUDECOMP_AUTOTUNE_P_COL_RANGE");
+  std::pair<int32_t, int32_t> rows{1, INT32_MAX};
+  std::pair<int32_t, int32_t> cols{1, INT32_MAX};
+  if (rows_value) rows = parsePdimRange("CUDECOMP_AUTOTUNE_P_ROW_RANGE");
+  if (cols_value) cols = parsePdimRange("CUDECOMP_AUTOTUNE_P_COL_RANGE");
+  candidates.erase(std::remove_if(candidates.begin(), candidates.end(),
+                                  [&](const auto& pdims) {
+                                    return pdims[0] < rows.first || pdims[0] > rows.second || pdims[1] < cols.first ||
+                                           pdims[1] > cols.second;
+                                  }),
+                   candidates.end());
+  if (candidates.empty()) {
+    THROW_INVALID_USAGE("Process-grid autotuning has no usable candidates after applying filters");
+  }
+  return candidates;
+}
+
 void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
                               const cudecompGridDescAutotuneOptions_t* options) {
   if (handle->rank == 0) printf("CUDECOMP: Running transpose autotuning...\n");
@@ -139,21 +288,9 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
   bool need_nccl = false;
   bool need_nvshmem = false;
   if (autotune_comm) {
-    comm_backend_list = {CUDECOMP_TRANSPOSE_COMM_MPI_P2P, CUDECOMP_TRANSPOSE_COMM_MPI_P2P_PL,
-                         CUDECOMP_TRANSPOSE_COMM_MPI_A2A};
-    if (!options->disable_nccl_backends) {
-      comm_backend_list.push_back(CUDECOMP_TRANSPOSE_COMM_NCCL);
-      comm_backend_list.push_back(CUDECOMP_TRANSPOSE_COMM_NCCL_PL);
-      need_nccl = true;
-    }
-#ifdef ENABLE_NVSHMEM
-    if (!options->disable_nvshmem_backends) {
-      comm_backend_list.push_back(CUDECOMP_TRANSPOSE_COMM_NVSHMEM);
-      comm_backend_list.push_back(CUDECOMP_TRANSPOSE_COMM_NVSHMEM_PL);
-      comm_backend_list.push_back(CUDECOMP_TRANSPOSE_COMM_NVSHMEM_SM);
-      need_nvshmem = true;
-    }
-#endif
+    comm_backend_list = getAutotuneTransposeBackendCandidates(options);
+    need_nccl = std::any_of(comm_backend_list.begin(), comm_backend_list.end(), transposeBackendRequiresNccl);
+    need_nvshmem = std::any_of(comm_backend_list.begin(), comm_backend_list.end(), transposeBackendRequiresNvshmem);
   } else {
     comm_backend_list = {grid_desc->config.transpose_comm_backend};
     if (transposeBackendRequiresNccl(comm_backend_list[0])) { need_nccl = true; }
@@ -161,6 +298,8 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
     if (transposeBackendRequiresNvshmem(comm_backend_list[0])) { need_nvshmem = true; }
 #endif
   }
+  const bool need_non_nvshmem = std::any_of(comm_backend_list.begin(), comm_backend_list.end(),
+                                            [](auto backend) { return !transposeBackendRequiresNvshmem(backend); });
 
   bool need_data2 = false;
   for (int i = 0; i < 4; ++i) {
@@ -169,7 +308,7 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
 
   std::vector<std::array<int32_t, 2>> pdim_list;
   if (autotune_pdims) {
-    pdim_list = getPdimCandidates(handle->nranks, grid_desc->config.rank_order);
+    pdim_list = getAutotunePdimCandidates(handle->nranks, grid_desc->config.rank_order);
   } else {
     pdim_list.push_back({grid_desc->config.pdims[0], grid_desc->config.pdims[1]});
   }
@@ -291,40 +430,42 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
         work_nvshmem_guard =
             transposeWorkspaceGuard(work_nvshmem, {handle, grid_desc, CUDECOMP_TRANSPOSE_COMM_NVSHMEM});
 
-        // Check if there is enough memory for separate non-NVSHMEM allocated work buffer
-        const bool allow_nvshmem_workspace_fallback = !handle->cuda_cumem_enable && !handle->nccl_enable_ubr;
-        auto ret = cudaMalloc(&work, work_sz);
-        int any_oom = (ret == cudaErrorMemoryAllocation);
-        CHECK_MPI(MPI_Allreduce(MPI_IN_PLACE, &any_oom, 1, MPI_INT, MPI_LOR, handle->mpi_comm));
-        if (any_oom) {
-          if (ret == cudaSuccess) {
-            CHECK_CUDA(cudaFree(work));
-            work = nullptr;
-          } else if (ret == cudaErrorMemoryAllocation) {
-            cudaGetLastError(); // Reset CUDA error state
+        if (need_non_nvshmem) {
+          // Check if there is enough memory for separate non-NVSHMEM allocated work buffer
+          const bool allow_nvshmem_workspace_fallback = !handle->cuda_cumem_enable && !handle->nccl_enable_ubr;
+          auto ret = cudaMalloc(&work, work_sz);
+          int any_oom = (ret == cudaErrorMemoryAllocation);
+          CHECK_MPI(MPI_Allreduce(MPI_IN_PLACE, &any_oom, 1, MPI_INT, MPI_LOR, handle->mpi_comm));
+          if (any_oom) {
+            if (ret == cudaSuccess) {
+              CHECK_CUDA(cudaFree(work));
+              work = nullptr;
+            } else if (ret == cudaErrorMemoryAllocation) {
+              cudaGetLastError(); // Reset CUDA error state
+            } else {
+              CHECK_CUDA(ret);
+            }
+            if (!allow_nvshmem_workspace_fallback) {
+              THROW_CUDA_ERROR(
+                  "Cannot allocate separate non-NVSHMEM workspace during autotuning while cuMem or NCCL user buffer "
+                  "registration is enabled.");
+            }
+            if (handle->rank == 0) {
+              printf("CUDECOMP:WARN: Cannot allocate separate workspace for non-NVSHMEM backends during "
+                     "autotuning. Using NVSHMEM allocated workspace for all backends, which may cause issues "
+                     "for some MPI implementations. See documentation for more details and suggested workarounds.\n");
+            }
+            work = work_nvshmem;
           } else {
             CHECK_CUDA(ret);
+            CHECK_CUDA(cudaFree(work));
+            auto backend = (need_nccl) ? CUDECOMP_TRANSPOSE_COMM_NCCL : CUDECOMP_TRANSPOSE_COMM_MPI_P2P;
+            tmp = grid_desc->config.transpose_comm_backend;
+            grid_desc->config.transpose_comm_backend = backend;
+            CHECK_CUDECOMP(cudecompMalloc(handle, grid_desc, reinterpret_cast<void**>(&work), work_sz));
+            grid_desc->config.transpose_comm_backend = tmp;
+            work_guard = transposeWorkspaceGuard(work, {handle, grid_desc, backend});
           }
-          if (!allow_nvshmem_workspace_fallback) {
-            THROW_CUDA_ERROR(
-                "Cannot allocate separate non-NVSHMEM workspace during autotuning while cuMem or NCCL user buffer "
-                "registration is enabled.");
-          }
-          if (handle->rank == 0) {
-            printf("CUDECOMP:WARN: Cannot allocate separate workspace for non-NVSHMEM backends during "
-                   "autotuning. Using NVSHMEM allocated workspace for all backends, which may cause issues "
-                   "for some MPI implementations. See documentation for more details and suggested workarounds.\n");
-          }
-          work = work_nvshmem;
-        } else {
-          CHECK_CUDA(ret);
-          CHECK_CUDA(cudaFree(work));
-          auto backend = (need_nccl) ? CUDECOMP_TRANSPOSE_COMM_NCCL : CUDECOMP_TRANSPOSE_COMM_MPI_P2P;
-          tmp = grid_desc->config.transpose_comm_backend;
-          grid_desc->config.transpose_comm_backend = backend;
-          CHECK_CUDECOMP(cudecompMalloc(handle, grid_desc, reinterpret_cast<void**>(&work), work_sz));
-          grid_desc->config.transpose_comm_backend = tmp;
-          work_guard = transposeWorkspaceGuard(work, {handle, grid_desc, backend});
         }
 #endif
       } else {
@@ -554,7 +695,7 @@ void autotuneTransposeBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_d
 
   // Free test data and workspace
   if (need_nvshmem) {
-    if (work != work_nvshmem) {
+    if (need_non_nvshmem && work != work_nvshmem) {
       auto tmp = grid_desc->config.transpose_comm_backend;
       grid_desc->config.transpose_comm_backend =
           (need_nccl) ? CUDECOMP_TRANSPOSE_COMM_NCCL : CUDECOMP_TRANSPOSE_COMM_MPI_P2P;
@@ -646,18 +787,9 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
   bool need_nccl = false;
   bool need_nvshmem = false;
   if (autotune_comm) {
-    comm_backend_list = {CUDECOMP_HALO_COMM_MPI, CUDECOMP_HALO_COMM_MPI_BLOCKING};
-    if (!options->disable_nccl_backends) {
-      comm_backend_list.push_back(CUDECOMP_HALO_COMM_NCCL);
-      need_nccl = true;
-    }
-#ifdef ENABLE_NVSHMEM
-    if (!options->disable_nvshmem_backends) {
-      comm_backend_list.push_back(CUDECOMP_HALO_COMM_NVSHMEM);
-      comm_backend_list.push_back(CUDECOMP_HALO_COMM_NVSHMEM_BLOCKING);
-      need_nvshmem = true;
-    }
-#endif
+    comm_backend_list = getAutotuneHaloBackendCandidates(options);
+    need_nccl = std::any_of(comm_backend_list.begin(), comm_backend_list.end(), haloBackendRequiresNccl);
+    need_nvshmem = std::any_of(comm_backend_list.begin(), comm_backend_list.end(), haloBackendRequiresNvshmem);
   } else {
     comm_backend_list = {grid_desc->config.halo_comm_backend};
     if (haloBackendRequiresNccl(comm_backend_list[0])) { need_nccl = true; }
@@ -665,10 +797,12 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
     if (haloBackendRequiresNvshmem(comm_backend_list[0])) { need_nvshmem = true; }
 #endif
   }
+  const bool need_non_nvshmem = std::any_of(comm_backend_list.begin(), comm_backend_list.end(),
+                                            [](auto backend) { return !haloBackendRequiresNvshmem(backend); });
 
   std::vector<std::array<int32_t, 2>> pdim_list;
   if (autotune_pdims) {
-    pdim_list = getPdimCandidates(handle->nranks, grid_desc->config.rank_order);
+    pdim_list = getAutotunePdimCandidates(handle->nranks, grid_desc->config.rank_order);
   } else {
     pdim_list.push_back({grid_desc->config.pdims[0], grid_desc->config.pdims[1]});
   }
@@ -761,40 +895,42 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
         grid_desc->config.halo_comm_backend = tmp;
         work_nvshmem_guard = haloWorkspaceGuard(work_nvshmem, {handle, grid_desc, CUDECOMP_HALO_COMM_NVSHMEM});
 
-        // Check if there is enough memory for separate non-NVSHMEM allocated work buffer
-        const bool allow_nvshmem_workspace_fallback = !handle->cuda_cumem_enable && !handle->nccl_enable_ubr;
-        auto ret = cudaMalloc(&work, work_sz);
-        int any_oom = (ret == cudaErrorMemoryAllocation);
-        CHECK_MPI(MPI_Allreduce(MPI_IN_PLACE, &any_oom, 1, MPI_INT, MPI_LOR, handle->mpi_comm));
-        if (any_oom) {
-          if (ret == cudaSuccess) {
-            CHECK_CUDA(cudaFree(work));
-            work = nullptr;
-          } else if (ret == cudaErrorMemoryAllocation) {
-            cudaGetLastError(); // Reset CUDA error state
+        if (need_non_nvshmem) {
+          // Check if there is enough memory for separate non-NVSHMEM allocated work buffer
+          const bool allow_nvshmem_workspace_fallback = !handle->cuda_cumem_enable && !handle->nccl_enable_ubr;
+          auto ret = cudaMalloc(&work, work_sz);
+          int any_oom = (ret == cudaErrorMemoryAllocation);
+          CHECK_MPI(MPI_Allreduce(MPI_IN_PLACE, &any_oom, 1, MPI_INT, MPI_LOR, handle->mpi_comm));
+          if (any_oom) {
+            if (ret == cudaSuccess) {
+              CHECK_CUDA(cudaFree(work));
+              work = nullptr;
+            } else if (ret == cudaErrorMemoryAllocation) {
+              cudaGetLastError(); // Reset CUDA error state
+            } else {
+              CHECK_CUDA(ret);
+            }
+            if (!allow_nvshmem_workspace_fallback) {
+              THROW_CUDA_ERROR(
+                  "Cannot allocate separate non-NVSHMEM workspace during autotuning while cuMem or NCCL user buffer "
+                  "registration is enabled.");
+            }
+            if (handle->rank == 0) {
+              printf("CUDECOMP:WARN: Cannot allocate separate workspace for non-NVSHMEM backends during "
+                     "autotuning. Using NVSHMEM allocated workspace for all backends, which may cause issues "
+                     "for some MPI implementations. See documentation for more details and suggested workarounds.\n");
+            }
+            work = work_nvshmem;
           } else {
             CHECK_CUDA(ret);
+            CHECK_CUDA(cudaFree(work));
+            auto backend = (need_nccl) ? CUDECOMP_HALO_COMM_NCCL : CUDECOMP_HALO_COMM_MPI;
+            tmp = grid_desc->config.halo_comm_backend;
+            grid_desc->config.halo_comm_backend = backend;
+            CHECK_CUDECOMP(cudecompMalloc(handle, grid_desc, reinterpret_cast<void**>(&work), work_sz));
+            grid_desc->config.halo_comm_backend = tmp;
+            work_guard = haloWorkspaceGuard(work, {handle, grid_desc, backend});
           }
-          if (!allow_nvshmem_workspace_fallback) {
-            THROW_CUDA_ERROR(
-                "Cannot allocate separate non-NVSHMEM workspace during autotuning while cuMem or NCCL user buffer "
-                "registration is enabled.");
-          }
-          if (handle->rank == 0) {
-            printf("CUDECOMP:WARN: Cannot allocate separate workspace for non-NVSHMEM backends during "
-                   "autotuning. Using NVSHMEM allocated workspace for all backends, which may cause issues "
-                   "for some MPI implementations. See documentation for more details and suggested workarounds.\n");
-          }
-          work = work_nvshmem;
-        } else {
-          CHECK_CUDA(ret);
-          CHECK_CUDA(cudaFree(work));
-          auto backend = (need_nccl) ? CUDECOMP_HALO_COMM_NCCL : CUDECOMP_HALO_COMM_MPI;
-          tmp = grid_desc->config.halo_comm_backend;
-          grid_desc->config.halo_comm_backend = backend;
-          CHECK_CUDECOMP(cudecompMalloc(handle, grid_desc, reinterpret_cast<void**>(&work), work_sz));
-          grid_desc->config.halo_comm_backend = tmp;
-          work_guard = haloWorkspaceGuard(work, {handle, grid_desc, backend});
         }
 #endif
       } else {
@@ -938,7 +1074,7 @@ void autotuneHaloBackend(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
 
   // Free test data and workspace
   if (need_nvshmem) {
-    if (work != work_nvshmem) {
+    if (need_non_nvshmem && work != work_nvshmem) {
       auto tmp = grid_desc->config.halo_comm_backend;
       grid_desc->config.halo_comm_backend = (need_nccl) ? CUDECOMP_HALO_COMM_NCCL : CUDECOMP_HALO_COMM_MPI;
       work_guard.release();

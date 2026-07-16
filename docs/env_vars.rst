@@ -104,3 +104,43 @@ CUDECOMP_USE_COL_MAJOR_RANK_ORDER
 When :code:`rank_order` is left at :code:`CUDECOMP_RANK_ORDER_DEFAULT`, this environment variable is still honored for
 backward compatibility. Setting this variable to :code:`1` enables column-major rank assignment; otherwise rank assignment
 is row-major. Explicit :code:`rank_order` settings take precedence over this environment variable.
+
+CUDECOMP_AUTOTUNE_TRANSPOSE_BACKENDS
+------------------------------------
+(since v0.7.0)
+
+:code:`CUDECOMP_AUTOTUNE_TRANSPOSE_BACKENDS` restricts the candidates used when transpose communication backends are
+autotuned. Its value is a comma-separated inclusion list of uppercase backend names. Prefixing the complete value with
+:code:`^` changes it to an exclusion list. Accepted names are :code:`MPI_P2P`, :code:`MPI_P2P_PL`, :code:`MPI_A2A`,
+:code:`NCCL`, :code:`NCCL_PL`, :code:`NVSHMEM`, :code:`NVSHMEM_PL`, and :code:`NVSHMEM_SM`.
+
+Default setting is unset (no additional backend filtering).
+
+CUDECOMP_AUTOTUNE_HALO_BACKENDS
+-------------------------------
+(since v0.7.0)
+
+:code:`CUDECOMP_AUTOTUNE_HALO_BACKENDS` restricts the candidates used when halo communication backends are autotuned.
+Its value is a comma-separated inclusion list of uppercase backend names. Prefixing the complete value with :code:`^`
+changes it to an exclusion list. Accepted names are :code:`MPI`, :code:`MPI_BLOCKING`, :code:`NCCL`, :code:`NVSHMEM`,
+and :code:`NVSHMEM_BLOCKING`.
+
+Default setting is unset (no additional backend filtering).
+
+CUDECOMP_AUTOTUNE_P_ROW_RANGE
+------------------------------
+(since v0.7.0)
+
+:code:`CUDECOMP_AUTOTUNE_P_ROW_RANGE` restricts process-grid autotuning to row dimensions in the inclusive range
+:code:`<min>,<max>`.
+
+Default setting is unset (no row-dimension restriction).
+
+CUDECOMP_AUTOTUNE_P_COL_RANGE
+------------------------------
+(since v0.7.0)
+
+:code:`CUDECOMP_AUTOTUNE_P_COL_RANGE` restricts process-grid autotuning to column dimensions in the inclusive range
+:code:`<min>,<max>`.
+
+Default setting is unset (no column-dimension restriction).

@@ -3,10 +3,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
+#include <cstdlib>
+#include <initializer_list>
 #include <limits>
 #include <memory>
+#include <string>
+#include <vector>
 
 #include <mpi.h>
 
@@ -17,12 +22,52 @@
 #endif
 
 #include "cudecomp.h"
+#include "internal/autotune.h"
+#include "internal/exceptions.h"
 
 #include "gpu_test_utils.h"
 #include "mpi_test_utils.h"
 #include "test_utils.h"
 
 namespace {
+
+class ScopedEnvVar {
+public:
+  ScopedEnvVar(const char* name, const char* value) : name_(name) {
+    const char* previous = std::getenv(name);
+    if (previous) {
+      had_previous_ = true;
+      previous_ = previous;
+    }
+    setenv(name, value, 1);
+  }
+
+  ~ScopedEnvVar() {
+    if (had_previous_) {
+      setenv(name_.c_str(), previous_.c_str(), 1);
+    } else {
+      unsetenv(name_.c_str());
+    }
+  }
+
+private:
+  std::string name_;
+  bool had_previous_ = false;
+  std::string previous_;
+};
+
+template <typename T> std::vector<T> withoutCandidates(std::vector<T> candidates, std::initializer_list<T> excluded) {
+  candidates.erase(std::remove_if(candidates.begin(), candidates.end(),
+                                  [&](T candidate) {
+                                    return std::find(excluded.begin(), excluded.end(), candidate) != excluded.end();
+                                  }),
+                   candidates.end());
+  return candidates;
+}
+
+template <typename T> void expectSameCandidates(const std::vector<T>& actual, const std::vector<T>& expected) {
+  EXPECT_TRUE(std::is_permutation(actual.begin(), actual.end(), expected.begin(), expected.end()));
+}
 
 constexpr int kApiTestRanks = 4;
 constexpr std::array<int32_t, 3> kGdims{9, 10, 11};
@@ -238,6 +283,7 @@ TEST(ApiGridDescAutotuneOptionsSetDefaultsTest, SetsDocumentedDefaults) {
   EXPECT_EQ(CUDECOMP_AUTOTUNE_GRID_TRANSPOSE, options.grid_mode);
   EXPECT_EQ(CUDECOMP_DOUBLE, options.dtype);
   EXPECT_TRUE(options.allow_uneven_decompositions);
+  EXPECT_FALSE(options.disable_mpi_backends);
   EXPECT_FALSE(options.disable_nccl_backends);
   EXPECT_FALSE(options.disable_nvshmem_backends);
   EXPECT_EQ(0.0, options.skip_threshold);
@@ -260,6 +306,132 @@ TEST(ApiGridDescAutotuneOptionsSetDefaultsTest, SetsDocumentedDefaults) {
     EXPECT_EQ(0, options.halo_extents[i]);
     EXPECT_FALSE(options.halo_periods[i]);
     EXPECT_EQ(0, options.halo_padding[i]);
+  }
+}
+
+TEST(AutotuneCandidateFilterTest, AppliesTransposeInclusionList) {
+  cudecompGridDescAutotuneOptions_t options;
+  ASSERT_EQ(CUDECOMP_RESULT_SUCCESS, cudecompGridDescAutotuneOptionsSetDefaults(&options));
+  ScopedEnvVar filter("CUDECOMP_AUTOTUNE_TRANSPOSE_BACKENDS", "NCCL,MPI_A2A,MPI_P2P");
+
+  auto candidates = cudecomp::getAutotuneTransposeBackendCandidates(&options);
+  std::vector<cudecompTransposeCommBackend_t> expected{CUDECOMP_TRANSPOSE_COMM_MPI_P2P, CUDECOMP_TRANSPOSE_COMM_MPI_A2A,
+                                                       CUDECOMP_TRANSPOSE_COMM_NCCL};
+  expectSameCandidates(candidates, expected);
+}
+
+TEST(AutotuneCandidateFilterTest, AppliesTransposeExclusionList) {
+  cudecompGridDescAutotuneOptions_t options;
+  ASSERT_EQ(CUDECOMP_RESULT_SUCCESS, cudecompGridDescAutotuneOptionsSetDefaults(&options));
+  auto expected =
+      withoutCandidates(cudecomp::getAutotuneTransposeBackendCandidates(&options), {CUDECOMP_TRANSPOSE_COMM_MPI_P2P});
+  ScopedEnvVar filter("CUDECOMP_AUTOTUNE_TRANSPOSE_BACKENDS", "^MPI_P2P");
+
+  auto candidates = cudecomp::getAutotuneTransposeBackendCandidates(&options);
+  expectSameCandidates(candidates, expected);
+}
+
+TEST(AutotuneCandidateFilterTest, AppliesHaloInclusionList) {
+  cudecompGridDescAutotuneOptions_t options;
+  ASSERT_EQ(CUDECOMP_RESULT_SUCCESS, cudecompGridDescAutotuneOptionsSetDefaults(&options));
+  ScopedEnvVar halo_filter("CUDECOMP_AUTOTUNE_HALO_BACKENDS", "NCCL,MPI_BLOCKING");
+
+  auto candidates = cudecomp::getAutotuneHaloBackendCandidates(&options);
+  std::vector<cudecompHaloCommBackend_t> expected{CUDECOMP_HALO_COMM_MPI_BLOCKING, CUDECOMP_HALO_COMM_NCCL};
+  expectSameCandidates(candidates, expected);
+}
+
+TEST(AutotuneCandidateFilterTest, AppliesTransposeBackendFamilyDisables) {
+  cudecompGridDescAutotuneOptions_t options;
+  ASSERT_EQ(CUDECOMP_RESULT_SUCCESS, cudecompGridDescAutotuneOptionsSetDefaults(&options));
+  auto all_candidates = cudecomp::getAutotuneTransposeBackendCandidates(&options);
+
+  options.disable_mpi_backends = true;
+  auto candidates = cudecomp::getAutotuneTransposeBackendCandidates(&options);
+  auto expected =
+      withoutCandidates(all_candidates, {CUDECOMP_TRANSPOSE_COMM_MPI_P2P, CUDECOMP_TRANSPOSE_COMM_MPI_P2P_PL,
+                                         CUDECOMP_TRANSPOSE_COMM_MPI_A2A});
+  expectSameCandidates(candidates, expected);
+
+  options.disable_mpi_backends = false;
+  options.disable_nccl_backends = true;
+  candidates = cudecomp::getAutotuneTransposeBackendCandidates(&options);
+  expected = withoutCandidates(all_candidates, {CUDECOMP_TRANSPOSE_COMM_NCCL, CUDECOMP_TRANSPOSE_COMM_NCCL_PL});
+  expectSameCandidates(candidates, expected);
+
+  options.disable_nccl_backends = false;
+  options.disable_nvshmem_backends = true;
+  candidates = cudecomp::getAutotuneTransposeBackendCandidates(&options);
+  expected = withoutCandidates(all_candidates, {CUDECOMP_TRANSPOSE_COMM_NVSHMEM, CUDECOMP_TRANSPOSE_COMM_NVSHMEM_PL,
+                                                CUDECOMP_TRANSPOSE_COMM_NVSHMEM_SM});
+  expectSameCandidates(candidates, expected);
+}
+
+TEST(AutotuneCandidateFilterTest, AppliesHaloBackendFamilyDisables) {
+  cudecompGridDescAutotuneOptions_t options;
+  ASSERT_EQ(CUDECOMP_RESULT_SUCCESS, cudecompGridDescAutotuneOptionsSetDefaults(&options));
+  auto all_candidates = cudecomp::getAutotuneHaloBackendCandidates(&options);
+
+  options.disable_mpi_backends = true;
+  auto candidates = cudecomp::getAutotuneHaloBackendCandidates(&options);
+  auto expected = withoutCandidates(all_candidates, {CUDECOMP_HALO_COMM_MPI, CUDECOMP_HALO_COMM_MPI_BLOCKING});
+  expectSameCandidates(candidates, expected);
+
+  options.disable_mpi_backends = false;
+  options.disable_nccl_backends = true;
+  candidates = cudecomp::getAutotuneHaloBackendCandidates(&options);
+  expected = withoutCandidates(all_candidates, {CUDECOMP_HALO_COMM_NCCL});
+  expectSameCandidates(candidates, expected);
+
+  options.disable_nccl_backends = false;
+  options.disable_nvshmem_backends = true;
+  candidates = cudecomp::getAutotuneHaloBackendCandidates(&options);
+  expected = withoutCandidates(all_candidates, {CUDECOMP_HALO_COMM_NVSHMEM, CUDECOMP_HALO_COMM_NVSHMEM_BLOCKING});
+  expectSameCandidates(candidates, expected);
+}
+
+TEST(AutotuneCandidateFilterTest, RejectsMalformedAndEmptyBackendSets) {
+  cudecompGridDescAutotuneOptions_t options;
+  ASSERT_EQ(CUDECOMP_RESULT_SUCCESS, cudecompGridDescAutotuneOptionsSetDefaults(&options));
+  {
+    ScopedEnvVar filter("CUDECOMP_AUTOTUNE_HALO_BACKENDS", "MPI,,NCCL");
+    EXPECT_THROW(cudecomp::getAutotuneHaloBackendCandidates(&options), cudecomp::InvalidUsage);
+  }
+  {
+    ScopedEnvVar filter("CUDECOMP_AUTOTUNE_HALO_BACKENDS", "^MPI,MPI_BLOCKING,NCCL,NVSHMEM,NVSHMEM_BLOCKING");
+    EXPECT_THROW(cudecomp::getAutotuneHaloBackendCandidates(&options), cudecomp::InvalidUsage);
+  }
+}
+
+TEST(AutotuneCandidateFilterTest, FiltersProcessGridRanges) {
+  {
+    ScopedEnvVar rows("CUDECOMP_AUTOTUNE_P_ROW_RANGE", "2,4");
+    auto candidates = cudecomp::getAutotunePdimCandidates(4, CUDECOMP_RANK_ORDER_ROW_MAJOR);
+    std::vector<std::array<int32_t, 2>> expected{{4, 1}, {2, 2}};
+    expectSameCandidates(candidates, expected);
+  }
+  {
+    ScopedEnvVar cols("CUDECOMP_AUTOTUNE_P_COL_RANGE", "2,4");
+    auto candidates = cudecomp::getAutotunePdimCandidates(4, CUDECOMP_RANK_ORDER_ROW_MAJOR);
+    std::vector<std::array<int32_t, 2>> expected{{2, 2}, {1, 4}};
+    expectSameCandidates(candidates, expected);
+  }
+  {
+    ScopedEnvVar rows("CUDECOMP_AUTOTUNE_P_ROW_RANGE", "2,2");
+    ScopedEnvVar cols("CUDECOMP_AUTOTUNE_P_COL_RANGE", "2,2");
+    EXPECT_EQ((std::vector<std::array<int32_t, 2>>{{2, 2}}),
+              cudecomp::getAutotunePdimCandidates(4, CUDECOMP_RANK_ORDER_ROW_MAJOR));
+  }
+}
+
+TEST(AutotuneCandidateFilterTest, RejectsMalformedAndEmptyProcessGridRanges) {
+  {
+    ScopedEnvVar rows("CUDECOMP_AUTOTUNE_P_ROW_RANGE", "2,1");
+    EXPECT_THROW(cudecomp::getAutotunePdimCandidates(4, CUDECOMP_RANK_ORDER_ROW_MAJOR), cudecomp::InvalidUsage);
+  }
+  {
+    ScopedEnvVar cols("CUDECOMP_AUTOTUNE_P_COL_RANGE", "3,3");
+    EXPECT_THROW(cudecomp::getAutotunePdimCandidates(4, CUDECOMP_RANK_ORDER_ROW_MAJOR), cudecomp::InvalidUsage);
   }
 }
 
@@ -916,6 +1088,19 @@ TEST_F(ApiGridDescCreateTest, RejectsInvalidAutotuneInputs) {
   auto options = fastAutotuneOptions();
   options.grid_mode = static_cast<cudecompAutotuneGridMode_t>(999);
   EXPECT_EQ(CUDECOMP_RESULT_INVALID_USAGE, cudecompGridDescCreate(handle_, &unused_grid_desc, &config, &options));
+}
+
+TEST_F(ApiGridDescCreateTest, IgnoresAutotuneEnvironmentFiltersForFixedSelections) {
+  auto config = distributedConfig();
+  auto options = fastAutotuneOptions();
+  ScopedEnvVar transpose_backends("CUDECOMP_AUTOTUNE_TRANSPOSE_BACKENDS", "invalid");
+  ScopedEnvVar halo_backends("CUDECOMP_AUTOTUNE_HALO_BACKENDS", "invalid");
+  ScopedEnvVar rows("CUDECOMP_AUTOTUNE_P_ROW_RANGE", "invalid");
+  ScopedEnvVar cols("CUDECOMP_AUTOTUNE_P_COL_RANGE", "invalid");
+
+  cudecompGridDesc_t grid_desc = nullptr;
+  CHECK_CUDECOMP_GLOBAL(active_comm_, cudecompGridDescCreate(handle_, &grid_desc, &config, &options));
+  cudecomp_test::gridDescGuard grid_desc_guard(handle_, grid_desc);
 }
 
 TEST_F(ApiGridDescDestroyTest, RejectsInvalidArguments) {
