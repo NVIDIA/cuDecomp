@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <cstdlib>
@@ -184,8 +183,7 @@ void expectNvshmemNotInitialized(const cudecomp_test::MpiTestComm& comm) {
   // NVSHMEM may leave the bootstrap layer active after nvshmem_finalize().
   int all_ranks_match = local_status < NVSHMEM_STATUS_IS_INITIALIZED ? 1 : 0;
   EXPECT_EQ(MPI_SUCCESS, MPI_Allreduce(MPI_IN_PLACE, &all_ranks_match, 1, MPI_INT, MPI_MIN, comm.mpiComm()));
-  EXPECT_EQ(1, all_ranks_match) << "local NVSHMEM init status is " << local_status
-                                << ", expected below initialized";
+  EXPECT_EQ(1, all_ranks_match) << "local NVSHMEM init status is " << local_status << ", expected below initialized";
 }
 #endif
 
@@ -204,6 +202,9 @@ void setGdimsDist(cudecompGridDescConfig_t& config) {
 }
 
 void expectPencilInfoEquals(const cudecompPencilInfo_t& actual, const ExpectedPencilInfo& expected) {
+  EXPECT_EQ(static_cast<int64_t>(sizeof(actual)), actual.struct_size);
+  EXPECT_EQ(CUDECOMP_PENCIL_INFO_MAGIC, actual.magic);
+  EXPECT_EQ(CUDECOMP_PENCIL_INFO_VERSION, actual.version);
   for (int i = 0; i < 3; ++i) {
     EXPECT_EQ(expected.shape[i], actual.shape[i]);
     EXPECT_EQ(expected.lo[i], actual.lo[i]);
@@ -254,6 +255,9 @@ TEST(ApiGridDescConfigSetDefaultsTest, SetsDocumentedDefaults) {
   cudecompGridDescConfig_t config;
   ASSERT_EQ(CUDECOMP_RESULT_SUCCESS, cudecompGridDescConfigSetDefaults(&config));
 
+  EXPECT_EQ(static_cast<int64_t>(sizeof(config)), config.struct_size);
+  EXPECT_EQ(CUDECOMP_GRID_DESC_CONFIG_MAGIC, config.magic);
+  EXPECT_EQ(CUDECOMP_GRID_DESC_CONFIG_VERSION, config.version);
   EXPECT_EQ(CUDECOMP_RANK_ORDER_DEFAULT, config.rank_order);
   EXPECT_EQ(CUDECOMP_TRANSPOSE_COMM_MPI_P2P, config.transpose_comm_backend);
   EXPECT_EQ(CUDECOMP_HALO_COMM_MPI, config.halo_comm_backend);
@@ -278,6 +282,9 @@ TEST(ApiGridDescAutotuneOptionsSetDefaultsTest, SetsDocumentedDefaults) {
   cudecompGridDescAutotuneOptions_t options;
   ASSERT_EQ(CUDECOMP_RESULT_SUCCESS, cudecompGridDescAutotuneOptionsSetDefaults(&options));
 
+  EXPECT_EQ(static_cast<int64_t>(sizeof(options)), options.struct_size);
+  EXPECT_EQ(CUDECOMP_GRID_DESC_AUTOTUNE_OPTIONS_MAGIC, options.magic);
+  EXPECT_EQ(CUDECOMP_GRID_DESC_AUTOTUNE_OPTIONS_VERSION, options.version);
   EXPECT_EQ(3, options.n_warmup_trials);
   EXPECT_EQ(5, options.n_trials);
   EXPECT_EQ(CUDECOMP_AUTOTUNE_GRID_TRANSPOSE, options.grid_mode);
@@ -1027,6 +1034,18 @@ TEST_F(ApiFinalizeTest, RejectsInvalidArguments) {
 
 TEST_F(ApiGridDescCreateTest, RejectsInvalidConfigs) {
   auto config = distributedConfig();
+  config.magic = 0;
+  expectGridDescCreateInvalid(config);
+
+  config = distributedConfig();
+  config.version = CUDECOMP_GRID_DESC_CONFIG_VERSION + 1;
+  expectGridDescCreateInvalid(config);
+
+  config = distributedConfig();
+  config.struct_size = static_cast<int64_t>(sizeof(config)) - 1;
+  expectGridDescCreateInvalid(config);
+
+  config = distributedConfig();
   config.pdims[0] = 1;
   config.pdims[1] = 1;
   expectGridDescCreateInvalid(config);
@@ -1075,6 +1094,13 @@ TEST_F(ApiGridDescCreateTest, RejectsInvalidArguments) {
   EXPECT_EQ(CUDECOMP_RESULT_INVALID_USAGE, cudecompGridDescCreate(nullptr, &unused_grid_desc, &config, nullptr));
   EXPECT_EQ(CUDECOMP_RESULT_INVALID_USAGE, cudecompGridDescCreate(handle_, nullptr, &config, nullptr));
   EXPECT_EQ(CUDECOMP_RESULT_INVALID_USAGE, cudecompGridDescCreate(handle_, &unused_grid_desc, nullptr, nullptr));
+  EXPECT_EQ(CUDECOMP_RESULT_INVALID_USAGE,
+            cudecompGridDescCreateVersioned(handle_, &unused_grid_desc, &config,
+                                            static_cast<int64_t>(sizeof(config)) - 1, CUDECOMP_GRID_DESC_CONFIG_VERSION,
+                                            nullptr, 0, 0));
+  EXPECT_EQ(CUDECOMP_RESULT_INVALID_USAGE,
+            cudecompGridDescCreateVersioned(handle_, &unused_grid_desc, &config, static_cast<int64_t>(sizeof(config)),
+                                            CUDECOMP_GRID_DESC_CONFIG_VERSION + 1, nullptr, 0, 0));
 }
 
 TEST_F(ApiGridDescCreateTest, RejectsInvalidAutotuneInputs) {
@@ -1086,6 +1112,25 @@ TEST_F(ApiGridDescCreateTest, RejectsInvalidAutotuneInputs) {
 
   config = distributedConfig();
   auto options = fastAutotuneOptions();
+  options.magic = 0;
+  EXPECT_EQ(CUDECOMP_RESULT_INVALID_USAGE, cudecompGridDescCreate(handle_, &unused_grid_desc, &config, &options));
+
+  options = fastAutotuneOptions();
+  options.version = CUDECOMP_GRID_DESC_AUTOTUNE_OPTIONS_VERSION + 1;
+  EXPECT_EQ(CUDECOMP_RESULT_INVALID_USAGE, cudecompGridDescCreate(handle_, &unused_grid_desc, &config, &options));
+
+  options = fastAutotuneOptions();
+  options.struct_size = static_cast<int64_t>(sizeof(options)) - 1;
+  EXPECT_EQ(CUDECOMP_RESULT_INVALID_USAGE, cudecompGridDescCreate(handle_, &unused_grid_desc, &config, &options));
+
+  options = fastAutotuneOptions();
+  EXPECT_EQ(CUDECOMP_RESULT_INVALID_USAGE,
+            cudecompGridDescCreateVersioned(handle_, &unused_grid_desc, &config, static_cast<int64_t>(sizeof(config)),
+                                            CUDECOMP_GRID_DESC_CONFIG_VERSION, &options,
+                                            static_cast<int64_t>(sizeof(options)) - 1,
+                                            CUDECOMP_GRID_DESC_AUTOTUNE_OPTIONS_VERSION));
+
+  options = fastAutotuneOptions();
   options.grid_mode = static_cast<cudecompAutotuneGridMode_t>(999);
   EXPECT_EQ(CUDECOMP_RESULT_INVALID_USAGE, cudecompGridDescCreate(handle_, &unused_grid_desc, &config, &options));
 }
@@ -1138,6 +1183,14 @@ TEST_F(ApiGetGridDescConfigTest, RejectsInvalidArguments) {
   cudecompGridDescConfig_t queried_config;
   EXPECT_EQ(CUDECOMP_RESULT_INVALID_USAGE, cudecompGetGridDescConfig(handle_, grid_desc, nullptr));
   EXPECT_EQ(CUDECOMP_RESULT_INVALID_USAGE, cudecompGetGridDescConfig(handle_, nullptr, &queried_config));
+  EXPECT_EQ(CUDECOMP_RESULT_INVALID_USAGE,
+            cudecompGetGridDescConfigVersioned(handle_, grid_desc, &queried_config,
+                                               static_cast<int64_t>(sizeof(queried_config)),
+                                               CUDECOMP_GRID_DESC_CONFIG_VERSION + 1));
+  EXPECT_EQ(CUDECOMP_RESULT_INVALID_USAGE,
+            cudecompGetGridDescConfigVersioned(handle_, grid_desc, &queried_config,
+                                               static_cast<int64_t>(sizeof(queried_config)) - 1,
+                                               CUDECOMP_GRID_DESC_CONFIG_VERSION));
 }
 
 TEST_F(ApiGridDescCreateTest, AutotunesTransposeConfig) {
@@ -1267,6 +1320,12 @@ TEST_F(ApiGetPencilInfoTest, RejectsInvalidArguments) {
   const std::array<int32_t, 3> oversized_padding{std::numeric_limits<int32_t>::max(), 0, 0};
 
   EXPECT_EQ(CUDECOMP_RESULT_INVALID_USAGE, cudecompGetPencilInfo(handle_, grid_desc, nullptr, 0, nullptr, nullptr));
+  EXPECT_EQ(CUDECOMP_RESULT_INVALID_USAGE,
+            cudecompGetPencilInfoVersioned(handle_, grid_desc, &pinfo, static_cast<int64_t>(sizeof(pinfo)) - 1,
+                                           CUDECOMP_PENCIL_INFO_VERSION, 0, nullptr, nullptr));
+  EXPECT_EQ(CUDECOMP_RESULT_INVALID_USAGE,
+            cudecompGetPencilInfoVersioned(handle_, grid_desc, &pinfo, static_cast<int64_t>(sizeof(pinfo)),
+                                           CUDECOMP_PENCIL_INFO_VERSION + 1, 0, nullptr, nullptr));
   EXPECT_EQ(CUDECOMP_RESULT_INVALID_USAGE, cudecompGetPencilInfo(handle_, grid_desc, &pinfo, -1, nullptr, nullptr));
   EXPECT_EQ(CUDECOMP_RESULT_INVALID_USAGE,
             cudecompGetPencilInfo(handle_, grid_desc, &pinfo, 0, negative_halo_extents.data(), nullptr));

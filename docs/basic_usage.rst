@@ -54,8 +54,10 @@ Creating a grid descriptor
 Next, we need to create a grid descriptor. To do this, we first need to create and populate a grid descriptor
 configuration structure, which provides basic information to the library required to set up the grid descriptor.
 
-We create an uninitialized configuration struct and initialize it to defaults using :ref:`cudecompGridDescConfigSetDefaults-ref`.
-Initializing to default values is required to ensure no entries are left uninitialized.
+We create an uninitialized configuration struct and initialize it to defaults using
+:ref:`cudecompGridDescConfigSetDefaults-ref`. This initialization is required before the configuration is first passed
+to :ref:`cudecompGridDescCreate-ref`. After initialization, its public fields may be modified and the initialized
+structure may be copied.
 
 .. tabs::
 

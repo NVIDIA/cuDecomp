@@ -41,7 +41,22 @@ else()
   set(LANGS CXX CUDA)
 endif()
 
-project(cudecomp LANGUAGES ${LANGS})
+set(CUDECOMP_VERSION_COMPONENTS)
+foreach(COMPONENT MAJOR MINOR PATCH)
+  file(STRINGS ${CMAKE_CURRENT_SOURCE_DIR}/include/cudecomp_version.h CUDECOMP_VERSION_LINE
+       REGEX "^#define CUDECOMP_${COMPONENT} [0-9]+$")
+  if (NOT CUDECOMP_VERSION_LINE)
+    message(FATAL_ERROR "Failed to read CUDECOMP_${COMPONENT} from include/cudecomp_version.h")
+  endif()
+  string(REGEX MATCH "[0-9]+$" CUDECOMP_VERSION_COMPONENT ${CUDECOMP_VERSION_LINE})
+  list(APPEND CUDECOMP_VERSION_COMPONENTS ${CUDECOMP_VERSION_COMPONENT})
+endforeach()
+list(JOIN CUDECOMP_VERSION_COMPONENTS "." CUDECOMP_VERSION)
+
+# Increment only when a release breaks binary compatibility.
+set(CUDECOMP_SOVERSION 0)
+
+project(cudecomp VERSION ${CUDECOMP_VERSION} LANGUAGES ${LANGS})
 
 if (CUDECOMP_BUILD_FORTRAN)
   # Remove debug information to enable mixed Fortran compilation with cc100 and older compute capabilities.
@@ -152,7 +167,12 @@ endif()
 
 # Building cuDecomp shared lib
 add_library(cudecomp SHARED)
-set_target_properties(cudecomp PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+set_target_properties(
+  cudecomp
+  PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
+             VERSION ${PROJECT_VERSION}
+             SOVERSION ${CUDECOMP_SOVERSION}
+)
 
 # Set NVCC flags for requested compute capability
 if (CMAKE_VERSION VERSION_LESS 3.18)
@@ -254,8 +274,13 @@ if (CUDECOMP_ENABLE_NVSHMEM)
   endif()
 endif()
 
-set_target_properties(cudecomp PROPERTIES PUBLIC_HEADER ${CMAKE_CURRENT_SOURCE_DIR}/include/cudecomp.h)
+set_target_properties(
+  cudecomp
+  PROPERTIES PUBLIC_HEADER
+             "${CMAKE_CURRENT_SOURCE_DIR}/include/cudecomp.h;${CMAKE_CURRENT_SOURCE_DIR}/include/cudecomp_version.h"
+)
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/include/cudecomp.h ${CMAKE_BINARY_DIR}/include/cudecomp.h)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/include/cudecomp_version.h ${CMAKE_BINARY_DIR}/include/cudecomp_version.h)
 
 install(
   TARGETS cudecomp
@@ -273,9 +298,14 @@ if (CUDECOMP_BUILD_FORTRAN)
   list(JOIN CUF_GPU_ARG "," CUF_GPU_ARG)
 
   add_library(cudecomp_fort SHARED)
-  set_target_properties(cudecomp_fort PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
-  set_target_properties(cudecomp_fort PROPERTIES Fortran_MODULE_DIRECTORY ${CMAKE_BINARY_DIR}/include)
-  set_target_properties(cudecomp_fort PROPERTIES LINKER_LANGUAGE Fortran)
+  set_target_properties(
+    cudecomp_fort
+    PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
+               Fortran_MODULE_DIRECTORY ${CMAKE_BINARY_DIR}/include
+               LINKER_LANGUAGE Fortran
+               VERSION ${PROJECT_VERSION}
+               SOVERSION ${CUDECOMP_SOVERSION}
+  )
   target_compile_options(cudecomp_fort PRIVATE $<$<COMPILE_LANGUAGE:Fortran>:-cpp -cuda -gpu=${CUF_GPU_ARG}>)
   target_sources(
     cudecomp_fort
@@ -290,8 +320,12 @@ if (CUDECOMP_BUILD_FORTRAN)
     TARGETS cudecomp_fort
     LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/lib
    )
-   # Install cuDecomp module
-   install(FILES ${CMAKE_BINARY_DIR}/include/cudecomp.mod DESTINATION ${CMAKE_INSTALL_PREFIX}/include)
+   # Install cuDecomp modules
+   install(
+     FILES ${CMAKE_BINARY_DIR}/include/cudecomp.mod
+           ${CMAKE_BINARY_DIR}/include/cudecomp_internal.mod
+     DESTINATION ${CMAKE_INSTALL_PREFIX}/include
+   )
 endif()
 
 if (CUDECOMP_BUILD_TESTS OR CUDECOMP_BUILD_EXTRAS)

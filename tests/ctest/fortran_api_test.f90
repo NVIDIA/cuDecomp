@@ -2,6 +2,7 @@
 ! SPDX-License-Identifier: Apache-2.0
 
 program cudecomp_fortran_api_test
+  use, intrinsic :: iso_c_binding, only: c_sizeof
   use, intrinsic :: iso_fortran_env, only: real32, real64
   use cudafor
   use cudecomp
@@ -90,6 +91,7 @@ contains
     type(cudecompGridDescAutotuneOptions) :: options
 
     call expect_success(cudecompGridDescConfigSetDefaults(config), "cudecompGridDescConfigSetDefaults")
+    if (config%struct_size /= c_sizeof(config)) call record_failure("default config struct_size is incorrect")
     call expect_equal_int(config%rank_order, CUDECOMP_RANK_ORDER_DEFAULT, "default rank order")
     call expect_equal_int(config%transpose_comm_backend, CUDECOMP_TRANSPOSE_COMM_MPI_P2P, &
                           "default transpose backend")
@@ -103,6 +105,7 @@ contains
 
     call expect_success(cudecompGridDescAutotuneOptionsSetDefaults(options), &
                         "cudecompGridDescAutotuneOptionsSetDefaults")
+    if (options%struct_size /= c_sizeof(options)) call record_failure("default options struct_size is incorrect")
     call expect_equal_int(options%n_warmup_trials, 3, "default warmup trials")
     call expect_equal_int(options%n_trials, 5, "default trials")
     call expect_equal_int(options%grid_mode, CUDECOMP_AUTOTUNE_GRID_TRANSPOSE, "default grid mode")
@@ -178,6 +181,7 @@ contains
 
     call expect_success(cudecompGetPencilInfo(handle, grid_desc, pinfo, 1), &
                         "cudecompGetPencilInfo without optional arrays")
+    if (pinfo%struct_size /= c_sizeof(pinfo)) call record_failure("pencil info struct_size is incorrect")
     call expect_axis1_pencil_without_halo(pinfo)
 
     call expect_success(cudecompGetPencilInfo(handle, grid_desc, pinfo, 2, k_halo_extents, k_padding), &

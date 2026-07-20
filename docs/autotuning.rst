@@ -69,7 +69,10 @@ the autotuning process.
 In addition to this modification of :code:`pdims`, an autotuning options structure, :ref:`cudecompGridDescAutotuneOptions_t-ref` must be created,
 populated, and passed as an additional argument to :ref:`cudecompGridDescCreate-ref`.
 
-Create an uninitialized autotune option struct and initialize it to defaults using :ref:`cudecompGridDescAutotuneOptionsSetDefaults-ref`. Initializing this struct to default values is required to ensure no entries are left uninitialized.
+Create an uninitialized autotune options struct and initialize it to defaults using
+:ref:`cudecompGridDescAutotuneOptionsSetDefaults-ref`. This initialization is required before the options are first
+passed to :ref:`cudecompGridDescCreate-ref`. After initialization, its public fields may be modified and the initialized
+structure may be copied.
 
 .. tabs::
 

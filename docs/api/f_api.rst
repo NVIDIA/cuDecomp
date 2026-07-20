@@ -44,6 +44,9 @@ ________________________
 
   A data structure defining configuration options for grid descriptor creation.
 
+  Call :f:func:`cudecompGridDescConfigSetDefaults` before first passing an instance to
+  :f:func:`cudecompGridDescCreate`. Public fields may be modified and initialized instances may be copied afterward.
+
   :f integer gdims(3): dimensions of global data grid
   :f integer gdims_dist(3): dimensions of global data grid to use for distribution
   :f integer pdims(2): dimensions of process grid
@@ -64,6 +67,9 @@ _________________________________
 .. f:type:: cudecompGridDescAutotuneOptions
 
   A data structure defining autotuning options for grid descriptor creation.
+
+  Call :f:func:`cudecompGridDescAutotuneOptionsSetDefaults` before first passing an instance to
+  :f:func:`cudecompGridDescCreate`. Public fields may be modified and initialized instances may be copied afterward.
 
   :f integer n_warmup_trials: number of warmup trials to run for each tested configuration during autotuning
   :f integer n_trials: number of timed trials to run for each tested configuration during autotuning

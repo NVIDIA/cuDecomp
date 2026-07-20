@@ -30,9 +30,13 @@
 #include <cuda_runtime.h>
 #include <mpi.h>
 
-#define CUDECOMP_MAJOR 0
-#define CUDECOMP_MINOR 6
-#define CUDECOMP_PATCH 2
+#include "cudecomp_version.h"
+
+/** @cond */
+#define CUDECOMP_GRID_DESC_CONFIG_MAGIC INT32_C(0x434f4e46)
+#define CUDECOMP_GRID_DESC_AUTOTUNE_OPTIONS_MAGIC INT32_C(0x4155544f)
+#define CUDECOMP_PENCIL_INFO_MAGIC INT32_C(0x50494e46)
+/** @endcond */
 
 #ifdef __cplusplus
 extern "C" {
@@ -122,6 +126,12 @@ typedef struct cudecompGridDesc* cudecompGridDesc_t;
  * @brief A data structure defining configuration options for grid descriptor creation.
  */
 typedef struct {
+  /** @cond */
+  int64_t struct_size;
+  int32_t magic;
+  int32_t version;
+  /** @endcond */
+
   // Grid information
   int32_t gdims[3];               ///< dimensions of global data grid
   int32_t gdims_dist[3];          ///< dimensions of global data grid to use for distribution
@@ -148,6 +158,12 @@ typedef struct {
  * @brief A data structure defining autotuning options for grid descriptor creation.
  */
 typedef struct {
+  /** @cond */
+  int64_t struct_size;
+  int32_t magic;
+  int32_t version;
+  /** @endcond */
+
   // General options
   int32_t n_warmup_trials; ///< number of warmup trials to run for each tested configuration during autotuning
                            ///< (default: 3)
@@ -206,6 +222,12 @@ typedef struct {
  * @brief A data structure containing geometry information about a pencil data buffer.
  */
 typedef struct {
+  /** @cond */
+  int64_t struct_size;
+  int32_t magic;
+  int32_t version;
+  /** @endcond */
+
   int32_t shape[3];        ///< pencil shape (in local order, including halo and padding elements)
   int32_t lo[3];           ///< lower bound coordinates (in local order, excluding halo and padding elements)
   int32_t hi[3];           ///< upper bound coordinates (in local order, excluding halo and padding elements)
@@ -246,6 +268,14 @@ cudecompResult_t cudecompInit_F(cudecompHandle_t* handle, MPI_Fint mpi_comm_f);
 cudecompResult_t cudecompFinalize(cudecompHandle_t handle);
 
 // cudecompGridDesc_t creation/manipulation functions
+/** @cond */
+cudecompResult_t cudecompGridDescCreateVersioned(cudecompHandle_t handle, cudecompGridDesc_t* grid_desc,
+                                                 cudecompGridDescConfig_t* config, int64_t config_struct_size,
+                                                 int32_t config_version,
+                                                 const cudecompGridDescAutotuneOptions_t* options,
+                                                 int64_t options_struct_size, int32_t options_version);
+/** @endcond */
+
 /**
  * @brief Creates a cuDecomp grid descriptor for use with cuDecomp functions.
  * @details This function creates a grid descriptor that cuDecomp requires for most library operations that perform
@@ -253,18 +283,24 @@ cudecompResult_t cudecompFinalize(cudecompHandle_t handle);
  * the global data grid is distributed and other internal resources to facilitate communication.
  * @param[in] handle The initialized cuDecomp library handle
  * @param[out] grid_desc A pointer to an uninitialized cudecompGridDesc_t
- * @param[in,out] config A pointer to a populated cudecompGridDescConfig_t structure. This config structure defines
- * the required attributes of the decomposition. On successful exit, fields in this structure may be updated to reflect
- * autotuning results.
- * @param[in] options A pointer to cudecompGridDescAutotuneOptions_t structure. This options structure is used
- * to control the behavior of the process grid and communication backend autotuning. If autotuning is not desired, a
- * NULL pointer can be passed in for this argument.
+ * @param[in,out] config A pointer to a cudecompGridDescConfig_t structure initialized by
+ * cudecompGridDescConfigSetDefaults(). After initialization, callers may modify its public fields. On successful exit,
+ * fields in this structure may be updated to reflect autotuning results.
+ * @param[in] options A pointer to a cudecompGridDescAutotuneOptions_t structure initialized by
+ * cudecompGridDescAutotuneOptionsSetDefaults(). After initialization, callers may modify its public fields. If
+ * autotuning is not desired, a NULL pointer can be passed in for this argument.
  *
  * @return CUDECOMP_RESULT_SUCCESS on success or error code on failure.
  */
-cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDesc_t* grid_desc,
-                                        cudecompGridDescConfig_t* config,
-                                        const cudecompGridDescAutotuneOptions_t* options);
+static inline cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDesc_t* grid_desc,
+                                                      cudecompGridDescConfig_t* config,
+                                                      const cudecompGridDescAutotuneOptions_t* options) {
+  return cudecompGridDescCreateVersioned(handle, grid_desc, config, (int64_t)sizeof(cudecompGridDescConfig_t),
+                                         CUDECOMP_GRID_DESC_CONFIG_VERSION, options,
+                                         options ? (int64_t)sizeof(cudecompGridDescAutotuneOptions_t) : (int64_t)0,
+                                         options ? CUDECOMP_GRID_DESC_AUTOTUNE_OPTIONS_VERSION : (int32_t)0);
+}
+
 /**
  * @brief Destroys a cuDecomp grid descriptor and frees associated resources.
  * @param[in] handle The initialized cuDecomp library handle
@@ -275,28 +311,54 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
 cudecompResult_t cudecompGridDescDestroy(cudecompHandle_t handle, cudecompGridDesc_t grid_desc);
 
 // cudecompGridDescConfig_t creation/manipulation functions
+/** @cond */
+cudecompResult_t cudecompGridDescConfigSetDefaultsVersioned(cudecompGridDescConfig_t* config, int64_t struct_size,
+                                                            int32_t version);
+/** @endcond */
+
 /**
  * @brief Initializes a cudecompGridDescConfig_t structure with default values
- * @details This function initializes entries in a cuDecomp grid descriptor configuration structure to default
- * values.
+ * @details This function initializes entries in a cuDecomp grid descriptor configuration structure to default values.
+ * It must be called before the structure is first passed to cudecompGridDescCreate(). After initialization, callers may
+ * modify public fields or copy the structure.
  * @param[in,out] config A pointer to cudecompGridDescConfig_t structure
  *
  * @return CUDECOMP_RESULT_SUCCESS on success or error code on failure.
  */
-cudecompResult_t cudecompGridDescConfigSetDefaults(cudecompGridDescConfig_t* config);
+static inline cudecompResult_t cudecompGridDescConfigSetDefaults(cudecompGridDescConfig_t* config) {
+  return cudecompGridDescConfigSetDefaultsVersioned(config, (int64_t)sizeof(cudecompGridDescConfig_t),
+                                                    CUDECOMP_GRID_DESC_CONFIG_VERSION);
+}
 
 // cudecompGridDescAutotuneOptions_t creation/manipulation functions
+/** @cond */
+cudecompResult_t cudecompGridDescAutotuneOptionsSetDefaultsVersioned(cudecompGridDescAutotuneOptions_t* options,
+                                                                     int64_t struct_size, int32_t version);
+/** @endcond */
+
 /**
  * @brief Initializes a cudecompGridDescAutotuneOptions_t structure with default values
  * @details This function initializes entries in a cuDecomp grid descriptor autotune options structure to default
- * values.
+ * values. It must be called before the structure is first passed to cudecompGridDescCreate(). After initialization,
+ * callers may modify public fields or copy the structure.
  * @param[in,out] options A pointer to cudecompGridDescAutotuneOptions_t structure
  *
  * @return CUDECOMP_RESULT_SUCCESS on success or error code on failure.
  */
-cudecompResult_t cudecompGridDescAutotuneOptionsSetDefaults(cudecompGridDescAutotuneOptions_t* options);
+static inline cudecompResult_t cudecompGridDescAutotuneOptionsSetDefaults(cudecompGridDescAutotuneOptions_t* options) {
+  return cudecompGridDescAutotuneOptionsSetDefaultsVersioned(options,
+                                                             (int64_t)sizeof(cudecompGridDescAutotuneOptions_t),
+                                                             CUDECOMP_GRID_DESC_AUTOTUNE_OPTIONS_VERSION);
+}
 
 // General functions
+/** @cond */
+cudecompResult_t cudecompGetPencilInfoVersioned(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
+                                                cudecompPencilInfo_t* pencil_info, int64_t pencil_info_struct_size,
+                                                int32_t pencil_info_version, int32_t axis, const int32_t halo_extents[],
+                                                const int32_t padding[]);
+/** @endcond */
+
 /**
  * @brief Collects geometry information about assigned pencils, by domain axis
  * @details This function queries information about the pencil assigned to the calling worker for the given axis.
@@ -316,9 +378,12 @@ cudecompResult_t cudecompGridDescAutotuneOptionsSetDefaults(cudecompGridDescAuto
  *
  * @return CUDECOMP_RESULT_SUCCESS on success or error code on failure.
  */
-cudecompResult_t cudecompGetPencilInfo(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
-                                       cudecompPencilInfo_t* pencil_info, int32_t axis, const int32_t halo_extents[],
-                                       const int32_t padding[]);
+static inline cudecompResult_t cudecompGetPencilInfo(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
+                                                     cudecompPencilInfo_t* pencil_info, int32_t axis,
+                                                     const int32_t halo_extents[], const int32_t padding[]) {
+  return cudecompGetPencilInfoVersioned(handle, grid_desc, pencil_info, (int64_t)sizeof(cudecompPencilInfo_t),
+                                        CUDECOMP_PENCIL_INFO_VERSION, axis, halo_extents, padding);
+}
 
 /**
  * @brief Queries the required transpose workspace size, in elements, for a provided grid descriptor.
@@ -413,6 +478,12 @@ const char* cudecompTransposeCommBackendToString(cudecompTransposeCommBackend_t 
  */
 const char* cudecompHaloCommBackendToString(cudecompHaloCommBackend_t comm_backend);
 
+/** @cond */
+cudecompResult_t cudecompGetGridDescConfigVersioned(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
+                                                    cudecompGridDescConfig_t* config, int64_t struct_size,
+                                                    int32_t version);
+/** @endcond */
+
 /**
  * @brief Queries the configuration used to create a grid descriptor.
  * @param[in] handle The initialized cuDecomp library handle
@@ -421,8 +492,11 @@ const char* cudecompHaloCommBackendToString(cudecompHaloCommBackend_t comm_backe
  *
  * @return CUDECOMP_RESULT_SUCCESS on success or error code on failure.
  */
-cudecompResult_t cudecompGetGridDescConfig(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
-                                           cudecompGridDescConfig_t* config);
+static inline cudecompResult_t cudecompGetGridDescConfig(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
+                                                         cudecompGridDescConfig_t* config) {
+  return cudecompGetGridDescConfigVersioned(handle, grid_desc, config, (int64_t)sizeof(cudecompGridDescConfig_t),
+                                            CUDECOMP_GRID_DESC_CONFIG_VERSION);
+}
 
 /**
  * @brief Function to retrieve the global rank of neighboring processes
