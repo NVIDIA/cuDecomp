@@ -220,6 +220,7 @@ module cudecomp
     end function cudecompFinalize
   end interface
 
+  ! Pass public structures as C pointers so all Fortran structure versions can share these low-level interfaces.
   interface
     function cudecompGridDescCreateC(handle, grid_desc, config, config_struct_size, config_version, &
                                      options, options_struct_size, options_version) &
@@ -227,31 +228,14 @@ module cudecomp
       import
       type(cudecompHandle), value :: handle
       type(cudecompGridDesc) :: grid_desc
-      type(*) :: config
-      integer(c_int64_t), value :: config_struct_size
-      integer(c_int32_t), value :: config_version
-      type(*) :: options
-      integer(c_int64_t), value :: options_struct_size
-      integer(c_int32_t), value :: options_version
-      integer(c_int) :: res
-    end function cudecompGridDescCreateC
-  end interface
-
-  interface
-    function cudecompGridDescCreateC_nullopt(handle, grid_desc, config, config_struct_size, config_version, &
-                                             options, options_struct_size, options_version) &
-       bind(C, name="cudecompGridDescCreateVersioned") result(res)
-      import
-      type(cudecompHandle), value :: handle
-      type(cudecompGridDesc) :: grid_desc
-      type(*) :: config
+      type(c_ptr), value :: config
       integer(c_int64_t), value :: config_struct_size
       integer(c_int32_t), value :: config_version
       type(c_ptr), value :: options
       integer(c_int64_t), value :: options_struct_size
       integer(c_int32_t), value :: options_version
       integer(c_int) :: res
-    end function cudecompGridDescCreateC_nullopt
+    end function cudecompGridDescCreateC
   end interface
 
   interface
@@ -268,7 +252,7 @@ module cudecomp
     function cudecompGridDescConfigSetDefaultsC(config, struct_size, version) &
       bind(C, name="cudecompGridDescConfigSetDefaultsVersioned") result(res)
       import
-      type(*) :: config
+      type(c_ptr), value :: config
       integer(c_int64_t), value :: struct_size
       integer(c_int32_t), value :: version
       integer(c_int) :: res
@@ -280,7 +264,7 @@ module cudecomp
     function cudecompGridDescAutotuneOptionsSetDefaultsC(options, struct_size, version) &
       bind(C, name="cudecompGridDescAutotuneOptionsSetDefaultsVersioned") result(res)
       import
-      type(*) :: options
+      type(c_ptr), value :: options
       integer(c_int64_t), value :: struct_size
       integer(c_int32_t), value :: version
       integer(c_int) :: res
@@ -295,7 +279,7 @@ module cudecomp
       import
       type(cudecompHandle), value :: handle
       type(cudecompGridDesc), value :: grid_desc
-      type(*) :: pencil_info
+      type(c_ptr), value :: pencil_info
       integer(c_int64_t), value :: pencil_info_struct_size
       integer(c_int32_t), value :: pencil_info_version
       integer(c_int32_t), value :: axis
@@ -311,7 +295,7 @@ module cudecomp
       import
       type(cudecompHandle), value :: handle
       type(cudecompGridDesc), value :: grid_desc
-      type(*) :: config
+      type(c_ptr), value :: config
       integer(c_int64_t), value :: struct_size
       integer(c_int32_t), value :: version
       integer(c_int) :: res
@@ -584,21 +568,21 @@ contains
   ! cudecompGridDesc creation/manipulation functions
   function cudecompGridDescConfigSetDefaults_v1(config) result(res)
     implicit none
-    type(cudecompGridDescConfig_v1) :: config
+    type(cudecompGridDescConfig_v1), target :: config
     integer(c_int) :: res
     integer(c_int32_t), parameter :: STRUCT_VERSION = 1
 
-    res = cudecompGridDescConfigSetDefaultsC(config, int(c_sizeof(config), c_int64_t), &
+    res = cudecompGridDescConfigSetDefaultsC(c_loc(config), int(c_sizeof(config), c_int64_t), &
                                              STRUCT_VERSION)
   end function cudecompGridDescConfigSetDefaults_v1
 
   function cudecompGridDescAutotuneOptionsSetDefaults_v1(options) result(res)
     implicit none
-    type(cudecompGridDescAutotuneOptions_v1) :: options
+    type(cudecompGridDescAutotuneOptions_v1), target :: options
     integer(c_int) :: res
     integer(c_int32_t), parameter :: STRUCT_VERSION = 1
 
-    res = cudecompGridDescAutotuneOptionsSetDefaultsC(options, int(c_sizeof(options), c_int64_t), &
+    res = cudecompGridDescAutotuneOptionsSetDefaultsC(c_loc(options), int(c_sizeof(options), c_int64_t), &
                                                       STRUCT_VERSION)
 
     ! Adjust halo axis entry for one-based axis indexing
@@ -610,8 +594,8 @@ contains
     implicit none
     type(cudecompHandle) :: handle
     type(cudecompGridDesc) :: grid_desc
-    type(cudecompGridDescConfig_v1) :: config
-    type(cudecompGridDescAutotuneOptions_v1), optional :: options
+    type(cudecompGridDescConfig_v1), target :: config
+    type(cudecompGridDescAutotuneOptions_v1), optional, target :: options
     integer(c_int) :: res
     integer(c_int32_t), parameter :: CONFIG_STRUCT_VERSION = 1
     integer(c_int32_t), parameter :: OPTIONS_STRUCT_VERSION = 1
@@ -622,14 +606,14 @@ contains
     if (present(options)) then
       ! Adjust halo axis entry for zero-based axis indexing
       options%halo_axis = options%halo_axis - 1
-      res = cudecompGridDescCreateC(handle, grid_desc, config, int(c_sizeof(config), c_int64_t), &
-                                    CONFIG_STRUCT_VERSION, options, int(c_sizeof(options), c_int64_t), &
+      res = cudecompGridDescCreateC(handle, grid_desc, c_loc(config), int(c_sizeof(config), c_int64_t), &
+                                    CONFIG_STRUCT_VERSION, c_loc(options), int(c_sizeof(options), c_int64_t), &
                                     OPTIONS_STRUCT_VERSION)
       ! Adjust halo axis entry for one-based axis indexing
       options%halo_axis = options%halo_axis + 1
     else
-      res = cudecompGridDescCreateC_nullopt(handle, grid_desc, config, int(c_sizeof(config), c_int64_t), &
-                                            CONFIG_STRUCT_VERSION, C_NULL_PTR, 0_c_int64_t, 0_c_int32_t)
+      res = cudecompGridDescCreateC(handle, grid_desc, c_loc(config), int(c_sizeof(config), c_int64_t), &
+                                    CONFIG_STRUCT_VERSION, C_NULL_PTR, 0_c_int64_t, 0_c_int32_t)
     endif
 
     ! Adjust transpose mem order entries for one-based indexing
@@ -644,7 +628,7 @@ contains
     integer :: axis  ! unit offset, so x/y/z = 1/2/3
     integer, optional:: halo_extents(3)
     integer, optional:: padding(3)
-    type(cudecompPencilInfo_v1) :: pencil_info  ! res%order is unit offset, x/y/z = 1/2/3
+    type(cudecompPencilInfo_v1), target :: pencil_info  ! res%order is unit offset, x/y/z = 1/2/3
     integer(c_int) :: res
     integer(c_int32_t), parameter :: STRUCT_VERSION = 1
 
@@ -655,7 +639,7 @@ contains
     padding_(:) = [0, 0, 0]
     if (present(halo_extents)) halo_extents_ = halo_extents
     if (present(padding)) padding_ = padding
-    res = cudecompGetPencilInfoC(handle, grid_desc, pencil_info, int(c_sizeof(pencil_info), c_int64_t), &
+    res = cudecompGetPencilInfoC(handle, grid_desc, c_loc(pencil_info), int(c_sizeof(pencil_info), c_int64_t), &
                                  STRUCT_VERSION, axis - 1, halo_extents_, padding_)
     ! Update entries for Fortran indexing
     pencil_info%order = pencil_info%order + 1
@@ -666,11 +650,11 @@ contains
   function cudecompGetGridDescConfig_v1(handle, grid_desc, config) result(res)
     type(cudecompHandle), value :: handle
     type(cudecompGridDesc), value :: grid_desc
-    type(cudecompGridDescConfig_v1) :: config
+    type(cudecompGridDescConfig_v1), target :: config
     integer(c_int) :: res
     integer(c_int32_t), parameter :: STRUCT_VERSION = 1
 
-    res = cudecompGetGridDescConfigC(handle, grid_desc, config, int(c_sizeof(config), c_int64_t), &
+    res = cudecompGetGridDescConfigC(handle, grid_desc, c_loc(config), int(c_sizeof(config), c_int64_t), &
                                      STRUCT_VERSION)
 
     ! Adjust transpose mem order entries for one-based indexing
