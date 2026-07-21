@@ -64,7 +64,7 @@ Communication Backends
 .. _cudecompTransposeCommBackend_t-ref:
 
 cudecompTransposeCommBackend_t
-_____________________________
+______________________________
 .. doxygenenum :: cudecompTransposeCommBackend_t
 
 ------
@@ -99,7 +99,7 @@ __________________________
 .. _cudecompRankOrder_t-ref:
 
 cudecompRankOrder_t
-__________________
+___________________
 .. doxygenenum :: cudecompRankOrder_t
 
 ------
@@ -234,7 +234,7 @@ _____________________
 .. _cudecompTransposeCommBackendToString-ref:
 
 cudecompTransposeCommBackendToString
-___________________________________
+____________________________________
 .. doxygenfunction:: cudecompTransposeCommBackendToString
 
 ------

@@ -390,7 +390,7 @@ _____________________
 .. _cudecompTransposeCommBackendToString-f-ref:
 
 cudecompTransposeCommBackendToString
-___________________________________
+____________________________________
 
 .. f:function:: cudecompTransposeCommBackendToString(comm_backend)
 
