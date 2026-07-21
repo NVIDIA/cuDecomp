@@ -48,15 +48,6 @@ static inline MPI_Datatype getMpiDataType(cuda::std::complex<float>) { return MP
 static inline MPI_Datatype getMpiDataType(cuda::std::complex<double>) { return MPI_C_DOUBLE_COMPLEX; }
 template <typename T> static inline MPI_Datatype getMpiDataType() { return getMpiDataType(T(0)); }
 
-static inline bool ncclAlltoAllRuntimeAvailable() {
-#if NCCL_VERSION_CODE >= NCCL_VERSION(2, 28, 3)
-  int version = 0;
-  return ncclGetVersion(&version) == ncclSuccess && version >= NCCL_VERSION(2, 28, 3);
-#else
-  return false;
-#endif
-}
-
 static inline bool canUseMpiAlltoall(const std::vector<comm_count_t>& send_counts,
                                      const std::vector<comm_count_t>& send_offsets,
                                      const std::vector<comm_count_t>& recv_counts,
@@ -309,8 +300,7 @@ static void cudecompAlltoall(const cudecompHandle_t& handle, const cudecompGridD
     auto comm = (comm_info.ngroups == 1) ? *grid_desc->nccl_local_comm : *grid_desc->nccl_comm;
 
 #if NCCL_VERSION_CODE >= NCCL_VERSION(2, 28, 3)
-    if (ncclAlltoAllRuntimeAvailable() &&
-        canUseNcclAlltoAll(handle, grid_desc, send_counts, send_offsets, recv_counts, recv_offsets, comm_axis)) {
+    if (canUseNcclAlltoAll(handle, grid_desc, send_counts, send_offsets, recv_counts, recv_offsets, comm_axis)) {
       CHECK_NCCL(ncclAlltoAll(send_buff, recv_buff, send_counts[0] * sizeof(T), ncclChar, comm, stream));
       break;
     }
