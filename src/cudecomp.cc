@@ -206,6 +206,213 @@ static void checkGridDesc(cudecompHandle_t handle, cudecompGridDesc_t grid_desc)
   if (grid_desc->handle != handle) { THROW_INVALID_USAGE("grid descriptor belongs to a different handle"); }
 }
 
+static int64_t expectedConfigSizeForVersion(int32_t version) {
+  if (version > CUDECOMP_GRID_DESC_CONFIG_VERSION) {
+    THROW_INVALID_USAGE("config was initialized with a newer cuDecomp header than this runtime library supports");
+  }
+
+  switch (version) {
+  case 1: {
+    constexpr int64_t size = 104;
+    static_assert(CUDECOMP_GRID_DESC_CONFIG_VERSION != 1 ||
+                      static_cast<int64_t>(sizeof(cudecompGridDescConfig_t)) == size,
+                  "config version 1 ABI size changed");
+    return size;
+  }
+  default: THROW_INVALID_USAGE("config layout version is unsupported");
+  }
+}
+
+static int64_t expectedConfigPayloadSizeForVersion(int32_t version) {
+  switch (version) {
+  case 1:
+    return static_cast<int64_t>(offsetof(cudecompGridDescConfig_t, halo_comm_backend) +
+                                sizeof(cudecompGridDescConfig_t::halo_comm_backend));
+  default: THROW_INVALID_USAGE("config layout version is unsupported");
+  }
+}
+
+static int64_t expectedAutotuneOptionsSizeForVersion(int32_t version) {
+  if (version > CUDECOMP_GRID_DESC_AUTOTUNE_OPTIONS_VERSION) {
+    THROW_INVALID_USAGE("options were initialized with a newer cuDecomp header than this runtime library supports");
+  }
+
+  switch (version) {
+  case 1: {
+    constexpr int64_t size = 320;
+    static_assert(CUDECOMP_GRID_DESC_AUTOTUNE_OPTIONS_VERSION != 1 ||
+                      static_cast<int64_t>(sizeof(cudecompGridDescAutotuneOptions_t)) == size,
+                  "autotune options version 1 ABI size changed");
+    return size;
+  }
+  default: THROW_INVALID_USAGE("options layout version is unsupported");
+  }
+}
+
+static int64_t expectedAutotuneOptionsPayloadSizeForVersion(int32_t version) {
+  switch (version) {
+  case 1:
+    return static_cast<int64_t>(offsetof(cudecompGridDescAutotuneOptions_t, halo_padding) +
+                                sizeof(cudecompGridDescAutotuneOptions_t::halo_padding));
+  default: THROW_INVALID_USAGE("options layout version is unsupported");
+  }
+}
+
+static int64_t expectedPencilInfoSizeForVersion(int32_t version) {
+  if (version > CUDECOMP_PENCIL_INFO_VERSION) {
+    THROW_INVALID_USAGE("pencil_info was created with a newer cuDecomp header than this runtime library supports");
+  }
+
+  switch (version) {
+  case 1: {
+    constexpr int64_t size = 96;
+    static_assert(CUDECOMP_PENCIL_INFO_VERSION != 1 || static_cast<int64_t>(sizeof(cudecompPencilInfo_t)) == size,
+                  "pencil info version 1 ABI size changed");
+    return size;
+  }
+  default: THROW_INVALID_USAGE("pencil_info layout version is unsupported");
+  }
+}
+
+static int64_t expectedPencilInfoPayloadSizeForVersion(int32_t version) {
+  switch (version) {
+  case 1: return static_cast<int64_t>(offsetof(cudecompPencilInfo_t, size) + sizeof(cudecompPencilInfo_t::size));
+  default: THROW_INVALID_USAGE("pencil_info layout version is unsupported");
+  }
+}
+
+static void checkConfigStruct(const cudecompGridDescConfig_t* config) {
+  if (config->magic != CUDECOMP_GRID_DESC_CONFIG_MAGIC) {
+    THROW_INVALID_USAGE(
+        "config is not initialized; call cudecompGridDescConfigSetDefaults() before cudecompGridDescCreate()");
+  }
+  if (config->struct_size != expectedConfigSizeForVersion(config->version)) {
+    THROW_INVALID_USAGE("config struct_size does not match its cuDecomp layout version");
+  }
+}
+
+static void checkAutotuneOptionsStruct(const cudecompGridDescAutotuneOptions_t* options) {
+  if (options->magic != CUDECOMP_GRID_DESC_AUTOTUNE_OPTIONS_MAGIC) {
+    THROW_INVALID_USAGE("options are not initialized; call cudecompGridDescAutotuneOptionsSetDefaults() before "
+                        "cudecompGridDescCreate()");
+  }
+  if (options->struct_size != expectedAutotuneOptionsSizeForVersion(options->version)) {
+    THROW_INVALID_USAGE("options struct_size does not match its cuDecomp layout version");
+  }
+}
+
+static void setConfigDefaults(cudecompGridDescConfig_t* config, int64_t struct_size, int32_t version) {
+  cudecompGridDescConfig_t defaults{};
+  for (int i = 0; i < 2; ++i) {
+    defaults.pdims[i] = 0;
+  }
+  for (int i = 0; i < 3; ++i) {
+    defaults.gdims[i] = 0;
+    defaults.gdims_dist[i] = 0;
+  }
+
+  defaults.transpose_comm_backend = CUDECOMP_TRANSPOSE_COMM_MPI_P2P;
+  for (int i = 0; i < 3; ++i) {
+    defaults.transpose_axis_contiguous[i] = false;
+    for (int j = 0; j < 3; ++j) {
+      defaults.transpose_mem_order[i][j] = -1;
+    }
+  }
+
+  defaults.rank_order = CUDECOMP_RANK_ORDER_DEFAULT;
+  defaults.halo_comm_backend = CUDECOMP_HALO_COMM_MPI;
+
+  std::memcpy(config, &defaults, static_cast<size_t>(expectedConfigPayloadSizeForVersion(version)));
+  config->struct_size = struct_size;
+  config->magic = CUDECOMP_GRID_DESC_CONFIG_MAGIC;
+  config->version = version;
+}
+
+static void setAutotuneOptionsDefaults(cudecompGridDescAutotuneOptions_t* options, int64_t struct_size,
+                                       int32_t version) {
+  cudecompGridDescAutotuneOptions_t defaults{};
+  defaults.n_warmup_trials = 3;
+  defaults.n_trials = 5;
+  defaults.grid_mode = CUDECOMP_AUTOTUNE_GRID_TRANSPOSE;
+  defaults.dtype = CUDECOMP_DOUBLE;
+  defaults.allow_uneven_decompositions = true;
+  defaults.disable_mpi_backends = false;
+  defaults.disable_nccl_backends = false;
+  defaults.disable_nvshmem_backends = false;
+  defaults.skip_threshold = 0.0;
+
+  defaults.autotune_transpose_backend = false;
+  for (int i = 0; i < 4; ++i) {
+    defaults.transpose_use_inplace_buffers[i] = false;
+    defaults.transpose_op_weights[i] = 1.0;
+    for (int j = 0; j < 3; ++j) {
+      defaults.transpose_input_halo_extents[i][j] = 0;
+      defaults.transpose_output_halo_extents[i][j] = 0;
+      defaults.transpose_input_padding[i][j] = 0;
+      defaults.transpose_output_padding[i][j] = 0;
+    }
+  }
+
+  defaults.autotune_halo_backend = false;
+  defaults.halo_axis = 0;
+  for (int i = 0; i < 3; ++i) {
+    defaults.halo_extents[i] = 0;
+    defaults.halo_periods[i] = false;
+    defaults.halo_padding[i] = 0;
+  }
+
+  std::memcpy(options, &defaults, static_cast<size_t>(expectedAutotuneOptionsPayloadSizeForVersion(version)));
+  options->struct_size = struct_size;
+  options->magic = CUDECOMP_GRID_DESC_AUTOTUNE_OPTIONS_MAGIC;
+  options->version = version;
+}
+
+static cudecompGridDescConfig_t normalizeConfig(const cudecompGridDescConfig_t* config) {
+  cudecompGridDescConfig_t normalized{};
+  setConfigDefaults(&normalized, static_cast<int64_t>(sizeof(normalized)), CUDECOMP_GRID_DESC_CONFIG_VERSION);
+  std::memcpy(&normalized, config, static_cast<size_t>(expectedConfigPayloadSizeForVersion(config->version)));
+  normalized.struct_size = static_cast<int64_t>(sizeof(normalized));
+  normalized.magic = CUDECOMP_GRID_DESC_CONFIG_MAGIC;
+  normalized.version = CUDECOMP_GRID_DESC_CONFIG_VERSION;
+  return normalized;
+}
+
+static cudecompGridDescAutotuneOptions_t normalizeAutotuneOptions(const cudecompGridDescAutotuneOptions_t* options) {
+  cudecompGridDescAutotuneOptions_t normalized{};
+  setAutotuneOptionsDefaults(&normalized, static_cast<int64_t>(sizeof(normalized)),
+                             CUDECOMP_GRID_DESC_AUTOTUNE_OPTIONS_VERSION);
+  std::memcpy(&normalized, options,
+              static_cast<size_t>(expectedAutotuneOptionsPayloadSizeForVersion(options->version)));
+  normalized.struct_size = static_cast<int64_t>(sizeof(normalized));
+  normalized.magic = CUDECOMP_GRID_DESC_AUTOTUNE_OPTIONS_MAGIC;
+  normalized.version = CUDECOMP_GRID_DESC_AUTOTUNE_OPTIONS_VERSION;
+  return normalized;
+}
+
+static void copyConfigToCaller(cudecompGridDescConfig_t* config, int64_t struct_size, int32_t version,
+                               const cudecompGridDescConfig_t& source) {
+  const int64_t config_size = expectedConfigSizeForVersion(version);
+  if (struct_size != config_size) {
+    THROW_INVALID_USAGE("config struct_size does not match its cuDecomp layout version");
+  }
+  std::memcpy(config, &source, static_cast<size_t>(expectedConfigPayloadSizeForVersion(version)));
+  config->struct_size = struct_size;
+  config->magic = CUDECOMP_GRID_DESC_CONFIG_MAGIC;
+  config->version = version;
+}
+
+static void copyPencilInfoToCaller(cudecompPencilInfo_t* pencil_info, int64_t struct_size, int32_t version,
+                                   const cudecompPencilInfo_t& source) {
+  const int64_t pencil_info_size = expectedPencilInfoSizeForVersion(version);
+  if (struct_size != pencil_info_size) {
+    THROW_INVALID_USAGE("pencil_info struct_size does not match its cuDecomp layout version");
+  }
+  std::memcpy(pencil_info, &source, static_cast<size_t>(expectedPencilInfoPayloadSizeForVersion(version)));
+  pencil_info->struct_size = struct_size;
+  pencil_info->magic = CUDECOMP_PENCIL_INFO_MAGIC;
+  pencil_info->version = version;
+}
+
 static cudecompResult_t handleException(const BaseException& e) {
   std::cerr << e.what();
   return e.getResult();
@@ -828,9 +1035,11 @@ cudecompResult_t cudecompInit_F(cudecompHandle_t* handle_in, MPI_Fint mpi_comm_f
   CUDECOMP_CATCH_C_API_ERRORS()
 }
 
-cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDesc_t* grid_desc_in,
-                                        cudecompGridDescConfig_t* config,
-                                        const cudecompGridDescAutotuneOptions_t* options) {
+cudecompResult_t cudecompGridDescCreateVersioned(cudecompHandle_t handle, cudecompGridDesc_t* grid_desc_in,
+                                                 cudecompGridDescConfig_t* config, int64_t config_struct_size,
+                                                 int32_t config_version,
+                                                 const cudecompGridDescAutotuneOptions_t* options,
+                                                 int64_t options_struct_size, int32_t options_version) {
 
   using namespace cudecomp;
   cudecompGridDesc_t grid_desc = nullptr;
@@ -842,6 +1051,30 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
     checkHandle(handle);
     if (!grid_desc_in) { THROW_INVALID_USAGE("grid_desc argument cannot be null"); }
     if (!config) { THROW_INVALID_USAGE("config argument cannot be null"); }
+    if (config_struct_size != expectedConfigSizeForVersion(config_version)) {
+      THROW_INVALID_USAGE("config struct_size does not match its cuDecomp layout version");
+    }
+    checkConfigStruct(config);
+    if (config->struct_size != config_struct_size || config->version != config_version) {
+      THROW_INVALID_USAGE("config metadata does not match the requested cuDecomp layout version");
+    }
+    cudecompGridDescConfig_t* caller_config = config;
+    const int64_t caller_config_size = config_struct_size;
+    const int32_t caller_config_version = config_version;
+    cudecompGridDescConfig_t normalized_config = normalizeConfig(config);
+    config = &normalized_config;
+    cudecompGridDescAutotuneOptions_t normalized_options;
+    if (options) {
+      if (options_struct_size != expectedAutotuneOptionsSizeForVersion(options_version)) {
+        THROW_INVALID_USAGE("options struct_size does not match its cuDecomp layout version");
+      }
+      checkAutotuneOptionsStruct(options);
+      if (options->struct_size != options_struct_size || options->version != options_version) {
+        THROW_INVALID_USAGE("options metadata does not match the requested cuDecomp layout version");
+      }
+      normalized_options = normalizeAutotuneOptions(options);
+      options = &normalized_options;
+    }
 
     // Check some autotuning options
     bool autotune_transpose_backend = false;
@@ -1017,7 +1250,8 @@ cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, cudecompGridDes
     releaseUnusedHandleResources(handle);
 
     *grid_desc_in = grid_desc;
-    *config = grid_desc->config;
+    copyConfigToCaller(caller_config, caller_config_size, caller_config_version, grid_desc->config);
+    config = caller_config;
 
     // If gdims_dist was not set, return config with default values
     if (!grid_desc->gdims_dist_set) {
@@ -1057,88 +1291,51 @@ cudecompResult_t cudecompGridDescDestroy(cudecompHandle_t handle, cudecompGridDe
   return CUDECOMP_RESULT_SUCCESS;
 }
 
-cudecompResult_t cudecompGridDescConfigSetDefaults(cudecompGridDescConfig_t* config) {
+cudecompResult_t cudecompGridDescConfigSetDefaultsVersioned(cudecompGridDescConfig_t* config, int64_t struct_size,
+                                                            int32_t version) {
   using namespace cudecomp;
   try {
     if (!config) { THROW_INVALID_USAGE("config argument cannot be null"); }
-
-    // Grid Information
-    for (int i = 0; i < 2; ++i) {
-      config->pdims[i] = 0;
+    if (struct_size != expectedConfigSizeForVersion(version)) {
+      THROW_INVALID_USAGE("config struct_size does not match its cuDecomp layout version");
     }
-    for (int i = 0; i < 3; ++i) {
-      config->gdims[i] = 0;
-      config->gdims_dist[i] = 0;
-    }
-    config->rank_order = CUDECOMP_RANK_ORDER_DEFAULT;
-
-    // Transpose Options
-    config->transpose_comm_backend = CUDECOMP_TRANSPOSE_COMM_MPI_P2P;
-    for (int i = 0; i < 3; ++i) {
-      config->transpose_axis_contiguous[i] = false;
-      for (int j = 0; j < 3; ++j) {
-        config->transpose_mem_order[i][j] = -1;
-      }
-    }
-
-    // Halo Options
-    config->halo_comm_backend = CUDECOMP_HALO_COMM_MPI;
+    setConfigDefaults(config, struct_size, version);
   }
   CUDECOMP_CATCH_C_API_ERRORS()
   return CUDECOMP_RESULT_SUCCESS;
 }
 
-cudecompResult_t cudecompGridDescAutotuneOptionsSetDefaults(cudecompGridDescAutotuneOptions_t* options) {
+cudecompResult_t cudecompGridDescAutotuneOptionsSetDefaultsVersioned(cudecompGridDescAutotuneOptions_t* options,
+                                                                     int64_t struct_size, int32_t version) {
   using namespace cudecomp;
   try {
     if (!options) { THROW_INVALID_USAGE("options argument cannot be null"); }
-
-    // General options
-    options->n_warmup_trials = 3;
-    options->n_trials = 5;
-    options->grid_mode = CUDECOMP_AUTOTUNE_GRID_TRANSPOSE;
-    options->dtype = CUDECOMP_DOUBLE;
-    options->allow_uneven_decompositions = true;
-    options->disable_mpi_backends = false;
-    options->disable_nccl_backends = false;
-    options->disable_nvshmem_backends = false;
-    options->skip_threshold = 0.0;
-
-    // Transpose-specific options
-    options->autotune_transpose_backend = false;
-    for (int i = 0; i < 4; ++i) {
-      options->transpose_use_inplace_buffers[i] = false;
-      options->transpose_op_weights[i] = 1.0;
-      for (int j = 0; j < 3; ++j) {
-        options->transpose_input_halo_extents[i][j] = 0;
-        options->transpose_output_halo_extents[i][j] = 0;
-        options->transpose_input_padding[i][j] = 0;
-        options->transpose_output_padding[i][j] = 0;
-      }
+    if (struct_size != expectedAutotuneOptionsSizeForVersion(version)) {
+      THROW_INVALID_USAGE("options struct_size does not match its cuDecomp layout version");
     }
-
-    // Halo-specific options
-    options->autotune_halo_backend = false;
-    options->halo_axis = 0;
-    for (int i = 0; i < 3; ++i) {
-      options->halo_extents[i] = 0;
-      options->halo_periods[i] = false;
-      options->halo_padding[i] = 0;
-    }
+    setAutotuneOptionsDefaults(options, struct_size, version);
   }
   CUDECOMP_CATCH_C_API_ERRORS()
   return CUDECOMP_RESULT_SUCCESS;
 }
 
-cudecompResult_t cudecompGetPencilInfo(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
-                                       cudecompPencilInfo_t* pencil_info, int32_t axis, const int32_t halo_extents[],
-                                       const int32_t padding[]) {
+cudecompResult_t cudecompGetPencilInfoVersioned(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
+                                                cudecompPencilInfo_t* pencil_info, int64_t pencil_info_struct_size,
+                                                int32_t pencil_info_version, int32_t axis, const int32_t halo_extents[],
+                                                const int32_t padding[]) {
   using namespace cudecomp;
   try {
     checkHandle(handle);
     checkGridDesc(handle, grid_desc);
     if (!pencil_info) { THROW_INVALID_USAGE("pencil_info argument cannot be null."); }
+    if (pencil_info_struct_size != expectedPencilInfoSizeForVersion(pencil_info_version)) {
+      THROW_INVALID_USAGE("pencil_info struct_size does not match its cuDecomp layout version");
+    }
     if (axis < 0 || axis > 2) { THROW_INVALID_USAGE("axis argument out of range"); }
+
+    cudecompPencilInfo_t normalized_pencil_info{};
+    cudecompPencilInfo_t* caller_pencil_info = pencil_info;
+    pencil_info = &normalized_pencil_info;
 
     std::array<int32_t, 3> invorder;
 
@@ -1179,20 +1376,23 @@ cudecompResult_t cudecompGetPencilInfo(cudecompHandle_t handle, cudecompGridDesc
       pencil_info->shape[ord] = checkedPencilShape(shape_with_halo_padding);
       pencil_info->size = checkedPencilSizeProduct(pencil_info->size, pencil_info->shape[ord]);
     }
+
+    copyPencilInfoToCaller(caller_pencil_info, pencil_info_struct_size, pencil_info_version, *pencil_info);
   }
   CUDECOMP_CATCH_C_API_ERRORS()
   return CUDECOMP_RESULT_SUCCESS;
 }
 
-cudecompResult_t cudecompGetGridDescConfig(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
-                                           cudecompGridDescConfig_t* config) {
+cudecompResult_t cudecompGetGridDescConfigVersioned(cudecompHandle_t handle, cudecompGridDesc_t grid_desc,
+                                                    cudecompGridDescConfig_t* config, int64_t struct_size,
+                                                    int32_t version) {
   using namespace cudecomp;
   try {
     checkHandle(handle);
     checkGridDesc(handle, grid_desc);
     if (!config) { THROW_INVALID_USAGE("config argument cannot be null."); }
 
-    *config = grid_desc->config;
+    copyConfigToCaller(config, struct_size, version, grid_desc->config);
     // If gdims_dist was not set, return config with default values
     if (!grid_desc->gdims_dist_set) {
       config->gdims_dist[0] = 0;

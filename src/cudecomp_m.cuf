@@ -13,12 +13,97 @@
 ! See the License for the specific language governing permissions and
 ! limitations under the License.
 
+module cudecomp_internal
+  use, intrinsic :: iso_c_binding
+  implicit none
+  private
+  public :: cudecompGridDescConfig_v1, cudecompGridDescAutotuneOptions_v1, cudecompPencilInfo_v1
+
+  ! Structure defining configuration options for grid descriptor creation
+  type, bind(c) :: cudecompGridDescConfig_v1
+    integer(c_int64_t) :: struct_size
+    integer(c_int32_t) :: magic
+    integer(c_int32_t) :: version
+
+    ! Grid information
+    integer(c_int32_t) :: gdims(3) ! dimensions of data grid
+    integer(c_int32_t) :: gdims_dist(3) ! dimensions of data grid for distribution
+    integer(c_int32_t) :: pdims(2) ! dimensions of process grid
+    integer(c_int32_t) :: rank_order ! process grid rank assignment order
+
+    ! Transpose Options
+    integer(c_int32_t) :: transpose_comm_backend
+    logical(c_bool) :: transpose_axis_contiguous(3) ! flag (by axis) indicating whether pencil memory should be contiguous along pencil axis
+    integer(c_int32_t) :: transpose_mem_order(3,3) ! user-specified memory ordering by axis, overrides transpose_axis_contiguous setting
+
+    ! Halo Options
+    integer(c_int32_t) :: halo_comm_backend ! communication backend to use for halo communication
+
+  end type cudecompGridDescConfig_v1
+
+  ! Structure defining autotuning options for grid descriptor creation
+  type, bind(c) :: cudecompGridDescAutotuneOptions_v1
+    integer(c_int64_t) :: struct_size
+    integer(c_int32_t) :: magic
+    integer(c_int32_t) :: version
+
+    ! General options
+    integer(c_int32_t) :: n_warmup_trials ! number of warmup trials to run for each tested configuration during autotuning
+    integer(c_int32_t) :: n_trials ! number of timed trials to run for each tested configuration during autotuning
+    integer(c_int32_t) :: grid_mode ! which communication (transpose/halo) to use to autotune process grid
+    integer(c_int32_t) :: dtype ! datatype to use during autotuning
+    logical(c_bool) :: allow_uneven_decompositions ! flag to control whether autotuning allows uneven decompositions (based on gdims_dist if provided, gdims otherwise)
+    logical(c_bool) :: disable_mpi_backends ! flag to disable MPI backend options during autotuning
+    logical(c_bool) :: disable_nccl_backends ! flag to disable NCCL backend options during autotuning
+    logical(c_bool) :: disable_nvshmem_backends ! flag to disable NVSHMEM backend options during autotuning
+    real(c_double) :: skip_threshold ! threshold used to skip testing slow configurations
+
+    ! Transpose-specific options
+    logical(c_bool) :: autotune_transpose_backend ! flag to enable transpose backend autotuning
+    logical(c_bool) :: transpose_use_inplace_buffers(4) ! flag to control whether transpose autotuning uses in-place or out-of-place buffers
+    real(c_double) :: transpose_op_weights(4) ! multiplicative weight to apply to trial time contribution by transpose operation
+    integer(c_int32_t) :: transpose_input_halo_extents(3, 4) ! input_halo_extents argument to use during autotuning by transpose operation
+    integer(c_int32_t) :: transpose_output_halo_extents(3, 4) ! output_halo_extents argument to use during autotuning by transpose operation
+    integer(c_int32_t) :: transpose_input_padding(3, 4) ! input_padding argument to use during autotuning by transpose operation
+    integer(c_int32_t) :: transpose_output_padding(3, 4) ! output_padding argument to use during autotuning by transpose operation
+
+    ! Halo-specific options
+    logical(c_bool) :: autotune_halo_backend ! flag to enable halo backend autotuning
+    integer(c_int32_t) :: halo_extents(3) ! extents for halo autotuning
+    logical(c_bool) :: halo_periods(3) ! periodicity for halo autotuning
+    integer(c_int32_t) :: halo_axis ! which axis pencils to use for halo autotuning
+    integer(c_int32_t) :: halo_padding(3) ! padding argument for halo autotuning
+  end type cudecompGridDescAutotuneOptions_v1
+
+  ! Structure containing pencil-specific geometry information
+  type, bind(c) :: cudecompPencilInfo_v1
+    integer(c_int64_t) :: struct_size
+    integer(c_int32_t) :: magic
+    integer(c_int32_t) :: version
+
+    integer(c_int32_t) :: shape(3)        ! pencil shape (in local order, including halo elements)
+    integer(c_int32_t) :: lo(3)           ! lower bound coordinates (in local order, excluding halo elements)
+    integer(c_int32_t) :: hi(3)           ! upper bound coordinates (in local order, excluding halo elements)
+    integer(c_int32_t) :: order(3)        ! data layout order (e.g. 3,2,1 means memory is ordered z,y,x)
+    integer(c_int32_t) :: halo_extents(3) ! halo extents by dimension (always in x,y,z order)
+    integer(c_int32_t) :: padding(3)      ! padding by dimension (always in x,y,z order)
+    integer(c_int64_t) :: size            ! number of elements in pencil (including halo elements)
+  end type cudecompPencilInfo_v1
+end module cudecomp_internal
+
 module cudecomp
   use, intrinsic :: iso_c_binding
   use, intrinsic :: iso_fortran_env, only: int64, real32, real64
   use cudafor
+  use cudecomp_internal, only: cudecompGridDescConfig => cudecompGridDescConfig_v1, &
+                               cudecompGridDescAutotuneOptions => cudecompGridDescAutotuneOptions_v1, &
+                               cudecompPencilInfo => cudecompPencilInfo_v1
+  use cudecomp_internal, only: cudecompGridDescConfig_v1, cudecompGridDescAutotuneOptions_v1, &
+                               cudecompPencilInfo_v1
   private :: cudafor
-
+  private :: cudecompGetGridDescConfig_v1, cudecompGridDescAutotuneOptionsSetDefaults_v1, &
+             cudecompGridDescConfigSetDefaults_v1, cudecompGridDescCreate_v1, cudecompGetPencilInfo_v1, &
+             cudecompGridDescConfig_v1, cudecompGridDescAutotuneOptions_v1, cudecompPencilInfo_v1
   ! enumerators
 
   ! enum for cuDecomp transpose backend options
@@ -89,65 +174,6 @@ module cudecomp
     type(c_ptr) :: member
   end type cudecompGridDesc
 
-  ! Structure defining configuration options for grid descriptor creation
-  type, bind(c) :: cudecompGridDescConfig
-    ! Grid information
-    integer(c_int32_t) :: gdims(3) ! dimensions of data grid
-    integer(c_int32_t) :: gdims_dist(3) ! dimensions of data grid for distribution
-    integer(c_int32_t) :: pdims(2) ! dimensions of process grid
-    integer(c_int32_t) :: rank_order ! process grid rank assignment order
-
-    ! Transpose Options
-    integer(c_int32_t) :: transpose_comm_backend
-    logical(c_bool) :: transpose_axis_contiguous(3) ! flag (by axis) indicating whether pencil memory should be contiguous along pencil axis
-    integer(c_int32_t) :: transpose_mem_order(3,3) ! user-specified memory ordering by axis, overrides transpose_axis_contiguous setting
-
-    ! Halo Options
-    integer(c_int32_t) :: halo_comm_backend ! communication backend to use for halo communication
-
-  end type cudecompGridDescConfig
-
-  ! Structure defining autotuning options for grid descriptor creation
-  type, bind(c) :: cudecompGridDescAutotuneOptions
-    ! General options
-    integer(c_int32_t) :: n_warmup_trials ! number of warmup trials to run for each tested configuration during autotuning
-    integer(c_int32_t) :: n_trials ! number of timed trials to run for each tested configuration during autotuning
-    integer(c_int32_t) :: grid_mode ! which communication (transpose/halo) to use to autotune process grid
-    integer(c_int32_t) :: dtype ! datatype to use during autotuning
-    logical(c_bool) :: allow_uneven_decompositions ! flag to control whether autotuning allows uneven decompositions (based on gdims_dist if provided, gdims otherwise)
-    logical(c_bool) :: disable_mpi_backends ! flag to disable MPI backend options during autotuning
-    logical(c_bool) :: disable_nccl_backends ! flag to disable NCCL backend options during autotuning
-    logical(c_bool) :: disable_nvshmem_backends ! flag to disable NVSHMEM backend options during autotuning
-    real(c_double) :: skip_threshold ! threshold used to skip testing slow configurations
-
-    ! Transpose-specific options
-    logical(c_bool) :: autotune_transpose_backend ! flag to enable transpose backend autotuning
-    logical(c_bool) :: transpose_use_inplace_buffers(4) ! flag to control whether transpose autotuning uses in-place or out-of-place buffers
-    real(c_double) :: transpose_op_weights(4) ! multiplicative weight to apply to trial time contribution by transpose operation
-    integer(c_int32_t) :: transpose_input_halo_extents(3, 4) ! input_halo_extents argument to use during autotuning by transpose operation
-    integer(c_int32_t) :: transpose_output_halo_extents(3, 4) ! output_halo_extents argument to use during autotuning by transpose operation
-    integer(c_int32_t) :: transpose_input_padding(3, 4) ! input_padding argument to use during autotuning by transpose operation
-    integer(c_int32_t) :: transpose_output_padding(3, 4) ! output_padding argument to use during autotuning by transpose operation
-
-    ! Halo-specific options
-    logical(c_bool) :: autotune_halo_backend ! flag to enable halo backend autotuning
-    integer(c_int32_t) :: halo_extents(3) ! extents for halo autotuning
-    logical(c_bool) :: halo_periods(3) ! periodicity for halo autotuning
-    integer(c_int32_t) :: halo_axis ! which axis pencils to use for halo autotuning
-    integer(c_int32_t) :: halo_padding(3) ! padding argument for halo autotuning
-  end type cudecompGridDescAutotuneOptions
-
-  ! Info structure containing pencil specific information
-  type, bind(c) :: cudecompPencilInfo
-    integer(c_int32_t) :: shape(3)        ! pencil shape (in local order, including halo elements)
-    integer(c_int32_t) :: lo(3)           ! lower bound coordinates (in local order, excluding halo elements)
-    integer(c_int32_t) :: hi(3)           ! upper bound coordinates (in local order, excluding halo elements)
-    integer(c_int32_t) :: order(3)        ! data layout order (e.g. 3,2,1 means memory is ordered z,y,x)
-    integer(c_int32_t) :: halo_extents(3) ! halo extents by dimension (always in x,y,z order)
-    integer(c_int32_t) :: padding(3)      ! padding by dimension (always in x,y,z order)
-    integer(c_int64_t) :: size            ! number of elements in pencil (including halo elements)
-  end type cudecompPencilInfo
-
   ! interfaces
 
   ! cuDecomp initialization/finalization functions
@@ -156,6 +182,26 @@ module cudecomp
   interface cudecompInit
     module procedure cudecompInit_MPI_F, cudecompInit_MPI_F08
   end interface cudecompInit
+
+  interface cudecompGridDescConfigSetDefaults
+    module procedure cudecompGridDescConfigSetDefaults_v1
+  end interface cudecompGridDescConfigSetDefaults
+
+  interface cudecompGridDescAutotuneOptionsSetDefaults
+    module procedure cudecompGridDescAutotuneOptionsSetDefaults_v1
+  end interface cudecompGridDescAutotuneOptionsSetDefaults
+
+  interface cudecompGridDescCreate
+    module procedure cudecompGridDescCreate_v1
+  end interface cudecompGridDescCreate
+
+  interface cudecompGetGridDescConfig
+    module procedure cudecompGetGridDescConfig_v1
+  end interface cudecompGetGridDescConfig
+
+  interface cudecompGetPencilInfo
+    module procedure cudecompGetPencilInfo_v1
+  end interface cudecompGetPencilInfo
 
   interface
     function cudecompInit_FC(handle, mpi_comm) bind(C, name="cudecompInit_F") result(res)
@@ -174,28 +220,22 @@ module cudecomp
     end function cudecompFinalize
   end interface
 
+  ! Pass public structures as C pointers so all Fortran structure versions can share these low-level interfaces.
   interface
-    function cudecompGridDescCreateC(handle, grid_desc, config, options) &
-       bind(C, name="cudecompGridDescCreate") result(res)
+    function cudecompGridDescCreateC(handle, grid_desc, config, config_struct_size, config_version, &
+                                     options, options_struct_size, options_version) &
+       bind(C, name="cudecompGridDescCreateVersioned") result(res)
       import
       type(cudecompHandle), value :: handle
       type(cudecompGridDesc) :: grid_desc
-      type(cudecompGridDescConfig) :: config
-      type(cudecompGridDescAutotuneOptions) :: options
+      type(c_ptr), value :: config
+      integer(c_int64_t), value :: config_struct_size
+      integer(c_int32_t), value :: config_version
+      type(c_ptr), value :: options
+      integer(c_int64_t), value :: options_struct_size
+      integer(c_int32_t), value :: options_version
       integer(c_int) :: res
     end function cudecompGridDescCreateC
-  end interface
-
-  interface
-    function cudecompGridDescCreateC_nullopt(handle, grid_desc, config, options) &
-       bind(C, name="cudecompGridDescCreate") result(res)
-      import
-      type(cudecompHandle), value :: handle
-      type(cudecompGridDesc) :: grid_desc
-      type(cudecompGridDescConfig) :: config
-      type(c_ptr), value :: options
-      integer(c_int) :: res
-    end function cudecompGridDescCreateC_nullopt
   end interface
 
   interface
@@ -209,46 +249,55 @@ module cudecomp
 
   ! cudecompGridDescConfig creation/manipulation functions
   interface
-    function cudecompGridDescConfigSetDefaults(config) &
-      bind(C, name="cudecompGridDescConfigSetDefaults") result(res)
+    function cudecompGridDescConfigSetDefaultsC(config, struct_size, version) &
+      bind(C, name="cudecompGridDescConfigSetDefaultsVersioned") result(res)
       import
-      type(cudecompGridDescConfig) :: config
+      type(c_ptr), value :: config
+      integer(c_int64_t), value :: struct_size
+      integer(c_int32_t), value :: version
       integer(c_int) :: res
-    end function cudecompGridDescConfigSetDefaults
+    end function cudecompGridDescConfigSetDefaultsC
   end interface
 
   ! cudecompGridDescAutotuneOptions creation/manipulation functions
   interface
-    function cudecompGridDescAutotuneOptionsSetDefaultsC(options) &
-      bind(C, name="cudecompGridDescAutotuneOptionsSetDefaults") result(res)
+    function cudecompGridDescAutotuneOptionsSetDefaultsC(options, struct_size, version) &
+      bind(C, name="cudecompGridDescAutotuneOptionsSetDefaultsVersioned") result(res)
       import
-      type(cudecompGridDescAutotuneOptions) :: options
+      type(c_ptr), value :: options
+      integer(c_int64_t), value :: struct_size
+      integer(c_int32_t), value :: version
       integer(c_int) :: res
     end function cudecompGridDescAutotuneOptionsSetDefaultsC
   end interface
 
   ! General functions
   interface
-    function cudecompGetPencilInfoC(handle, grid_desc, pencil_info, axis, halo_extents, padding) &
-      bind(C, name="cudecompGetPencilInfo") result(res)
+    function cudecompGetPencilInfoC(handle, grid_desc, pencil_info, pencil_info_struct_size, &
+                                    pencil_info_version, axis, halo_extents, padding) &
+      bind(C, name="cudecompGetPencilInfoVersioned") result(res)
       import
       type(cudecompHandle), value :: handle
       type(cudecompGridDesc), value :: grid_desc
+      type(c_ptr), value :: pencil_info
+      integer(c_int64_t), value :: pencil_info_struct_size
+      integer(c_int32_t), value :: pencil_info_version
       integer(c_int32_t), value :: axis
       integer(c_int32_t) :: halo_extents(3)
       integer(c_int32_t) :: padding(3)
-      type(cudecompPencilInfo) :: pencil_info
       integer(c_int) :: res
     end function cudecompGetPencilInfoC
   end interface
 
   interface
-    function cudecompGetGridDescConfigC(handle, grid_desc, config) &
-      bind(C, name="cudecompGetGridDescConfig") result(res)
+    function cudecompGetGridDescConfigC(handle, grid_desc, config, struct_size, version) &
+      bind(C, name="cudecompGetGridDescConfigVersioned") result(res)
       import
       type(cudecompHandle), value :: handle
       type(cudecompGridDesc), value :: grid_desc
-      type(cudecompGridDescConfig) :: config
+      type(c_ptr), value :: config
+      integer(c_int64_t), value :: struct_size
+      integer(c_int32_t), value :: version
       integer(c_int) :: res
     end function cudecompGetGridDescConfigC
   end interface
@@ -517,24 +566,39 @@ contains
   end function cudecompInit_MPI_F08
 
   ! cudecompGridDesc creation/manipulation functions
-  function cudecompGridDescAutotuneOptionsSetDefaults(options) result(res)
-    type(cudecompGridDescAutotuneOptions) :: options
+  function cudecompGridDescConfigSetDefaults_v1(config) result(res)
+    implicit none
+    type(cudecompGridDescConfig_v1), target :: config
     integer(c_int) :: res
+    integer(c_int32_t), parameter :: STRUCT_VERSION = 1
 
-    res = cudecompGridDescAutotuneOptionsSetDefaultsC(options)
+    res = cudecompGridDescConfigSetDefaultsC(c_loc(config), int(c_sizeof(config), c_int64_t), &
+                                             STRUCT_VERSION)
+  end function cudecompGridDescConfigSetDefaults_v1
+
+  function cudecompGridDescAutotuneOptionsSetDefaults_v1(options) result(res)
+    implicit none
+    type(cudecompGridDescAutotuneOptions_v1), target :: options
+    integer(c_int) :: res
+    integer(c_int32_t), parameter :: STRUCT_VERSION = 1
+
+    res = cudecompGridDescAutotuneOptionsSetDefaultsC(c_loc(options), int(c_sizeof(options), c_int64_t), &
+                                                      STRUCT_VERSION)
 
     ! Adjust halo axis entry for one-based axis indexing
     options%halo_axis = options%halo_axis + 1
 
-  end function cudecompGridDescAutotuneOptionsSetDefaults
+  end function cudecompGridDescAutotuneOptionsSetDefaults_v1
 
-  function cudecompGridDescCreate(handle, grid_desc, config, options) result(res)
+  function cudecompGridDescCreate_v1(handle, grid_desc, config, options) result(res)
     implicit none
     type(cudecompHandle) :: handle
     type(cudecompGridDesc) :: grid_desc
-    type(cudecompGridDescConfig) :: config
-    type(cudecompGridDescAutotuneOptions), optional :: options
+    type(cudecompGridDescConfig_v1), target :: config
+    type(cudecompGridDescAutotuneOptions_v1), optional, target :: options
     integer(c_int) :: res
+    integer(c_int32_t), parameter :: CONFIG_STRUCT_VERSION = 1
+    integer(c_int32_t), parameter :: OPTIONS_STRUCT_VERSION = 1
 
     ! Adjust transpose mem order entries for zero-based indexing
     config%transpose_mem_order = config%transpose_mem_order - 1
@@ -542,27 +606,31 @@ contains
     if (present(options)) then
       ! Adjust halo axis entry for zero-based axis indexing
       options%halo_axis = options%halo_axis - 1
-      res = cudecompGridDescCreateC(handle, grid_desc, config, options)
+      res = cudecompGridDescCreateC(handle, grid_desc, c_loc(config), int(c_sizeof(config), c_int64_t), &
+                                    CONFIG_STRUCT_VERSION, c_loc(options), int(c_sizeof(options), c_int64_t), &
+                                    OPTIONS_STRUCT_VERSION)
       ! Adjust halo axis entry for one-based axis indexing
       options%halo_axis = options%halo_axis + 1
     else
-      res = cudecompGridDescCreateC_nullopt(handle, grid_desc, config, C_NULL_PTR)
+      res = cudecompGridDescCreateC(handle, grid_desc, c_loc(config), int(c_sizeof(config), c_int64_t), &
+                                    CONFIG_STRUCT_VERSION, C_NULL_PTR, 0_c_int64_t, 0_c_int32_t)
     endif
 
     ! Adjust transpose mem order entries for one-based indexing
     config%transpose_mem_order = config%transpose_mem_order + 1
-  end function cudecompGridDescCreate
+  end function cudecompGridDescCreate_v1
 
   ! General functions
-  function cudecompGetPencilInfo(handle, grid_desc, pencil_info, axis, halo_extents, padding) result(res)
+  function cudecompGetPencilInfo_v1(handle, grid_desc, pencil_info, axis, halo_extents, padding) result(res)
     implicit none
     type(cudecompHandle) :: handle
     type(cudecompGridDesc) :: grid_desc
     integer :: axis  ! unit offset, so x/y/z = 1/2/3
     integer, optional:: halo_extents(3)
     integer, optional:: padding(3)
-    type(cudecompPencilInfo) :: pencil_info  ! res%order is unit offset, x/y/z = 1/2/3
+    type(cudecompPencilInfo_v1), target :: pencil_info  ! res%order is unit offset, x/y/z = 1/2/3
     integer(c_int) :: res
+    integer(c_int32_t), parameter :: STRUCT_VERSION = 1
 
     integer :: halo_extents_(3)
     integer :: padding_(3)
@@ -571,25 +639,28 @@ contains
     padding_(:) = [0, 0, 0]
     if (present(halo_extents)) halo_extents_ = halo_extents
     if (present(padding)) padding_ = padding
-    res = cudecompGetPencilInfoC(handle, grid_desc, pencil_info, axis - 1, halo_extents_, padding_)
+    res = cudecompGetPencilInfoC(handle, grid_desc, c_loc(pencil_info), int(c_sizeof(pencil_info), c_int64_t), &
+                                 STRUCT_VERSION, axis - 1, halo_extents_, padding_)
     ! Update entries for Fortran indexing
     pencil_info%order = pencil_info%order + 1
     pencil_info%lo = pencil_info%lo + 1
     pencil_info%hi = pencil_info%hi + 1
-  end function cudecompGetPencilInfo
+  end function cudecompGetPencilInfo_v1
 
-  function cudecompGetGridDescConfig(handle, grid_desc, config) result(res)
+  function cudecompGetGridDescConfig_v1(handle, grid_desc, config) result(res)
     type(cudecompHandle), value :: handle
     type(cudecompGridDesc), value :: grid_desc
-    type(cudecompGridDescConfig) :: config
+    type(cudecompGridDescConfig_v1), target :: config
     integer(c_int) :: res
+    integer(c_int32_t), parameter :: STRUCT_VERSION = 1
 
-    res = cudecompGetGridDescConfigC(handle, grid_desc, config)
+    res = cudecompGetGridDescConfigC(handle, grid_desc, c_loc(config), int(c_sizeof(config), c_int64_t), &
+                                     STRUCT_VERSION)
 
     ! Adjust transpose mem order entries for one-based indexing
     config%transpose_mem_order = config%transpose_mem_order + 1
 
-  end function cudecompGetGridDescConfig
+  end function cudecompGetGridDescConfig_v1
 
   function cudecompGetHaloWorkspaceSize(handle, grid_desc, axis, halo_extents, workspace_size) result(res)
     implicit none
