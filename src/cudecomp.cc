@@ -282,14 +282,20 @@ static int64_t expectedPencilInfoPayloadSizeForVersion(int32_t version) {
 }
 
 static void checkConfigStruct(const cudecompGridDescConfig_t* config) {
-  if (config->magic != CUDECOMP_GRID_DESC_CONFIG_MAGIC) { THROW_INVALID_USAGE("config magic is invalid"); }
+  if (config->magic != CUDECOMP_GRID_DESC_CONFIG_MAGIC) {
+    THROW_INVALID_USAGE(
+        "config is not initialized; call cudecompGridDescConfigSetDefaults() before cudecompGridDescCreate()");
+  }
   if (config->struct_size != expectedConfigSizeForVersion(config->version)) {
     THROW_INVALID_USAGE("config struct_size does not match its cuDecomp layout version");
   }
 }
 
 static void checkAutotuneOptionsStruct(const cudecompGridDescAutotuneOptions_t* options) {
-  if (options->magic != CUDECOMP_GRID_DESC_AUTOTUNE_OPTIONS_MAGIC) { THROW_INVALID_USAGE("options magic is invalid"); }
+  if (options->magic != CUDECOMP_GRID_DESC_AUTOTUNE_OPTIONS_MAGIC) {
+    THROW_INVALID_USAGE("options are not initialized; call cudecompGridDescAutotuneOptionsSetDefaults() before "
+                        "cudecompGridDescCreate()");
+  }
   if (options->struct_size != expectedAutotuneOptionsSizeForVersion(options->version)) {
     THROW_INVALID_USAGE("options struct_size does not match its cuDecomp layout version");
   }
