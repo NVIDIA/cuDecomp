@@ -475,6 +475,50 @@ class TransposeCorrectnessTest : public ::testing::TestWithParam<TransposeCase> 
 class CudaGraphTransposeCorrectnessTest : public ::testing::TestWithParam<TransposeCase> {};
 class NcclUserBufferRegistrationTest : public ::testing::TestWithParam<TransposeCase> {};
 
+TEST(NcclCommunicatorLifecycleTest, RetainsLocalCommunicatorUntilAllDescriptorsReleaseIt) {
+  const auto world_comm = cudecomp_test::MpiTestComm::world();
+  if (world_comm.size() != 4) { GTEST_SKIP() << "NCCL communicator lifecycle test requires exactly four ranks"; }
+
+  const auto setup_decision = cudecomp_test::initializeGpuForTest(world_comm, true);
+  ASSERT_FALSE(setup_decision.fail) << setup_decision.reason;
+  if (setup_decision.skip) { GTEST_SKIP() << setup_decision.reason; }
+
+  cudecompHandle_t handle = nullptr;
+  CHECK_CUDECOMP_GLOBAL(world_comm, cudecompInit(&handle, world_comm.mpiComm()));
+  cudecomp_test::cudecompHandleGuard handle_guard(handle);
+
+  // With a 2x2 process grid, ranks 0-2 use an intra-host row or column while rank 3 does not. The local NCCL
+  // communicator still belongs to all four ranks and must therefore have a uniform lifetime across them.
+  ASSERT_TRUE(applySyntheticHostnames(handle, {0, 0, 0, 1}));
+
+  cudecompGridDescConfig_t config;
+  ASSERT_EQ(CUDECOMP_RESULT_SUCCESS, cudecompGridDescConfigSetDefaults(&config));
+  config.gdims[0] = kBaselineGdims[0];
+  config.gdims[1] = kBaselineGdims[1];
+  config.gdims[2] = kBaselineGdims[2];
+  config.pdims[0] = 2;
+  config.pdims[1] = 2;
+  config.transpose_comm_backend = CUDECOMP_TRANSPOSE_COMM_NCCL;
+
+  cudecompGridDesc_t first_grid_desc = nullptr;
+  CHECK_CUDECOMP_GLOBAL(world_comm, cudecompGridDescCreate(handle, &first_grid_desc, &config, nullptr));
+  EXPECT_TRUE(handle->nccl_comm);
+  EXPECT_TRUE(handle->nccl_local_comm);
+
+  // Before the lifecycle fix, rank 3 released its local communicator after the first creation. This second creation
+  // then entered different collective call sequences across ranks and hung.
+  cudecompGridDesc_t second_grid_desc = nullptr;
+  CHECK_CUDECOMP_GLOBAL(world_comm, cudecompGridDescCreate(handle, &second_grid_desc, &config, nullptr));
+
+  CHECK_CUDECOMP_GLOBAL(world_comm, cudecompGridDescDestroy(handle, second_grid_desc));
+  EXPECT_TRUE(handle->nccl_comm);
+  EXPECT_TRUE(handle->nccl_local_comm);
+
+  CHECK_CUDECOMP_GLOBAL(world_comm, cudecompGridDescDestroy(handle, first_grid_desc));
+  EXPECT_FALSE(handle->nccl_comm);
+  EXPECT_FALSE(handle->nccl_local_comm);
+}
+
 testing::AssertionResult ncclUserBufferRegistrationIsActive(cudecompHandle_t handle, void* buffer) {
 #if NCCL_VERSION_CODE >= NCCL_VERSION(2, 19, 0)
   if (!handle->nccl_enable_ubr) { return testing::AssertionFailure() << "NCCL user buffer registration is disabled"; }

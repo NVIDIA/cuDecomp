@@ -238,6 +238,7 @@ module cudecomp
     end function cudecompGridDescCreateC
   end interface
 
+  ! Collective over the handle MPI communicator.
   interface
     function cudecompGridDescDestroy(handle, grid_desc) bind(C, name="cudecompGridDescDestroy") result(res)
       import

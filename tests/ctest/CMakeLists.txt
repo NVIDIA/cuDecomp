@@ -147,7 +147,10 @@ function(add_cudecomp_transpose_test test_name filter labels)
 endfunction()
 
 add_cudecomp_transpose_test(cudecomp_transpose_mpi "MpiBackends/*" "transpose;mpi")
-add_cudecomp_transpose_test(cudecomp_transpose_nccl "NcclBackends/*" "transpose;nccl")
+add_cudecomp_transpose_test(cudecomp_transpose_nccl
+  "NcclBackends/*:NcclCommunicatorLifecycleTest.*"
+  "transpose;nccl"
+)
 set_tests_properties(cudecomp_transpose_nccl PROPERTIES
   ENVIRONMENT "CUDECOMP_TEST_KEEPALIVE_BACKEND=nccl"
 )
