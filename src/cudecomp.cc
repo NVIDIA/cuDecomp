@@ -818,7 +818,8 @@ static nvshmemRuntime acquireNvshmemRuntime(cudecompHandle_t& handle) {
 static void releaseUnusedHandleResources(cudecompHandle_t handle, bool release_streams = false) noexcept {
   if (!handle || !handle->initialized) { return; }
 
-  // Destroy NCCL communicators to reclaim resources if not used by other grid descriptors
+  // Grid descriptors retain NCCL communicator references uniformly across each communicator, so collective grid
+  // descriptor creation and destruction leave the same reference counts on all of its ranks.
   if (handle->nccl_comm && handle->nccl_comm.use_count() == 1) { handle->nccl_comm.reset(); }
   if (handle->nccl_local_comm && handle->nccl_local_comm.use_count() == 1) { handle->nccl_local_comm.reset(); }
   if (release_streams) { handle->streams.clear(); }
@@ -1151,30 +1152,25 @@ cudecompResult_t cudecompGridDescCreateVersioned(cudecompHandle_t handle, cudeco
     // Initialize NCCL communicator if needed
     if (need_nccl) {
       if (!handle->nccl_comm) { handle->nccl_comm = ncclCommFromMPIComm(handle->mpi_comm); }
-      if (!handle->nccl_local_comm) {
-        if (grid_desc->config.pdims[0] > 0 && grid_desc->config.pdims[1] > 0) {
-          // If pdims are set, temporarily set up comm info stuctures to determine if we need to create a local NCCL
-          // communicator
-          createCommInfo(handle, grid_desc);
+      MPI_Comm local_comm = handle->mpi_clique_comm != MPI_COMM_NULL ? handle->mpi_clique_comm : handle->mpi_local_comm;
+      if (grid_desc->config.pdims[0] > 0 && grid_desc->config.pdims[1] > 0) {
+        // All ranks must participate in these world-wide communicator splits even when some local groups already have
+        // a cached NCCL communicator.
+        createCommInfo(handle, grid_desc);
 
-          // Create local NCCL communicator if row or column communicator uses it
-          int need_local_nccl_comm =
-              static_cast<int>((grid_desc->row_comm_info.ngroups == 1 && grid_desc->row_comm_info.nranks > 1) ||
-                               (grid_desc->col_comm_info.ngroups == 1 && grid_desc->col_comm_info.nranks > 1));
+        int need_local_nccl_comm =
+            static_cast<int>((grid_desc->row_comm_info.ngroups == 1 && grid_desc->row_comm_info.nranks > 1) ||
+                             (grid_desc->col_comm_info.ngroups == 1 && grid_desc->col_comm_info.nranks > 1));
+        CHECK_MPI(MPI_Allreduce(MPI_IN_PLACE, &need_local_nccl_comm, 1, MPI_INT, MPI_LOR, local_comm));
 
-          // Local comm can include ranks in other rows/columns, need additional check for those cases.
-          CHECK_MPI(MPI_Allreduce(MPI_IN_PLACE, &need_local_nccl_comm, 1, MPI_INT, MPI_LOR,
-                                  handle->mpi_clique_comm != MPI_COMM_NULL ? handle->mpi_clique_comm
-                                                                           : handle->mpi_local_comm));
-
-          if (need_local_nccl_comm) {
-            handle->nccl_local_comm = ncclCommFromMPIComm(
-                handle->mpi_clique_comm != MPI_COMM_NULL ? handle->mpi_clique_comm : handle->mpi_local_comm);
-          }
-          grid_desc->row_comm_info.reset();
-          grid_desc->col_comm_info.reset();
-        } else {
-          // If pdims are not set, set up local NCCL communicator for use during autotuning
+        if (need_local_nccl_comm && !handle->nccl_local_comm) {
+          handle->nccl_local_comm = ncclCommFromMPIComm(local_comm);
+        }
+        grid_desc->row_comm_info.reset();
+        grid_desc->col_comm_info.reset();
+      } else {
+        // If pdims are not set, set up a local NCCL communicator for use during autotuning.
+        if (!handle->nccl_local_comm) {
           handle->nccl_local_comm = ncclCommFromMPIComm(
               handle->mpi_clique_comm != MPI_COMM_NULL ? handle->mpi_clique_comm : handle->mpi_local_comm);
         }
@@ -1233,14 +1229,13 @@ cudecompResult_t cudecompGridDescCreateVersioned(cudecompHandle_t handle, cudeco
 #endif
     if (transposeBackendRequiresNccl(grid_desc->config.transpose_comm_backend) ||
         haloBackendRequiresNccl(grid_desc->config.halo_comm_backend)) {
-      // If this grid descriptor initialized the group local NCCL communicator but does not need it, release reference
-      // to it
-      if (grid_desc->nccl_local_comm) {
-        if ((grid_desc->row_comm_info.ngroups > 1 || grid_desc->row_comm_info.nranks == 1) &&
-            (grid_desc->col_comm_info.ngroups > 1 || grid_desc->col_comm_info.nranks == 1)) {
-          grid_desc->nccl_local_comm.reset();
-        }
-      }
+      int need_local_nccl_comm =
+          static_cast<int>((grid_desc->row_comm_info.ngroups == 1 && grid_desc->row_comm_info.nranks > 1) ||
+                           (grid_desc->col_comm_info.ngroups == 1 && grid_desc->col_comm_info.nranks > 1));
+      MPI_Comm local_comm = handle->mpi_clique_comm != MPI_COMM_NULL ? handle->mpi_clique_comm : handle->mpi_local_comm;
+      CHECK_MPI(MPI_Allreduce(MPI_IN_PLACE, &need_local_nccl_comm, 1, MPI_INT, MPI_LOR, local_comm));
+      // Descriptor references must be uniform across the NCCL communicator so its eventual destruction is collective.
+      if (!need_local_nccl_comm) { grid_desc->nccl_local_comm.reset(); }
     } else {
       // Release grid descriptor references to NCCL communicators
       grid_desc->nccl_comm.reset();

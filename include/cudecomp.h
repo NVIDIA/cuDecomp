@@ -281,6 +281,7 @@ cudecompResult_t cudecompGridDescCreateVersioned(cudecompHandle_t handle, cudeco
  * @details This function creates a grid descriptor that cuDecomp requires for most library operations that perform
  * communication or query decomposition information. This grid descriptor contains information about how
  * the global data grid is distributed and other internal resources to facilitate communication.
+ * This function is collective over the handle MPI communicator.
  * @param[in] handle The initialized cuDecomp library handle
  * @param[out] grid_desc A pointer to an uninitialized cudecompGridDesc_t
  * @param[in,out] config A pointer to a cudecompGridDescConfig_t structure initialized by
@@ -303,6 +304,7 @@ static inline cudecompResult_t cudecompGridDescCreate(cudecompHandle_t handle, c
 
 /**
  * @brief Destroys a cuDecomp grid descriptor and frees associated resources.
+ * @details This function is collective over the handle MPI communicator.
  * @param[in] handle The initialized cuDecomp library handle
  * @param[in] grid_desc A cuDecomp grid descriptor
  *

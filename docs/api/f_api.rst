@@ -214,6 +214,8 @@ ______________________
 
   This function creates a grid descriptor that cuDecomp requires for most library operations that perform communication or query decomposition information. This grid descriptor contains information about how the global data grid is distributed and other internal resources to facilitate communication.
 
+  This function is collective over the handle MPI communicator.
+
   :p cudecompHandle handle [in]: The initialized cuDecomp library handle
   :p cudecompGridDesc grid_desc [out]: An uninitalized cuDecomp grid descriptor.
   :p cudecompGridDescConfig config [inout]: A populated cuDecomp grid descriptor configuration structure. This structure defines the required attributes of the decomposition. On successful exit, fields in this structure may be updated to reflect autotuning results.
@@ -230,6 +232,8 @@ _______________________
 .. f:function:: cudecompGridDescDestroy(handle, grid_desc)
 
   Destroys a cuDecomp grid descriptor and frees associated resources.
+
+  This function is collective over the handle MPI communicator.
 
   :p cudecompHandle handle [in]: The initialized cuDecomp library handle
   :p cudecompGridDesc grid_desc [in]: A cuDecomp grid descriptor.
