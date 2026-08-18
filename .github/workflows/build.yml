@@ -27,6 +27,9 @@ jobs:
   build:
     needs: trigger-comment
     if: github.event.issue.pull_request && contains(github.event.comment.body, '/build') && (github.actor == 'romerojosh')
+    permissions:
+      contents: read
+      pull-requests: read
     strategy:
       matrix:
         include:
@@ -66,7 +69,7 @@ jobs:
 
     - name: "Full build with NVSHMEM"
       run: |
-        docker run --rm -v $PWD:/workspace -w /workspace ${{ matrix.image }} bash -c '
+        docker run --rm --network=none --cap-drop=ALL --security-opt=no-new-privileges -v $PWD:/workspace -w /workspace ${{ matrix.image }} bash -c '
           mkdir -p build-nvshmem
           cd build-nvshmem
           cmake -DCUDECOMP_ENABLE_NVSHMEM=1 -DCUDECOMP_BUILD_EXTRAS=1 ..
@@ -75,7 +78,7 @@ jobs:
 
     - name: "Library only build without NVSHMEM"
       run: |
-        docker run --rm -v $PWD:/workspace -w /workspace ${{ matrix.image }} bash -c '
+        docker run --rm --network=none --cap-drop=ALL --security-opt=no-new-privileges -v $PWD:/workspace -w /workspace ${{ matrix.image }} bash -c '
           mkdir -p build-no-nvshmem
           cd build-no-nvshmem
           cmake ..
