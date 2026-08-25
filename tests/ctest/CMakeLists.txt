@@ -125,6 +125,7 @@ target_link_libraries(cudecomp_test_automatic_workspace
   PRIVATE
   cudecomp
   cudecomp_test_support
+  NVHPC::CUTENSOR
 )
 set_target_properties(cudecomp_test_automatic_workspace PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests/ctest
@@ -208,6 +209,7 @@ target_link_libraries(cudecomp_test_halo
   PRIVATE
   cudecomp
   cudecomp_test_support
+  NVHPC::CUTENSOR
 )
 set_target_properties(cudecomp_test_halo PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests/ctest
