@@ -856,6 +856,191 @@ struct cuMemAllocationGuard {
 };
 #endif
 
+static size_t getDataTypeSizeBytes(cudecompDataType_t dtype) {
+  switch (dtype) {
+  case CUDECOMP_FLOAT: return 4;
+  case CUDECOMP_DOUBLE:
+  case CUDECOMP_FLOAT_COMPLEX: return 8;
+  case CUDECOMP_DOUBLE_COMPLEX: return 16;
+  default: THROW_INVALID_USAGE("unknown data type");
+  }
+}
+
+static size_t getWorkspaceSizeBytes(int64_t num_elements, cudecompDataType_t dtype) {
+  if (num_elements < 0) { THROW_INTERNAL_ERROR("workspace element count cannot be negative"); }
+  return static_cast<size_t>(num_elements) * getDataTypeSizeBytes(dtype);
+}
+
+static size_t getWorkspaceAllocationSize(cudecompHandle_t handle, size_t requested_size, bool use_nvshmem) {
+#ifdef ENABLE_NVSHMEM
+  if (use_nvshmem) {
+    CHECK_MPI(MPI_Allreduce(MPI_IN_PLACE, &requested_size, 1, mpiSizeTDatatype(), MPI_MAX, handle->mpi_comm));
+  }
+#else
+  (void)handle;
+  if (use_nvshmem) { THROW_NOT_SUPPORTED("build does not support NVSHMEM communication backends."); }
+#endif
+  return requested_size;
+}
+
+static void deregisterNcclBuffer(cudecompHandle_t handle, void* buffer) {
+#if NCCL_VERSION_CODE >= NCCL_VERSION(2, 19, 0)
+  auto entry = handle->nccl_ubr_handles.find(buffer);
+  if (entry == handle->nccl_ubr_handles.end()) return;
+  for (const auto& registration : entry->second) {
+    CHECK_NCCL(ncclCommDeregister(*registration.first, registration.second));
+  }
+  handle->nccl_ubr_handles.erase(entry);
+#else
+  (void)handle;
+  (void)buffer;
+#endif
+}
+
+static void freeOrdinaryWorkspace(cudecompHandle_t handle, void* buffer) {
+  if (!buffer) return;
+  deregisterNcclBuffer(handle, buffer);
+  if (handle->cuda_cumem_enable) {
+#if CUDART_VERSION >= 11030
+    CUmemGenericAllocationHandle cumem_handle;
+    CHECK_CUDA_DRV(cuMemRetainAllocationHandle(&cumem_handle, buffer));
+    CHECK_CUDA_DRV(cuMemRelease(cumem_handle));
+    size_t size = 0;
+    CHECK_CUDA_DRV(cuMemGetAddressRange(nullptr, &size, reinterpret_cast<CUdeviceptr>(buffer)));
+    CHECK_CUDA_DRV(cuMemUnmap(reinterpret_cast<CUdeviceptr>(buffer), size));
+    CHECK_CUDA_DRV(cuMemRelease(cumem_handle));
+    CHECK_CUDA_DRV(cuMemAddressFree(reinterpret_cast<CUdeviceptr>(buffer), size));
+#endif
+  } else {
+    CHECK_CUDA(cudaFree(buffer));
+  }
+}
+
+#ifdef ENABLE_NVSHMEM
+static void freeNvshmemWorkspace(const nvshmemRuntime& runtime, void* buffer) {
+  if (!buffer) return;
+  if (!runtime || !runtime->initialized) { THROW_INVALID_USAGE("NVSHMEM runtime is unavailable"); }
+  nvshmem_free(buffer);
+  auto entry = runtime->nvshmem_allocations.find(buffer);
+  if (entry != runtime->nvshmem_allocations.end()) {
+    runtime->nvshmem_allocation_size -= entry->second;
+    runtime->nvshmem_allocations.erase(entry);
+  }
+}
+#endif
+
+static void releaseManagedWorkspaces(cudecompHandle_t handle) {
+  if (handle->workspace_stream) { CHECK_CUDA(cudaStreamSynchronize(*handle->workspace_stream)); }
+
+  freeOrdinaryWorkspace(handle, handle->ordinary_workspace.ptr);
+  handle->ordinary_workspace.ptr = nullptr;
+  handle->ordinary_workspace.size = 0;
+
+#ifdef ENABLE_NVSHMEM
+  freeNvshmemWorkspace(handle->nvshmem_workspace.nvshmem_runtime, handle->nvshmem_workspace.ptr);
+  handle->nvshmem_workspace.nvshmem_runtime.reset();
+#endif
+  handle->nvshmem_workspace.ptr = nullptr;
+  handle->nvshmem_workspace.size = 0;
+
+  handle->workspace_ingress_event.reset();
+  handle->workspace_egress_event.reset();
+  handle->workspace_stream.reset();
+}
+
+// NVSHMEM allocation sizes must be normalized with getWorkspaceAllocationSize before calling this function.
+static void allocateWorkspace(cudecompHandle_t handle, cudecompGridDesc_t grid_desc, void** buffer,
+                              size_t buffer_size_bytes, bool use_nvshmem);
+
+static void registerWorkspaceWithNccl(cudecompHandle_t handle, cudecompGridDesc_t grid_desc, void* buffer,
+                                      size_t size) {
+#if NCCL_VERSION_CODE >= NCCL_VERSION(2, 19, 0)
+  if (!handle->nccl_enable_ubr || !buffer) return;
+
+  auto register_comm = [&](const ncclComm& comm) {
+    if (!comm) return;
+    auto& registrations = handle->nccl_ubr_handles[buffer];
+    auto existing = std::find_if(registrations.begin(), registrations.end(),
+                                 [&](const auto& registration) { return registration.first.get() == comm.get(); });
+    if (existing != registrations.end()) return;
+    void* registration_handle;
+    CHECK_NCCL(ncclCommRegister(*comm, buffer, size, &registration_handle));
+    registrations.emplace_back(comm, registration_handle);
+  };
+
+  register_comm(grid_desc->nccl_comm);
+  register_comm(grid_desc->nccl_local_comm);
+#else
+  (void)handle;
+  (void)grid_desc;
+  (void)buffer;
+  (void)size;
+#endif
+}
+
+static void* prepareManagedWorkspace(cudecompHandle_t handle, cudecompGridDesc_t grid_desc, size_t required_size,
+                                     bool use_nvshmem) {
+  if (required_size == 0) return nullptr;
+  required_size = getWorkspaceAllocationSize(handle, required_size, use_nvshmem);
+
+  auto& workspace = use_nvshmem ? handle->nvshmem_workspace : handle->ordinary_workspace;
+  if (workspace.size < required_size) {
+    CHECK_CUDA(cudaStreamSynchronize(*handle->workspace_stream));
+    if (workspace.ptr) {
+#ifdef ENABLE_NVSHMEM
+      if (use_nvshmem) {
+        freeNvshmemWorkspace(workspace.nvshmem_runtime, workspace.ptr);
+        workspace.nvshmem_runtime.reset();
+      } else
+#endif
+      {
+        freeOrdinaryWorkspace(handle, workspace.ptr);
+      }
+      workspace.ptr = nullptr;
+      workspace.size = 0;
+    }
+
+    allocateWorkspace(handle, grid_desc, &workspace.ptr, required_size, use_nvshmem);
+    workspace.size = required_size;
+#ifdef ENABLE_NVSHMEM
+    if (use_nvshmem) { workspace.nvshmem_runtime = grid_desc->nvshmem_runtime; }
+#endif
+  } else if (!use_nvshmem) {
+    registerWorkspaceWithNccl(handle, grid_desc, workspace.ptr, workspace.size);
+  }
+
+  return workspace.ptr;
+}
+
+template <typename Function>
+static void runWithWorkspace(cudecompHandle_t handle, cudecompGridDesc_t grid_desc, void* work, size_t required_size,
+                             bool use_nvshmem, cudaStream_t caller_stream, Function&& function) {
+  if (work) {
+    function(work, caller_stream);
+    return;
+  }
+
+  cudaStreamCaptureStatus capture_status;
+  CHECK_CUDA(cudaStreamIsCapturing(caller_stream, &capture_status));
+  if (capture_status != cudaStreamCaptureStatusNone) {
+    THROW_NOT_SUPPORTED(
+        "automatic workspace management is not supported during CUDA stream capture; use an explicit workspace");
+  }
+
+  std::lock_guard<std::mutex> lock(handle->workspace_mutex);
+  if (!handle->workspace_stream) { handle->workspace_stream = std::make_unique<cudaStream>(); }
+  if (!handle->workspace_ingress_event) { handle->workspace_ingress_event = std::make_unique<cudaEvent>(); }
+  if (!handle->workspace_egress_event) { handle->workspace_egress_event = std::make_unique<cudaEvent>(); }
+  void* managed_work = prepareManagedWorkspace(handle, grid_desc, required_size, use_nvshmem);
+  auto managed_stream = handle->workspace_stream->get();
+
+  CHECK_CUDA(cudaEventRecord(*handle->workspace_ingress_event, caller_stream));
+  CHECK_CUDA(cudaStreamWaitEvent(managed_stream, *handle->workspace_ingress_event, 0));
+  function(managed_work, managed_stream);
+  CHECK_CUDA(cudaEventRecord(*handle->workspace_egress_event, managed_stream));
+  CHECK_CUDA(cudaStreamWaitEvent(caller_stream, *handle->workspace_egress_event, 0));
+}
+
 } // namespace
 } // namespace cudecomp
 
@@ -880,6 +1065,10 @@ void warnIfNvshmemBufferUsedWithMpi(cudecompHandle_t handle, const void* send_bu
 #endif
 
 cudecompHandle::~cudecompHandle() noexcept {
+  try {
+    cudecomp::releaseManagedWorkspaces(this);
+  } catch (...) {}
+
 #if NCCL_VERSION_CODE >= NCCL_VERSION(2, 19, 0)
   for (auto& entry : nccl_ubr_handles) {
     for (const auto& ubr_handle : entry.second) {
@@ -1012,14 +1201,11 @@ cudecompResult_t cudecompFinalize(cudecompHandle_t handle) {
   try {
     checkHandle(handle);
 
-#if NCCL_VERSION_CODE >= NCCL_VERSION(2, 19, 0)
-    for (auto& entry : handle->nccl_ubr_handles) {
-      for (const auto& ubr_handle : entry.second) {
-        CHECK_NCCL(ncclCommDeregister(*ubr_handle.first, ubr_handle.second));
-      }
+    releaseManagedWorkspaces(handle);
+
+    while (!handle->nccl_ubr_handles.empty()) {
+      deregisterNcclBuffer(handle, handle->nccl_ubr_handles.begin()->first);
     }
-    handle->nccl_ubr_handles.clear();
-#endif
 
     delete handle;
   }
@@ -1458,6 +1644,127 @@ cudecompResult_t cudecompGetHaloWorkspaceSize(cudecompHandle_t handle, cudecompG
   return CUDECOMP_RESULT_SUCCESS;
 }
 
+namespace cudecomp {
+namespace {
+static void allocateWorkspace(cudecompHandle_t handle, cudecompGridDesc_t grid_desc, void** buffer,
+                              size_t buffer_size_bytes, bool use_nvshmem) {
+  if (use_nvshmem) {
+#ifdef ENABLE_NVSHMEM
+    auto nvshmem_runtime = grid_desc->nvshmem_runtime;
+    if (!nvshmem_runtime || !nvshmem_runtime->initialized) { THROW_INVALID_USAGE("NVSHMEM runtime is unavailable"); }
+
+    size_t nvshmem_free_size = 0;
+    if (nvshmem_runtime->nvshmem_symmetric_size > nvshmem_runtime->nvshmem_allocation_size) {
+      nvshmem_free_size = nvshmem_runtime->nvshmem_symmetric_size - nvshmem_runtime->nvshmem_allocation_size;
+    }
+    if (!nvshmem_runtime->nvshmem_vmm && handle->rank == 0 && buffer_size_bytes > nvshmem_free_size) {
+      fprintf(stderr,
+              "CUDECOMP:WARN: Attempting an NVSHMEM allocation of %zu bytes but *approximately* "
+              "%zu free bytes of %zu total bytes of symmetric heap space available. If the allocation fails, "
+              "set NVSHMEM_SYMMETRIC_SIZE >= %zu and try again.\n",
+              buffer_size_bytes, nvshmem_free_size, nvshmem_runtime->nvshmem_symmetric_size,
+              nvshmem_runtime->nvshmem_symmetric_size + (buffer_size_bytes - nvshmem_free_size));
+    }
+
+    *buffer = nvshmem_malloc(buffer_size_bytes);
+    if (buffer_size_bytes != 0 && *buffer == nullptr) { THROW_NVSHMEM_ERROR("nvshmem_malloc failed"); }
+    // Record NVSHMEM allocation details
+    nvshmem_runtime->nvshmem_allocations[*buffer] = buffer_size_bytes;
+    nvshmem_runtime->nvshmem_allocation_size += buffer_size_bytes;
+#else
+    THROW_NOT_SUPPORTED("build does not support NVSHMEM communication backends.");
+#endif
+  } else {
+    if (handle->cuda_cumem_enable) {
+#if CUDART_VERSION >= 11030
+      int dev;
+      CUdevice cu_dev;
+      CHECK_CUDA(cudaGetDevice(&dev));
+      CHECK_CUDA_DRV(cuDeviceGet(&cu_dev, dev));
+
+      int requestedHandleTypes = CU_MEM_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR;
+#if CUDART_VERSION >= 12030
+      int driverVersion;
+      CHECK_CUDA(cudaDriverGetVersion(&driverVersion));
+      if (driverVersion >= 12030) {
+        int fabric_supported = 0;
+        CHECK_CUDA_DRV(
+            cuDeviceGetAttribute(&fabric_supported, CU_DEVICE_ATTRIBUTE_HANDLE_TYPE_FABRIC_SUPPORTED, cu_dev));
+        if (fabric_supported) requestedHandleTypes |= CU_MEM_HANDLE_TYPE_FABRIC;
+      }
+#endif
+
+      CUmemAllocationProp prop = {};
+      prop.type = CU_MEM_ALLOCATION_TYPE_PINNED;
+      prop.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
+      prop.requestedHandleTypes = static_cast<CUmemAllocationHandleType>(requestedHandleTypes);
+      prop.location.id = cu_dev;
+
+      // Check for RDMA support
+      int flag;
+      CHECK_CUDA_DRV(cuDeviceGetAttribute(&flag, CU_DEVICE_ATTRIBUTE_GPU_DIRECT_RDMA_WITH_CUDA_VMM_SUPPORTED, cu_dev));
+      if (flag) prop.allocFlags.gpuDirectRDMACapable = 1;
+
+      // Keep the caller-requested size so any retry can realign from the original value.
+      size_t original_buffer_size_bytes = buffer_size_bytes;
+      size_t granularity;
+      CHECK_CUDA_DRV(cuMemGetAllocationGranularity(&granularity, &prop, CU_MEM_ALLOC_GRANULARITY_RECOMMENDED));
+      buffer_size_bytes = (original_buffer_size_bytes + granularity - 1) / granularity * granularity;
+
+      // Allocate memory
+      cuMemAllocationGuard cumem_guard;
+      cumem_guard.size = buffer_size_bytes;
+      CUresult err = cuFnTable.pfn_cuMemCreate(&cumem_guard.handle, buffer_size_bytes, &prop, 0);
+#if CUDART_VERSION >= 12030
+      if ((requestedHandleTypes & CU_MEM_HANDLE_TYPE_FABRIC) &&
+          (err == CUDA_ERROR_NOT_PERMITTED || err == CUDA_ERROR_NOT_SUPPORTED)) {
+        // Fabric handles are useful when the platform supports them, but regular NCCL user buffer registration only
+        // requires POSIX FD export support. If Fabric creation is unavailable at runtime, keep VMM enabled and fall
+        // back to a POSIX-FD-only allocation.
+        requestedHandleTypes &= ~CU_MEM_HANDLE_TYPE_FABRIC;
+        prop.requestedHandleTypes = static_cast<CUmemAllocationHandleType>(requestedHandleTypes);
+        CHECK_CUDA_DRV(cuMemGetAllocationGranularity(&granularity, &prop, CU_MEM_ALLOC_GRANULARITY_RECOMMENDED));
+        buffer_size_bytes = (original_buffer_size_bytes + granularity - 1) / granularity * granularity;
+        cumem_guard.size = buffer_size_bytes;
+        err = cuFnTable.pfn_cuMemCreate(&cumem_guard.handle, buffer_size_bytes, &prop, 0);
+      }
+#endif
+      if (CUDA_SUCCESS != err) {
+        const char* error_str;
+        cuFnTable.pfn_cuGetErrorString(err, &error_str);
+        throw cudecomp::CudaError(__FILE__, __LINE__, error_str);
+      }
+      cumem_guard.handle_created = true;
+      CHECK_CUDA_DRV(cuMemAddressReserve(&cumem_guard.ptr, buffer_size_bytes, granularity, 0, 0));
+      cumem_guard.address_reserved = true;
+      CHECK_CUDA_DRV(cuMemMap(cumem_guard.ptr, buffer_size_bytes, 0, cumem_guard.handle, 0));
+      cumem_guard.mapped = true;
+
+      // Set read/write access
+      CUmemAccessDesc accessDesc = {};
+      accessDesc.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
+      accessDesc.location.id = cu_dev;
+      accessDesc.flags = CU_MEM_ACCESS_FLAGS_PROT_READWRITE;
+      CHECK_CUDA_DRV(cuMemSetAccess(cumem_guard.ptr, buffer_size_bytes, &accessDesc, 1));
+
+      *buffer = reinterpret_cast<void*>(cumem_guard.ptr);
+      cumem_guard.release();
+#endif
+    } else {
+      CHECK_CUDA(cudaMalloc(buffer, buffer_size_bytes));
+    }
+    try {
+      registerWorkspaceWithNccl(handle, grid_desc, *buffer, buffer_size_bytes);
+    } catch (...) {
+      freeOrdinaryWorkspace(handle, *buffer);
+      *buffer = nullptr;
+      throw;
+    }
+  }
+}
+} // namespace
+} // namespace cudecomp
+
 cudecompResult_t cudecompMalloc(cudecompHandle_t handle, cudecompGridDesc_t grid_desc, void** buffer,
                                 size_t buffer_size_bytes) {
   using namespace cudecomp;
@@ -1467,140 +1774,10 @@ cudecompResult_t cudecompMalloc(cudecompHandle_t handle, cudecompGridDesc_t grid
     if (!buffer) { THROW_INVALID_USAGE("buffer argument cannot be null"); }
     if (buffer_size_bytes == 0) { THROW_INVALID_USAGE("buffer size cannot be zero"); }
 
-    if (transposeBackendRequiresNvshmem(grid_desc->config.transpose_comm_backend) ||
-        haloBackendRequiresNvshmem(grid_desc->config.halo_comm_backend)) {
-#ifdef ENABLE_NVSHMEM
-      // NVSHMEM requires allocations to be the same size for all ranks. Find maximum.
-      CHECK_MPI(MPI_Allreduce(MPI_IN_PLACE, &buffer_size_bytes, 1, mpiSizeTDatatype(), MPI_MAX, handle->mpi_comm));
-
-      auto nvshmem_runtime = grid_desc->nvshmem_runtime;
-      if (!nvshmem_runtime || !nvshmem_runtime->initialized) { THROW_INVALID_USAGE("NVSHMEM runtime is unavailable"); }
-
-      size_t nvshmem_free_size = 0;
-      if (nvshmem_runtime->nvshmem_symmetric_size > nvshmem_runtime->nvshmem_allocation_size) {
-        nvshmem_free_size = nvshmem_runtime->nvshmem_symmetric_size - nvshmem_runtime->nvshmem_allocation_size;
-      }
-      if (!nvshmem_runtime->nvshmem_vmm && handle->rank == 0 && buffer_size_bytes > nvshmem_free_size) {
-        fprintf(stderr,
-                "CUDECOMP:WARN: Attempting an NVSHMEM allocation of %zu bytes but *approximately* "
-                "%zu free bytes of %zu total bytes of symmetric heap space available. If the allocation fails, "
-                "set NVSHMEM_SYMMETRIC_SIZE >= %zu and try again.\n",
-                buffer_size_bytes, nvshmem_free_size, nvshmem_runtime->nvshmem_symmetric_size,
-                nvshmem_runtime->nvshmem_symmetric_size + (buffer_size_bytes - nvshmem_free_size));
-      }
-
-      *buffer = nvshmem_malloc(buffer_size_bytes);
-      if (buffer_size_bytes != 0 && *buffer == nullptr) { THROW_NVSHMEM_ERROR("nvshmem_malloc failed"); }
-      // Record NVSHMEM allocation details
-      nvshmem_runtime->nvshmem_allocations[*buffer] = buffer_size_bytes;
-      nvshmem_runtime->nvshmem_allocation_size += buffer_size_bytes;
-#else
-      THROW_NOT_SUPPORTED("build does not support NVSHMEM communication backends.");
-#endif
-    } else {
-      if (handle->cuda_cumem_enable) {
-#if CUDART_VERSION >= 11030
-        int dev;
-        CUdevice cu_dev;
-        CHECK_CUDA(cudaGetDevice(&dev));
-        CHECK_CUDA_DRV(cuDeviceGet(&cu_dev, dev));
-
-        int requestedHandleTypes = CU_MEM_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR;
-#if CUDART_VERSION >= 12030
-        int driverVersion;
-        CHECK_CUDA(cudaDriverGetVersion(&driverVersion));
-        if (driverVersion >= 12030) {
-          int fabric_supported = 0;
-          CHECK_CUDA_DRV(
-              cuDeviceGetAttribute(&fabric_supported, CU_DEVICE_ATTRIBUTE_HANDLE_TYPE_FABRIC_SUPPORTED, cu_dev));
-          if (fabric_supported) requestedHandleTypes |= CU_MEM_HANDLE_TYPE_FABRIC;
-        }
-#endif
-
-        CUmemAllocationProp prop = {};
-        prop.type = CU_MEM_ALLOCATION_TYPE_PINNED;
-        prop.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
-        prop.requestedHandleTypes = static_cast<CUmemAllocationHandleType>(requestedHandleTypes);
-        prop.location.id = cu_dev;
-
-        // Check for RDMA support
-        int flag;
-        CHECK_CUDA_DRV(
-            cuDeviceGetAttribute(&flag, CU_DEVICE_ATTRIBUTE_GPU_DIRECT_RDMA_WITH_CUDA_VMM_SUPPORTED, cu_dev));
-        if (flag) prop.allocFlags.gpuDirectRDMACapable = 1;
-
-        // Keep the caller-requested size so any retry can realign from the original value.
-        size_t original_buffer_size_bytes = buffer_size_bytes;
-        size_t granularity;
-        CHECK_CUDA_DRV(cuMemGetAllocationGranularity(&granularity, &prop, CU_MEM_ALLOC_GRANULARITY_RECOMMENDED));
-        buffer_size_bytes = (original_buffer_size_bytes + granularity - 1) / granularity * granularity;
-
-        // Allocate memory
-        cuMemAllocationGuard cumem_guard;
-        cumem_guard.size = buffer_size_bytes;
-        CUresult err = cuFnTable.pfn_cuMemCreate(&cumem_guard.handle, buffer_size_bytes, &prop, 0);
-#if CUDART_VERSION >= 12030
-        if ((requestedHandleTypes & CU_MEM_HANDLE_TYPE_FABRIC) &&
-            (err == CUDA_ERROR_NOT_PERMITTED || err == CUDA_ERROR_NOT_SUPPORTED)) {
-          // Fabric handles are useful when the platform supports them, but regular NCCL user buffer registration only
-          // requires POSIX FD export support. If Fabric creation is unavailable at runtime, keep VMM enabled and fall
-          // back to a POSIX-FD-only allocation.
-          requestedHandleTypes &= ~CU_MEM_HANDLE_TYPE_FABRIC;
-          prop.requestedHandleTypes = static_cast<CUmemAllocationHandleType>(requestedHandleTypes);
-          CHECK_CUDA_DRV(cuMemGetAllocationGranularity(&granularity, &prop, CU_MEM_ALLOC_GRANULARITY_RECOMMENDED));
-          buffer_size_bytes = (original_buffer_size_bytes + granularity - 1) / granularity * granularity;
-          cumem_guard.size = buffer_size_bytes;
-          err = cuFnTable.pfn_cuMemCreate(&cumem_guard.handle, buffer_size_bytes, &prop, 0);
-        }
-#endif
-        if (CUDA_SUCCESS != err) {
-          const char* error_str;
-          cuFnTable.pfn_cuGetErrorString(err, &error_str);
-          throw cudecomp::CudaError(__FILE__, __LINE__, error_str);
-        }
-        cumem_guard.handle_created = true;
-        CHECK_CUDA_DRV(cuMemAddressReserve(&cumem_guard.ptr, buffer_size_bytes, granularity, 0, 0));
-        cumem_guard.address_reserved = true;
-        CHECK_CUDA_DRV(cuMemMap(cumem_guard.ptr, buffer_size_bytes, 0, cumem_guard.handle, 0));
-        cumem_guard.mapped = true;
-
-        // Set read/write access
-        CUmemAccessDesc accessDesc = {};
-        accessDesc.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
-        accessDesc.location.id = cu_dev;
-        accessDesc.flags = CU_MEM_ACCESS_FLAGS_PROT_READWRITE;
-        CHECK_CUDA_DRV(cuMemSetAccess(cumem_guard.ptr, buffer_size_bytes, &accessDesc, 1));
-
-        *buffer = reinterpret_cast<void*>(cumem_guard.ptr);
-        cumem_guard.release();
-#endif
-      } else {
-        CHECK_CUDA(cudaMalloc(buffer, buffer_size_bytes));
-      }
-#if NCCL_VERSION_CODE >= NCCL_VERSION(2, 19, 0)
-      if (transposeBackendRequiresNccl(grid_desc->config.transpose_comm_backend) ||
-          haloBackendRequiresNccl(grid_desc->config.halo_comm_backend)) {
-
-        if (handle->nccl_enable_ubr) {
-          try {
-            void* nccl_ubr_handle;
-            if (grid_desc->nccl_comm) {
-              CHECK_NCCL(ncclCommRegister(*grid_desc->nccl_comm, *buffer, buffer_size_bytes, &nccl_ubr_handle));
-              handle->nccl_ubr_handles[*buffer].push_back(std::make_pair(grid_desc->nccl_comm, nccl_ubr_handle));
-            }
-            if (grid_desc->nccl_local_comm) {
-              CHECK_NCCL(ncclCommRegister(*grid_desc->nccl_local_comm, *buffer, buffer_size_bytes, &nccl_ubr_handle));
-              handle->nccl_ubr_handles[*buffer].push_back(std::make_pair(grid_desc->nccl_local_comm, nccl_ubr_handle));
-            }
-          } catch (...) {
-            cudecompFree(handle, grid_desc, *buffer);
-            *buffer = nullptr;
-            throw;
-          }
-        }
-      }
-#endif
-    }
+    bool use_nvshmem = transposeBackendRequiresNvshmem(grid_desc->config.transpose_comm_backend) ||
+                       haloBackendRequiresNvshmem(grid_desc->config.halo_comm_backend);
+    buffer_size_bytes = getWorkspaceAllocationSize(handle, buffer_size_bytes, use_nvshmem);
+    allocateWorkspace(handle, grid_desc, buffer, buffer_size_bytes, use_nvshmem);
   }
   CUDECOMP_CATCH_C_API_ERRORS()
   return CUDECOMP_RESULT_SUCCESS;
@@ -1612,54 +1789,16 @@ cudecompResult_t cudecompFree(cudecompHandle_t handle, cudecompGridDesc_t grid_d
     checkHandle(handle);
     checkGridDesc(handle, grid_desc);
 
-#if NCCL_VERSION_CODE >= NCCL_VERSION(2, 19, 0)
-    if (handle->nccl_ubr_handles.count(buffer) != 0) {
-      for (const auto& entry : handle->nccl_ubr_handles[buffer]) {
-        CHECK_NCCL(ncclCommDeregister(*entry.first, entry.second));
-      }
-      handle->nccl_ubr_handles.erase(buffer);
-    }
-#endif
-
     if (transposeBackendRequiresNvshmem(grid_desc->config.transpose_comm_backend) ||
         haloBackendRequiresNvshmem(grid_desc->config.halo_comm_backend)) {
 #ifdef ENABLE_NVSHMEM
-      if (buffer) {
-        auto nvshmem_runtime = grid_desc->nvshmem_runtime;
-        if (!nvshmem_runtime || !nvshmem_runtime->initialized) {
-          THROW_INVALID_USAGE("NVSHMEM runtime is unavailable");
-        }
-
-        nvshmem_free(buffer);
-
-        // Record NVSHMEM deallocation details
-        auto entry = nvshmem_runtime->nvshmem_allocations.find(buffer);
-        if (entry != nvshmem_runtime->nvshmem_allocations.end()) {
-          nvshmem_runtime->nvshmem_allocation_size -= entry->second;
-          nvshmem_runtime->nvshmem_allocations.erase(entry);
-        }
-      }
+      freeNvshmemWorkspace(grid_desc->nvshmem_runtime, buffer);
 #else
       THROW_NOT_SUPPORTED("build does not support NVSHMEM communication backends.");
 #endif
 
     } else {
-      if (handle->cuda_cumem_enable) {
-#if CUDART_VERSION >= 11030
-        if (buffer) {
-          CUmemGenericAllocationHandle cumem_handle;
-          CHECK_CUDA_DRV(cuMemRetainAllocationHandle(&cumem_handle, buffer));
-          CHECK_CUDA_DRV(cuMemRelease(cumem_handle));
-          size_t size = 0;
-          CHECK_CUDA_DRV(cuMemGetAddressRange(NULL, &size, (CUdeviceptr)buffer));
-          CHECK_CUDA_DRV(cuMemUnmap((CUdeviceptr)buffer, size));
-          CHECK_CUDA_DRV(cuMemRelease(cumem_handle));
-          CHECK_CUDA_DRV(cuMemAddressFree((CUdeviceptr)buffer, size));
-        }
-#endif
-      } else {
-        if (buffer) { CHECK_CUDA(cudaFree(buffer)); }
-      }
+      freeOrdinaryWorkspace(handle, buffer);
     }
   }
   CUDECOMP_CATCH_C_API_ERRORS()
@@ -1696,12 +1835,7 @@ cudecompResult_t cudecompGetDataTypeSize(cudecompDataType_t dtype, int64_t* dtyp
   try {
     checkDataType(dtype);
     if (!dtype_size) { THROW_INVALID_USAGE("dtype_size cannot be null."); }
-    switch (dtype) {
-    case CUDECOMP_FLOAT: *dtype_size = 4; break;
-    case CUDECOMP_DOUBLE:
-    case CUDECOMP_FLOAT_COMPLEX: *dtype_size = 8; break;
-    case CUDECOMP_DOUBLE_COMPLEX: *dtype_size = 16; break;
-    }
+    *dtype_size = static_cast<int64_t>(getDataTypeSizeBytes(dtype));
   }
   CUDECOMP_CATCH_C_API_ERRORS()
   return CUDECOMP_RESULT_SUCCESS;
@@ -1765,31 +1899,40 @@ cudecompResult_t cudecompTransposeXToY(cudecompHandle_t handle, cudecompGridDesc
     checkDataType(dtype);
     if (!input) { THROW_INVALID_USAGE("input argument cannot be null"); }
     if (!output) { THROW_INVALID_USAGE("output argument cannot be null"); }
-    if (!work) { THROW_INVALID_USAGE("work argument cannot be null"); }
-    switch (dtype) {
-    case CUDECOMP_FLOAT:
-      cudecompTransposeXToY(handle, grid_desc, reinterpret_cast<float*>(input), reinterpret_cast<float*>(output),
-                            reinterpret_cast<float*>(work), input_halo_extents, output_halo_extents, input_padding,
-                            output_padding, stream);
-      break;
-    case CUDECOMP_DOUBLE:
-      cudecompTransposeXToY(handle, grid_desc, reinterpret_cast<double*>(input), reinterpret_cast<double*>(output),
-                            reinterpret_cast<double*>(work), input_halo_extents, output_halo_extents, input_padding,
-                            output_padding, stream);
-      break;
-    case CUDECOMP_FLOAT_COMPLEX:
-      cudecompTransposeXToY(handle, grid_desc, reinterpret_cast<cuda::std::complex<float>*>(input),
-                            reinterpret_cast<cuda::std::complex<float>*>(output),
-                            reinterpret_cast<cuda::std::complex<float>*>(work), input_halo_extents, output_halo_extents,
-                            input_padding, output_padding, stream);
-      break;
-    case CUDECOMP_DOUBLE_COMPLEX:
-      cudecompTransposeXToY(handle, grid_desc, reinterpret_cast<cuda::std::complex<double>*>(input),
-                            reinterpret_cast<cuda::std::complex<double>*>(output),
-                            reinterpret_cast<cuda::std::complex<double>*>(work), input_halo_extents,
-                            output_halo_extents, input_padding, output_padding, stream);
-      break;
+    size_t workspace_size = 0;
+    if (!work) {
+      int64_t workspace_elements;
+      CHECK_CUDECOMP(cudecompGetTransposeWorkspaceSize(handle, grid_desc, &workspace_elements));
+      workspace_size = getWorkspaceSizeBytes(workspace_elements, dtype);
     }
+    auto execute = [&](void* actual_work, cudaStream_t actual_stream) {
+      switch (dtype) {
+      case CUDECOMP_FLOAT:
+        cudecompTransposeXToY(handle, grid_desc, reinterpret_cast<float*>(input), reinterpret_cast<float*>(output),
+                              reinterpret_cast<float*>(actual_work), input_halo_extents, output_halo_extents,
+                              input_padding, output_padding, actual_stream);
+        break;
+      case CUDECOMP_DOUBLE:
+        cudecompTransposeXToY(handle, grid_desc, reinterpret_cast<double*>(input), reinterpret_cast<double*>(output),
+                              reinterpret_cast<double*>(actual_work), input_halo_extents, output_halo_extents,
+                              input_padding, output_padding, actual_stream);
+        break;
+      case CUDECOMP_FLOAT_COMPLEX:
+        cudecompTransposeXToY(handle, grid_desc, reinterpret_cast<cuda::std::complex<float>*>(input),
+                              reinterpret_cast<cuda::std::complex<float>*>(output),
+                              reinterpret_cast<cuda::std::complex<float>*>(actual_work), input_halo_extents,
+                              output_halo_extents, input_padding, output_padding, actual_stream);
+        break;
+      case CUDECOMP_DOUBLE_COMPLEX:
+        cudecompTransposeXToY(handle, grid_desc, reinterpret_cast<cuda::std::complex<double>*>(input),
+                              reinterpret_cast<cuda::std::complex<double>*>(output),
+                              reinterpret_cast<cuda::std::complex<double>*>(actual_work), input_halo_extents,
+                              output_halo_extents, input_padding, output_padding, actual_stream);
+        break;
+      }
+    };
+    bool use_nvshmem = transposeBackendRequiresNvshmem(grid_desc->config.transpose_comm_backend);
+    runWithWorkspace(handle, grid_desc, work, workspace_size, use_nvshmem, stream, execute);
   }
   CUDECOMP_CATCH_C_API_ERRORS()
   return CUDECOMP_RESULT_SUCCESS;
@@ -1806,31 +1949,40 @@ cudecompResult_t cudecompTransposeYToZ(cudecompHandle_t handle, cudecompGridDesc
     checkDataType(dtype);
     if (!input) { THROW_INVALID_USAGE("input argument cannot be null"); }
     if (!output) { THROW_INVALID_USAGE("output argument cannot be null"); }
-    if (!work) { THROW_INVALID_USAGE("work argument cannot be null"); }
-    switch (dtype) {
-    case CUDECOMP_FLOAT:
-      cudecompTransposeYToZ(handle, grid_desc, reinterpret_cast<float*>(input), reinterpret_cast<float*>(output),
-                            reinterpret_cast<float*>(work), input_halo_extents, output_halo_extents, input_padding,
-                            output_padding, stream);
-      break;
-    case CUDECOMP_DOUBLE:
-      cudecompTransposeYToZ(handle, grid_desc, reinterpret_cast<double*>(input), reinterpret_cast<double*>(output),
-                            reinterpret_cast<double*>(work), input_halo_extents, output_halo_extents, input_padding,
-                            output_padding, stream);
-      break;
-    case CUDECOMP_FLOAT_COMPLEX:
-      cudecompTransposeYToZ(handle, grid_desc, reinterpret_cast<cuda::std::complex<float>*>(input),
-                            reinterpret_cast<cuda::std::complex<float>*>(output),
-                            reinterpret_cast<cuda::std::complex<float>*>(work), input_halo_extents, output_halo_extents,
-                            input_padding, output_padding, stream);
-      break;
-    case CUDECOMP_DOUBLE_COMPLEX:
-      cudecompTransposeYToZ(handle, grid_desc, reinterpret_cast<cuda::std::complex<double>*>(input),
-                            reinterpret_cast<cuda::std::complex<double>*>(output),
-                            reinterpret_cast<cuda::std::complex<double>*>(work), input_halo_extents,
-                            output_halo_extents, input_padding, output_padding, stream);
-      break;
+    size_t workspace_size = 0;
+    if (!work) {
+      int64_t workspace_elements;
+      CHECK_CUDECOMP(cudecompGetTransposeWorkspaceSize(handle, grid_desc, &workspace_elements));
+      workspace_size = getWorkspaceSizeBytes(workspace_elements, dtype);
     }
+    auto execute = [&](void* actual_work, cudaStream_t actual_stream) {
+      switch (dtype) {
+      case CUDECOMP_FLOAT:
+        cudecompTransposeYToZ(handle, grid_desc, reinterpret_cast<float*>(input), reinterpret_cast<float*>(output),
+                              reinterpret_cast<float*>(actual_work), input_halo_extents, output_halo_extents,
+                              input_padding, output_padding, actual_stream);
+        break;
+      case CUDECOMP_DOUBLE:
+        cudecompTransposeYToZ(handle, grid_desc, reinterpret_cast<double*>(input), reinterpret_cast<double*>(output),
+                              reinterpret_cast<double*>(actual_work), input_halo_extents, output_halo_extents,
+                              input_padding, output_padding, actual_stream);
+        break;
+      case CUDECOMP_FLOAT_COMPLEX:
+        cudecompTransposeYToZ(handle, grid_desc, reinterpret_cast<cuda::std::complex<float>*>(input),
+                              reinterpret_cast<cuda::std::complex<float>*>(output),
+                              reinterpret_cast<cuda::std::complex<float>*>(actual_work), input_halo_extents,
+                              output_halo_extents, input_padding, output_padding, actual_stream);
+        break;
+      case CUDECOMP_DOUBLE_COMPLEX:
+        cudecompTransposeYToZ(handle, grid_desc, reinterpret_cast<cuda::std::complex<double>*>(input),
+                              reinterpret_cast<cuda::std::complex<double>*>(output),
+                              reinterpret_cast<cuda::std::complex<double>*>(actual_work), input_halo_extents,
+                              output_halo_extents, input_padding, output_padding, actual_stream);
+        break;
+      }
+    };
+    bool use_nvshmem = transposeBackendRequiresNvshmem(grid_desc->config.transpose_comm_backend);
+    runWithWorkspace(handle, grid_desc, work, workspace_size, use_nvshmem, stream, execute);
   }
   CUDECOMP_CATCH_C_API_ERRORS()
   return CUDECOMP_RESULT_SUCCESS;
@@ -1847,31 +1999,40 @@ cudecompResult_t cudecompTransposeZToY(cudecompHandle_t handle, cudecompGridDesc
     checkDataType(dtype);
     if (!input) { THROW_INVALID_USAGE("input argument cannot be null"); }
     if (!output) { THROW_INVALID_USAGE("output argument cannot be null"); }
-    if (!work) { THROW_INVALID_USAGE("work argument cannot be null"); }
-    switch (dtype) {
-    case CUDECOMP_FLOAT:
-      cudecompTransposeZToY(handle, grid_desc, reinterpret_cast<float*>(input), reinterpret_cast<float*>(output),
-                            reinterpret_cast<float*>(work), input_halo_extents, output_halo_extents, input_padding,
-                            output_padding, stream);
-      break;
-    case CUDECOMP_DOUBLE:
-      cudecompTransposeZToY(handle, grid_desc, reinterpret_cast<double*>(input), reinterpret_cast<double*>(output),
-                            reinterpret_cast<double*>(work), input_halo_extents, output_halo_extents, input_padding,
-                            output_padding, stream);
-      break;
-    case CUDECOMP_FLOAT_COMPLEX:
-      cudecompTransposeZToY(handle, grid_desc, reinterpret_cast<cuda::std::complex<float>*>(input),
-                            reinterpret_cast<cuda::std::complex<float>*>(output),
-                            reinterpret_cast<cuda::std::complex<float>*>(work), input_halo_extents, output_halo_extents,
-                            input_padding, output_padding, stream);
-      break;
-    case CUDECOMP_DOUBLE_COMPLEX:
-      cudecompTransposeZToY(handle, grid_desc, reinterpret_cast<cuda::std::complex<double>*>(input),
-                            reinterpret_cast<cuda::std::complex<double>*>(output),
-                            reinterpret_cast<cuda::std::complex<double>*>(work), input_halo_extents,
-                            output_halo_extents, input_padding, output_padding, stream);
-      break;
+    size_t workspace_size = 0;
+    if (!work) {
+      int64_t workspace_elements;
+      CHECK_CUDECOMP(cudecompGetTransposeWorkspaceSize(handle, grid_desc, &workspace_elements));
+      workspace_size = getWorkspaceSizeBytes(workspace_elements, dtype);
     }
+    auto execute = [&](void* actual_work, cudaStream_t actual_stream) {
+      switch (dtype) {
+      case CUDECOMP_FLOAT:
+        cudecompTransposeZToY(handle, grid_desc, reinterpret_cast<float*>(input), reinterpret_cast<float*>(output),
+                              reinterpret_cast<float*>(actual_work), input_halo_extents, output_halo_extents,
+                              input_padding, output_padding, actual_stream);
+        break;
+      case CUDECOMP_DOUBLE:
+        cudecompTransposeZToY(handle, grid_desc, reinterpret_cast<double*>(input), reinterpret_cast<double*>(output),
+                              reinterpret_cast<double*>(actual_work), input_halo_extents, output_halo_extents,
+                              input_padding, output_padding, actual_stream);
+        break;
+      case CUDECOMP_FLOAT_COMPLEX:
+        cudecompTransposeZToY(handle, grid_desc, reinterpret_cast<cuda::std::complex<float>*>(input),
+                              reinterpret_cast<cuda::std::complex<float>*>(output),
+                              reinterpret_cast<cuda::std::complex<float>*>(actual_work), input_halo_extents,
+                              output_halo_extents, input_padding, output_padding, actual_stream);
+        break;
+      case CUDECOMP_DOUBLE_COMPLEX:
+        cudecompTransposeZToY(handle, grid_desc, reinterpret_cast<cuda::std::complex<double>*>(input),
+                              reinterpret_cast<cuda::std::complex<double>*>(output),
+                              reinterpret_cast<cuda::std::complex<double>*>(actual_work), input_halo_extents,
+                              output_halo_extents, input_padding, output_padding, actual_stream);
+        break;
+      }
+    };
+    bool use_nvshmem = transposeBackendRequiresNvshmem(grid_desc->config.transpose_comm_backend);
+    runWithWorkspace(handle, grid_desc, work, workspace_size, use_nvshmem, stream, execute);
   }
   CUDECOMP_CATCH_C_API_ERRORS()
   return CUDECOMP_RESULT_SUCCESS;
@@ -1888,31 +2049,40 @@ cudecompResult_t cudecompTransposeYToX(cudecompHandle_t handle, cudecompGridDesc
     checkDataType(dtype);
     if (!input) { THROW_INVALID_USAGE("input argument cannot be null"); }
     if (!output) { THROW_INVALID_USAGE("output argument cannot be null"); }
-    if (!work) { THROW_INVALID_USAGE("work argument cannot be null"); }
-    switch (dtype) {
-    case CUDECOMP_FLOAT:
-      cudecompTransposeYToX(handle, grid_desc, reinterpret_cast<float*>(input), reinterpret_cast<float*>(output),
-                            reinterpret_cast<float*>(work), input_halo_extents, output_halo_extents, input_padding,
-                            output_padding, stream);
-      break;
-    case CUDECOMP_DOUBLE:
-      cudecompTransposeYToX(handle, grid_desc, reinterpret_cast<double*>(input), reinterpret_cast<double*>(output),
-                            reinterpret_cast<double*>(work), input_halo_extents, output_halo_extents, input_padding,
-                            output_padding, stream);
-      break;
-    case CUDECOMP_FLOAT_COMPLEX:
-      cudecompTransposeYToX(handle, grid_desc, reinterpret_cast<cuda::std::complex<float>*>(input),
-                            reinterpret_cast<cuda::std::complex<float>*>(output),
-                            reinterpret_cast<cuda::std::complex<float>*>(work), input_halo_extents, output_halo_extents,
-                            input_padding, output_padding, stream);
-      break;
-    case CUDECOMP_DOUBLE_COMPLEX:
-      cudecompTransposeYToX(handle, grid_desc, reinterpret_cast<cuda::std::complex<double>*>(input),
-                            reinterpret_cast<cuda::std::complex<double>*>(output),
-                            reinterpret_cast<cuda::std::complex<double>*>(work), input_halo_extents,
-                            output_halo_extents, input_padding, output_padding, stream);
-      break;
+    size_t workspace_size = 0;
+    if (!work) {
+      int64_t workspace_elements;
+      CHECK_CUDECOMP(cudecompGetTransposeWorkspaceSize(handle, grid_desc, &workspace_elements));
+      workspace_size = getWorkspaceSizeBytes(workspace_elements, dtype);
     }
+    auto execute = [&](void* actual_work, cudaStream_t actual_stream) {
+      switch (dtype) {
+      case CUDECOMP_FLOAT:
+        cudecompTransposeYToX(handle, grid_desc, reinterpret_cast<float*>(input), reinterpret_cast<float*>(output),
+                              reinterpret_cast<float*>(actual_work), input_halo_extents, output_halo_extents,
+                              input_padding, output_padding, actual_stream);
+        break;
+      case CUDECOMP_DOUBLE:
+        cudecompTransposeYToX(handle, grid_desc, reinterpret_cast<double*>(input), reinterpret_cast<double*>(output),
+                              reinterpret_cast<double*>(actual_work), input_halo_extents, output_halo_extents,
+                              input_padding, output_padding, actual_stream);
+        break;
+      case CUDECOMP_FLOAT_COMPLEX:
+        cudecompTransposeYToX(handle, grid_desc, reinterpret_cast<cuda::std::complex<float>*>(input),
+                              reinterpret_cast<cuda::std::complex<float>*>(output),
+                              reinterpret_cast<cuda::std::complex<float>*>(actual_work), input_halo_extents,
+                              output_halo_extents, input_padding, output_padding, actual_stream);
+        break;
+      case CUDECOMP_DOUBLE_COMPLEX:
+        cudecompTransposeYToX(handle, grid_desc, reinterpret_cast<cuda::std::complex<double>*>(input),
+                              reinterpret_cast<cuda::std::complex<double>*>(output),
+                              reinterpret_cast<cuda::std::complex<double>*>(actual_work), input_halo_extents,
+                              output_halo_extents, input_padding, output_padding, actual_stream);
+        break;
+      }
+    };
+    bool use_nvshmem = transposeBackendRequiresNvshmem(grid_desc->config.transpose_comm_backend);
+    runWithWorkspace(handle, grid_desc, work, workspace_size, use_nvshmem, stream, execute);
   }
   CUDECOMP_CATCH_C_API_ERRORS()
   return CUDECOMP_RESULT_SUCCESS;
@@ -1932,29 +2102,38 @@ cudecompResult_t cudecompUpdateHalosX(cudecompHandle_t handle, cudecompGridDesc_
       return CUDECOMP_RESULT_SUCCESS;
     }
     if (!input) { THROW_INVALID_USAGE("input argument cannot be null"); }
-    if (!work) { THROW_INVALID_USAGE("work argument cannot be null"); }
     if (dim < 0 || dim > 2) { THROW_INVALID_USAGE("dim argument out of range"); }
-
-    switch (dtype) {
-    case CUDECOMP_FLOAT:
-      cudecompUpdateHalosX(handle, grid_desc, reinterpret_cast<float*>(input), reinterpret_cast<float*>(work),
-                           halo_extents, halo_periods, dim, padding, stream);
-      break;
-    case CUDECOMP_DOUBLE:
-      cudecompUpdateHalosX(handle, grid_desc, reinterpret_cast<double*>(input), reinterpret_cast<double*>(work),
-                           halo_extents, halo_periods, dim, padding, stream);
-      break;
-    case CUDECOMP_FLOAT_COMPLEX:
-      cudecompUpdateHalosX(handle, grid_desc, reinterpret_cast<cuda::std::complex<float>*>(input),
-                           reinterpret_cast<cuda::std::complex<float>*>(work), halo_extents, halo_periods, dim, padding,
-                           stream);
-      break;
-    case CUDECOMP_DOUBLE_COMPLEX:
-      cudecompUpdateHalosX(handle, grid_desc, reinterpret_cast<cuda::std::complex<double>*>(input),
-                           reinterpret_cast<cuda::std::complex<double>*>(work), halo_extents, halo_periods, dim,
-                           padding, stream);
-      break;
+    size_t workspace_size = 0;
+    if (!work) {
+      int64_t workspace_elements;
+      CHECK_CUDECOMP(cudecompGetHaloWorkspaceSize(handle, grid_desc, 0, halo_extents, &workspace_elements));
+      workspace_size = getWorkspaceSizeBytes(workspace_elements, dtype);
     }
+    auto execute = [&](void* actual_work, cudaStream_t actual_stream) {
+      switch (dtype) {
+      case CUDECOMP_FLOAT:
+        cudecompUpdateHalosX(handle, grid_desc, reinterpret_cast<float*>(input), reinterpret_cast<float*>(actual_work),
+                             halo_extents, halo_periods, dim, padding, actual_stream);
+        break;
+      case CUDECOMP_DOUBLE:
+        cudecompUpdateHalosX(handle, grid_desc, reinterpret_cast<double*>(input),
+                             reinterpret_cast<double*>(actual_work), halo_extents, halo_periods, dim, padding,
+                             actual_stream);
+        break;
+      case CUDECOMP_FLOAT_COMPLEX:
+        cudecompUpdateHalosX(handle, grid_desc, reinterpret_cast<cuda::std::complex<float>*>(input),
+                             reinterpret_cast<cuda::std::complex<float>*>(actual_work), halo_extents, halo_periods, dim,
+                             padding, actual_stream);
+        break;
+      case CUDECOMP_DOUBLE_COMPLEX:
+        cudecompUpdateHalosX(handle, grid_desc, reinterpret_cast<cuda::std::complex<double>*>(input),
+                             reinterpret_cast<cuda::std::complex<double>*>(actual_work), halo_extents, halo_periods,
+                             dim, padding, actual_stream);
+        break;
+      }
+    };
+    bool use_nvshmem = haloBackendRequiresNvshmem(grid_desc->config.halo_comm_backend);
+    runWithWorkspace(handle, grid_desc, work, workspace_size, use_nvshmem, stream, execute);
   }
   CUDECOMP_CATCH_C_API_ERRORS()
   return CUDECOMP_RESULT_SUCCESS;
@@ -1974,29 +2153,38 @@ cudecompResult_t cudecompUpdateHalosY(cudecompHandle_t handle, cudecompGridDesc_
       return CUDECOMP_RESULT_SUCCESS;
     }
     if (!input) { THROW_INVALID_USAGE("input argument cannot be null"); }
-    if (!work) { THROW_INVALID_USAGE("work argument cannot be null"); }
     if (dim < 0 || dim > 2) { THROW_INVALID_USAGE("dim argument out of range"); }
-
-    switch (dtype) {
-    case CUDECOMP_FLOAT:
-      cudecompUpdateHalosY(handle, grid_desc, reinterpret_cast<float*>(input), reinterpret_cast<float*>(work),
-                           halo_extents, halo_periods, dim, padding, stream);
-      break;
-    case CUDECOMP_DOUBLE:
-      cudecompUpdateHalosY(handle, grid_desc, reinterpret_cast<double*>(input), reinterpret_cast<double*>(work),
-                           halo_extents, halo_periods, dim, padding, stream);
-      break;
-    case CUDECOMP_FLOAT_COMPLEX:
-      cudecompUpdateHalosY(handle, grid_desc, reinterpret_cast<cuda::std::complex<float>*>(input),
-                           reinterpret_cast<cuda::std::complex<float>*>(work), halo_extents, halo_periods, dim, padding,
-                           stream);
-      break;
-    case CUDECOMP_DOUBLE_COMPLEX:
-      cudecompUpdateHalosY(handle, grid_desc, reinterpret_cast<cuda::std::complex<double>*>(input),
-                           reinterpret_cast<cuda::std::complex<double>*>(work), halo_extents, halo_periods, dim,
-                           padding, stream);
-      break;
+    size_t workspace_size = 0;
+    if (!work) {
+      int64_t workspace_elements;
+      CHECK_CUDECOMP(cudecompGetHaloWorkspaceSize(handle, grid_desc, 1, halo_extents, &workspace_elements));
+      workspace_size = getWorkspaceSizeBytes(workspace_elements, dtype);
     }
+    auto execute = [&](void* actual_work, cudaStream_t actual_stream) {
+      switch (dtype) {
+      case CUDECOMP_FLOAT:
+        cudecompUpdateHalosY(handle, grid_desc, reinterpret_cast<float*>(input), reinterpret_cast<float*>(actual_work),
+                             halo_extents, halo_periods, dim, padding, actual_stream);
+        break;
+      case CUDECOMP_DOUBLE:
+        cudecompUpdateHalosY(handle, grid_desc, reinterpret_cast<double*>(input),
+                             reinterpret_cast<double*>(actual_work), halo_extents, halo_periods, dim, padding,
+                             actual_stream);
+        break;
+      case CUDECOMP_FLOAT_COMPLEX:
+        cudecompUpdateHalosY(handle, grid_desc, reinterpret_cast<cuda::std::complex<float>*>(input),
+                             reinterpret_cast<cuda::std::complex<float>*>(actual_work), halo_extents, halo_periods, dim,
+                             padding, actual_stream);
+        break;
+      case CUDECOMP_DOUBLE_COMPLEX:
+        cudecompUpdateHalosY(handle, grid_desc, reinterpret_cast<cuda::std::complex<double>*>(input),
+                             reinterpret_cast<cuda::std::complex<double>*>(actual_work), halo_extents, halo_periods,
+                             dim, padding, actual_stream);
+        break;
+      }
+    };
+    bool use_nvshmem = haloBackendRequiresNvshmem(grid_desc->config.halo_comm_backend);
+    runWithWorkspace(handle, grid_desc, work, workspace_size, use_nvshmem, stream, execute);
   }
   CUDECOMP_CATCH_C_API_ERRORS()
   return CUDECOMP_RESULT_SUCCESS;
@@ -2016,29 +2204,38 @@ cudecompResult_t cudecompUpdateHalosZ(cudecompHandle_t handle, cudecompGridDesc_
       return CUDECOMP_RESULT_SUCCESS;
     }
     if (!input) { THROW_INVALID_USAGE("input argument cannot be null"); }
-    if (!work) { THROW_INVALID_USAGE("work argument cannot be null"); }
     if (dim < 0 || dim > 2) { THROW_INVALID_USAGE("dim argument out of range"); }
-
-    switch (dtype) {
-    case CUDECOMP_FLOAT:
-      cudecompUpdateHalosZ(handle, grid_desc, reinterpret_cast<float*>(input), reinterpret_cast<float*>(work),
-                           halo_extents, halo_periods, dim, padding, stream);
-      break;
-    case CUDECOMP_DOUBLE:
-      cudecompUpdateHalosZ(handle, grid_desc, reinterpret_cast<double*>(input), reinterpret_cast<double*>(work),
-                           halo_extents, halo_periods, dim, padding, stream);
-      break;
-    case CUDECOMP_FLOAT_COMPLEX:
-      cudecompUpdateHalosZ(handle, grid_desc, reinterpret_cast<cuda::std::complex<float>*>(input),
-                           reinterpret_cast<cuda::std::complex<float>*>(work), halo_extents, halo_periods, dim, padding,
-                           stream);
-      break;
-    case CUDECOMP_DOUBLE_COMPLEX:
-      cudecompUpdateHalosZ(handle, grid_desc, reinterpret_cast<cuda::std::complex<double>*>(input),
-                           reinterpret_cast<cuda::std::complex<double>*>(work), halo_extents, halo_periods, dim,
-                           padding, stream);
-      break;
+    size_t workspace_size = 0;
+    if (!work) {
+      int64_t workspace_elements;
+      CHECK_CUDECOMP(cudecompGetHaloWorkspaceSize(handle, grid_desc, 2, halo_extents, &workspace_elements));
+      workspace_size = getWorkspaceSizeBytes(workspace_elements, dtype);
     }
+    auto execute = [&](void* actual_work, cudaStream_t actual_stream) {
+      switch (dtype) {
+      case CUDECOMP_FLOAT:
+        cudecompUpdateHalosZ(handle, grid_desc, reinterpret_cast<float*>(input), reinterpret_cast<float*>(actual_work),
+                             halo_extents, halo_periods, dim, padding, actual_stream);
+        break;
+      case CUDECOMP_DOUBLE:
+        cudecompUpdateHalosZ(handle, grid_desc, reinterpret_cast<double*>(input),
+                             reinterpret_cast<double*>(actual_work), halo_extents, halo_periods, dim, padding,
+                             actual_stream);
+        break;
+      case CUDECOMP_FLOAT_COMPLEX:
+        cudecompUpdateHalosZ(handle, grid_desc, reinterpret_cast<cuda::std::complex<float>*>(input),
+                             reinterpret_cast<cuda::std::complex<float>*>(actual_work), halo_extents, halo_periods, dim,
+                             padding, actual_stream);
+        break;
+      case CUDECOMP_DOUBLE_COMPLEX:
+        cudecompUpdateHalosZ(handle, grid_desc, reinterpret_cast<cuda::std::complex<double>*>(input),
+                             reinterpret_cast<cuda::std::complex<double>*>(actual_work), halo_extents, halo_periods,
+                             dim, padding, actual_stream);
+        break;
+      }
+    };
+    bool use_nvshmem = haloBackendRequiresNvshmem(grid_desc->config.halo_comm_backend);
+    runWithWorkspace(handle, grid_desc, work, workspace_size, use_nvshmem, stream, execute);
   }
   CUDECOMP_CATCH_C_API_ERRORS()
   return CUDECOMP_RESULT_SUCCESS;

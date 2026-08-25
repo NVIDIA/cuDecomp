@@ -16,6 +16,7 @@
 #include <gtest/gtest.h>
 
 #include "cudecomp.h"
+#include "internal/common.h"
 
 #include "backend_test_context.h"
 #include "backend_utils.h"
@@ -48,6 +49,7 @@ struct HaloCase {
   std::array<bool, 3> halo_periods;
   std::array<int32_t, 3> padding;
   cudecompRankOrder_t rank_order;
+  bool automatic_workspace;
 };
 
 const char* axisName(int axis) {
@@ -85,7 +87,8 @@ std::string paramName(const testing::TestParamInfo<HaloCase>& info) {
   const auto& test_case = info.param;
   return sanitizeParamName(test_case.scenario) + "_Axis" + axisName(test_case.axis) + "_" +
          sanitizeParamName(test_case.backend.name) + "_" + dtypeName(test_case.dtype) + "_P" +
-         std::to_string(test_case.pdims[0]) + "x" + std::to_string(test_case.pdims[1]);
+         std::to_string(test_case.pdims[0]) + "x" + std::to_string(test_case.pdims[1]) +
+         (test_case.automatic_workspace ? "_AutomaticWorkspace" : "");
 }
 
 HaloCase makeCase(cudecomp_test::HaloBackend backend, const char* scenario, int axis,
@@ -96,8 +99,13 @@ HaloCase makeCase(cudecomp_test::HaloBackend backend, const char* scenario, int 
                   std::array<int32_t, 3> halo_extents = kBaselineHaloExtents,
                   std::array<bool, 3> halo_periods = kPeriodicHalos, std::array<int32_t, 3> padding = kZeroExtents,
                   cudecompRankOrder_t rank_order = CUDECOMP_RANK_ORDER_DEFAULT) {
-  return {backend,         scenario,  axis,         gdims,        pdims,   dtype,
-          axis_contiguous, mem_order, halo_extents, halo_periods, padding, rank_order};
+  return {backend,   scenario,     axis,         gdims,   pdims,      dtype, axis_contiguous,
+          mem_order, halo_extents, halo_periods, padding, rank_order, false};
+}
+
+HaloCase withAutomaticWorkspace(HaloCase test_case) {
+  test_case.automatic_workspace = true;
+  return test_case;
 }
 
 void appendBaselineCases(std::vector<HaloCase>& cases, const cudecomp_test::HaloBackend& backend) {
@@ -122,6 +130,8 @@ void appendBaselineCases(std::vector<HaloCase>& cases, const cudecomp_test::Halo
       }
     }
   }
+
+  cases.push_back(withAutomaticWorkspace(makeCase(backend, "AutomaticWorkspaceReuse", 0)));
 }
 
 void appendCoverageCases(std::vector<HaloCase>& cases, const cudecomp_test::HaloBackend& backend) {
@@ -356,26 +366,42 @@ template <typename T> void runHaloCase(const HaloCase& test_case) {
   cudecomp_test::cudaBufferGuard data_buffer(data_d);
   CHECK_CUDA_GLOBAL(active_comm, data_alloc_result);
 
-  void* work_d = nullptr;
-  const cudecompResult_t work_alloc_result =
-      cudecompMalloc(handle, grid_desc, &work_d, workspace_num_elements * dtype_size);
+  void* work_d = CUDECOMP_WORKSPACE_AUTO;
+  cudecompResult_t work_alloc_result = CUDECOMP_RESULT_SUCCESS;
+  if (!test_case.automatic_workspace) {
+    work_alloc_result = cudecompMalloc(handle, grid_desc, &work_d, workspace_num_elements * dtype_size);
+  }
   cudecomp_test::cudecompBufferGuard work_buffer(handle, grid_desc, work_d);
   CHECK_CUDECOMP_GLOBAL(active_comm, work_alloc_result);
 
-  CHECK_CUDA_GLOBAL(active_comm, cudaMemset(data_d, 0, pinfo.size * sizeof(*data_d)));
-  CHECK_CUDA_GLOBAL(active_comm,
-                    cudaMemcpy(data_d, initial.data(), initial.size() * sizeof(*data_d), cudaMemcpyHostToDevice));
-  CHECK_CUDA_GLOBAL(active_comm, cudaMemset(work_d, 0, workspace_num_elements * dtype_size));
+  auto run_and_verify = [&](void* work) {
+    CHECK_CUDA_GLOBAL(active_comm, cudaMemset(data_d, 0, pinfo.size * sizeof(*data_d)));
+    CHECK_CUDA_GLOBAL(active_comm,
+                      cudaMemcpy(data_d, initial.data(), initial.size() * sizeof(*data_d), cudaMemcpyHostToDevice));
+    if (work) { CHECK_CUDA_GLOBAL(active_comm, cudaMemset(work, 0, workspace_num_elements * dtype_size)); }
 
-  for (int dim = 0; dim < 3; ++dim) {
-    CHECK_CUDECOMP_GLOBAL(active_comm, runHalo(handle, grid_desc, test_case.axis, data_d, work_d, test_case.dtype,
-                                               pinfo, test_case.halo_periods, dim));
+    for (int dim = 0; dim < 3; ++dim) {
+      CHECK_CUDECOMP_GLOBAL(active_comm, runHalo(handle, grid_desc, test_case.axis, data_d, work, test_case.dtype,
+                                                 pinfo, test_case.halo_periods, dim));
+    }
+
+    std::vector<T> actual(expected.size(), unsetValue<T>());
+    CHECK_CUDA_GLOBAL(active_comm,
+                      cudaMemcpy(actual.data(), data_d, actual.size() * sizeof(*data_d), cudaMemcpyDeviceToHost));
+    EXPECT_TRUE(pencilMatches(expected, actual, pinfo));
+  };
+
+  run_and_verify(work_d);
+  if (test_case.automatic_workspace) {
+    void* cached_workspace = cudecomp::haloBackendRequiresNvshmem(test_case.backend.backend)
+                                 ? handle->nvshmem_workspace.ptr
+                                 : handle->ordinary_workspace.ptr;
+    ASSERT_NE(cached_workspace, nullptr);
+    run_and_verify(nullptr);
+    EXPECT_EQ(cached_workspace, cudecomp::haloBackendRequiresNvshmem(test_case.backend.backend)
+                                    ? handle->nvshmem_workspace.ptr
+                                    : handle->ordinary_workspace.ptr);
   }
-
-  std::vector<T> actual(expected.size(), unsetValue<T>());
-  CHECK_CUDA_GLOBAL(active_comm,
-                    cudaMemcpy(actual.data(), data_d, actual.size() * sizeof(*data_d), cudaMemcpyDeviceToHost));
-  EXPECT_TRUE(pencilMatches(expected, actual, pinfo));
 }
 
 TEST_P(HaloCorrectnessTest, UpdateHalos) {

@@ -58,6 +58,7 @@ struct TransposeCase {
   std::array<int32_t, 3> output_padding;
   cudecompRankOrder_t rank_order;
   std::vector<int32_t> synthetic_host_groups;
+  bool automatic_workspace;
 };
 
 const char* operationName(TransposeOperation operation) {
@@ -117,7 +118,8 @@ std::string paramName(const testing::TestParamInfo<TransposeCase>& info) {
   return sanitizeParamName(test_case.scenario) + "_" + operationName(test_case.operation) + "_" +
          sanitizeParamName(test_case.backend.name) + "_" + dtypeName(test_case.dtype) + "_P" +
          std::to_string(test_case.pdims[0]) + "x" + std::to_string(test_case.pdims[1]) + "_" +
-         (test_case.out_of_place ? "OutOfPlace" : "InPlace");
+         (test_case.out_of_place ? "OutOfPlace" : "InPlace") +
+         (test_case.automatic_workspace ? "_AutomaticWorkspace" : "");
 }
 
 TransposeCase makeCase(cudecomp_test::TransposeBackend backend, const char* scenario, TransposeOperation operation,
@@ -144,7 +146,13 @@ TransposeCase makeCase(cudecomp_test::TransposeBackend backend, const char* scen
           input_padding,
           output_padding,
           rank_order,
-          {}};
+          {},
+          false};
+}
+
+TransposeCase withAutomaticWorkspace(TransposeCase test_case) {
+  test_case.automatic_workspace = true;
+  return test_case;
 }
 
 TransposeCase withSyntheticHostGroups(TransposeCase test_case, std::vector<int32_t> synthetic_host_groups) {
@@ -185,6 +193,9 @@ void appendBaselineCases(std::vector<TransposeCase>& cases, const cudecomp_test:
       }
     }
   }
+
+  cases.push_back(withAutomaticWorkspace(makeCase(backend, "AutomaticWorkspaceReuse", TransposeOperation::XToY,
+                                                  kBaselineGdims, {2, 2}, CUDECOMP_FLOAT, true)));
 }
 
 void appendNcclNativeAlltoAllCases(std::vector<TransposeCase>& cases, const cudecomp_test::TransposeBackend& backend) {
@@ -380,20 +391,21 @@ testing::AssertionResult pencilMatches(const std::vector<T>& expected, const std
 template <typename T>
 cudecompResult_t runTranspose(cudecompHandle_t handle, cudecompGridDesc_t grid_desc, TransposeOperation operation,
                               T* input, T* output, void* work, cudecompDataType_t dtype,
-                              const cudecompPencilInfo_t& input_info, const cudecompPencilInfo_t& output_info) {
+                              const cudecompPencilInfo_t& input_info, const cudecompPencilInfo_t& output_info,
+                              cudaStream_t stream = nullptr) {
   switch (operation) {
   case TransposeOperation::XToY:
     return cudecompTransposeXToY(handle, grid_desc, input, output, work, dtype, input_info.halo_extents,
-                                 output_info.halo_extents, input_info.padding, output_info.padding, 0);
+                                 output_info.halo_extents, input_info.padding, output_info.padding, stream);
   case TransposeOperation::YToX:
     return cudecompTransposeYToX(handle, grid_desc, input, output, work, dtype, input_info.halo_extents,
-                                 output_info.halo_extents, input_info.padding, output_info.padding, 0);
+                                 output_info.halo_extents, input_info.padding, output_info.padding, stream);
   case TransposeOperation::YToZ:
     return cudecompTransposeYToZ(handle, grid_desc, input, output, work, dtype, input_info.halo_extents,
-                                 output_info.halo_extents, input_info.padding, output_info.padding, 0);
+                                 output_info.halo_extents, input_info.padding, output_info.padding, stream);
   case TransposeOperation::ZToY:
     return cudecompTransposeZToY(handle, grid_desc, input, output, work, dtype, input_info.halo_extents,
-                                 output_info.halo_extents, input_info.padding, output_info.padding, 0);
+                                 output_info.halo_extents, input_info.padding, output_info.padding, stream);
   }
   return CUDECOMP_RESULT_INVALID_USAGE;
 }
@@ -410,7 +422,7 @@ void runAndVerifyTranspose(const cudecomp_test::MpiTestComm& active_comm, cudeco
   }
   CHECK_CUDA_GLOBAL(active_comm,
                     cudaMemcpy(input_d, input_ref.data(), input_ref.size() * sizeof(*input_d), cudaMemcpyHostToDevice));
-  CHECK_CUDA_GLOBAL(active_comm, cudaMemset(work_d, 0, workspace_num_elements * dtype_size));
+  if (work_d) { CHECK_CUDA_GLOBAL(active_comm, cudaMemset(work_d, 0, workspace_num_elements * dtype_size)); }
 
   CHECK_CUDECOMP_GLOBAL(active_comm, runTranspose(handle, grid_desc, test_case.operation, input_d, output_d, work_d,
                                                   test_case.dtype, input_info, output_info));
@@ -654,15 +666,42 @@ void runTransposeCase(const TransposeCase& test_case, bool check_cuda_graph_repl
     output_d = allocated_output_d;
   }
 
-  void* work_d = nullptr;
-  const cudecompResult_t work_alloc_result =
-      cudecompMalloc(handle, grid_desc, &work_d, workspace_num_elements * dtype_size);
+  void* work_d = CUDECOMP_WORKSPACE_AUTO;
+  cudecompResult_t work_alloc_result = CUDECOMP_RESULT_SUCCESS;
+  if (!test_case.automatic_workspace) {
+    work_alloc_result = cudecompMalloc(handle, grid_desc, &work_d, workspace_num_elements * dtype_size);
+  }
   cudecomp_test::cudecompBufferGuard work_buffer(handle, grid_desc, work_d);
   CHECK_CUDECOMP_GLOBAL(active_comm, work_alloc_result);
   if (check_nccl_user_buffer_registration) { ASSERT_TRUE(ncclUserBufferRegistrationIsActive(handle, work_d)); }
 
   runAndVerifyTranspose(active_comm, handle, grid_desc, test_case, input_d, output_d, work_d, data_num_elements,
                         workspace_num_elements, dtype_size, input_ref, output_ref, input_info, output_info);
+
+  if (test_case.automatic_workspace) {
+    void* cached_workspace = cudecomp::transposeBackendRequiresNvshmem(test_case.backend.backend)
+                                 ? handle->nvshmem_workspace.ptr
+                                 : handle->ordinary_workspace.ptr;
+    ASSERT_NE(cached_workspace, nullptr);
+
+    runAndVerifyTranspose(active_comm, handle, grid_desc, test_case, input_d, output_d, CUDECOMP_WORKSPACE_AUTO,
+                          data_num_elements, workspace_num_elements, dtype_size, input_ref, output_ref, input_info,
+                          output_info);
+    EXPECT_EQ(cached_workspace, cudecomp::transposeBackendRequiresNvshmem(test_case.backend.backend)
+                                    ? handle->nvshmem_workspace.ptr
+                                    : handle->ordinary_workspace.ptr);
+
+    cudaStream_t capture_stream = nullptr;
+    CHECK_CUDA_GLOBAL(active_comm, cudaStreamCreateWithFlags(&capture_stream, cudaStreamNonBlocking));
+    CHECK_CUDA_GLOBAL(active_comm, cudaStreamBeginCapture(capture_stream, cudaStreamCaptureModeThreadLocal));
+    EXPECT_EQ(CUDECOMP_RESULT_NOT_SUPPORTED,
+              runTranspose(handle, grid_desc, test_case.operation, input_d, output_d, CUDECOMP_WORKSPACE_AUTO,
+                           test_case.dtype, input_info, output_info, capture_stream));
+    cudaGraph_t graph = nullptr;
+    CHECK_CUDA_GLOBAL(active_comm, cudaStreamEndCapture(capture_stream, &graph));
+    if (graph) { CHECK_CUDA_GLOBAL(active_comm, cudaGraphDestroy(graph)); }
+    CHECK_CUDA_GLOBAL(active_comm, cudaStreamDestroy(capture_stream));
+  }
 
   if (check_nccl_user_buffer_registration) {
     const cudecompResult_t work_free_result = cudecompFree(handle, grid_desc, work_d);

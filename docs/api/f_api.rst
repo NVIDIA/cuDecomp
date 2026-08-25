@@ -471,7 +471,7 @@ _____________________
   :p cudecompGridDesc grid_desc [in]: A cuDecomp grid descriptor.
   :p T input(*) [in]: Device array containing input X-axis aligned pencil data.
   :p T output(*) [out]: Device array to write output Y-axis aligned pencil data. If :code:`input` and :code:`output` are the same, operation is performed in-place
-  :p T work(*) [in]: Device array to use for transpose workspace.
+  :p T work(*) [in]: Caller-owned device array to use for transpose workspace, or :code:`CUDECOMP_WORKSPACE_AUTO` to use handle-owned workspace management.
   :p cudecompDataType dtype [in]: The :code:`cudecompDataType` to use for the operation.
   :p integer input_halo_extents(3) [in,optional]: An array of three integers to define halo region extents of the input data, in global order. The i-th entry in this array should contain the number of halo elements (per direction) expected in the along the i-th global domain axis. Symmetric halos are assumed (e.g. a value of one in halo_extents means there are 2 halo elements, one element on each side). If not provided, input data is assumed to have no halos.
   :p integer output_halo_extents(3) [in,optional]: Similar to :code:`input_halo_extents` but for the output data. If not provided, output data is assumed to have no halos.
@@ -497,7 +497,7 @@ _____________________
   :p cudecompGridDesc grid_desc [in]: A cuDecomp grid descriptor.
   :p T input(*) [in]: Device array containing input Y-axis aligned pencil data.
   :p T output(*) [out]: Device array to write output Z-axis aligned pencil data. If :code:`input` and :code:`output` are the same, operation is performed in-place
-  :p T work(*) [in]: Device array to use for transpose workspace.
+  :p T work(*) [in]: Caller-owned device array to use for transpose workspace, or :code:`CUDECOMP_WORKSPACE_AUTO` to use handle-owned workspace management.
   :p cudecompDataType dtype [in]: The :code:`cudecompDataType` to use for the operation.
   :p integer input_halo_extents(3) [in,optional]: An array of three integers to define halo region extents of the input data, in global order. The i-th entry in this array should contain the number of halo elements (per direction) expected in the along the i-th global domain axis. Symmetric halos are assumed (e.g. a value of one in halo_extents means there are 2 halo elements, one element on each side). If not provided, input data is assumed to have no halos.
   :p integer output_halo_extents(3) [in,optional]: Similar to :code:`intput_halo_extents` but for the output data. If not provided, output data is assumed to have no halos.
@@ -523,7 +523,7 @@ _____________________
   :p cudecompGridDesc grid_desc [in]: A cuDecomp grid descriptor.
   :p T input(*) [in]: Device array containing input Z-axis aligned pencil data.
   :p T output(*) [out]: Device array to write output Y-axis aligned pencil data. If :code:`input` and :code:`output` are the same, operation is performed in-place
-  :p T work(*) [in]: Device array to use for transpose workspace.
+  :p T work(*) [in]: Caller-owned device array to use for transpose workspace, or :code:`CUDECOMP_WORKSPACE_AUTO` to use handle-owned workspace management.
   :p cudecompDataType dtype [in]: The :code:`cudecompDataType` to use for the operation.
   :p integer input_halo_extents(3) [in,optional]: An array of three integers to define halo region extents of the input data, in global order. The i-th entry in this array should contain the number of halo elements (per direction) expected in the along the i-th global domain axis. Symmetric halos are assumed (e.g. a value of one in halo_extents means there are 2 halo elements, one element on each side). If not provided, input data is assumed to have no halos.
   :p integer output_halo_extents(3) [in,optional]: Similar to :code:`intput_halo_extents` but for the output data. If not provided, output data is assumed to have no halos.
@@ -550,7 +550,7 @@ _____________________
   :p cudecompGridDesc grid_desc [in]: A cuDecomp grid descriptor.
   :p T input(*) [in]: Device array containing input Y-axis aligned pencil data.
   :p T output(*) [out]: Device array to write output X-axis aligned pencil data. If :code:`input` and :code:`output` are the same, operation is performed in-place
-  :p T work(*) [in]: Device array to use for transpose workspace.
+  :p T work(*) [in]: Caller-owned device array to use for transpose workspace, or :code:`CUDECOMP_WORKSPACE_AUTO` to use handle-owned workspace management.
   :p cudecompDataType dtype [in]: The :code:`cudecompDataType` to use for the operation.
   :p integer input_halo_extents(3) [in,optional]: An array of three integers to define halo region extents of the input data, in global order. The i-th entry in this array should contain the number of halo elements (per direction) expected in the along the i-th global domain axis. Symmetric halos are assumed (e.g. a value of one in halo_extents means there are 2 halo elements, one element on each side). If not provided, input data is assumed to have no halos.
   :p integer output_halo_extents(3) [in,optional]: Similar to :code:`intput_halo_extents` but for the output data. If not provided, output data is assumed to have no halos.
@@ -578,7 +578,7 @@ ____________________
   :p cudecompHandle handle [in]: The initialized cuDecomp library handle
   :p cudecompGridDesc grid_desc [in]: A cuDecomp grid descriptor.
   :p T input(*) [in,out]: Device array containing input X-axis aligned pencil data. On successful completion, this buffer will contain the input X-axis aligned pencil data with the specified halo regions updated.
-  :p T work(*) [in]: Device array to use for halo workspace.
+  :p T work(*) [in]: Caller-owned device array to use for halo workspace, or :code:`CUDECOMP_WORKSPACE_AUTO` to use handle-owned workspace management.
   :p cudecompDataType dtype [in]: The :code:`cudecompDataType` to use for the operation.
   :p integer halo_extents(3) [in]: An array of three integers to define halo region extents of the input data, in global order. The i-th entry in this array should contain the number of halo elements (per direction) expected in the along the i-th global domain axis. Symmetric halos are assumed (e.g. a value of one in halo_extents means there are 2 halo elements, one element on each side).
   :p logical halo_periods(3) [in]: An array of three boolean values to define halo periodicity of the input data, in global order. If the i-th entry in this array is true, the domain is treated periodically along the i-th global domain axis.
@@ -603,7 +603,7 @@ ____________________
   :p cudecompHandle handle [in]: The initialized cuDecomp library handle
   :p cudecompGridDesc grid_desc [in]: A cuDecomp grid descriptor.
   :p T input(*) [in,out]: Device array containing input Y-axis aligned pencil data. On successful completion, this buffer will contain the input X-axis aligned pencil data with the specified halo regions updated.
-  :p T work(*) [in]: Device array to use for halo workspace.
+  :p T work(*) [in]: Caller-owned device array to use for halo workspace, or :code:`CUDECOMP_WORKSPACE_AUTO` to use handle-owned workspace management.
   :p cudecompDataType dtype [in]: The :code:`cudecompDataType` to use for the operation.
   :p integer halo_extents(3) [in]: An array of three integers to define halo region extents of the input data, in global order. The i-th entry in this array should contain the number of halo elements (per direction) expected in the along the i-th global domain axis. Symmetric halos are assumed (e.g. a value of one in halo_extents means there are 2 halo elements, one element on each side).
   :p logical halo_periods(3) [in]: An array of three boolean values to define halo periodicity of the input data, in global order. If the i-th entry in this array is true, the domain is treated periodically along the i-th global domain axis.
@@ -628,7 +628,7 @@ ____________________
   :p cudecompHandle handle [in]: The initialized cuDecomp library handle
   :p cudecompGridDesc grid_desc [in]: A cuDecomp grid descriptor.
   :p T input(*) [in,out]: Device array containing input Z-axis aligned pencil data. On successful completion, this buffer will contain the input X-axis aligned pencil data with the specified halo regions updated.
-  :p T work(*) [in]: Device array to use for halo workspace.
+  :p T work(*) [in]: Caller-owned device array to use for halo workspace, or :code:`CUDECOMP_WORKSPACE_AUTO` to use handle-owned workspace management.
   :p cudecompDataType dtype [in]: The :code:`cudecompDataType` to use for the operation.
   :p integer halo_extents(3) [in]: An array of three integers to define halo region extents of the input data, in global order. The i-th entry in this array should contain the number of halo elements (per direction) expected in the along the i-th global domain axis. Symmetric halos are assumed (e.g. a value of one in halo_extents means there are 2 halo elements, one element on each side).
   :p logical halo_periods(3) [in]: An array of three boolean values to define halo periodicity of the input data, in global order. If the i-th entry in this array is true, the domain is treated periodically along the i-th global domain axis.

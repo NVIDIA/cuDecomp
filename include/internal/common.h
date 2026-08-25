@@ -26,6 +26,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <sstream>
 #include <string>
 #include <tuple>
@@ -120,6 +121,22 @@ struct cudecompHandle {
       nccl_ubr_handles; // map of allocated buffer address to NCCL registration handle(s)
 
   std::vector<cudecomp::cudaStream> streams; // internal streams for concurrent scheduling
+
+  // Automatic workspaces are split by allocation domain but share one execution stream so operations submitted with
+  // a null workspace cannot race with each other.
+  struct ManagedWorkspace {
+    void* ptr = nullptr;
+    size_t size = 0;
+#ifdef ENABLE_NVSHMEM
+    cudecomp::nvshmemRuntime nvshmem_runtime;
+#endif
+  };
+  ManagedWorkspace ordinary_workspace;
+  ManagedWorkspace nvshmem_workspace;
+  std::unique_ptr<cudecomp::cudaStream> workspace_stream;
+  std::unique_ptr<cudecomp::cudaEvent> workspace_ingress_event;
+  std::unique_ptr<cudecomp::cudaEvent> workspace_egress_event;
+  std::mutex workspace_mutex;
 
 #if CUTENSOR_MAJOR >= 2
   cutensorHandle_t cutensor_handle = nullptr;            // cuTENSOR handle;

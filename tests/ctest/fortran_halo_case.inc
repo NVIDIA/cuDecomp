@@ -98,27 +98,31 @@ subroutine RUN_HALO_AXIS(scenario, axis, halo_extents, padding, halo_periods, me
       select case (axis)
       case (1)
         if (use_optional_padding) then
-          res = cudecompUpdateHalosX(handle, grid_desc, data_d, work_d, DTYPE, pinfo%halo_extents, halo_periods, &
-                                     dim, pinfo%padding)
+          res = cudecompUpdateHalosX(handle, grid_desc, data_d, CUDECOMP_WORKSPACE_AUTO, DTYPE, pinfo%halo_extents, &
+                                     halo_periods, dim, pinfo%padding)
         else
-          res = cudecompUpdateHalosX(handle, grid_desc, data_d, work_d, DTYPE, pinfo%halo_extents, halo_periods, dim)
+          res = cudecompUpdateHalosX(handle, grid_desc, data_d, CUDECOMP_WORKSPACE_AUTO, DTYPE, pinfo%halo_extents, &
+                                     halo_periods, dim)
         endif
       case (2)
         if (use_optional_padding) then
-          res = cudecompUpdateHalosY(handle, grid_desc, data_d, work_d, DTYPE, pinfo%halo_extents, halo_periods, &
-                                     dim, pinfo%padding)
+          res = cudecompUpdateHalosY(handle, grid_desc, data_d, CUDECOMP_WORKSPACE_AUTO, DTYPE, pinfo%halo_extents, &
+                                     halo_periods, dim, pinfo%padding)
         else
-          res = cudecompUpdateHalosY(handle, grid_desc, data_d, work_d, DTYPE, pinfo%halo_extents, halo_periods, dim)
+          res = cudecompUpdateHalosY(handle, grid_desc, data_d, CUDECOMP_WORKSPACE_AUTO, DTYPE, pinfo%halo_extents, &
+                                     halo_periods, dim)
         endif
       case (3)
         if (use_optional_padding) then
-          res = cudecompUpdateHalosZ(handle, grid_desc, data_d, work_d, DTYPE, pinfo%halo_extents, halo_periods, &
-                                     dim, pinfo%padding)
+          res = cudecompUpdateHalosZ(handle, grid_desc, data_d, CUDECOMP_WORKSPACE_AUTO, DTYPE, pinfo%halo_extents, &
+                                     halo_periods, dim, pinfo%padding)
         else
-          res = cudecompUpdateHalosZ(handle, grid_desc, data_d, work_d, DTYPE, pinfo%halo_extents, halo_periods, dim)
+          res = cudecompUpdateHalosZ(handle, grid_desc, data_d, CUDECOMP_WORKSPACE_AUTO, DTYPE, pinfo%halo_extents, &
+                                     halo_periods, dim)
         endif
       end select
-      call expect_success(res, DTYPE_NAME//" "//trim(scenario)//" axis "//axis_name(axis)//" cudecompUpdateHalos")
+      call expect_success(res, DTYPE_NAME//" "//trim(scenario)//" axis "//axis_name(axis)// &
+                          " cudecompUpdateHalos automatic workspace")
     enddo
 
     allocate(actual(pinfo%size))

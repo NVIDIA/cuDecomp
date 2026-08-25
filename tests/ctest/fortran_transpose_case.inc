@@ -115,12 +115,12 @@ subroutine RUN_TRANSPOSE_SCENARIO(scenario, halo_extents_x, halo_extents_y, halo
     endif
     work_d = 0
     if (use_optional_args) then
-      res = cudecompTransposeXToY(handle, grid_desc, input_d, output_d, work_d, DTYPE, pinfo_x%halo_extents, &
-                                  pinfo_y%halo_extents, pinfo_x%padding, pinfo_y%padding)
+      res = cudecompTransposeXToY(handle, grid_desc, input_d, output_d, CUDECOMP_WORKSPACE_AUTO, DTYPE, &
+                                  pinfo_x%halo_extents, pinfo_y%halo_extents, pinfo_x%padding, pinfo_y%padding)
     else
-      res = cudecompTransposeXToY(handle, grid_desc, input_d, output_d, work_d, DTYPE)
+      res = cudecompTransposeXToY(handle, grid_desc, input_d, output_d, CUDECOMP_WORKSPACE_AUTO, DTYPE)
     endif
-    call expect_success(res, DTYPE_NAME//" "//trim(scenario)//" cudecompTransposeXToY")
+    call expect_success(res, DTYPE_NAME//" "//trim(scenario)//" cudecompTransposeXToY automatic workspace")
     if (res == CUDECOMP_RESULT_SUCCESS) then
       allocate(actual(pinfo_y%size))
       actual = output_d(1:pinfo_y%size)
