@@ -115,6 +115,43 @@ if (CUDECOMP_ENABLE_NVSHMEM)
   )
 endif()
 
+add_executable(cudecomp_test_automatic_workspace)
+target_sources(cudecomp_test_automatic_workspace
+  PRIVATE
+  automatic_workspace_tests.cc
+  mpi_test_main.cc
+)
+target_link_libraries(cudecomp_test_automatic_workspace
+  PRIVATE
+  cudecomp
+  cudecomp_test_support
+  NVHPC::CUTENSOR
+)
+set_target_properties(cudecomp_test_automatic_workspace PROPERTIES
+  RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests/ctest
+)
+
+set(CUDECOMP_TEST_AUTOMATIC_WORKSPACE_MPI_RANKS 4)
+add_test(
+  NAME cudecomp_automatic_workspace
+  COMMAND ${MPIEXEC_EXECUTABLE} ${CUDECOMP_TEST_MPIEXEC_PREFLAGS_LIST}
+          ${MPIEXEC_NUMPROC_FLAG} ${CUDECOMP_TEST_AUTOMATIC_WORKSPACE_MPI_RANKS}
+          $<TARGET_FILE:cudecomp_test_automatic_workspace>
+)
+set_tests_properties(cudecomp_automatic_workspace PROPERTIES
+  LABELS "workspace;mpi;nccl;nccl_ubr"
+  TIMEOUT ${CUDECOMP_TEST_TIMEOUT}
+  ENVIRONMENT "CUDECOMP_ENABLE_NCCL_UBR=1"
+)
+if (CUDECOMP_ENABLE_NVSHMEM)
+  set_property(TEST cudecomp_automatic_workspace APPEND PROPERTY
+    LABELS "nvshmem"
+  )
+  set_property(TEST cudecomp_automatic_workspace APPEND PROPERTY
+    ENVIRONMENT "NVSHMEM_DISABLE_NCCL=1"
+  )
+endif()
+
 add_executable(cudecomp_test_transpose)
 target_sources(cudecomp_test_transpose
   PRIVATE
@@ -172,6 +209,7 @@ target_link_libraries(cudecomp_test_halo
   PRIVATE
   cudecomp
   cudecomp_test_support
+  NVHPC::CUTENSOR
 )
 set_target_properties(cudecomp_test_halo PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests/ctest

@@ -522,7 +522,9 @@ Besides device memory to store pencil data, cuDecomp also requires workspace buf
 is used to facilitate local packing/unpacking and transposition operations (which are currently performed
 out-of-place). As a result, this workspace buffer will be approximately 2x the size of the largest pencil
 assigned to this process. For halo communication, the workspace is used to facilitate local packing of non-contiguous
-halo elements. We can query the required workspace sizes, in number of elements, using the
+halo elements.
+
+Applications can allocate caller-owned workspaces. Query the required workspace sizes, in number of elements, using the
 :ref:`cudecompGetTransposeWorkspaceSize-ref` and :ref:`cudecompGetHaloWorkspaceSize-ref` functions.
 
 .. tabs::
@@ -580,6 +582,35 @@ is required for NVSHMEM operations (see NVSHMEM documentation for more details).
     call CHECK_CUDECOMP_EXIT(istat)
 
     istat = cudecompMalloc(handle, grid_desc, halo_work_d, halo_work_num_elements)
+    call CHECK_CUDECOMP_EXIT(istat)
+
+Alternatively, applications may let cuDecomp manage workspace memory by skipping the size queries and allocations
+above and passing :code:`CUDECOMP_WORKSPACE_AUTO` directly to each operation. cuDecomp then allocates, grows, and reuses
+handle-owned workspace memory and preserves ordering with the stream passed to each operation. All participating ranks
+must consistently choose automatic or explicit workspace management for a given operation. Automatic workspace
+management cannot be used while the caller's stream is being captured by a CUDA Graph; provide an explicit workspace
+in that case.
+
+.. tabs::
+
+  .. code-tab:: c++
+
+    CHECK_CUDECOMP_EXIT(cudecompTransposeXToY(handle, grid_desc, data_d, data_d,
+                                              CUDECOMP_WORKSPACE_AUTO, CUDECOMP_DOUBLE,
+                                              pinfo_x.halo_extents, nullptr, nullptr, nullptr, 0));
+
+    CHECK_CUDECOMP_EXIT(cudecompUpdateHalosX(handle, grid_desc, data_d, CUDECOMP_WORKSPACE_AUTO,
+                                             CUDECOMP_DOUBLE, pinfo_x.halo_extents, halo_periods,
+                                             0, nullptr, 0));
+
+  .. code-tab:: fortran
+
+    istat = cudecompTransposeXToY(handle, grid_desc, data_d, data_d, CUDECOMP_WORKSPACE_AUTO, &
+                                  CUDECOMP_DOUBLE, pinfo_x%halo_extents, [0,0,0])
+    call CHECK_CUDECOMP_EXIT(istat)
+
+    istat = cudecompUpdateHalosX(handle, grid_desc, data_d, CUDECOMP_WORKSPACE_AUTO, CUDECOMP_DOUBLE, &
+                                 pinfo_x%halo_extents, halo_periods, 1)
     call CHECK_CUDECOMP_EXIT(istat)
 
 
@@ -681,7 +712,8 @@ them unspecified in Fortran.
 Cleaning up and finalizing the library
 --------------------------------------
 Finally, we can clean up resources. Note the usage of :ref:`cudecompFree-ref` to deallocate the workspace arrays 
-allocated with :ref:`cudecompMalloc-ref`.
+allocated with :ref:`cudecompMalloc-ref`. Automatically managed workspaces are owned by the handle and are released by
+:code:`cudecompFinalize`; applications must not pass them to :ref:`cudecompFree-ref`.
 
 .. tabs::
 

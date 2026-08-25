@@ -162,6 +162,9 @@ module cudecomp
     enumerator :: CUDECOMP_RESULT_NVML_ERROR = 9
   end enum
 
+  ! Sentinel used to select handle-owned workspace management. Its pointer association must not be changed.
+  real(c_float), pointer, public, protected :: CUDECOMP_WORKSPACE_AUTO(:) => null()
+
   ! types
 
   ! Opaque handle to cuDecomp handle
@@ -408,8 +411,9 @@ module cudecomp
       import
       type(cudecompHandle), value :: handle
       type(cudecompGridDesc), value :: grid_desc
-      !dir$ ignore_tkr input, output, work
-      real(c_float), device :: input(*), output(*), work(*)
+      !dir$ ignore_tkr input, output
+      real(c_float), device :: input(*), output(*)
+      type(c_devptr), value :: work
       integer(c_int), value :: dtype
       integer(c_int32_t) :: input_halo_extents(3), output_halo_extents(3)
       integer(c_int32_t) :: input_padding(3), output_padding(3)
@@ -426,8 +430,9 @@ module cudecomp
       import
       type(cudecompHandle), value :: handle
       type(cudecompGridDesc), value :: grid_desc
-      !dir$ ignore_tkr input, output, work
-      real(c_float), device :: input(*), output(*), work(*)
+      !dir$ ignore_tkr input, output
+      real(c_float), device :: input(*), output(*)
+      type(c_devptr), value :: work
       integer(c_int), value :: dtype
       integer(c_int32_t) :: input_halo_extents(3), output_halo_extents(3)
       integer(c_int32_t) :: input_padding(3), output_padding(3)
@@ -444,8 +449,9 @@ module cudecomp
       import
       type(cudecompHandle), value :: handle
       type(cudecompGridDesc), value :: grid_desc
-      !dir$ ignore_tkr input, output, work
-      real(c_float), device :: input(*), output(*), work(*)
+      !dir$ ignore_tkr input, output
+      real(c_float), device :: input(*), output(*)
+      type(c_devptr), value :: work
       integer(c_int), value :: dtype
       integer(c_int32_t) :: input_halo_extents(3), output_halo_extents(3)
       integer(c_int32_t) :: input_padding(3), output_padding(3)
@@ -462,8 +468,9 @@ module cudecomp
       import
       type(cudecompHandle), value :: handle
       type(cudecompGridDesc), value :: grid_desc
-      !dir$ ignore_tkr input, output, work
-      real(c_float), device :: input(*), output(*), work(*)
+      !dir$ ignore_tkr input, output
+      real(c_float), device :: input(*), output(*)
+      type(c_devptr), value :: work
       integer(c_int), value :: dtype
       integer(c_int32_t) :: input_halo_extents(3), output_halo_extents(3)
       integer(c_int32_t) :: input_padding(3), output_padding(3)
@@ -480,8 +487,9 @@ module cudecomp
       import
       type(cudecompHandle), value :: handle
       type(cudecompGridDesc), value :: grid_desc
-      !dir$ ignore_tkr input, work
-      real(c_float), device :: input(*), work(*)
+      !dir$ ignore_tkr input
+      real(c_float), device :: input(*)
+      type(c_devptr), value :: work
       integer(c_int), value :: dtype
       integer(c_int32_t) :: halo_extents(3)
       logical(c_bool) :: halo_periods(3)
@@ -499,8 +507,9 @@ module cudecomp
       import
       type(cudecompHandle), value :: handle
       type(cudecompGridDesc), value :: grid_desc
-      !dir$ ignore_tkr input, work
-      real(c_float), device :: input(*), work(*)
+      !dir$ ignore_tkr input
+      real(c_float), device :: input(*)
+      type(c_devptr), value :: work
       integer(c_int), value :: dtype
       integer(c_int32_t) :: halo_extents(3)
       logical(c_bool) :: halo_periods(3)
@@ -518,8 +527,9 @@ module cudecomp
       import
       type(cudecompHandle), value :: handle
       type(cudecompGridDesc), value :: grid_desc
-      !dir$ ignore_tkr input, work
-      real(c_float), device :: input(*), work(*)
+      !dir$ ignore_tkr input
+      real(c_float), device :: input(*)
+      type(c_devptr), value :: work
       integer(c_int), value :: dtype
       integer(c_int32_t) :: halo_extents(3)
       logical(c_bool) :: halo_periods(3)
@@ -842,6 +852,7 @@ contains
     integer :: output_halo_extents_(3)
     integer :: input_padding_(3)
     integer :: output_padding_(3)
+    type(c_devptr) :: work_
 
     stream_ = 0
     input_halo_extents_(:) = [0, 0, 0]
@@ -853,8 +864,9 @@ contains
     if (present(output_halo_extents)) output_halo_extents_ = output_halo_extents
     if (present(input_padding)) input_padding_ = input_padding
     if (present(output_padding)) output_padding_ = output_padding
+    work_ = c_devloc(work)
     res = cudecompTransposeXToY_C(handle, grid_desc, &
-          input, output, work, dtype, input_halo_extents_, output_halo_extents_, &
+          input, output, work_, dtype, input_halo_extents_, output_halo_extents_, &
           input_padding_, output_padding_, stream_)
   end function cudecompTransposeXToY
 
@@ -879,6 +891,7 @@ contains
     integer :: output_halo_extents_(3)
     integer :: input_padding_(3)
     integer :: output_padding_(3)
+    type(c_devptr) :: work_
 
     stream_ = 0
     input_halo_extents_(:) = [0, 0, 0]
@@ -890,8 +903,9 @@ contains
     if (present(output_halo_extents)) output_halo_extents_ = output_halo_extents
     if (present(input_padding)) input_padding_ = input_padding
     if (present(output_padding)) output_padding_ = output_padding
+    work_ = c_devloc(work)
     res = cudecompTransposeYToZ_C(handle, grid_desc, &
-          input, output, work, dtype, input_halo_extents_, output_halo_extents_, &
+          input, output, work_, dtype, input_halo_extents_, output_halo_extents_, &
           input_padding_, output_padding_, stream_)
   end function cudecompTransposeYToZ
 
@@ -916,6 +930,7 @@ contains
     integer :: output_halo_extents_(3)
     integer :: input_padding_(3)
     integer :: output_padding_(3)
+    type(c_devptr) :: work_
 
     stream_ = 0
     input_halo_extents_(:) = [0, 0, 0]
@@ -927,8 +942,9 @@ contains
     if (present(output_halo_extents)) output_halo_extents_ = output_halo_extents
     if (present(input_padding)) input_padding_ = input_padding
     if (present(output_padding)) output_padding_ = output_padding
+    work_ = c_devloc(work)
     res = cudecompTransposeZToY_C(handle, grid_desc, &
-          input, output, work, dtype, input_halo_extents_, output_halo_extents_, &
+          input, output, work_, dtype, input_halo_extents_, output_halo_extents_, &
           input_padding_, output_padding_, stream_)
   end function cudecompTransposeZToY
 
@@ -953,6 +969,7 @@ contains
     integer :: output_halo_extents_(3)
     integer :: input_padding_(3)
     integer :: output_padding_(3)
+    type(c_devptr) :: work_
 
     stream_ = 0
     input_halo_extents_(:) = [0, 0, 0]
@@ -964,8 +981,9 @@ contains
     if (present(output_halo_extents)) output_halo_extents_ = output_halo_extents
     if (present(input_padding)) input_padding_ = input_padding
     if (present(output_padding)) output_padding_ = output_padding
+    work_ = c_devloc(work)
     res = cudecompTransposeYToX_C(handle, grid_desc, &
-          input, output, work, dtype, input_halo_extents_, output_halo_extents_, &
+          input, output, work_, dtype, input_halo_extents_, output_halo_extents_, &
           input_padding_, output_padding_, stream_)
   end function cudecompTransposeYToX
 
@@ -989,6 +1007,7 @@ contains
     integer(cuda_stream_kind) :: stream_
     logical(c_bool) :: halo_periods_c(3)
     integer :: padding_(3)
+    type(c_devptr) :: work_
 
     halo_periods_c(:) = halo_periods
 
@@ -996,8 +1015,9 @@ contains
     padding_ = [0, 0, 0]
     if (present(stream)) stream_ = stream
     if (present(padding)) padding_ = padding
+    work_ = c_devloc(work)
     res = cudecompUpdateHalosX_C(handle, grid_desc, &
-          input, work, dtype, halo_extents, halo_periods_c, &
+          input, work_, dtype, halo_extents, halo_periods_c, &
           dim - 1, padding_, stream_)
   end function cudecompUpdateHalosX
 
@@ -1020,6 +1040,7 @@ contains
     integer(cuda_stream_kind) :: stream_
     logical(c_bool) :: halo_periods_c(3)
     integer :: padding_(3)
+    type(c_devptr) :: work_
 
     halo_periods_c(:) = halo_periods
 
@@ -1027,8 +1048,9 @@ contains
     padding_ = [0, 0, 0]
     if (present(stream)) stream_ = stream
     if (present(padding)) padding_ = padding
+    work_ = c_devloc(work)
     res = cudecompUpdateHalosY_C(handle, grid_desc, &
-          input, work, dtype, halo_extents, halo_periods_c, &
+          input, work_, dtype, halo_extents, halo_periods_c, &
           dim - 1, padding_, stream_)
   end function cudecompUpdateHalosY
 
@@ -1051,6 +1073,7 @@ contains
     integer(cuda_stream_kind) :: stream_
     logical(c_bool) :: halo_periods_c(3)
     integer :: padding_(3)
+    type(c_devptr) :: work_
 
     halo_periods_c(:) = halo_periods
 
@@ -1058,8 +1081,9 @@ contains
     padding_ = [0, 0, 0]
     if (present(stream)) stream_ = stream
     if (present(padding)) padding_ = padding
+    work_ = c_devloc(work)
     res = cudecompUpdateHalosZ_C(handle, grid_desc, &
-          input, work, dtype, halo_extents, halo_periods_c, &
+          input, work_, dtype, halo_extents, halo_periods_c, &
           dim - 1, padding_, stream_)
   end function cudecompUpdateHalosZ
 

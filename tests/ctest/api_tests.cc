@@ -1483,9 +1483,6 @@ TEST_F(ApiTransposeTest, RejectsInvalidArguments) {
             cudecompTransposeXToY(handle_, grid_desc, valid_pointer, nullptr, valid_pointer, CUDECOMP_FLOAT, nullptr,
                                   nullptr, nullptr, nullptr, 0));
   EXPECT_EQ(CUDECOMP_RESULT_INVALID_USAGE,
-            cudecompTransposeXToY(handle_, grid_desc, valid_pointer, valid_pointer, nullptr, CUDECOMP_FLOAT, nullptr,
-                                  nullptr, nullptr, nullptr, 0));
-  EXPECT_EQ(CUDECOMP_RESULT_INVALID_USAGE,
             cudecompTransposeXToY(handle_, grid_desc, valid_pointer, valid_pointer, valid_pointer,
                                   static_cast<cudecompDataType_t>(999), nullptr, nullptr, nullptr, nullptr, 0));
 }
@@ -1520,9 +1517,6 @@ TEST_F(ApiHaloTest, RejectsInvalidArguments) {
                                  kHaloPeriods.data(), 0, nullptr, 0));
   EXPECT_EQ(CUDECOMP_RESULT_INVALID_USAGE,
             cudecompUpdateHalosX(handle_, grid_desc, nullptr, valid_pointer, CUDECOMP_FLOAT, kHaloExtents.data(),
-                                 kHaloPeriods.data(), 0, nullptr, 0));
-  EXPECT_EQ(CUDECOMP_RESULT_INVALID_USAGE,
-            cudecompUpdateHalosX(handle_, grid_desc, valid_pointer, nullptr, CUDECOMP_FLOAT, kHaloExtents.data(),
                                  kHaloPeriods.data(), 0, nullptr, 0));
   EXPECT_EQ(CUDECOMP_RESULT_INVALID_USAGE,
             cudecompUpdateHalosX(handle_, grid_desc, valid_pointer, valid_pointer, CUDECOMP_FLOAT, kHaloExtents.data(),
