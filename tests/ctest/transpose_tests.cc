@@ -205,6 +205,14 @@ void appendNcclNativeAlltoAllCases(std::vector<TransposeCase>& cases, const cude
       makeCase(backend, "NativeAlltoAllPath", TransposeOperation::YToZ, {8, 8, 8}, {1, 4}, CUDECOMP_FLOAT, true));
 }
 
+void appendNvshmemRankOrderCases(std::vector<TransposeCase>& cases, const cudecomp_test::TransposeBackend& backend) {
+  for (const auto operation : {TransposeOperation::XToY, TransposeOperation::YToZ}) {
+    cases.push_back(makeCase(backend, "ColumnMajorRankOrder", operation, kBaselineGdims, {2, 2}, CUDECOMP_FLOAT, false,
+                             kDefaultAxisContiguous, kDefaultMemOrder, kZeroExtents, kZeroExtents, kZeroExtents,
+                             kZeroExtents, CUDECOMP_RANK_ORDER_COL_MAJOR));
+  }
+}
+
 void appendCoverageCases(std::vector<TransposeCase>& cases, const cudecomp_test::TransposeBackend& backend) {
   // Coverage cases select explicit memory orders, nonzero halo/padding, dtypes, rank order, and rank counts to reach
   // transpose paths not guaranteed by the baseline sweep. These are not inherently MPI-only, but running them in the
@@ -290,6 +298,7 @@ std::vector<TransposeCase> transposeCasesForLabel(const char* label) {
 
     appendBaselineCases(cases, backend);
     if (std::string(label) == "nccl") { appendNcclNativeAlltoAllCases(cases, backend); }
+    if (std::string(label) == "nvshmem") { appendNvshmemRankOrderCases(cases, backend); }
     if (std::string(label) == "mpi") { appendCoverageCases(cases, backend); }
   }
   return cases;
@@ -481,6 +490,35 @@ testing::AssertionResult syntheticTopologyIsActive(cudecompGridDesc_t grid_desc,
   return testing::AssertionSuccess();
 }
 
+#ifdef ENABLE_NVSHMEM
+testing::AssertionResult nvshmemTeamsMatchProcessGrid(cudecompHandle_t handle, cudecompGridDesc_t grid_desc) {
+  for (const auto axis : {cudecomp::CUDECOMP_COMM_ROW, cudecomp::CUDECOMP_COMM_COL}) {
+    const auto& comm_info = (axis == cudecomp::CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info : grid_desc->col_comm_info;
+    const char* axis_name = (axis == cudecomp::CUDECOMP_COMM_ROW) ? "row" : "column";
+
+    if (comm_info.nvshmem_team == NVSHMEM_TEAM_INVALID) {
+      return testing::AssertionFailure() << axis_name << " NVSHMEM team is invalid";
+    }
+    if (nvshmem_team_n_pes(comm_info.nvshmem_team) != comm_info.nranks) {
+      return testing::AssertionFailure() << axis_name << " NVSHMEM and MPI communicator sizes differ";
+    }
+    if (nvshmem_team_my_pe(comm_info.nvshmem_team) != comm_info.rank) {
+      return testing::AssertionFailure() << axis_name << " NVSHMEM and MPI communicator ranks differ";
+    }
+
+    for (int team_rank = 0; team_rank < comm_info.nranks; ++team_rank) {
+      const int global_rank = nvshmem_team_translate_pe(comm_info.nvshmem_team, team_rank, NVSHMEM_TEAM_WORLD);
+      const int expected_global_rank = cudecomp::getGlobalRank(handle, grid_desc, axis, team_rank);
+      if (global_rank != expected_global_rank) {
+        return testing::AssertionFailure() << axis_name << " communicator rank " << team_rank << " maps to NVSHMEM PE "
+                                           << global_rank << ", expected global rank " << expected_global_rank;
+      }
+    }
+  }
+  return testing::AssertionSuccess();
+}
+#endif
+
 } // namespace
 
 class TransposeCorrectnessTest : public ::testing::TestWithParam<TransposeCase> {};
@@ -592,6 +630,11 @@ void runTransposeCase(const TransposeCase& test_case, bool check_cuda_graph_repl
   const cudecompResult_t grid_desc_create_result = cudecompGridDescCreate(handle, &grid_desc, &config, nullptr);
   cudecomp_test::gridDescGuard grid_desc_guard(handle, grid_desc);
   CHECK_CUDECOMP_GLOBAL(active_comm, grid_desc_create_result);
+#ifdef ENABLE_NVSHMEM
+  if (std::string(test_case.backend.label) == "nvshmem") {
+    ASSERT_TRUE(nvshmemTeamsMatchProcessGrid(handle, grid_desc));
+  }
+#endif
   if (!test_case.synthetic_host_groups.empty()) {
     ASSERT_TRUE(syntheticTopologyIsActive(grid_desc, test_case.operation));
   }
