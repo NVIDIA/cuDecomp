@@ -527,8 +527,17 @@ static void createCommInfo(cudecompHandle_t& handle, cudecompGridDesc_t& grid_de
 #ifdef ENABLE_NVSHMEM
   if (need_nvshmem) {
     nvshmem_team_config_t tmp;
-    nvshmem_team_split_2d(NVSHMEM_TEAM_WORLD, grid_desc->config.pdims[1], &tmp, 0,
-                          &grid_desc->row_comm_info.nvshmem_team, &tmp, 0, &grid_desc->col_comm_info.nvshmem_team);
+    int status;
+    if (grid_desc->config.rank_order == CUDECOMP_RANK_ORDER_COL_MAJOR) {
+      status = nvshmem_team_split_2d(NVSHMEM_TEAM_WORLD, grid_desc->config.pdims[0], &tmp, 0,
+                                     &grid_desc->col_comm_info.nvshmem_team, &tmp, 0,
+                                     &grid_desc->row_comm_info.nvshmem_team);
+    } else {
+      status = nvshmem_team_split_2d(NVSHMEM_TEAM_WORLD, grid_desc->config.pdims[1], &tmp, 0,
+                                     &grid_desc->row_comm_info.nvshmem_team, &tmp, 0,
+                                     &grid_desc->col_comm_info.nvshmem_team);
+    }
+    if (status != 0) { THROW_NVSHMEM_ERROR("nvshmem_team_split_2d failed"); }
 
     grid_desc->row_comm_info.nvshmem_signals =
         (uint64_t*)nvshmem_malloc(grid_desc->row_comm_info.nranks * sizeof(uint64_t));
