@@ -42,6 +42,10 @@
 
 namespace cudecomp {
 
+#ifdef ENABLE_NVSHMEM
+inline constexpr uint64_t nvshmem_signal_set_value = 1; // Graph-stable source for mapped-peer signal writes
+#endif
+
 static inline MPI_Datatype getMpiDataType(float) { return MPI_FLOAT; }
 static inline MPI_Datatype getMpiDataType(double) { return MPI_DOUBLE; }
 static inline MPI_Datatype getMpiDataType(cuda::std::complex<float>) { return MPI_C_FLOAT_COMPLEX; }
@@ -503,13 +507,16 @@ cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cudecompGridDesc
         int dst_rank = dst_ranks[i];
 
         int dst_rank_global = getGlobalRank(handle, grid_desc, comm_axis, dst_rank);
-        if (!nvshmem_ptr(recv_buff, dst_rank_global) || src_rank == self_rank) { continue; }
+        auto peer_recv_buff = nvshmem_ptr(recv_buff, dst_rank_global);
+        if (!peer_recv_buff || src_rank == self_rank) { continue; }
 
         CHECK_CUDA(cudaStreamWaitEvent(pl_stream, grid_desc->events[dst_rank], 0));
 
-        nvshmemx_putmem_signal_on_stream(recv_buff + recv_offsets_nvshmem[dst_rank], send_buff + send_offsets[dst_rank],
-                                         send_counts[dst_rank] * sizeof(T), &comm_info.nvshmem_signals[comm_info.rank],
-                                         1, NVSHMEM_SIGNAL_SET, dst_rank_global, pl_stream);
+        nvshmemx_putmem_on_stream(recv_buff + recv_offsets_nvshmem[dst_rank], send_buff + send_offsets[dst_rank],
+                                  send_counts[dst_rank] * sizeof(T), dst_rank_global, pl_stream);
+        auto peer_signal = nvshmem_ptr(&comm_info.nvshmem_signals[comm_info.rank], dst_rank_global);
+        CHECK_CUDA(cudaMemcpyAsync(peer_signal, &nvshmem_signal_set_value, sizeof(nvshmem_signal_set_value),
+                                   cudaMemcpyHostToDevice, pl_stream));
       }
 
       if (need_quiet) { nvshmemx_quiet_on_stream(pl_stream); }

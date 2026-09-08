@@ -758,7 +758,7 @@ static void inspectNvshmemEnvVars(nvshmemRuntimeState& runtime) {
   }
 }
 
-static void checkNvshmemVersion(cudecompHandle_t& handle) {
+static void checkNvshmemVersion(cudecompHandle_t& handle, bool& external_graph_capture_supported) {
   int major, minor, patch;
   char name[NVSHMEM_MAX_NAME_LEN];
   nvshmem_info_get_name(name);
@@ -786,6 +786,8 @@ static void checkNvshmemVersion(cudecompHandle_t& handle) {
     CHECK_MPI(MPI_Barrier(handle->mpi_comm));
     setenv("NVSHMEM_CUMEM_GRANULARITY", "2147483648", 1);
   }
+
+  external_graph_capture_supported = major > 2 || (major == 2 && minor >= 9);
 }
 
 static nvshmemRuntime acquireNvshmemRuntime(cudecompHandle_t& handle) {
@@ -797,7 +799,7 @@ static nvshmemRuntime acquireNvshmemRuntime(cudecompHandle_t& handle) {
     if (process_nvshmem_state.init_world_ranks.empty()) {
       process_nvshmem_state.init_world_ranks = std::move(world_ranks);
     }
-    checkNvshmemVersion(handle);
+    checkNvshmemVersion(handle, runtime->external_graph_capture_supported);
     initNvshmemFromMPIComm(handle->mpi_comm);
     runtime->initialized = true;
     process_nvshmem_state.active_runtime = runtime;
@@ -807,7 +809,7 @@ static nvshmemRuntime acquireNvshmemRuntime(cudecompHandle_t& handle) {
   if (!runtime->initialized) {
     runtime->finalize();
     inspectNvshmemEnvVars(*runtime);
-    checkNvshmemVersion(handle);
+    checkNvshmemVersion(handle, runtime->external_graph_capture_supported);
     initNvshmemFromMPIComm(handle->mpi_comm);
     runtime->initialized = true;
   }
@@ -935,6 +937,7 @@ static void releaseManagedWorkspaces(cudecompHandle_t handle) {
   freeOrdinaryWorkspace(handle, handle->ordinary_workspace.ptr);
   handle->ordinary_workspace.ptr = nullptr;
   handle->ordinary_workspace.size = 0;
+  handle->ordinary_workspace.capture_frozen = false;
 
 #ifdef ENABLE_NVSHMEM
   freeNvshmemWorkspace(handle->nvshmem_workspace.nvshmem_runtime, handle->nvshmem_workspace.ptr);
@@ -942,6 +945,7 @@ static void releaseManagedWorkspaces(cudecompHandle_t handle) {
 #endif
   handle->nvshmem_workspace.ptr = nullptr;
   handle->nvshmem_workspace.size = 0;
+  handle->nvshmem_workspace.capture_frozen = false;
 
   handle->workspace_ingress_event.reset();
   handle->workspace_egress_event.reset();
@@ -978,12 +982,41 @@ static void registerWorkspaceWithNccl(cudecompHandle_t handle, cudecompGridDesc_
 #endif
 }
 
+static bool workspaceRegisteredWithNccl(cudecompHandle_t handle, cudecompGridDesc_t grid_desc, void* buffer) {
+#if NCCL_VERSION_CODE >= NCCL_VERSION(2, 19, 0)
+  if (!handle->nccl_enable_ubr) return true;
+
+  auto entry = handle->nccl_ubr_handles.find(buffer);
+  if (entry == handle->nccl_ubr_handles.end()) return false;
+  auto registered_with = [&](const ncclComm& comm) {
+    return !comm || std::any_of(entry->second.begin(), entry->second.end(),
+                                [&](const auto& registration) { return registration.first.get() == comm.get(); });
+  };
+  return registered_with(grid_desc->nccl_comm) && registered_with(grid_desc->nccl_local_comm);
+#else
+  (void)handle;
+  (void)grid_desc;
+  (void)buffer;
+  return true;
+#endif
+}
+
+static bool allRanksTrue(cudecompHandle_t handle, bool local_value) {
+  int value = local_value;
+  CHECK_MPI(MPI_Allreduce(MPI_IN_PLACE, &value, 1, MPI_INT, MPI_MIN, handle->mpi_comm));
+  return value != 0;
+}
+
 static void* prepareManagedWorkspace(cudecompHandle_t handle, cudecompGridDesc_t grid_desc, size_t required_size,
                                      bool use_nvshmem) {
   if (required_size == 0) return nullptr;
   required_size = getWorkspaceAllocationSize(handle, required_size, use_nvshmem);
 
   auto& workspace = use_nvshmem ? handle->nvshmem_workspace : handle->ordinary_workspace;
+  if (workspace.capture_frozen && !allRanksTrue(handle, workspace.ptr != nullptr && workspace.size >= required_size)) {
+    THROW_NOT_SUPPORTED(
+        "automatic workspace cannot grow after being used by an externally captured CUDA Graph; use a new handle");
+  }
   if (workspace.size < required_size) {
     CHECK_CUDA(cudaStreamSynchronize(*handle->workspace_stream));
     if (workspace.ptr) {
@@ -1014,20 +1047,54 @@ static void* prepareManagedWorkspace(cudecompHandle_t handle, cudecompGridDesc_t
 
 template <typename Function>
 static void runWithWorkspace(cudecompHandle_t handle, cudecompGridDesc_t grid_desc, void* work, size_t required_size,
-                             bool use_nvshmem, cudaStream_t caller_stream, Function&& function) {
+                             bool use_nvshmem, bool graph_capture_supported, cudaStream_t caller_stream,
+                             Function&& function) {
+  cudaStreamCaptureStatus capture_status;
+  CHECK_CUDA(cudaStreamIsCapturing(caller_stream, &capture_status));
+  if (capture_status == cudaStreamCaptureStatusInvalidated) {
+    THROW_NOT_SUPPORTED("cuDecomp cannot be used with an invalidated CUDA stream capture");
+  }
+  if (capture_status == cudaStreamCaptureStatusActive && handle->cuda_graphs_enable) {
+    THROW_NOT_SUPPORTED("external CUDA Graph capture cannot be combined with CUDECOMP_ENABLE_CUDA_GRAPHS");
+  }
+  if (capture_status == cudaStreamCaptureStatusActive && !graph_capture_supported) {
+    THROW_NOT_SUPPORTED("the selected communication backend does not support external CUDA Graph capture");
+  }
+#ifdef ENABLE_NVSHMEM
+  if (capture_status == cudaStreamCaptureStatusActive && use_nvshmem &&
+      !nvshmemSupportsExternalGraphCapture(grid_desc)) {
+    THROW_NOT_SUPPORTED("NVSHMEM 2.9.0 or newer is required for external CUDA Graph capture");
+  }
+#endif
+  if (capture_status == cudaStreamCaptureStatusActive && handle->performance_report_enable) {
+    THROW_NOT_SUPPORTED("performance reporting is not supported during external CUDA Graph capture");
+  }
+
   if (work) {
     function(work, caller_stream);
     return;
   }
 
-  cudaStreamCaptureStatus capture_status;
-  CHECK_CUDA(cudaStreamIsCapturing(caller_stream, &capture_status));
-  if (capture_status != cudaStreamCaptureStatusNone) {
-    THROW_NOT_SUPPORTED(
-        "automatic workspace management is not supported during CUDA stream capture; use an explicit workspace");
+  std::lock_guard<std::mutex> lock(handle->workspace_mutex);
+  auto& workspace = use_nvshmem ? handle->nvshmem_workspace : handle->ordinary_workspace;
+  if (capture_status == cudaStreamCaptureStatusActive) {
+    bool capture_ready = true;
+    if (required_size != 0) {
+      capture_ready = capture_ready && workspace.ptr != nullptr && workspace.size >= required_size;
+      if (!use_nvshmem) {
+        capture_ready = capture_ready && workspaceRegisteredWithNccl(handle, grid_desc, workspace.ptr);
+      }
+    }
+    if (!allRanksTrue(handle, capture_ready)) {
+      THROW_NOT_SUPPORTED(
+          "automatic workspace is not prepared for CUDA Graph capture; warm up the operation outside capture");
+    }
+
+    function(workspace.ptr, caller_stream);
+    if (required_size != 0) { workspace.capture_frozen = true; }
+    return;
   }
 
-  std::lock_guard<std::mutex> lock(handle->workspace_mutex);
   if (!handle->workspace_stream) { handle->workspace_stream = std::make_unique<cudaStream>(); }
   if (!handle->workspace_ingress_event) { handle->workspace_ingress_event = std::make_unique<cudaEvent>(); }
   if (!handle->workspace_egress_event) { handle->workspace_egress_event = std::make_unique<cudaEvent>(); }
@@ -1932,7 +1999,9 @@ cudecompResult_t cudecompTransposeXToY(cudecompHandle_t handle, cudecompGridDesc
       }
     };
     bool use_nvshmem = transposeBackendRequiresNvshmem(grid_desc->config.transpose_comm_backend);
-    runWithWorkspace(handle, grid_desc, work, workspace_size, use_nvshmem, stream, execute);
+    bool graph_capture_supported =
+        transposeBackendSupportsExternalGraphCapture(grid_desc->config.transpose_comm_backend);
+    runWithWorkspace(handle, grid_desc, work, workspace_size, use_nvshmem, graph_capture_supported, stream, execute);
   }
   CUDECOMP_CATCH_C_API_ERRORS()
   return CUDECOMP_RESULT_SUCCESS;
@@ -1982,7 +2051,9 @@ cudecompResult_t cudecompTransposeYToZ(cudecompHandle_t handle, cudecompGridDesc
       }
     };
     bool use_nvshmem = transposeBackendRequiresNvshmem(grid_desc->config.transpose_comm_backend);
-    runWithWorkspace(handle, grid_desc, work, workspace_size, use_nvshmem, stream, execute);
+    bool graph_capture_supported =
+        transposeBackendSupportsExternalGraphCapture(grid_desc->config.transpose_comm_backend);
+    runWithWorkspace(handle, grid_desc, work, workspace_size, use_nvshmem, graph_capture_supported, stream, execute);
   }
   CUDECOMP_CATCH_C_API_ERRORS()
   return CUDECOMP_RESULT_SUCCESS;
@@ -2032,7 +2103,9 @@ cudecompResult_t cudecompTransposeZToY(cudecompHandle_t handle, cudecompGridDesc
       }
     };
     bool use_nvshmem = transposeBackendRequiresNvshmem(grid_desc->config.transpose_comm_backend);
-    runWithWorkspace(handle, grid_desc, work, workspace_size, use_nvshmem, stream, execute);
+    bool graph_capture_supported =
+        transposeBackendSupportsExternalGraphCapture(grid_desc->config.transpose_comm_backend);
+    runWithWorkspace(handle, grid_desc, work, workspace_size, use_nvshmem, graph_capture_supported, stream, execute);
   }
   CUDECOMP_CATCH_C_API_ERRORS()
   return CUDECOMP_RESULT_SUCCESS;
@@ -2082,7 +2155,9 @@ cudecompResult_t cudecompTransposeYToX(cudecompHandle_t handle, cudecompGridDesc
       }
     };
     bool use_nvshmem = transposeBackendRequiresNvshmem(grid_desc->config.transpose_comm_backend);
-    runWithWorkspace(handle, grid_desc, work, workspace_size, use_nvshmem, stream, execute);
+    bool graph_capture_supported =
+        transposeBackendSupportsExternalGraphCapture(grid_desc->config.transpose_comm_backend);
+    runWithWorkspace(handle, grid_desc, work, workspace_size, use_nvshmem, graph_capture_supported, stream, execute);
   }
   CUDECOMP_CATCH_C_API_ERRORS()
   return CUDECOMP_RESULT_SUCCESS;
@@ -2133,7 +2208,8 @@ cudecompResult_t cudecompUpdateHalosX(cudecompHandle_t handle, cudecompGridDesc_
       }
     };
     bool use_nvshmem = haloBackendRequiresNvshmem(grid_desc->config.halo_comm_backend);
-    runWithWorkspace(handle, grid_desc, work, workspace_size, use_nvshmem, stream, execute);
+    bool graph_capture_supported = haloBackendSupportsExternalGraphCapture(grid_desc->config.halo_comm_backend);
+    runWithWorkspace(handle, grid_desc, work, workspace_size, use_nvshmem, graph_capture_supported, stream, execute);
   }
   CUDECOMP_CATCH_C_API_ERRORS()
   return CUDECOMP_RESULT_SUCCESS;
@@ -2184,7 +2260,8 @@ cudecompResult_t cudecompUpdateHalosY(cudecompHandle_t handle, cudecompGridDesc_
       }
     };
     bool use_nvshmem = haloBackendRequiresNvshmem(grid_desc->config.halo_comm_backend);
-    runWithWorkspace(handle, grid_desc, work, workspace_size, use_nvshmem, stream, execute);
+    bool graph_capture_supported = haloBackendSupportsExternalGraphCapture(grid_desc->config.halo_comm_backend);
+    runWithWorkspace(handle, grid_desc, work, workspace_size, use_nvshmem, graph_capture_supported, stream, execute);
   }
   CUDECOMP_CATCH_C_API_ERRORS()
   return CUDECOMP_RESULT_SUCCESS;
@@ -2235,7 +2312,8 @@ cudecompResult_t cudecompUpdateHalosZ(cudecompHandle_t handle, cudecompGridDesc_
       }
     };
     bool use_nvshmem = haloBackendRequiresNvshmem(grid_desc->config.halo_comm_backend);
-    runWithWorkspace(handle, grid_desc, work, workspace_size, use_nvshmem, stream, execute);
+    bool graph_capture_supported = haloBackendSupportsExternalGraphCapture(grid_desc->config.halo_comm_backend);
+    runWithWorkspace(handle, grid_desc, work, workspace_size, use_nvshmem, graph_capture_supported, stream, execute);
   }
   CUDECOMP_CATCH_C_API_ERRORS()
   return CUDECOMP_RESULT_SUCCESS;

@@ -27,6 +27,7 @@ Table of Contents
 
    overview
    basic_usage
+   cuda_graph_capture
    autotuning
    nvshmem
    api

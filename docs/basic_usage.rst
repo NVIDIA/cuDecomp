@@ -587,9 +587,8 @@ is required for NVSHMEM operations (see NVSHMEM documentation for more details).
 Alternatively, applications may let cuDecomp manage workspace memory by skipping the size queries and allocations
 above and passing :code:`CUDECOMP_WORKSPACE_AUTO` directly to each operation. cuDecomp then allocates, grows, and reuses
 handle-owned workspace memory and preserves ordering with the stream passed to each operation. All participating ranks
-must consistently choose automatic or explicit workspace management for a given operation. Automatic workspace
-management cannot be used while the caller's stream is being captured by a CUDA Graph; provide an explicit workspace
-in that case.
+must consistently choose automatic or explicit workspace management for a given operation.
+See :ref:`cuda-graph-capture-ref` before capturing cuDecomp operations in a caller-owned CUDA Graph.
 
 .. tabs::
 

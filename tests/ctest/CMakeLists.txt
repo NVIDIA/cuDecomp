@@ -155,6 +155,7 @@ endif()
 add_executable(cudecomp_test_transpose)
 target_sources(cudecomp_test_transpose
   PRIVATE
+  cuda_graph_tests.cc
   mpi_test_main.cc
   transpose_tests.cc
 )
@@ -243,10 +244,40 @@ if (CUDECOMP_ENABLE_NVSHMEM)
   )
 endif()
 
-add_cudecomp_transpose_test(cudecomp_cuda_graphs "CudaGraphMpiBackends/*" "cuda_graphs;mpi")
-set_tests_properties(cudecomp_cuda_graphs PROPERTIES
+add_cudecomp_transpose_test(cudecomp_cuda_graphs_internal "CudaGraphMpiBackends/*" "cuda_graphs;mpi")
+set_tests_properties(cudecomp_cuda_graphs_internal PROPERTIES
   ENVIRONMENT "CUDECOMP_ENABLE_CUDA_GRAPHS=1"
 )
+add_cudecomp_transpose_test(cudecomp_cuda_graphs_external_transpose_nccl
+  "ExternalCudaGraphNcclBackends/*:CudaGraphContractTest.*"
+  "cuda_graphs;workspace;nccl"
+)
+set_tests_properties(cudecomp_cuda_graphs_external_transpose_nccl PROPERTIES
+  ENVIRONMENT "CUDECOMP_TEST_KEEPALIVE_BACKEND=nccl"
+)
+add_cudecomp_halo_test(cudecomp_cuda_graphs_external_halo_nccl
+  "ExternalCudaGraphNcclBackends/*"
+  "cuda_graphs;workspace;nccl"
+)
+set_tests_properties(cudecomp_cuda_graphs_external_halo_nccl PROPERTIES
+  ENVIRONMENT "CUDECOMP_TEST_KEEPALIVE_BACKEND=nccl"
+)
+if (CUDECOMP_ENABLE_NVSHMEM)
+  add_cudecomp_transpose_test(cudecomp_cuda_graphs_external_transpose_nvshmem
+    "ExternalCudaGraphNvshmemBackends/*"
+    "cuda_graphs;workspace;nvshmem"
+  )
+  set_tests_properties(cudecomp_cuda_graphs_external_transpose_nvshmem PROPERTIES
+    ENVIRONMENT "CUDECOMP_TEST_KEEPALIVE_BACKEND=nvshmem;NVSHMEM_DISABLE_NCCL=1"
+  )
+  add_cudecomp_halo_test(cudecomp_cuda_graphs_external_halo_nvshmem
+    "ExternalCudaGraphNvshmemBackends/*"
+    "cuda_graphs;workspace;nvshmem"
+  )
+  set_tests_properties(cudecomp_cuda_graphs_external_halo_nvshmem PROPERTIES
+    ENVIRONMENT "CUDECOMP_TEST_KEEPALIVE_BACKEND=nvshmem;NVSHMEM_DISABLE_NCCL=1"
+  )
+endif()
 add_cudecomp_transpose_test(cudecomp_nccl_user_buffer_registration "NcclUserBufferRegistration/*"
                             "nccl;nccl_ubr")
 set_tests_properties(cudecomp_nccl_user_buffer_registration PROPERTIES
