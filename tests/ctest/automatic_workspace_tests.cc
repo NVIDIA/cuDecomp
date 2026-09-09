@@ -237,4 +237,5 @@ TEST(AutomaticWorkspaceTest, KeepsAllocationDomainsSeparate) {
   EXPECT_EQ(handle->ordinary_workspace.ptr, ordinary_workspace);
   EXPECT_EQ(handle->nvshmem_workspace.ptr, nvshmem_workspace);
 }
+
 #endif

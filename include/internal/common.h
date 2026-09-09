@@ -71,6 +71,7 @@ struct nvshmemRuntimeState {
   }
 
   bool initialized = false;                              // Flag to track NVSHMEM initialization
+  bool external_graph_capture_supported = false;         // NVSHMEM runtime supports CUDA Graph capture
   size_t nvshmem_symmetric_size = 0;                     // NVSHMEM symmetric size
   bool nvshmem_vmm = true;                               // Flag to track if NVSHMEM is using VMM allocations
   std::unordered_map<void*, size_t> nvshmem_allocations; // Table to record NVSHMEM allocations
@@ -127,6 +128,7 @@ struct cudecompHandle {
   struct ManagedWorkspace {
     void* ptr = nullptr;
     size_t size = 0;
+    bool capture_frozen = false;
 #ifdef ENABLE_NVSHMEM
     cudecomp::nvshmemRuntime nvshmem_runtime;
 #endif
@@ -431,6 +433,24 @@ static inline bool transposeBackendRequiresNvshmem(cudecompTransposeCommBackend_
 
 static inline bool haloBackendRequiresNvshmem(cudecompHaloCommBackend_t comm_backend) {
   return (comm_backend == CUDECOMP_HALO_COMM_NVSHMEM || comm_backend == CUDECOMP_HALO_COMM_NVSHMEM_BLOCKING);
+}
+
+static inline bool transposeBackendSupportsExternalGraphCapture(cudecompTransposeCommBackend_t comm_backend) {
+  return transposeBackendRequiresNccl(comm_backend) || comm_backend == CUDECOMP_TRANSPOSE_COMM_NVSHMEM ||
+         comm_backend == CUDECOMP_TRANSPOSE_COMM_NVSHMEM_PL || comm_backend == CUDECOMP_TRANSPOSE_COMM_NVSHMEM_SM;
+}
+
+static inline bool haloBackendSupportsExternalGraphCapture(cudecompHaloCommBackend_t comm_backend) {
+  return haloBackendRequiresNccl(comm_backend) || haloBackendRequiresNvshmem(comm_backend);
+}
+
+static inline bool nvshmemSupportsExternalGraphCapture(const cudecompGridDesc_t grid_desc) {
+#ifdef ENABLE_NVSHMEM
+  return grid_desc->nvshmem_runtime && grid_desc->nvshmem_runtime->external_graph_capture_supported;
+#else
+  (void)grid_desc;
+  return false;
+#endif
 }
 
 static inline bool isManagedPointer(void* ptr) {

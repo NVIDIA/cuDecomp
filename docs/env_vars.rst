@@ -35,6 +35,7 @@ CUDECOMP_ENABLE_CUDA_GRAPHS
 and communication overlap of packing kernels in large scale cases.
 
 Default setting is off (:code:`0`). Setting this variable to :code:`1` will enable this feature.
+This option must remain disabled when using :ref:`external CUDA Graph capture <cuda-graph-capture-ref>`.
 
 CUDECOMP_ENABLE_PERFORMANCE_REPORT
 ------------------------------------

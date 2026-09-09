@@ -530,9 +530,8 @@ cudecompResult_t cudecompGetShiftedRank(cudecompHandle_t handle, cudecompGridDes
  * the same, operation is performed in-place
  * @param[in] work A pointer to transpose workspace memory. For handle-owned workspace management, a NULL pointer (or
  * CUDECOMP_WORKSPACE_AUTO) can be provided. In this case, cuDecomp allocates and grows the workspace as needed and
- * serializes the operation on a handle-owned stream while preserving ordering with stream. Callers must make the same
- * workspace-management choice on all participating ranks. Handle-owned workspace management is not supported while
- * stream is being captured.
+ * runs the operation on a handle-owned stream while preserving ordering with stream. Callers must make the same
+ * workspace-management choice on all participating ranks.
  * @param[in] dtype The cuDecomp datatype to use for the transpose operation
  * @param[in] input_halo_extents An array of three integers to define halo region extents of the input data, in global
  * order. The i-th entry in this array should contain the number of halo elements (per direction) expected in the along
@@ -563,9 +562,8 @@ cudecompResult_t cudecompTransposeXToY(cudecompHandle_t handle, cudecompGridDesc
  * the same, operation is performed in-place
  * @param[in] work A pointer to transpose workspace memory. For handle-owned workspace management, a NULL pointer (or
  * CUDECOMP_WORKSPACE_AUTO) can be provided. In this case, cuDecomp allocates and grows the workspace as needed and
- * serializes the operation on a handle-owned stream while preserving ordering with stream. Callers must make the same
- * workspace-management choice on all participating ranks. Handle-owned workspace management is not supported while
- * stream is being captured.
+ * runs the operation on a handle-owned stream while preserving ordering with stream. Callers must make the same
+ * workspace-management choice on all participating ranks.
  * @param[in] dtype The cuDecomp datatype to use for the transpose operation
  * @param[in] input_halo_extents An array of three integers to define halo region extents of the input data, in global
  * order. The i-th entry in this array should contain the number of halo elements (per direction) expected in the along
@@ -596,9 +594,8 @@ cudecompResult_t cudecompTransposeYToZ(cudecompHandle_t handle, cudecompGridDesc
  * the same, operation is performed in-place
  * @param[in] work A pointer to transpose workspace memory. For handle-owned workspace management, a NULL pointer (or
  * CUDECOMP_WORKSPACE_AUTO) can be provided. In this case, cuDecomp allocates and grows the workspace as needed and
- * serializes the operation on a handle-owned stream while preserving ordering with stream. Callers must make the same
- * workspace-management choice on all participating ranks. Handle-owned workspace management is not supported while
- * stream is being captured.
+ * runs the operation on a handle-owned stream while preserving ordering with stream. Callers must make the same
+ * workspace-management choice on all participating ranks.
  * @param[in] dtype The cuDecomp datatype to use for the transpose operation
  * @param[in] input_halo_extents An array of three integers to define halo region extents of the input data, in global
  * order. The i-th entry in this array should contain the number of halo elements (per direction) expected in the along
@@ -629,9 +626,8 @@ cudecompResult_t cudecompTransposeZToY(cudecompHandle_t handle, cudecompGridDesc
  * the same, operation is performed in-place
  * @param[in] work A pointer to transpose workspace memory. For handle-owned workspace management, a NULL pointer (or
  * CUDECOMP_WORKSPACE_AUTO) can be provided. In this case, cuDecomp allocates and grows the workspace as needed and
- * serializes the operation on a handle-owned stream while preserving ordering with stream. Callers must make the same
- * workspace-management choice on all participating ranks. Handle-owned workspace management is not supported while
- * stream is being captured.
+ * runs the operation on a handle-owned stream while preserving ordering with stream. Callers must make the same
+ * workspace-management choice on all participating ranks.
  * @param[in] dtype The cuDecomp datatype to use for the transpose operation
  * @param[in] input_halo_extents An array of three integers to define halo region extents of the input data, in global
  * order. The i-th entry in this array should contain the number of halo elements (per direction) expected in the along
@@ -662,9 +658,8 @@ cudecompResult_t cudecompTransposeYToX(cudecompHandle_t handle, cudecompGridDesc
  * completion, this buffer will contain the input X-axis aligned pencil data with the specified halo regions updated.
  * @param[in] work A pointer to halo workspace memory. For handle-owned workspace management, a NULL pointer (or
  * CUDECOMP_WORKSPACE_AUTO) can be provided. In this case, cuDecomp allocates and grows the workspace as needed and
- * serializes the operation on a handle-owned stream while preserving ordering with stream. Callers must make the same
- * workspace-management choice on all participating ranks. Handle-owned workspace management is not supported while
- * stream is being captured.
+ * runs the operation on a handle-owned stream while preserving ordering with stream. Callers must make the same
+ * workspace-management choice on all participating ranks.
  * @param[in] dtype The cuDecomp datatype to use for the halo operation
  * @param[in] halo_extents An array of three integers to define halo region extents of the input data, in global order.
  * The i-th entry in this array should contain the number of halo elements (per direction) expected in the along the
@@ -693,9 +688,8 @@ cudecompResult_t cudecompUpdateHalosX(cudecompHandle_t handle, cudecompGridDesc_
  * completion, this buffer will contain the input Y-axis aligned pencil data with the specified halo regions updated.
  * @param[in] work A pointer to halo workspace memory. For handle-owned workspace management, a NULL pointer (or
  * CUDECOMP_WORKSPACE_AUTO) can be provided. In this case, cuDecomp allocates and grows the workspace as needed and
- * serializes the operation on a handle-owned stream while preserving ordering with stream. Callers must make the same
- * workspace-management choice on all participating ranks. Handle-owned workspace management is not supported while
- * stream is being captured.
+ * runs the operation on a handle-owned stream while preserving ordering with stream. Callers must make the same
+ * workspace-management choice on all participating ranks.
  * @param[in] dtype The cuDecomp datatype to use for the halo operation
  * @param[in] halo_extents An array of three integers to define halo region extents of the input data, in global order.
  * The i-th entry in this array should contain the number of halo elements (per direction) expected in the along the
@@ -724,9 +718,8 @@ cudecompResult_t cudecompUpdateHalosY(cudecompHandle_t handle, cudecompGridDesc_
  * completion, this buffer will contain the input Z-axis aligned pencil data with the specified halo regions updated.
  * @param[in] work A pointer to halo workspace memory. For handle-owned workspace management, a NULL pointer (or
  * CUDECOMP_WORKSPACE_AUTO) can be provided. In this case, cuDecomp allocates and grows the workspace as needed and
- * serializes the operation on a handle-owned stream while preserving ordering with stream. Callers must make the same
- * workspace-management choice on all participating ranks. Handle-owned workspace management is not supported while
- * stream is being captured.
+ * runs the operation on a handle-owned stream while preserving ordering with stream. Callers must make the same
+ * workspace-management choice on all participating ranks.
  * @param[in] dtype The cuDecomp datatype to use for the halo operation
  * @param[in] halo_extents An array of three integers to define halo region extents of the input data, in global order.
  * The i-th entry in this array should contain the number of halo elements (per direction) expected in the along the

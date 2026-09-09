@@ -218,6 +218,9 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
   bool output_has_halos_padding = anyNonzeros(output_halo_extents) || anyNonzeros(output_padding);
   bool pipelined = isTransposeCommPipelined(grid_desc->config.transpose_comm_backend);
   int memcpy_limit = pipelined ? 1 : CUDECOMP_BATCHED_D2D_3D_PARAM_CAPACITY;
+  cudaStreamCaptureStatus capture_status;
+  CHECK_CUDA(cudaStreamIsCapturing(stream, &capture_status));
+  bool use_internal_graphs = handle->cuda_graphs_enable && capture_status == cudaStreamCaptureStatusNone;
 
   // Set axis values
   int ax_a = ax;
@@ -459,11 +462,11 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
         auto dtype = getCudecompDataType<T>();
         auto key = std::tie(i1, o1, ax, dir, pinfo_a_h, pinfo_b_h, dtype);
 
-        if (handle->cuda_graphs_enable && grid_desc->graph_cache.cached(key)) {
+        if (use_internal_graphs && grid_desc->graph_cache.cached(key)) {
           grid_desc->graph_cache.replay(key, stream);
         } else {
           cudaStream_t graph_stream = stream;
-          if (handle->cuda_graphs_enable && splits_a.size() > 1) {
+          if (use_internal_graphs && splits_a.size() > 1) {
             graph_stream = grid_desc->graph_cache.startCapture(key, stream);
           }
 
@@ -501,18 +504,15 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
 
             localPermute(handle, extents, order, strides_in, strides_out, src, dst, graph_stream);
 #if CUDART_VERSION >= 11010
-            cudaStreamCaptureStatus capture_status;
-            CHECK_CUDA(cudaStreamIsCapturing(graph_stream, &capture_status));
             CHECK_CUDA(cudaEventRecordWithFlags(grid_desc->events[dst_rank], graph_stream,
-                                                capture_status == cudaStreamCaptureStatusActive
-                                                    ? cudaEventRecordExternal
-                                                    : cudaEventRecordDefault));
+                                                use_internal_graphs && splits_a.size() > 1 ? cudaEventRecordExternal
+                                                                                           : cudaEventRecordDefault));
 #else
             CHECK_CUDA(cudaEventRecord((grid_desc->events[dst_rank], graph_stream));
 #endif
           }
 
-          if (handle->cuda_graphs_enable && splits_a.size() > 1) {
+          if (use_internal_graphs && splits_a.size() > 1) {
             grid_desc->graph_cache.endCapture(key);
             grid_desc->graph_cache.replay(key, stream);
           }
@@ -538,11 +538,11 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
       auto dtype = getCudecompDataType<T>();
       auto key = std::tie(i1, o1, ax, dir, pinfo_a_h, pinfo_b_h, dtype);
 
-      if (handle->cuda_graphs_enable && grid_desc->graph_cache.cached(key)) {
+      if (use_internal_graphs && grid_desc->graph_cache.cached(key)) {
         grid_desc->graph_cache.replay(key, stream);
       } else {
         cudaStream_t graph_stream = stream;
-        if (handle->cuda_graphs_enable && pipelined && splits_a.size() > 1) {
+        if (use_internal_graphs && pipelined && splits_a.size() > 1) {
           graph_stream = grid_desc->graph_cache.startCapture(key, stream);
         }
 
@@ -598,18 +598,15 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
           }
 #if CUDART_VERSION >= 11010
           if (pipelined) {
-            cudaStreamCaptureStatus capture_status;
-            CHECK_CUDA(cudaStreamIsCapturing(graph_stream, &capture_status));
             CHECK_CUDA(cudaEventRecordWithFlags(grid_desc->events[dst_rank], graph_stream,
-                                                capture_status == cudaStreamCaptureStatusActive
-                                                    ? cudaEventRecordExternal
-                                                    : cudaEventRecordDefault));
+                                                use_internal_graphs && splits_a.size() > 1 ? cudaEventRecordExternal
+                                                                                           : cudaEventRecordDefault));
           }
 #else
           if (pipelined) CHECK_CUDA(cudaEventRecord((grid_desc->events[dst_rank], graph_stream));
 #endif
         }
-        if (handle->cuda_graphs_enable && pipelined && splits_a.size() > 1) {
+        if (use_internal_graphs && pipelined && splits_a.size() > 1) {
           grid_desc->graph_cache.endCapture(key);
           grid_desc->graph_cache.replay(key, stream);
         }

@@ -8,6 +8,7 @@
 #include <complex>
 #include <cstdint>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <mpi.h>
@@ -165,6 +166,18 @@ std::vector<HaloCase> haloCasesForLabel(const char* label) {
   return cases;
 }
 
+std::vector<HaloCase> externalCudaGraphHaloCases(const char* label) {
+  std::vector<HaloCase> cases;
+  for (const auto& backend : cudecomp_test::haloBackends()) {
+    if (std::string(backend.label) != label) continue;
+
+    auto test_case = makeCase(backend, "ExternalCudaGraph", 0);
+    cases.push_back(test_case);
+    cases.push_back(withAutomaticWorkspace(std::move(test_case)));
+  }
+  return cases;
+}
+
 bool isInternal(const cudecompPencilInfo_t& pinfo, const std::array<int64_t, 3>& local) {
   return local[0] >= pinfo.halo_extents[pinfo.order[0]] &&
          local[0] < pinfo.shape[0] - pinfo.halo_extents[pinfo.order[0]] - pinfo.padding[pinfo.order[0]] &&
@@ -284,17 +297,17 @@ testing::AssertionResult pencilMatches(const std::vector<T>& expected, const std
 template <typename T>
 cudecompResult_t runHalo(cudecompHandle_t handle, cudecompGridDesc_t grid_desc, int axis, T* input, void* work,
                          cudecompDataType_t dtype, const cudecompPencilInfo_t& pinfo,
-                         const std::array<bool, 3>& halo_periods, int dim) {
+                         const std::array<bool, 3>& halo_periods, int dim, cudaStream_t stream = nullptr) {
   switch (axis) {
   case 0:
     return cudecompUpdateHalosX(handle, grid_desc, input, work, dtype, pinfo.halo_extents, halo_periods.data(), dim,
-                                pinfo.padding, 0);
+                                pinfo.padding, stream);
   case 1:
     return cudecompUpdateHalosY(handle, grid_desc, input, work, dtype, pinfo.halo_extents, halo_periods.data(), dim,
-                                pinfo.padding, 0);
+                                pinfo.padding, stream);
   case 2:
     return cudecompUpdateHalosZ(handle, grid_desc, input, work, dtype, pinfo.halo_extents, halo_periods.data(), dim,
-                                pinfo.padding, 0);
+                                pinfo.padding, stream);
   }
   return CUDECOMP_RESULT_INVALID_USAGE;
 }
@@ -302,8 +315,9 @@ cudecompResult_t runHalo(cudecompHandle_t handle, cudecompGridDesc_t grid_desc, 
 } // namespace
 
 class HaloCorrectnessTest : public ::testing::TestWithParam<HaloCase> {};
+class ExternalCudaGraphHaloCorrectnessTest : public ::testing::TestWithParam<HaloCase> {};
 
-template <typename T> void runHaloCase(const HaloCase& test_case) {
+template <typename T> void runHaloCase(const HaloCase& test_case, bool capture_external_graph = false) {
   const int active_ranks = test_case.pdims[0] * test_case.pdims[1];
   const auto world_comm = cudecomp_test::MpiTestComm::world();
 
@@ -402,6 +416,50 @@ template <typename T> void runHaloCase(const HaloCase& test_case) {
                                     ? handle->nvshmem_workspace.ptr
                                     : handle->ordinary_workspace.ptr);
   }
+
+  if (capture_external_graph) {
+    cudaStream_t capture_stream = nullptr;
+    CHECK_CUDA_GLOBAL(active_comm, cudaStreamCreateWithFlags(&capture_stream, cudaStreamNonBlocking));
+    CHECK_CUDA_GLOBAL(active_comm, cudaStreamBeginCapture(capture_stream, cudaStreamCaptureModeThreadLocal));
+    cudecompResult_t capture_result = CUDECOMP_RESULT_SUCCESS;
+    for (int dim = 0; dim < 3 && capture_result == CUDECOMP_RESULT_SUCCESS; ++dim) {
+      capture_result = runHalo(handle, grid_desc, test_case.axis, data_d, work_d, test_case.dtype, pinfo,
+                               test_case.halo_periods, dim, capture_stream);
+    }
+    cudaGraph_t graph = nullptr;
+    CHECK_CUDA_GLOBAL(active_comm, cudaStreamEndCapture(capture_stream, &graph));
+
+    bool nvshmem_capture_unsupported = cudecomp::haloBackendRequiresNvshmem(test_case.backend.backend) &&
+                                       !cudecomp::nvshmemSupportsExternalGraphCapture(grid_desc);
+    if (handle->cuda_graphs_enable || !cudecomp::haloBackendSupportsExternalGraphCapture(test_case.backend.backend) ||
+        nvshmem_capture_unsupported) {
+      EXPECT_EQ(CUDECOMP_RESULT_NOT_SUPPORTED, capture_result);
+    } else {
+      EXPECT_EQ(CUDECOMP_RESULT_SUCCESS, capture_result);
+      ASSERT_NE(graph, nullptr);
+      if (test_case.automatic_workspace) {
+        EXPECT_TRUE(cudecomp::haloBackendRequiresNvshmem(test_case.backend.backend)
+                        ? handle->nvshmem_workspace.capture_frozen
+                        : handle->ordinary_workspace.capture_frozen);
+      }
+
+      CHECK_CUDA_GLOBAL(active_comm, cudaMemset(data_d, 0, pinfo.size * sizeof(*data_d)));
+      CHECK_CUDA_GLOBAL(active_comm,
+                        cudaMemcpy(data_d, initial.data(), initial.size() * sizeof(*data_d), cudaMemcpyHostToDevice));
+      cudaGraphExec_t graph_exec = nullptr;
+      CHECK_CUDA_GLOBAL(active_comm, cudaGraphInstantiate(&graph_exec, graph, nullptr, nullptr, 0));
+      CHECK_CUDA_GLOBAL(active_comm, cudaGraphLaunch(graph_exec, capture_stream));
+      CHECK_CUDA_GLOBAL(active_comm, cudaStreamSynchronize(capture_stream));
+
+      std::vector<T> actual(expected.size(), unsetValue<T>());
+      CHECK_CUDA_GLOBAL(active_comm,
+                        cudaMemcpy(actual.data(), data_d, actual.size() * sizeof(*data_d), cudaMemcpyDeviceToHost));
+      EXPECT_TRUE(pencilMatches(expected, actual, pinfo));
+      CHECK_CUDA_GLOBAL(active_comm, cudaGraphExecDestroy(graph_exec));
+    }
+    if (graph) { CHECK_CUDA_GLOBAL(active_comm, cudaGraphDestroy(graph)); }
+    CHECK_CUDA_GLOBAL(active_comm, cudaStreamDestroy(capture_stream));
+  }
 }
 
 TEST_P(HaloCorrectnessTest, UpdateHalos) {
@@ -415,7 +473,22 @@ TEST_P(HaloCorrectnessTest, UpdateHalos) {
   }
 }
 
+TEST_P(ExternalCudaGraphHaloCorrectnessTest, CapturesAndReplaysOperation) {
+  const auto test_case = GetParam();
+  switch (test_case.dtype) {
+  case CUDECOMP_FLOAT: runHaloCase<float>(test_case, true); break;
+  case CUDECOMP_FLOAT_COMPLEX: runHaloCase<std::complex<float>>(test_case, true); break;
+  case CUDECOMP_DOUBLE: runHaloCase<double>(test_case, true); break;
+  case CUDECOMP_DOUBLE_COMPLEX: runHaloCase<std::complex<double>>(test_case, true); break;
+  default: FAIL() << "unsupported test dtype " << test_case.dtype;
+  }
+}
+
 INSTANTIATE_TEST_SUITE_P(MpiBackends, HaloCorrectnessTest, ::testing::ValuesIn(haloCasesForLabel("mpi")), paramName);
 INSTANTIATE_TEST_SUITE_P(NcclBackends, HaloCorrectnessTest, ::testing::ValuesIn(haloCasesForLabel("nccl")), paramName);
 INSTANTIATE_TEST_SUITE_P(NvshmemBackends, HaloCorrectnessTest, ::testing::ValuesIn(haloCasesForLabel("nvshmem")),
                          paramName);
+INSTANTIATE_TEST_SUITE_P(ExternalCudaGraphNcclBackends, ExternalCudaGraphHaloCorrectnessTest,
+                         ::testing::ValuesIn(externalCudaGraphHaloCases("nccl")), paramName);
+INSTANTIATE_TEST_SUITE_P(ExternalCudaGraphNvshmemBackends, ExternalCudaGraphHaloCorrectnessTest,
+                         ::testing::ValuesIn(externalCudaGraphHaloCases("nvshmem")), paramName);

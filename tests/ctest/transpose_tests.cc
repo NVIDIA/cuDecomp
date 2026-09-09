@@ -29,6 +29,7 @@
 namespace {
 
 enum class TransposeOperation { XToY, YToX, YToZ, ZToY };
+enum class GraphExecution { Eager, Internal, External };
 
 constexpr std::array<TransposeOperation, 4> kTransposeOperations{TransposeOperation::XToY, TransposeOperation::YToX,
                                                                  TransposeOperation::YToZ, TransposeOperation::ZToY};
@@ -321,6 +322,19 @@ std::vector<TransposeCase> cudaGraphTransposeCases() {
   return cases;
 }
 
+std::vector<TransposeCase> externalCudaGraphTransposeCases(const char* label) {
+  std::vector<TransposeCase> cases;
+  for (const auto& backend : cudecomp_test::transposeBackends()) {
+    if (std::string(backend.label) != label) continue;
+
+    auto test_case =
+        makeCase(backend, "ExternalCudaGraph", TransposeOperation::XToY, kBaselineGdims, {2, 2}, CUDECOMP_FLOAT, true);
+    cases.push_back(test_case);
+    cases.push_back(withAutomaticWorkspace(std::move(test_case)));
+  }
+  return cases;
+}
+
 std::vector<TransposeCase> ncclUserBufferRegistrationCases() {
   std::vector<TransposeCase> cases;
   for (const auto& backend : cudecomp_test::transposeBackends()) {
@@ -523,6 +537,7 @@ testing::AssertionResult nvshmemTeamsMatchProcessGrid(cudecompHandle_t handle, c
 
 class TransposeCorrectnessTest : public ::testing::TestWithParam<TransposeCase> {};
 class CudaGraphTransposeCorrectnessTest : public ::testing::TestWithParam<TransposeCase> {};
+class ExternalCudaGraphTransposeCorrectnessTest : public ::testing::TestWithParam<TransposeCase> {};
 class NcclUserBufferRegistrationTest : public ::testing::TestWithParam<TransposeCase> {};
 
 TEST(NcclCommunicatorLifecycleTest, RetainsLocalCommunicatorUntilAllDescriptorsReleaseIt) {
@@ -585,7 +600,7 @@ testing::AssertionResult ncclUserBufferRegistrationIsActive(cudecompHandle_t han
 }
 
 template <typename T>
-void runTransposeCase(const TransposeCase& test_case, bool check_cuda_graph_replay = false,
+void runTransposeCase(const TransposeCase& test_case, GraphExecution graph_execution = GraphExecution::Eager,
                       bool check_nccl_user_buffer_registration = false) {
   const int active_ranks = test_case.pdims[0] * test_case.pdims[1];
   const auto world_comm = cudecomp_test::MpiTestComm::world();
@@ -624,7 +639,7 @@ void runTransposeCase(const TransposeCase& test_case, bool check_cuda_graph_repl
   cudecompHandle_t handle = test_context.handle();
   ASSERT_NE(handle, nullptr);
   ASSERT_TRUE(applySyntheticHostnames(handle, test_case.synthetic_host_groups));
-  if (check_cuda_graph_replay) { ASSERT_TRUE(handle->cuda_graphs_enable); }
+  if (graph_execution == GraphExecution::Internal) { ASSERT_TRUE(handle->cuda_graphs_enable); }
 
   cudecompGridDesc_t grid_desc = nullptr;
   const cudecompResult_t grid_desc_create_result = cudecompGridDescCreate(handle, &grid_desc, &config, nullptr);
@@ -663,7 +678,7 @@ void runTransposeCase(const TransposeCase& test_case, bool check_cuda_graph_repl
   cudecomp_test::cudaBufferGuard input_buffer(input_d);
   CHECK_CUDA_GLOBAL(active_comm, input_alloc_result);
 
-  if (check_cuda_graph_replay) {
+  if (graph_execution == GraphExecution::Internal) {
     ASSERT_TRUE(test_case.out_of_place);
 
     T* output_a_d = nullptr;
@@ -733,15 +748,45 @@ void runTransposeCase(const TransposeCase& test_case, bool check_cuda_graph_repl
     EXPECT_EQ(cached_workspace, cudecomp::transposeBackendRequiresNvshmem(test_case.backend.backend)
                                     ? handle->nvshmem_workspace.ptr
                                     : handle->ordinary_workspace.ptr);
+  }
 
+  if (graph_execution == GraphExecution::External) {
     cudaStream_t capture_stream = nullptr;
     CHECK_CUDA_GLOBAL(active_comm, cudaStreamCreateWithFlags(&capture_stream, cudaStreamNonBlocking));
     CHECK_CUDA_GLOBAL(active_comm, cudaStreamBeginCapture(capture_stream, cudaStreamCaptureModeThreadLocal));
-    EXPECT_EQ(CUDECOMP_RESULT_NOT_SUPPORTED,
-              runTranspose(handle, grid_desc, test_case.operation, input_d, output_d, CUDECOMP_WORKSPACE_AUTO,
-                           test_case.dtype, input_info, output_info, capture_stream));
+    const cudecompResult_t capture_result =
+        runTranspose(handle, grid_desc, test_case.operation, input_d, output_d, work_d, test_case.dtype, input_info,
+                     output_info, capture_stream);
     cudaGraph_t graph = nullptr;
     CHECK_CUDA_GLOBAL(active_comm, cudaStreamEndCapture(capture_stream, &graph));
+
+    bool nvshmem_capture_unsupported = cudecomp::transposeBackendRequiresNvshmem(test_case.backend.backend) &&
+                                       !cudecomp::nvshmemSupportsExternalGraphCapture(grid_desc);
+    if (handle->cuda_graphs_enable ||
+        !cudecomp::transposeBackendSupportsExternalGraphCapture(test_case.backend.backend) ||
+        nvshmem_capture_unsupported) {
+      EXPECT_EQ(CUDECOMP_RESULT_NOT_SUPPORTED, capture_result);
+    } else {
+      EXPECT_EQ(CUDECOMP_RESULT_SUCCESS, capture_result);
+      ASSERT_NE(graph, nullptr);
+      if (test_case.automatic_workspace) {
+        EXPECT_TRUE(cudecomp::transposeBackendRequiresNvshmem(test_case.backend.backend)
+                        ? handle->nvshmem_workspace.capture_frozen
+                        : handle->ordinary_workspace.capture_frozen);
+      }
+
+      cudaGraphExec_t graph_exec = nullptr;
+      CHECK_CUDA_GLOBAL(active_comm, cudaGraphInstantiate(&graph_exec, graph, nullptr, nullptr, 0));
+      CHECK_CUDA_GLOBAL(active_comm, cudaGraphLaunch(graph_exec, capture_stream));
+      CHECK_CUDA_GLOBAL(active_comm, cudaGraphLaunch(graph_exec, capture_stream));
+      CHECK_CUDA_GLOBAL(active_comm, cudaStreamSynchronize(capture_stream));
+
+      std::vector<T> actual(output_ref.size());
+      CHECK_CUDA_GLOBAL(active_comm,
+                        cudaMemcpy(actual.data(), output_d, actual.size() * sizeof(*output_d), cudaMemcpyDeviceToHost));
+      EXPECT_TRUE(pencilMatches(output_ref, actual, output_info));
+      CHECK_CUDA_GLOBAL(active_comm, cudaGraphExecDestroy(graph_exec));
+    }
     if (graph) { CHECK_CUDA_GLOBAL(active_comm, cudaGraphDestroy(graph)); }
     CHECK_CUDA_GLOBAL(active_comm, cudaStreamDestroy(capture_stream));
   }
@@ -770,10 +815,21 @@ TEST_P(TransposeCorrectnessTest, DirectOperation) {
 TEST_P(CudaGraphTransposeCorrectnessTest, CapturesAndReplaysPackingGraph) {
   const auto test_case = GetParam();
   switch (test_case.dtype) {
-  case CUDECOMP_FLOAT: runTransposeCase<float>(test_case, true); break;
-  case CUDECOMP_FLOAT_COMPLEX: runTransposeCase<std::complex<float>>(test_case, true); break;
-  case CUDECOMP_DOUBLE: runTransposeCase<double>(test_case, true); break;
-  case CUDECOMP_DOUBLE_COMPLEX: runTransposeCase<std::complex<double>>(test_case, true); break;
+  case CUDECOMP_FLOAT: runTransposeCase<float>(test_case, GraphExecution::Internal); break;
+  case CUDECOMP_FLOAT_COMPLEX: runTransposeCase<std::complex<float>>(test_case, GraphExecution::Internal); break;
+  case CUDECOMP_DOUBLE: runTransposeCase<double>(test_case, GraphExecution::Internal); break;
+  case CUDECOMP_DOUBLE_COMPLEX: runTransposeCase<std::complex<double>>(test_case, GraphExecution::Internal); break;
+  default: FAIL() << "unsupported test dtype " << test_case.dtype;
+  }
+}
+
+TEST_P(ExternalCudaGraphTransposeCorrectnessTest, CapturesAndReplaysOperation) {
+  const auto test_case = GetParam();
+  switch (test_case.dtype) {
+  case CUDECOMP_FLOAT: runTransposeCase<float>(test_case, GraphExecution::External); break;
+  case CUDECOMP_FLOAT_COMPLEX: runTransposeCase<std::complex<float>>(test_case, GraphExecution::External); break;
+  case CUDECOMP_DOUBLE: runTransposeCase<double>(test_case, GraphExecution::External); break;
+  case CUDECOMP_DOUBLE_COMPLEX: runTransposeCase<std::complex<double>>(test_case, GraphExecution::External); break;
   default: FAIL() << "unsupported test dtype " << test_case.dtype;
   }
 }
@@ -784,10 +840,10 @@ TEST_P(NcclUserBufferRegistrationTest, DirectOperation) {
 #else
   const auto test_case = GetParam();
   switch (test_case.dtype) {
-  case CUDECOMP_FLOAT: runTransposeCase<float>(test_case, false, true); break;
-  case CUDECOMP_FLOAT_COMPLEX: runTransposeCase<std::complex<float>>(test_case, false, true); break;
-  case CUDECOMP_DOUBLE: runTransposeCase<double>(test_case, false, true); break;
-  case CUDECOMP_DOUBLE_COMPLEX: runTransposeCase<std::complex<double>>(test_case, false, true); break;
+  case CUDECOMP_FLOAT: runTransposeCase<float>(test_case, GraphExecution::Eager, true); break;
+  case CUDECOMP_FLOAT_COMPLEX: runTransposeCase<std::complex<float>>(test_case, GraphExecution::Eager, true); break;
+  case CUDECOMP_DOUBLE: runTransposeCase<double>(test_case, GraphExecution::Eager, true); break;
+  case CUDECOMP_DOUBLE_COMPLEX: runTransposeCase<std::complex<double>>(test_case, GraphExecution::Eager, true); break;
   default: FAIL() << "unsupported test dtype " << test_case.dtype;
   }
 #endif
@@ -801,5 +857,9 @@ INSTANTIATE_TEST_SUITE_P(NvshmemBackends, TransposeCorrectnessTest,
                          ::testing::ValuesIn(transposeCasesForLabel("nvshmem")), paramName);
 INSTANTIATE_TEST_SUITE_P(CudaGraphMpiBackends, CudaGraphTransposeCorrectnessTest,
                          ::testing::ValuesIn(cudaGraphTransposeCases()), paramName);
+INSTANTIATE_TEST_SUITE_P(ExternalCudaGraphNcclBackends, ExternalCudaGraphTransposeCorrectnessTest,
+                         ::testing::ValuesIn(externalCudaGraphTransposeCases("nccl")), paramName);
+INSTANTIATE_TEST_SUITE_P(ExternalCudaGraphNvshmemBackends, ExternalCudaGraphTransposeCorrectnessTest,
+                         ::testing::ValuesIn(externalCudaGraphTransposeCases("nvshmem")), paramName);
 INSTANTIATE_TEST_SUITE_P(NcclUserBufferRegistration, NcclUserBufferRegistrationTest,
                          ::testing::ValuesIn(ncclUserBufferRegistrationCases()), paramName);
