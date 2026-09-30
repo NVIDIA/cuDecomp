@@ -21,9 +21,13 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "cudecomp_config.h"
+#if !CUDECOMP_BUILD_CPU_ONLY
 #include <cuda/std/complex>
+#endif
 
 #include "internal/common.h"
+#include "internal/utils.h"
 
 namespace cudecomp {
 
@@ -58,9 +62,9 @@ template <typename T> struct cudecompNvshmemP2PParams {
 void cudecomp_nvshmem_alltoallv(const cudecompNvshmemA2AParams<float>& params, uint64_t* sig_addr, cudaStream_t stream);
 void cudecomp_nvshmem_alltoallv(const cudecompNvshmemA2AParams<double>& params, uint64_t* sig_addr,
                                 cudaStream_t stream);
-void cudecomp_nvshmem_alltoallv(const cudecompNvshmemA2AParams<cuda::std::complex<float>>& params, uint64_t* sig_addr,
+void cudecomp_nvshmem_alltoallv(const cudecompNvshmemA2AParams<cudecomp::complex<float>>& params, uint64_t* sig_addr,
                                 cudaStream_t stream);
-void cudecomp_nvshmem_alltoallv(const cudecompNvshmemA2AParams<cuda::std::complex<double>>& params, uint64_t* sig_addr,
+void cudecomp_nvshmem_alltoallv(const cudecompNvshmemA2AParams<cudecomp::complex<double>>& params, uint64_t* sig_addr,
                                 cudaStream_t stream);
 
 void cudecomp_nvshmem_alltoallv_p2p(cudecompHandle_t handle, const cudecompNvshmemP2PParams<float>& params,
@@ -68,10 +72,10 @@ void cudecomp_nvshmem_alltoallv_p2p(cudecompHandle_t handle, const cudecompNvshm
 void cudecomp_nvshmem_alltoallv_p2p(cudecompHandle_t handle, const cudecompNvshmemP2PParams<double>& params,
                                     uint64_t* sig_addr, cudaStream_t stream);
 void cudecomp_nvshmem_alltoallv_p2p(cudecompHandle_t handle,
-                                    const cudecompNvshmemP2PParams<cuda::std::complex<float>>& params,
+                                    const cudecompNvshmemP2PParams<cudecomp::complex<float>>& params,
                                     uint64_t* sig_addr, cudaStream_t stream);
 void cudecomp_nvshmem_alltoallv_p2p(cudecompHandle_t handle,
-                                    const cudecompNvshmemP2PParams<cuda::std::complex<double>>& params,
+                                    const cudecompNvshmemP2PParams<cudecomp::complex<double>>& params,
                                     uint64_t* sig_addr, cudaStream_t stream);
 #endif
 
@@ -90,10 +94,10 @@ void cudecomp_batched_d2d_memcpy_3d(cudecompHandle_t handle, cudecompBatchedD2DM
 void cudecomp_batched_d2d_memcpy_3d(cudecompHandle_t handle, cudecompBatchedD2DMemcpy3DParams<double>& params,
                                     cudaStream_t stream);
 void cudecomp_batched_d2d_memcpy_3d(cudecompHandle_t handle,
-                                    cudecompBatchedD2DMemcpy3DParams<cuda::std::complex<float>>& params,
+                                    cudecompBatchedD2DMemcpy3DParams<cudecomp::complex<float>>& params,
                                     cudaStream_t stream);
 void cudecomp_batched_d2d_memcpy_3d(cudecompHandle_t handle,
-                                    cudecompBatchedD2DMemcpy3DParams<cuda::std::complex<double>>& params,
+                                    cudecompBatchedD2DMemcpy3DParams<cudecomp::complex<double>>& params,
                                     cudaStream_t stream);
 
 } // namespace cudecomp

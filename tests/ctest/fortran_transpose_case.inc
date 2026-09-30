@@ -55,11 +55,11 @@ subroutine RUN_TRANSPOSE_SCENARIO(scenario, halo_extents_x, halo_extents_y, halo
   ARRTYPE, allocatable :: yref(:)
   ARRTYPE, allocatable :: zref(:)
   ARRTYPE, allocatable :: actual(:)
-  ARRTYPE, allocatable, device, target :: data_a_d(:)
-  ARRTYPE, allocatable, device, target :: data_b_d(:)
-  ARRTYPE, pointer, device, contiguous :: input_d(:)
-  ARRTYPE, pointer, device, contiguous :: output_d(:)
-  ARRTYPE, pointer, device, contiguous :: work_d(:)
+  ARRTYPE, allocatable, CUDECOMP_TEST_DEVICE target :: data_a_d(:)
+  ARRTYPE, allocatable, CUDECOMP_TEST_DEVICE target :: data_b_d(:)
+  ARRTYPE, pointer, CUDECOMP_TEST_DEVICE contiguous :: input_d(:)
+  ARRTYPE, pointer, CUDECOMP_TEST_DEVICE contiguous :: output_d(:)
+  ARRTYPE, pointer, CUDECOMP_TEST_DEVICE contiguous :: work_d(:)
 
   grid_desc_created = .false.
   work_allocated = .false.

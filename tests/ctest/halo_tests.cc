@@ -13,7 +13,10 @@
 
 #include <mpi.h>
 
+#include "cudecomp_config.h"
+#if !CUDECOMP_BUILD_CPU_ONLY
 #include <cuda_runtime.h>
+#endif
 #include <gtest/gtest.h>
 
 #include "cudecomp.h"
@@ -375,6 +378,21 @@ template <typename T> void runHaloCase(const HaloCase& test_case, bool capture_e
   const auto initial = initializePencil<T>(pinfo, test_case.gdims);
   const auto expected = initializeReference<T>(pinfo, test_case.gdims, test_case.halo_periods);
 
+#if CUDECOMP_BUILD_CPU_ONLY
+  void* work = nullptr;
+  if (!test_case.automatic_workspace) {
+    CHECK_CUDECOMP_GLOBAL(active_comm, cudecompMalloc(handle, grid_desc, &work, workspace_num_elements * dtype_size));
+  }
+  cudecomp_test::cudecompBufferGuard workspace(handle, grid_desc, work);
+  for (int repeat = 0; repeat < 2; ++repeat) {
+    auto actual = initial;
+    for (int dim = 0; dim < 3; ++dim) {
+      CHECK_CUDECOMP_GLOBAL(active_comm, runHalo(handle, grid_desc, test_case.axis, actual.data(), work,
+                                                 test_case.dtype, pinfo, test_case.halo_periods, dim));
+    }
+    EXPECT_TRUE(pencilMatches(expected, actual, pinfo));
+  }
+#else
   T* data_d = nullptr;
   const cudaError_t data_alloc_result = cudaMalloc(&data_d, pinfo.size * sizeof(*data_d));
   cudecomp_test::cudaBufferGuard data_buffer(data_d);
@@ -460,6 +478,7 @@ template <typename T> void runHaloCase(const HaloCase& test_case, bool capture_e
     if (graph) { CHECK_CUDA_GLOBAL(active_comm, cudaGraphDestroy(graph)); }
     CHECK_CUDA_GLOBAL(active_comm, cudaStreamDestroy(capture_stream));
   }
+#endif
 }
 
 TEST_P(HaloCorrectnessTest, UpdateHalos) {
@@ -473,6 +492,7 @@ TEST_P(HaloCorrectnessTest, UpdateHalos) {
   }
 }
 
+#if !CUDECOMP_BUILD_CPU_ONLY
 TEST_P(ExternalCudaGraphHaloCorrectnessTest, CapturesAndReplaysOperation) {
   const auto test_case = GetParam();
   switch (test_case.dtype) {
@@ -484,7 +504,9 @@ TEST_P(ExternalCudaGraphHaloCorrectnessTest, CapturesAndReplaysOperation) {
   }
 }
 
+#endif
 INSTANTIATE_TEST_SUITE_P(MpiBackends, HaloCorrectnessTest, ::testing::ValuesIn(haloCasesForLabel("mpi")), paramName);
+#if !CUDECOMP_BUILD_CPU_ONLY
 INSTANTIATE_TEST_SUITE_P(NcclBackends, HaloCorrectnessTest, ::testing::ValuesIn(haloCasesForLabel("nccl")), paramName);
 INSTANTIATE_TEST_SUITE_P(NvshmemBackends, HaloCorrectnessTest, ::testing::ValuesIn(haloCasesForLabel("nvshmem")),
                          paramName);
@@ -492,3 +514,5 @@ INSTANTIATE_TEST_SUITE_P(ExternalCudaGraphNcclBackends, ExternalCudaGraphHaloCor
                          ::testing::ValuesIn(externalCudaGraphHaloCases("nccl")), paramName);
 INSTANTIATE_TEST_SUITE_P(ExternalCudaGraphNvshmemBackends, ExternalCudaGraphHaloCorrectnessTest,
                          ::testing::ValuesIn(externalCudaGraphHaloCases("nvshmem")), paramName);
+
+#endif

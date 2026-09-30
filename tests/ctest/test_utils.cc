@@ -44,6 +44,7 @@ gridDescGuard::~gridDescGuard() {
   if (grid_desc_) { (void)cudecompGridDescDestroy(handle_, grid_desc_); }
 }
 
+#if !CUDECOMP_BUILD_CPU_ONLY
 cudaBufferGuard::cudaBufferGuard(void* ptr) : ptr_(ptr) {}
 
 cudaBufferGuard::~cudaBufferGuard() { reset(); }
@@ -53,6 +54,7 @@ void cudaBufferGuard::reset(void* ptr) {
   ptr_ = ptr;
 }
 
+#endif
 cudecompBufferGuard::cudecompBufferGuard(cudecompHandle_t handle, cudecompGridDesc_t grid_desc, void* ptr)
     : handle_(handle), grid_desc_(grid_desc), ptr_(ptr) {}
 
@@ -62,9 +64,11 @@ cudecompBufferGuard::~cudecompBufferGuard() {
 
 void cudecompBufferGuard::release() noexcept { ptr_ = nullptr; }
 
+#if !CUDECOMP_BUILD_CPU_ONLY
 testing::AssertionResult checkCudaGlobal(const MpiTestComm& comm, cudaError_t result, const char* file, int line) {
   return checkLocalFailureGlobal(comm, result == cudaSuccess, "CUDA", cudaGetErrorString(result), file, line);
 }
+#endif
 
 testing::AssertionResult checkCudecompGlobal(const MpiTestComm& comm, cudecompResult_t result, const char* file,
                                              int line) {

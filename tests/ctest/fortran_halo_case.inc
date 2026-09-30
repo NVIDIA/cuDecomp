@@ -58,8 +58,8 @@ subroutine RUN_HALO_AXIS(scenario, axis, halo_extents, padding, halo_periods, me
   ARRTYPE, allocatable :: initial(:)
   ARRTYPE, allocatable :: expected(:)
   ARRTYPE, allocatable :: actual(:)
-  ARRTYPE, allocatable, device, target :: data_d(:)
-  ARRTYPE, pointer, device, contiguous :: work_d(:)
+  ARRTYPE, allocatable, CUDECOMP_TEST_DEVICE target :: data_d(:)
+  ARRTYPE, pointer, CUDECOMP_TEST_DEVICE contiguous :: work_d(:)
 
   grid_desc_created = .false.
   work_allocated = .false.

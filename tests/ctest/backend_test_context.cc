@@ -77,6 +77,7 @@ testing::AssertionResult BackendTestContext::initialize(const MpiTestComm& world
   const bool use_shared_context =
       !keepalive_backend.empty() && keepalive_backend == backend_label && active_ranks == world_comm.size();
 
+#if !CUDECOMP_BUILD_CPU_ONLY
   if (use_shared_context) {
     if (shared_context && !shared_context->compatibleWith(backend_label, active_ranks)) {
       resetSharedBackendTestContext();
@@ -110,6 +111,7 @@ testing::AssertionResult BackendTestContext::initialize(const MpiTestComm& world
     handle_ = shared_context->handle();
     return testing::AssertionSuccess();
   }
+#endif
 
   resetSharedBackendTestContext();
 
@@ -121,8 +123,10 @@ testing::AssertionResult BackendTestContext::initialize(const MpiTestComm& world
     return testing::AssertionSuccess();
   }
 
+#if !CUDECOMP_BUILD_CPU_ONLY
   *setup_decision = initializeGpuForTest(local_active_comm_, check_nccl);
   if (setup_decision->skip || setup_decision->fail) return testing::AssertionSuccess();
+#endif
 
   const cudecompResult_t init_result = cudecompInit(&local_handle_, local_active_comm_.mpiComm());
   local_handle_guard_ = std::make_unique<cudecompHandleGuard>(local_handle_);

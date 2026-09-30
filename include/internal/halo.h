@@ -25,14 +25,19 @@
 #include <sstream>
 #include <vector>
 
+#include "cudecomp_config.h"
+#if !CUDECOMP_BUILD_CPU_ONLY
 #include <cuda_runtime.h>
+#endif
 #include <mpi.h>
 
 #include "internal/checks.h"
 #include "internal/comm_routines.h"
 #include "internal/cudecomp_kernels.h"
 #include "internal/nvtx.h"
+#if !CUDECOMP_BUILD_CPU_ONLY
 #include "internal/performance.h"
+#endif
 #include "internal/utils.h"
 
 namespace cudecomp {
@@ -71,6 +76,7 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
   if (halo_extents[dim] == 0) { return; }
 
   cudecompHaloPerformanceSample* current_sample = nullptr;
+#if !CUDECOMP_BUILD_CPU_ONLY
   if (handle->performance_report_enable) {
     auto& samples =
         getOrCreateHaloPerformanceSamples(handle, grid_desc,
@@ -83,6 +89,7 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
     // Record start event
     CHECK_CUDA(cudaEventRecord(current_sample->halo_start_event, stream));
   }
+#endif
 
   int count = 0;
   for (int i = 0; i < 3; ++i) {
@@ -108,6 +115,7 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
     c = 0;
   } else if (neighbors[0] == -1 && neighbors[1] == -1) {
     // Single rank in this dimension and not periodic. Return.
+#if !CUDECOMP_BUILD_CPU_ONLY
     if (handle->performance_report_enable && current_sample) {
       // Record end event and advance sample even for early return
       CHECK_CUDA(cudaEventRecord(current_sample->halo_end_event, stream));
@@ -115,6 +123,7 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
                                    createHaloConfig(ax, dim, input, halo_extents.data(), halo_periods.data(),
                                                     padding.data(), getCudecompDataType<T>()));
     }
+#endif
     return;
   } else {
     // For multi-rank cases, check if halos include ranks other than nearest neighbor process (unsupported currently).
@@ -230,12 +239,14 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
     std::array<size_t, 2> offsets{};
     offsets[1] = static_cast<size_t>(alignCountToBytes(halo_size, CUDECOMP_WORKSPACE_ALIGN_BYTES));
 
+#if !CUDECOMP_BUILD_CPU_ONLY
     if (handle->performance_report_enable && current_sample) {
       current_sample->sendrecv_bytes = 0;
       for (int i = 0; i < 2; ++i) {
         if (neighbors[i] != -1) { current_sample->sendrecv_bytes += halo_size * sizeof(T); }
       }
     }
+#endif
     cudecompSendRecvPair(handle, grid_desc, neighbors, send_buff, counts, offsets, recv_buff, counts, offsets, stream,
                          current_sample);
 
@@ -294,17 +305,20 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
     lx[dim] = shape_g_h_p[dim] - halo_extents[dim];
     recv_offsets[1] = getPencilPtrOffset(pinfo_h, lx);
 
+#if !CUDECOMP_BUILD_CPU_ONLY
     if (handle->performance_report_enable && current_sample) {
       current_sample->sendrecv_bytes = 0;
       for (int i = 0; i < 2; ++i) {
         if (neighbors[i] != -1) { current_sample->sendrecv_bytes += halo_size * sizeof(T); }
       }
     }
+#endif
     cudecompSendRecvPair(handle, grid_desc, neighbors, input, counts, send_offsets, input, counts, recv_offsets, stream,
                          current_sample);
   } break;
   }
 
+#if !CUDECOMP_BUILD_CPU_ONLY
   if (handle->performance_report_enable && current_sample) {
     // Record end event
     CHECK_CUDA(cudaEventRecord(current_sample->halo_end_event, stream));
@@ -312,6 +326,7 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
                                  createHaloConfig(ax, dim, input, halo_extents.data(), halo_periods.data(),
                                                   padding.data(), getCudecompDataType<T>()));
   }
+#endif
 }
 
 template <typename T>

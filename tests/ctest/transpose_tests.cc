@@ -14,7 +14,10 @@
 
 #include <mpi.h>
 
+#include "cudecomp_config.h"
+#if !CUDECOMP_BUILD_CPU_ONLY
 #include <cuda_runtime.h>
+#endif
 #include <gtest/gtest.h>
 
 #include "cudecomp.h"
@@ -433,6 +436,7 @@ cudecompResult_t runTranspose(cudecompHandle_t handle, cudecompGridDesc_t grid_d
   return CUDECOMP_RESULT_INVALID_USAGE;
 }
 
+#if !CUDECOMP_BUILD_CPU_ONLY
 template <typename T>
 void runAndVerifyTranspose(const cudecomp_test::MpiTestComm& active_comm, cudecompHandle_t handle,
                            cudecompGridDesc_t grid_desc, const TransposeCase& test_case, T* input_d, T* output_d,
@@ -456,6 +460,7 @@ void runAndVerifyTranspose(const cudecomp_test::MpiTestComm& active_comm, cudeco
   EXPECT_TRUE(pencilMatches(output_ref, output, output_info));
 }
 
+#endif
 cudecomp::cudecompCommAxis communicationAxis(TransposeOperation operation) {
   const int ax_a = inputAxis(operation);
   const int ax_b = outputAxis(operation);
@@ -540,6 +545,7 @@ class CudaGraphTransposeCorrectnessTest : public ::testing::TestWithParam<Transp
 class ExternalCudaGraphTransposeCorrectnessTest : public ::testing::TestWithParam<TransposeCase> {};
 class NcclUserBufferRegistrationTest : public ::testing::TestWithParam<TransposeCase> {};
 
+#if !CUDECOMP_BUILD_CPU_ONLY
 TEST(NcclCommunicatorLifecycleTest, RetainsLocalCommunicatorUntilAllDescriptorsReleaseIt) {
   const auto world_comm = cudecomp_test::MpiTestComm::world();
   if (world_comm.size() != 4) { GTEST_SKIP() << "NCCL communicator lifecycle test requires exactly four ranks"; }
@@ -599,6 +605,7 @@ testing::AssertionResult ncclUserBufferRegistrationIsActive(cudecompHandle_t han
 #endif
 }
 
+#endif
 template <typename T>
 void runTransposeCase(const TransposeCase& test_case, GraphExecution graph_execution = GraphExecution::Eager,
                       bool check_nccl_user_buffer_registration = false) {
@@ -673,6 +680,22 @@ void runTransposeCase(const TransposeCase& test_case, GraphExecution graph_execu
   const auto output_ref = initializePencil<T>(output_info, test_case.gdims);
   const int64_t data_num_elements = std::max(input_info.size, output_info.size);
 
+#if CUDECOMP_BUILD_CPU_ONLY
+  std::vector<T> input(data_num_elements), output(data_num_elements);
+  void* work = nullptr;
+  if (!test_case.automatic_workspace) {
+    CHECK_CUDECOMP_GLOBAL(active_comm, cudecompMalloc(handle, grid_desc, &work, workspace_num_elements * dtype_size));
+  }
+  cudecomp_test::cudecompBufferGuard workspace(handle, grid_desc, work);
+  for (int repeat = 0; repeat < 2; ++repeat) {
+    std::copy(input_ref.begin(), input_ref.end(), input.begin());
+    T* dst = test_case.out_of_place ? output.data() : input.data();
+    CHECK_CUDECOMP_GLOBAL(active_comm, runTranspose(handle, grid_desc, test_case.operation, input.data(), dst, work,
+                                                    test_case.dtype, input_info, output_info));
+    std::vector<T> actual(dst, dst + output_ref.size());
+    EXPECT_TRUE(pencilMatches(output_ref, actual, output_info));
+  }
+#else
   T* input_d = nullptr;
   const cudaError_t input_alloc_result = cudaMalloc(&input_d, data_num_elements * sizeof(*input_d));
   cudecomp_test::cudaBufferGuard input_buffer(input_d);
@@ -799,6 +822,7 @@ void runTransposeCase(const TransposeCase& test_case, GraphExecution graph_execu
     EXPECT_EQ(handle->nccl_ubr_handles.count(work_d), 0);
 #endif
   }
+#endif
 }
 
 TEST_P(TransposeCorrectnessTest, DirectOperation) {
@@ -812,6 +836,7 @@ TEST_P(TransposeCorrectnessTest, DirectOperation) {
   }
 }
 
+#if !CUDECOMP_BUILD_CPU_ONLY
 TEST_P(CudaGraphTransposeCorrectnessTest, CapturesAndReplaysPackingGraph) {
   const auto test_case = GetParam();
   switch (test_case.dtype) {
@@ -849,8 +874,10 @@ TEST_P(NcclUserBufferRegistrationTest, DirectOperation) {
 #endif
 }
 
+#endif
 INSTANTIATE_TEST_SUITE_P(MpiBackends, TransposeCorrectnessTest, ::testing::ValuesIn(transposeCasesForLabel("mpi")),
                          paramName);
+#if !CUDECOMP_BUILD_CPU_ONLY
 INSTANTIATE_TEST_SUITE_P(NcclBackends, TransposeCorrectnessTest, ::testing::ValuesIn(transposeCasesForLabel("nccl")),
                          paramName);
 INSTANTIATE_TEST_SUITE_P(NvshmemBackends, TransposeCorrectnessTest,
@@ -863,3 +890,5 @@ INSTANTIATE_TEST_SUITE_P(ExternalCudaGraphNvshmemBackends, ExternalCudaGraphTran
                          ::testing::ValuesIn(externalCudaGraphTransposeCases("nvshmem")), paramName);
 INSTANTIATE_TEST_SUITE_P(NcclUserBufferRegistration, NcclUserBufferRegistrationTest,
                          ::testing::ValuesIn(ncclUserBufferRegistrationCases()), paramName);
+
+#endif

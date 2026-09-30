@@ -24,13 +24,18 @@
 #include <sstream>
 #include <string>
 
+#include "cudecomp_config.h"
+#if !CUDECOMP_BUILD_CPU_ONLY
 #include <cuda.h>
 #include <cuda_runtime.h>
 #include <cufft.h>
 #include <cutensor.h>
+#endif
 #include <mpi.h>
+#if !CUDECOMP_BUILD_CPU_ONLY
 #include <nccl.h>
 #include <nvml.h>
+#endif
 
 #include "internal/exceptions.h"
 
