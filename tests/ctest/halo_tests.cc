@@ -169,6 +169,7 @@ std::vector<HaloCase> haloCasesForLabel(const char* label) {
   return cases;
 }
 
+#if !CUDECOMP_BUILD_CPU_ONLY
 std::vector<HaloCase> externalCudaGraphHaloCases(const char* label) {
   std::vector<HaloCase> cases;
   for (const auto& backend : cudecomp_test::haloBackends()) {
@@ -180,6 +181,7 @@ std::vector<HaloCase> externalCudaGraphHaloCases(const char* label) {
   }
   return cases;
 }
+#endif
 
 bool isInternal(const cudecompPencilInfo_t& pinfo, const std::array<int64_t, 3>& local) {
   return local[0] >= pinfo.halo_extents[pinfo.order[0]] &&

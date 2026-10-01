@@ -308,6 +308,7 @@ std::vector<TransposeCase> transposeCasesForLabel(const char* label) {
   return cases;
 }
 
+#if !CUDECOMP_BUILD_CPU_ONLY
 std::vector<TransposeCase> cudaGraphTransposeCases() {
   std::vector<TransposeCase> cases;
   for (const auto& backend : cudecomp_test::transposeBackends()) {
@@ -347,6 +348,7 @@ std::vector<TransposeCase> ncclUserBufferRegistrationCases() {
   }
   return cases;
 }
+#endif
 
 bool isInternal(const cudecompPencilInfo_t& pinfo, const std::array<int64_t, 3>& local) {
   return local[0] >= pinfo.halo_extents[pinfo.order[0]] &&

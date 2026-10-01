@@ -1407,10 +1407,10 @@ cudecompResult_t cudecompGridDescCreateVersioned(cudecompHandle_t handle, cudeco
     grid_desc->handle = handle;
     grid_desc->config = *config;
     resolveRankOrder(handle, grid_desc);
+#if !CUDECOMP_BUILD_CPU_ONLY
     auto comm_backend = grid_desc->config.transpose_comm_backend;
     auto halo_comm_backend = grid_desc->config.halo_comm_backend;
 
-#if !CUDECOMP_BUILD_CPU_ONLY
     std::vector<cudecompTransposeCommBackend_t> autotune_transpose_candidates;
     std::vector<cudecompHaloCommBackend_t> autotune_halo_candidates;
     if (autotune_transpose_backend) { autotune_transpose_candidates = getAutotuneTransposeBackendCandidates(options); }

@@ -460,8 +460,8 @@ cudecompAlltoallPipelined(const cudecompHandle_t& handle, const cudecompGridDesc
   }
   nvtx::rangePush(os.str());
 
-  int self_rank = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info.rank : grid_desc->col_comm_info.rank;
 #if !CUDECOMP_BUILD_CPU_ONLY
+  int self_rank = (comm_axis == CUDECOMP_COMM_ROW) ? grid_desc->row_comm_info.rank : grid_desc->col_comm_info.rank;
   if (handle->performance_report_enable && src_ranks[0] != self_rank) {
     // Note: skipping self-copy for timing as it should be overlapped
     CHECK_CUDA(cudaStreamWaitEvent(handle->streams[0], grid_desc->events[dst_ranks[0]], 0));

@@ -15,6 +15,7 @@
 namespace cudecomp_test {
 namespace {
 
+#if !CUDECOMP_BUILD_CPU_ONLY
 constexpr const char* kKeepaliveBackendEnv = "CUDECOMP_TEST_KEEPALIVE_BACKEND";
 
 class SharedBackendTestContextState {
@@ -60,6 +61,7 @@ std::string requestedKeepaliveBackend() {
   if (backend == "nccl" || backend == "nvshmem") return backend;
   return {};
 }
+#endif
 
 } // namespace
 
@@ -73,11 +75,11 @@ testing::AssertionResult BackendTestContext::initialize(const MpiTestComm& world
   active_comm_ = nullptr;
   handle_ = nullptr;
 
+#if !CUDECOMP_BUILD_CPU_ONLY
   const std::string keepalive_backend = requestedKeepaliveBackend();
   const bool use_shared_context =
       !keepalive_backend.empty() && keepalive_backend == backend_label && active_ranks == world_comm.size();
 
-#if !CUDECOMP_BUILD_CPU_ONLY
   if (use_shared_context) {
     if (shared_context && !shared_context->compatibleWith(backend_label, active_ranks)) {
       resetSharedBackendTestContext();
@@ -138,6 +140,10 @@ testing::AssertionResult BackendTestContext::initialize(const MpiTestComm& world
   return testing::AssertionSuccess();
 }
 
-void resetSharedBackendTestContext() { shared_context.reset(); }
+void resetSharedBackendTestContext() {
+#if !CUDECOMP_BUILD_CPU_ONLY
+  shared_context.reset();
+#endif
+}
 
 } // namespace cudecomp_test

@@ -110,7 +110,12 @@ if (CUDECOMP_BUILD_CPU_ONLY)
       endif()
       add_executable(cudecomp_test_fortran_cpu_${kind} ${source})
       target_compile_definitions(cudecomp_test_fortran_cpu_${kind} PRIVATE CUDECOMP_BUILD_CPU_ONLY)
-      target_compile_options(cudecomp_test_fortran_cpu_${kind} PRIVATE -cpp
+      if (CMAKE_VERSION VERSION_LESS 3.18)
+        target_compile_options(cudecomp_test_fortran_cpu_${kind} PRIVATE -cpp)
+      else()
+        set_target_properties(cudecomp_test_fortran_cpu_${kind} PROPERTIES Fortran_PREPROCESS ON)
+      endif()
+      target_compile_options(cudecomp_test_fortran_cpu_${kind} PRIVATE
         $<$<Fortran_COMPILER_ID:GNU>:-ffree-line-length-none>)
       target_include_directories(cudecomp_test_fortran_cpu_${kind} PRIVATE ${CMAKE_BINARY_DIR}/include)
       target_link_libraries(cudecomp_test_fortran_cpu_${kind} PRIVATE cudecomp_fort cudecomp)
