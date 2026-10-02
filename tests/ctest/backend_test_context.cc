@@ -15,6 +15,7 @@
 namespace cudecomp_test {
 namespace {
 
+#if !CUDECOMP_BUILD_CPU_ONLY
 constexpr const char* kKeepaliveBackendEnv = "CUDECOMP_TEST_KEEPALIVE_BACKEND";
 
 class SharedBackendTestContextState {
@@ -60,6 +61,7 @@ std::string requestedKeepaliveBackend() {
   if (backend == "nccl" || backend == "nvshmem") return backend;
   return {};
 }
+#endif
 
 } // namespace
 
@@ -73,6 +75,7 @@ testing::AssertionResult BackendTestContext::initialize(const MpiTestComm& world
   active_comm_ = nullptr;
   handle_ = nullptr;
 
+#if !CUDECOMP_BUILD_CPU_ONLY
   const std::string keepalive_backend = requestedKeepaliveBackend();
   const bool use_shared_context =
       !keepalive_backend.empty() && keepalive_backend == backend_label && active_ranks == world_comm.size();
@@ -110,6 +113,7 @@ testing::AssertionResult BackendTestContext::initialize(const MpiTestComm& world
     handle_ = shared_context->handle();
     return testing::AssertionSuccess();
   }
+#endif
 
   resetSharedBackendTestContext();
 
@@ -121,8 +125,10 @@ testing::AssertionResult BackendTestContext::initialize(const MpiTestComm& world
     return testing::AssertionSuccess();
   }
 
+#if !CUDECOMP_BUILD_CPU_ONLY
   *setup_decision = initializeGpuForTest(local_active_comm_, check_nccl);
   if (setup_decision->skip || setup_decision->fail) return testing::AssertionSuccess();
+#endif
 
   const cudecompResult_t init_result = cudecompInit(&local_handle_, local_active_comm_.mpiComm());
   local_handle_guard_ = std::make_unique<cudecompHandleGuard>(local_handle_);
@@ -134,6 +140,10 @@ testing::AssertionResult BackendTestContext::initialize(const MpiTestComm& world
   return testing::AssertionSuccess();
 }
 
-void resetSharedBackendTestContext() { shared_context.reset(); }
+void resetSharedBackendTestContext() {
+#if !CUDECOMP_BUILD_CPU_ONLY
+  shared_context.reset();
+#endif
+}
 
 } // namespace cudecomp_test

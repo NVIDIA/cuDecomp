@@ -8,7 +8,10 @@
 
 #include <mpi.h>
 
+#include "cudecomp_config.h"
+#if !CUDECOMP_BUILD_CPU_ONLY
 #include <cuda_runtime.h>
+#endif
 #include <gtest/gtest.h>
 
 #include "cudecomp.h"
@@ -39,6 +42,7 @@ private:
   cudecompGridDesc_t grid_desc_ = nullptr;
 };
 
+#if !CUDECOMP_BUILD_CPU_ONLY
 class cudaBufferGuard {
 public:
   explicit cudaBufferGuard(void* ptr = nullptr);
@@ -52,6 +56,7 @@ private:
   void* ptr_ = nullptr;
 };
 
+#endif
 class cudecompBufferGuard {
 public:
   cudecompBufferGuard(cudecompHandle_t handle, cudecompGridDesc_t grid_desc, void* ptr);
@@ -67,7 +72,9 @@ private:
   void* ptr_ = nullptr;
 };
 
+#if !CUDECOMP_BUILD_CPU_ONLY
 testing::AssertionResult checkCudaGlobal(const MpiTestComm& comm, cudaError_t result, const char* file, int line);
+#endif
 testing::AssertionResult checkCudecompGlobal(const MpiTestComm& comm, cudecompResult_t result, const char* file,
                                              int line);
 testing::AssertionResult checkMpiGlobal(const MpiTestComm& comm, int result, const char* file, int line);

@@ -27,9 +27,10 @@ Table of Contents
 
    overview
    basic_usage
-   cuda_graph_capture
    autotuning
+   cuda_graph_capture
    nvshmem
+   cpu_only
    api
    env_vars
 

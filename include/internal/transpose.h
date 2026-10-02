@@ -25,17 +25,22 @@
 #include <limits>
 #include <vector>
 
+#include "cudecomp_config.h"
+#if !CUDECOMP_BUILD_CPU_ONLY
 #include <cuda/std/complex>
 #include <cuda_runtime.h>
 #include <cutensor.h>
+#endif
 #include <mpi.h>
 
 #include "internal/checks.h"
 #include "internal/comm_routines.h"
 #include "internal/cudecomp_kernels.h"
 #include "internal/nvtx.h"
+#if !CUDECOMP_BUILD_CPU_ONLY
 #include "internal/performance.h"
 #include "internal/raii_wrappers.h"
+#endif
 #include "internal/utils.h"
 
 namespace cudecomp {
@@ -48,6 +53,28 @@ static inline bool isTransposeCommPipelined(cudecompTransposeCommBackend_t commT
           commType == CUDECOMP_TRANSPOSE_COMM_MPI_P2P_PL);
 }
 
+#if CUDECOMP_BUILD_CPU_ONLY
+// Host permutation uses the same element strides and axis order as cuTENSOR.
+template <typename T>
+static void localPermute(const cudecompHandle_t, const std::array<int64_t, 3>& extents,
+                         const std::array<int32_t, 3>& order, std::array<int64_t, 3> strides_in,
+                         std::array<int64_t, 3> strides_out, const T* input, T* output, cudaStream_t) {
+  if (!anyNonzeros(strides_in)) { strides_in = {1, extents[0], extents[0] * extents[1]}; }
+  if (!anyNonzeros(strides_out)) { strides_out = {1, extents[order[0]], extents[order[0]] * extents[order[1]]}; }
+  std::array<int64_t, 3> dst_strides{};
+  for (int i = 0; i < 3; ++i) {
+    dst_strides[order[i]] = strides_out[i];
+  }
+  for (int64_t k = 0; k < extents[2]; ++k) {
+    for (int64_t j = 0; j < extents[1]; ++j) {
+      for (int64_t i = 0; i < extents[0]; ++i) {
+        output[i * dst_strides[0] + j * dst_strides[1] + k * dst_strides[2]] =
+            input[i * strides_in[0] + j * strides_in[1] + k * strides_in[2]];
+      }
+    }
+  }
+}
+#else
 #if CUTENSOR_MAJOR >= 2
 static inline cutensorDataType_t getCutensorDataType(float) { return CUTENSOR_R_32F; }
 static inline cutensorDataType_t getCutensorDataType(double) { return CUTENSOR_R_64F; }
@@ -192,6 +219,7 @@ static void localPermute(const cudecompHandle_t handle, const std::array<int64_t
                                      &desc_out, order_out.data(), cuda_type, stream));
 }
 #endif
+#endif
 
 template <typename T>
 static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, const cudecompGridDesc_t grid_desc,
@@ -218,10 +246,12 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
   bool output_has_halos_padding = anyNonzeros(output_halo_extents) || anyNonzeros(output_padding);
   bool pipelined = isTransposeCommPipelined(grid_desc->config.transpose_comm_backend);
   int memcpy_limit = pipelined ? 1 : CUDECOMP_BATCHED_D2D_3D_PARAM_CAPACITY;
-  cudaStreamCaptureStatus capture_status;
+#if !CUDECOMP_BUILD_CPU_ONLY
+  cudaStreamCaptureStatus capture_status = cudaStreamCaptureStatusNone;
   CHECK_CUDA(cudaStreamIsCapturing(stream, &capture_status));
   bool use_internal_graphs = handle->cuda_graphs_enable && capture_status == cudaStreamCaptureStatusNone;
 
+#endif
   // Set axis values
   int ax_a = ax;
   int ax_b = (fwd ? ax_a + 1 : ax_a + 2) % 3;
@@ -308,6 +338,7 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
 #endif
 
   cudecompTransposePerformanceSample* current_sample = nullptr;
+#if !CUDECOMP_BUILD_CPU_ONLY
   if (handle->performance_report_enable) {
     auto& samples =
         getOrCreateTransposePerformanceSamples(handle, grid_desc,
@@ -322,6 +353,7 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
     // Record start event
     CHECK_CUDA(cudaEventRecord(current_sample->transpose_start_event, stream));
   }
+#endif
 
   // Adjust pointers to handle special cases
   bool direct_pack = false;
@@ -332,6 +364,7 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
       if (inplace) {
         if (halos_padding_equal) {
           // Single rank, in place, Pack -> Unpack: No transpose necessary.
+#if !CUDECOMP_BUILD_CPU_ONLY
           if (handle->performance_report_enable) {
             // Record performance data
             CHECK_CUDA(cudaEventRecord(current_sample->transpose_end_event, stream));
@@ -340,6 +373,7 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
                                                                     output_halo_extents.data(), input_padding.data(),
                                                                     output_padding.data(), getCudecompDataType<T>()));
           }
+#endif
           return;
         }
       } else {
@@ -385,7 +419,7 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
     } else if (transposeBackendRequiresMpi(grid_desc->config.transpose_comm_backend)) {
       // Note: For MPI, disable special cases if input or output pointers are to managed memory
       // since MPI performance directly from managed memory is not great
-      if (isManagedPointer(input) || isManagedPointer(output)) { enable = false; }
+      if ((isManagedPointer(input) || isManagedPointer(output))) { enable = false; }
 
       // Note: For MPI, disable special cases if communicator has an MNNVL connection and the workspace
       // is fabric allocated. This forces MPI comms to always use the fabric allocated workspace
@@ -462,13 +496,18 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
         auto dtype = getCudecompDataType<T>();
         auto key = std::tie(i1, o1, ax, dir, pinfo_a_h, pinfo_b_h, dtype);
 
+#if !CUDECOMP_BUILD_CPU_ONLY
         if (use_internal_graphs && grid_desc->graph_cache.cached(key)) {
           grid_desc->graph_cache.replay(key, stream);
-        } else {
+        } else
+#endif
+        {
           cudaStream_t graph_stream = stream;
+#if !CUDECOMP_BUILD_CPU_ONLY
           if (use_internal_graphs && splits_a.size() > 1) {
             graph_stream = grid_desc->graph_cache.startCapture(key, stream);
           }
+#endif
 
           for (int j = 1; j < splits_a.size() + 1; ++j) {
             int src_rank, dst_rank;
@@ -503,19 +542,23 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
             }
 
             localPermute(handle, extents, order, strides_in, strides_out, src, dst, graph_stream);
+#if !CUDECOMP_BUILD_CPU_ONLY
 #if CUDART_VERSION >= 11010
             CHECK_CUDA(cudaEventRecordWithFlags(grid_desc->events[dst_rank], graph_stream,
                                                 use_internal_graphs && splits_a.size() > 1 ? cudaEventRecordExternal
                                                                                            : cudaEventRecordDefault));
 #else
-            CHECK_CUDA(cudaEventRecord((grid_desc->events[dst_rank], graph_stream));
+            CHECK_CUDA(cudaEventRecord(grid_desc->events[dst_rank], graph_stream));
+#endif
 #endif
           }
 
+#if !CUDECOMP_BUILD_CPU_ONLY
           if (use_internal_graphs && splits_a.size() > 1) {
             grid_desc->graph_cache.endCapture(key);
             grid_desc->graph_cache.replay(key, stream);
           }
+#endif
         }
       } else {
         T* src = i1 + getPencilPtrOffset(pinfo_a_h, input_halo_extents);
@@ -538,13 +581,18 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
       auto dtype = getCudecompDataType<T>();
       auto key = std::tie(i1, o1, ax, dir, pinfo_a_h, pinfo_b_h, dtype);
 
+#if !CUDECOMP_BUILD_CPU_ONLY
       if (use_internal_graphs && grid_desc->graph_cache.cached(key)) {
         grid_desc->graph_cache.replay(key, stream);
-      } else {
+      } else
+#endif
+      {
         cudaStream_t graph_stream = stream;
+#if !CUDECOMP_BUILD_CPU_ONLY
         if (use_internal_graphs && pipelined && splits_a.size() > 1) {
           graph_stream = grid_desc->graph_cache.startCapture(key, stream);
         }
+#endif
 
         for (int j = 1; j < splits_a.size() + 1; ++j) {
           int src_rank, dst_rank;
@@ -596,6 +644,7 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
             cudecomp_batched_d2d_memcpy_3d(handle, memcpy_params, graph_stream);
             memcpy_count = 0;
           }
+#if !CUDECOMP_BUILD_CPU_ONLY
 #if CUDART_VERSION >= 11010
           if (pipelined) {
             CHECK_CUDA(cudaEventRecordWithFlags(grid_desc->events[dst_rank], graph_stream,
@@ -603,18 +652,22 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
                                                                                            : cudaEventRecordDefault));
           }
 #else
-          if (pipelined) CHECK_CUDA(cudaEventRecord((grid_desc->events[dst_rank], graph_stream));
+          if (pipelined) CHECK_CUDA(cudaEventRecord(grid_desc->events[dst_rank], graph_stream));
+#endif
 #endif
         }
+#if !CUDECOMP_BUILD_CPU_ONLY
         if (use_internal_graphs && pipelined && splits_a.size() > 1) {
           grid_desc->graph_cache.endCapture(key);
           grid_desc->graph_cache.replay(key, stream);
         }
+#endif
       }
     }
 
     if (o1 == output) {
       // o1 is output. Return.
+#if !CUDECOMP_BUILD_CPU_ONLY
       if (handle->performance_report_enable) {
         CHECK_CUDA(cudaEventRecord(current_sample->transpose_end_event, stream));
         advanceTransposePerformanceSample(handle, grid_desc,
@@ -622,16 +675,19 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
                                                                 output_halo_extents.data(), input_padding.data(),
                                                                 output_padding.data(), getCudecompDataType<T>()));
       }
+#endif
       return;
     }
   } else {
     // For special cases that skip packing and are pipelined, need to record events to
     // enforce input data dependency
+#if !CUDECOMP_BUILD_CPU_ONLY
     if (pipelined) {
       for (int j = 0; j < splits_a.size(); ++j) {
         CHECK_CUDA(cudaEventRecord(grid_desc->events[j], stream));
       }
     }
+#endif
   }
 
   // Communicate
@@ -891,6 +947,7 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
     }
   }
 
+#if !CUDECOMP_BUILD_CPU_ONLY
   if (handle->performance_report_enable) {
     // Record performance data
     CHECK_CUDA(cudaEventRecord(current_sample->transpose_end_event, stream));
@@ -899,6 +956,7 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
                                                             output_halo_extents.data(), input_padding.data(),
                                                             output_padding.data(), getCudecompDataType<T>()));
   }
+#endif
 }
 
 template <typename T>

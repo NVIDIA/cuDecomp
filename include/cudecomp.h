@@ -27,7 +27,13 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "cudecomp_config.h"
+#if CUDECOMP_BUILD_CPU_ONLY
+// Keep stream signatures compatible without requiring CUDA headers.
+typedef struct CUstream_st* cudaStream_t;
+#else
 #include <cuda_runtime.h>
+#endif
 #include <mpi.h>
 
 #include "cudecomp_version.h"

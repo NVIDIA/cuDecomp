@@ -18,9 +18,22 @@
 #ifndef CUDECOMP_UTILS_H
 #define CUDECOMP_UTILS_H
 
+#include "cudecomp_config.h"
+#if !CUDECOMP_BUILD_CPU_ONLY
 #include <cuda/std/complex>
+#else
+#include <complex>
+#endif
 
 #include "cudecomp.h"
+
+namespace cudecomp {
+#if !CUDECOMP_BUILD_CPU_ONLY
+template <typename T> using complex = cuda::std::complex<T>;
+#else
+template <typename T> using complex = std::complex<T>;
+#endif
+} // namespace cudecomp
 
 inline bool operator==(const cudecompPencilInfo_t& a, const cudecompPencilInfo_t& b) {
   if (a.size != b.size) return false;
@@ -35,8 +48,8 @@ inline bool operator==(const cudecompPencilInfo_t& a, const cudecompPencilInfo_t
 
 inline cudecompDataType_t getCudecompDataType(float) { return CUDECOMP_FLOAT; }
 inline cudecompDataType_t getCudecompDataType(double) { return CUDECOMP_DOUBLE; }
-inline cudecompDataType_t getCudecompDataType(cuda::std::complex<float>) { return CUDECOMP_FLOAT_COMPLEX; }
-inline cudecompDataType_t getCudecompDataType(cuda::std::complex<double>) { return CUDECOMP_DOUBLE_COMPLEX; }
+inline cudecompDataType_t getCudecompDataType(cudecomp::complex<float>) { return CUDECOMP_FLOAT_COMPLEX; }
+inline cudecompDataType_t getCudecompDataType(cudecomp::complex<double>) { return CUDECOMP_DOUBLE_COMPLEX; }
 template <typename T> inline cudecompDataType_t getCudecompDataType() { return getCudecompDataType(T(0)); }
 
 #endif // CUDECOMP_UTILS_H

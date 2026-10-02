@@ -10,6 +10,7 @@
 #include <gtest/gtest.h>
 
 #include "backend_test_context.h"
+#include "cudecomp_config.h"
 #include "gpu_test_utils.h"
 #include "mpi_test_utils.h"
 
@@ -31,12 +32,16 @@ private:
 };
 
 bool gpuRequirementsSatisfied(const cudecomp_test::MpiTestComm& world_comm) {
+#if !CUDECOMP_BUILD_CPU_ONLY
   const auto setup_decision = cudecomp_test::checkGpuTestRequirements(world_comm);
   if (!setup_decision.fail) return true;
 
   std::cerr << "[rank " << world_comm.rank() << "] GPU test requirements are not satisfied: " << setup_decision.reason
             << "\n";
   return false;
+#else
+  return true;
+#endif
 }
 
 } // namespace
@@ -48,7 +53,9 @@ int main(int argc, char** argv) {
 
   {
     const auto world_comm = cudecomp_test::MpiTestComm::world();
+#if !CUDECOMP_BUILD_CPU_ONLY
     cudecomp_test::initializeGpuTestRuntime();
+#endif
 
     ::testing::InitGoogleTest(&argc, argv);
     ::testing::UnitTest::GetInstance()->listeners().Append(new RankFailurePrinter(world_comm.rank()));

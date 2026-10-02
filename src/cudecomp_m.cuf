@@ -13,6 +13,19 @@
 ! See the License for the specific language governing permissions and
 ! limitations under the License.
 
+! Compile the same wrappers for CUDA device arrays or standard Fortran host arrays.
+! The NVIDIA/GNU directives below accept all supported buffer types without TYPE(*).
+#if CUDECOMP_BUILD_CPU_ONLY
+#define c_devptr c_ptr
+#define c_devloc c_loc
+#define cuda_stream_kind c_intptr_t
+#define CUDECOMP_DEVICE
+#define CUDECOMP_ARRAY real(c_float), target
+#else
+#define CUDECOMP_DEVICE device,
+#define CUDECOMP_ARRAY real(c_float), device
+#endif
+
 module cudecomp_internal
   use, intrinsic :: iso_c_binding
   implicit none
@@ -94,16 +107,21 @@ end module cudecomp_internal
 module cudecomp
   use, intrinsic :: iso_c_binding
   use, intrinsic :: iso_fortran_env, only: int64, real32, real64
+#if !CUDECOMP_BUILD_CPU_ONLY
   use cudafor
+#endif
+  ! Keep public aliases here and import fixed-version types locally in versioned wrappers.
+  ! Marking a duplicate module-level import private can also hide its public alias in GNU Fortran.
   use cudecomp_internal, only: cudecompGridDescConfig => cudecompGridDescConfig_v1, &
                                cudecompGridDescAutotuneOptions => cudecompGridDescAutotuneOptions_v1, &
                                cudecompPencilInfo => cudecompPencilInfo_v1
-  use cudecomp_internal, only: cudecompGridDescConfig_v1, cudecompGridDescAutotuneOptions_v1, &
-                               cudecompPencilInfo_v1
+
+#if !CUDECOMP_BUILD_CPU_ONLY
   private :: cudafor
+#endif
   private :: cudecompGetGridDescConfig_v1, cudecompGridDescAutotuneOptionsSetDefaults_v1, &
-             cudecompGridDescConfigSetDefaults_v1, cudecompGridDescCreate_v1, cudecompGetPencilInfo_v1, &
-             cudecompGridDescConfig_v1, cudecompGridDescAutotuneOptions_v1, cudecompPencilInfo_v1
+             cudecompGridDescConfigSetDefaults_v1, cudecompGridDescCreate_v1, cudecompGetPencilInfo_v1
+  private :: cudecomp_copy_c_string
   ! enumerators
 
   ! enum for cuDecomp transpose backend options
@@ -412,7 +430,8 @@ module cudecomp
       type(cudecompHandle), value :: handle
       type(cudecompGridDesc), value :: grid_desc
       !dir$ ignore_tkr input, output
-      real(c_float), device :: input(*), output(*)
+      !GCC$ ATTRIBUTES NO_ARG_CHECK :: input, output
+      CUDECOMP_ARRAY :: input(*), output(*)
       type(c_devptr), value :: work
       integer(c_int), value :: dtype
       integer(c_int32_t) :: input_halo_extents(3), output_halo_extents(3)
@@ -431,7 +450,8 @@ module cudecomp
       type(cudecompHandle), value :: handle
       type(cudecompGridDesc), value :: grid_desc
       !dir$ ignore_tkr input, output
-      real(c_float), device :: input(*), output(*)
+      !GCC$ ATTRIBUTES NO_ARG_CHECK :: input, output
+      CUDECOMP_ARRAY :: input(*), output(*)
       type(c_devptr), value :: work
       integer(c_int), value :: dtype
       integer(c_int32_t) :: input_halo_extents(3), output_halo_extents(3)
@@ -450,7 +470,8 @@ module cudecomp
       type(cudecompHandle), value :: handle
       type(cudecompGridDesc), value :: grid_desc
       !dir$ ignore_tkr input, output
-      real(c_float), device :: input(*), output(*)
+      !GCC$ ATTRIBUTES NO_ARG_CHECK :: input, output
+      CUDECOMP_ARRAY :: input(*), output(*)
       type(c_devptr), value :: work
       integer(c_int), value :: dtype
       integer(c_int32_t) :: input_halo_extents(3), output_halo_extents(3)
@@ -469,7 +490,8 @@ module cudecomp
       type(cudecompHandle), value :: handle
       type(cudecompGridDesc), value :: grid_desc
       !dir$ ignore_tkr input, output
-      real(c_float), device :: input(*), output(*)
+      !GCC$ ATTRIBUTES NO_ARG_CHECK :: input, output
+      CUDECOMP_ARRAY :: input(*), output(*)
       type(c_devptr), value :: work
       integer(c_int), value :: dtype
       integer(c_int32_t) :: input_halo_extents(3), output_halo_extents(3)
@@ -488,7 +510,8 @@ module cudecomp
       type(cudecompHandle), value :: handle
       type(cudecompGridDesc), value :: grid_desc
       !dir$ ignore_tkr input
-      real(c_float), device :: input(*)
+      !GCC$ ATTRIBUTES NO_ARG_CHECK :: input
+      CUDECOMP_ARRAY :: input(*)
       type(c_devptr), value :: work
       integer(c_int), value :: dtype
       integer(c_int32_t) :: halo_extents(3)
@@ -508,7 +531,8 @@ module cudecomp
       type(cudecompHandle), value :: handle
       type(cudecompGridDesc), value :: grid_desc
       !dir$ ignore_tkr input
-      real(c_float), device :: input(*)
+      !GCC$ ATTRIBUTES NO_ARG_CHECK :: input
+      CUDECOMP_ARRAY :: input(*)
       type(c_devptr), value :: work
       integer(c_int), value :: dtype
       integer(c_int32_t) :: halo_extents(3)
@@ -528,7 +552,8 @@ module cudecomp
       type(cudecompHandle), value :: handle
       type(cudecompGridDesc), value :: grid_desc
       !dir$ ignore_tkr input
-      real(c_float), device :: input(*)
+      !GCC$ ATTRIBUTES NO_ARG_CHECK :: input
+      CUDECOMP_ARRAY :: input(*)
       type(c_devptr), value :: work
       integer(c_int), value :: dtype
       integer(c_int32_t) :: halo_extents(3)
@@ -578,6 +603,7 @@ contains
 
   ! cudecompGridDesc creation/manipulation functions
   function cudecompGridDescConfigSetDefaults_v1(config) result(res)
+    use cudecomp_internal, only: cudecompGridDescConfig_v1
     implicit none
     type(cudecompGridDescConfig_v1), target :: config
     integer(c_int) :: res
@@ -588,6 +614,7 @@ contains
   end function cudecompGridDescConfigSetDefaults_v1
 
   function cudecompGridDescAutotuneOptionsSetDefaults_v1(options) result(res)
+    use cudecomp_internal, only: cudecompGridDescAutotuneOptions_v1
     implicit none
     type(cudecompGridDescAutotuneOptions_v1), target :: options
     integer(c_int) :: res
@@ -602,6 +629,7 @@ contains
   end function cudecompGridDescAutotuneOptionsSetDefaults_v1
 
   function cudecompGridDescCreate_v1(handle, grid_desc, config, options) result(res)
+    use cudecomp_internal, only: cudecompGridDescConfig_v1, cudecompGridDescAutotuneOptions_v1
     implicit none
     type(cudecompHandle) :: handle
     type(cudecompGridDesc) :: grid_desc
@@ -633,6 +661,7 @@ contains
 
   ! General functions
   function cudecompGetPencilInfo_v1(handle, grid_desc, pencil_info, axis, halo_extents, padding) result(res)
+    use cudecomp_internal, only: cudecompPencilInfo_v1
     implicit none
     type(cudecompHandle) :: handle
     type(cudecompGridDesc) :: grid_desc
@@ -659,6 +688,7 @@ contains
   end function cudecompGetPencilInfo_v1
 
   function cudecompGetGridDescConfig_v1(handle, grid_desc, config) result(res)
+    use cudecomp_internal, only: cudecompGridDescConfig_v1
     type(cudecompHandle), value :: handle
     type(cudecompGridDesc), value :: grid_desc
     type(cudecompGridDescConfig_v1), target :: config
@@ -689,7 +719,7 @@ contains
     implicit none
     type(cudecompHandle) :: handle
     type(cudecompGridDesc) :: grid_desc
-    real(real32), pointer, device, contiguous :: buffer(:)
+    real(real32), pointer, CUDECOMP_DEVICE contiguous :: buffer(:)
     integer(int64) :: buffer_size
     integer(c_int) :: res
 
@@ -703,7 +733,7 @@ contains
     implicit none
     type(cudecompHandle) :: handle
     type(cudecompGridDesc) :: grid_desc
-    real(real64), pointer, device, contiguous :: buffer(:)
+    real(real64), pointer, CUDECOMP_DEVICE contiguous :: buffer(:)
     integer(int64) :: buffer_size
     integer(c_int) :: res
 
@@ -717,7 +747,7 @@ contains
     implicit none
     type(cudecompHandle) :: handle
     type(cudecompGridDesc) :: grid_desc
-    complex(real32), pointer, device, contiguous :: buffer(:)
+    complex(real32), pointer, CUDECOMP_DEVICE contiguous :: buffer(:)
     integer(int64) :: buffer_size
     integer(c_int) :: res
 
@@ -731,7 +761,7 @@ contains
     implicit none
     type(cudecompHandle) :: handle
     type(cudecompGridDesc) :: grid_desc
-    complex(real64), pointer, device, contiguous :: buffer(:)
+    complex(real64), pointer, CUDECOMP_DEVICE contiguous :: buffer(:)
     integer(int64) :: buffer_size
     integer(c_int) :: res
 
@@ -745,7 +775,7 @@ contains
     implicit none
     type(cudecompHandle) :: handle
     type(cudecompGridDesc) :: grid_desc
-    real(real32), pointer, device, contiguous :: buffer(:)
+    real(real32), pointer, CUDECOMP_DEVICE contiguous :: buffer(:)
     integer(c_int) :: res
 
     type(c_devptr) :: buffer_c
@@ -758,7 +788,7 @@ contains
     implicit none
     type(cudecompHandle) :: handle
     type(cudecompGridDesc) :: grid_desc
-    real(real64), pointer, device, contiguous :: buffer(:)
+    real(real64), pointer, CUDECOMP_DEVICE contiguous :: buffer(:)
     integer(c_int) :: res
 
     type(c_devptr) :: buffer_c
@@ -771,7 +801,7 @@ contains
     implicit none
     type(cudecompHandle) :: handle
     type(cudecompGridDesc) :: grid_desc
-    complex(real32), pointer, device, contiguous :: buffer(:)
+    complex(real32), pointer, CUDECOMP_DEVICE contiguous :: buffer(:)
     integer(c_int) :: res
 
     type(c_devptr) :: buffer_c
@@ -784,7 +814,7 @@ contains
     implicit none
     type(cudecompHandle) :: handle
     type(cudecompGridDesc) :: grid_desc
-    complex(real64), pointer, device, contiguous :: buffer(:)
+    complex(real64), pointer, CUDECOMP_DEVICE contiguous :: buffer(:)
     integer(c_int) :: res
 
     type(c_devptr) :: buffer_c
@@ -801,7 +831,7 @@ contains
     type(c_ptr) :: cstr
 
     cstr = cudecompTransposeCommBackendToStringC(comm_backend)
-    call __cudecomp_copy_c_string(cstr, res)
+    call cudecomp_copy_c_string(cstr, res)
   end function cudecompTransposeCommBackendToString
 
   function cudecompHaloCommBackendToString(comm_backend) result(res)
@@ -812,7 +842,7 @@ contains
     integer(c_int) :: csize
 
     cstr = cudecompHaloCommBackendToStringC(comm_backend)
-    call __cudecomp_copy_c_string(cstr, res)
+    call cudecomp_copy_c_string(cstr, res)
   end function cudecompHaloCommBackendToString
 
   function cudecompGetShiftedRank(handle, grid_desc, axis, dim, displacement, periodic, shifted_rank) &
@@ -838,7 +868,8 @@ contains
     type(cudecompHandle) :: handle
     type(cudecompGridDesc) :: grid_desc
     !dir$ ignore_tkr input, output, work
-    real(c_float), device :: input(*), output(*), work(*)
+    !GCC$ ATTRIBUTES NO_ARG_CHECK :: input, output, work
+    CUDECOMP_ARRAY :: input(*), output(*), work(*)
     integer :: dtype
     integer(cuda_stream_kind), optional :: stream
     integer, optional :: input_halo_extents(3)
@@ -877,7 +908,8 @@ contains
     type(cudecompHandle) :: handle
     type(cudecompGridDesc) :: grid_desc
     !dir$ ignore_tkr input, output, work
-    real(c_float), device :: input(*), output(*), work(*)
+    !GCC$ ATTRIBUTES NO_ARG_CHECK :: input, output, work
+    CUDECOMP_ARRAY :: input(*), output(*), work(*)
     integer :: dtype
     integer(cuda_stream_kind), optional :: stream
     integer, optional :: input_halo_extents(3)
@@ -916,7 +948,8 @@ contains
     type(cudecompHandle) :: handle
     type(cudecompGridDesc) :: grid_desc
     !dir$ ignore_tkr input, output, work
-    real(c_float), device :: input(*), output(*), work(*)
+    !GCC$ ATTRIBUTES NO_ARG_CHECK :: input, output, work
+    CUDECOMP_ARRAY :: input(*), output(*), work(*)
     integer :: dtype
     integer(cuda_stream_kind), optional :: stream
     integer, optional :: input_halo_extents(3)
@@ -955,7 +988,8 @@ contains
     type(cudecompHandle) :: handle
     type(cudecompGridDesc) :: grid_desc
     !dir$ ignore_tkr input, output, work
-    real(c_float), device :: input(*), output(*), work(*)
+    !GCC$ ATTRIBUTES NO_ARG_CHECK :: input, output, work
+    CUDECOMP_ARRAY :: input(*), output(*), work(*)
     integer :: dtype
     integer(cuda_stream_kind), optional :: stream
     integer, optional :: input_halo_extents(3)
@@ -995,7 +1029,8 @@ contains
     type(cudecompHandle) :: handle
     type(cudecompGridDesc) :: grid_desc
     !dir$ ignore_tkr input, work
-    real(c_float), device :: input(*), work(*)
+    !GCC$ ATTRIBUTES NO_ARG_CHECK :: input, work
+    CUDECOMP_ARRAY :: input(*), work(*)
     integer :: dtype
     integer :: halo_extents(3)
     logical :: halo_periods(3)
@@ -1028,7 +1063,8 @@ contains
     type(cudecompHandle) :: handle
     type(cudecompGridDesc) :: grid_desc
     !dir$ ignore_tkr input, work
-    real(c_float), device :: input(*), work(*)
+    !GCC$ ATTRIBUTES NO_ARG_CHECK :: input, work
+    CUDECOMP_ARRAY :: input(*), work(*)
     integer :: dtype
     integer :: halo_extents(3)
     logical :: halo_periods(3)
@@ -1061,7 +1097,8 @@ contains
     type(cudecompHandle) :: handle
     type(cudecompGridDesc) :: grid_desc
     !dir$ ignore_tkr input, work
-    real(c_float), device :: input(*), work(*)
+    !GCC$ ATTRIBUTES NO_ARG_CHECK :: input, work
+    CUDECOMP_ARRAY :: input(*), work(*)
     integer :: dtype
     integer :: halo_extents(3)
     logical :: halo_periods(3)
@@ -1088,7 +1125,7 @@ contains
   end function cudecompUpdateHalosZ
 
   ! Helper function to copy string
-  subroutine __cudecomp_copy_c_string(cstr, fstr)
+  subroutine cudecomp_copy_c_string(cstr, fstr)
     implicit none
     type(c_ptr) :: cstr
     character(len=:), allocatable :: fstr
@@ -1105,6 +1142,6 @@ contains
     else
       fstr = ' '
     endif
-  end subroutine __cudecomp_copy_c_string
+  end subroutine cudecomp_copy_c_string
 
 end module cudecomp

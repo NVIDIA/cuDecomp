@@ -23,6 +23,7 @@
 #include <complex>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <functional>
 #include <map>
 #include <memory>
@@ -35,11 +36,16 @@
 #include <utility>
 #include <vector>
 
+#include "cudecomp_config.h"
+#if !CUDECOMP_BUILD_CPU_ONLY
 #include <cuda_runtime.h>
 #include <cutensor.h>
+#endif
 #include <mpi.h>
+#if !CUDECOMP_BUILD_CPU_ONLY
 #include <nccl.h>
 #include <nvml.h>
+#endif
 #ifdef ENABLE_NVSHMEM
 #include <nvshmem.h>
 #include <nvshmemx.h>
@@ -47,8 +53,11 @@
 
 #include "cudecomp.h"
 #include "internal/checks.h"
+#include "internal/utils.h"
+#if !CUDECOMP_BUILD_CPU_ONLY
 #include "internal/graph.h"
 #include "internal/raii_wrappers.h"
+#endif
 
 namespace cudecomp {
 #if NVML_API_VERSION >= 12 && CUDART_VERSION >= 12040
@@ -56,7 +65,9 @@ typedef std::pair<std::array<unsigned char, NVML_GPU_FABRIC_UUID_LEN>, unsigned 
 #else
 typedef std::pair<std::array<unsigned char, 1>, unsigned int> mnnvl_info;
 #endif
+#if !CUDECOMP_BUILD_CPU_ONLY
 typedef std::shared_ptr<ncclComm_t> ncclComm;
+#endif
 struct nvshmemRuntimeState {
 #ifdef ENABLE_NVSHMEM
   ~nvshmemRuntimeState() noexcept { finalize(); }
@@ -114,14 +125,17 @@ struct cudecompHandle {
   int32_t clique_rank;                      // MPI rank
   int32_t clique_nranks;                    // MPI size
 
+#if !CUDECOMP_BUILD_CPU_ONLY
   // Entries for NCCL management
   cudecomp::ncclComm nccl_comm;       // NCCL communicator (global)
   cudecomp::ncclComm nccl_local_comm; // NCCL communicator (intra-node, or intra-clique on MNNVL systems)
-  bool nccl_enable_ubr = false;       // Flag to control NCCL user buffer registration usage
   std::unordered_map<void*, std::vector<std::pair<cudecomp::ncclComm, void*>>>
       nccl_ubr_handles; // map of allocated buffer address to NCCL registration handle(s)
 
   std::vector<cudecomp::cudaStream> streams; // internal streams for concurrent scheduling
+
+#endif
+  bool nccl_enable_ubr = false; // Always false in CPU-only builds.
 
   // Automatic workspaces are split by allocation domain but share one execution stream so operations submitted with
   // a null workspace cannot race with each other.
@@ -135,11 +149,14 @@ struct cudecompHandle {
   };
   ManagedWorkspace ordinary_workspace;
   ManagedWorkspace nvshmem_workspace;
+#if !CUDECOMP_BUILD_CPU_ONLY
   std::unique_ptr<cudecomp::cudaStream> workspace_stream;
   std::unique_ptr<cudecomp::cudaEvent> workspace_ingress_event;
   std::unique_ptr<cudecomp::cudaEvent> workspace_egress_event;
+#endif
   std::mutex workspace_mutex;
 
+#if !CUDECOMP_BUILD_CPU_ONLY
 #if CUTENSOR_MAJOR >= 2
   cutensorHandle_t cutensor_handle = nullptr;            // cuTENSOR handle;
   cutensorPlanPreference_t cutensor_plan_pref = nullptr; // cuTENSOR plan preference;
@@ -148,6 +165,7 @@ struct cudecompHandle {
   cutensorHandle_t cutensor_handle; // cuTENSOR handle;
 #endif
 
+#endif
   std::vector<std::array<char, MPI_MAX_PROCESSOR_NAME>> hostnames; // list of hostnames by rank
   std::vector<int32_t> rank_to_local_rank;                         // list of local rank mappings
 
@@ -227,6 +245,10 @@ struct cudecompCommInfo {
   bool mnnvl_active = false; // flag to indicate whether communicator has MNNVL connections
 };
 
+// CPU communication only passes null sample pointers; timing resources are GPU-only.
+struct cudecompTransposePerformanceSample;
+struct cudecompHaloPerformanceSample;
+#if !CUDECOMP_BUILD_CPU_ONLY
 // Structure to contain data for transpose performance sample
 struct cudecompTransposePerformanceSample {
   cudecomp::cudaEventTimed transpose_start_event;
@@ -262,6 +284,8 @@ struct cudecompHaloPerformanceSampleCollection {
   int32_t warmup_count = 0;
 };
 
+#endif
+
 // cuDecomp grid descriptor containing grid-specific information
 struct cudecompGridDesc {
   ~cudecompGridDesc() noexcept {
@@ -282,14 +306,17 @@ struct cudecompGridDesc {
   cudecompCommInfo row_comm_info; // row communicator information
   cudecompCommInfo col_comm_info; // column communicator information
 
+#if !CUDECOMP_BUILD_CPU_ONLY
   std::vector<cudecomp::cudaEvent> events; // CUDA events used for scheduling
   cudecomp::cudaEvent nvshmem_sync_event;  // NVSHMEM event used for synchronization
 
+#endif
 #ifdef ENABLE_NVSHMEM
   int* nvshmem_block_counters = nullptr;    // device memory counters for SM alltoallv last-block detection
   cudecomp::nvshmemRuntime nvshmem_runtime; // Shared reference to initialized NVSHMEM runtime
 #endif
 
+#if !CUDECOMP_BUILD_CPU_ONLY
   cudecomp::graphCache graph_cache; // CUDA graph cache
 
   cudecomp::ncclComm nccl_comm; // NCCL communicator (global), shared from handle
@@ -313,10 +340,26 @@ struct cudecompGridDesc {
                      cudecompHaloPerformanceSampleCollection>
       halo_perf_samples_map;
 
+#endif
   bool initialized = false;
 };
 
 namespace cudecomp {
+
+// CPU local work is synchronous; GPU MPI paths must retain their stream ordering.
+static inline void streamSynchronize(cudaStream_t stream) {
+#if !CUDECOMP_BUILD_CPU_ONLY
+  CHECK_CUDA(cudaStreamSynchronize(stream));
+#endif
+}
+
+static inline void copyBuffer(void* dst, const void* src, size_t bytes, cudaStream_t stream) {
+#if CUDECOMP_BUILD_CPU_ONLY
+  if (bytes) { std::memcpy(dst, src, bytes); }
+#else
+  CHECK_CUDA(cudaMemcpyAsync(dst, src, bytes, cudaMemcpyDeviceToDevice, stream));
+#endif
+}
 
 using comm_count_t = int64_t;
 
@@ -454,10 +497,14 @@ static inline bool nvshmemSupportsExternalGraphCapture(const cudecompGridDesc_t 
 }
 
 static inline bool isManagedPointer(void* ptr) {
+#if !CUDECOMP_BUILD_CPU_ONLY
   // Check if input pointer is managed
   cudaPointerAttributes attr;
   CHECK_CUDA(cudaPointerGetAttributes(&attr, ptr));
   return attr.type == cudaMemoryTypeManaged;
+#else
+  return false;
+#endif
 }
 
 static void setCommInfo(cudecompHandle_t& handle, cudecompGridDesc_t& grid_desc, MPI_Comm mpi_comm,
@@ -647,6 +694,7 @@ template <typename T> std::unordered_map<T, unsigned int> getUniqueIds(const std
   return ids;
 }
 
+#if !CUDECOMP_BUILD_CPU_ONLY
 // Custom deleter for NCCL communicators
 struct ncclCommDeleter {
   void operator()(ncclComm_t* comm) {
@@ -662,6 +710,7 @@ static inline ncclComm createNcclComm(ncclComm_t comm) {
   return std::shared_ptr<ncclComm_t>(new ncclComm_t(comm), ncclCommDeleter());
 }
 
+#endif
 // Helper to check if pencil axis has empty pencils
 static inline bool checkForEmptyPencils(const cudecompGridDesc_t grid_desc, int axis) {
   int j = 0;

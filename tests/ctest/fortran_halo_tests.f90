@@ -3,7 +3,12 @@
 
 module cudecomp_fortran_halo_tests
   use, intrinsic :: iso_fortran_env, only: int64, real32, real64
+#if CUDECOMP_BUILD_CPU_ONLY
+#define CUDECOMP_TEST_DEVICE
+#else
   use cudafor
+#define CUDECOMP_TEST_DEVICE device,
+#endif
   use cudecomp
   use mpi
 
@@ -46,7 +51,9 @@ contains
     if (nranks /= halo_test_ranks) then
       call record_failure("Fortran halo test requires exactly 4 MPI ranks")
     else
+#if !CUDECOMP_BUILD_CPU_ONLY
       call initialize_gpu()
+#endif
     endif
 
     if (failures == 0) then
@@ -74,6 +81,7 @@ contains
     if (global_failures /= 0) call exit(1)
   end subroutine run_all_tests
 
+#if !CUDECOMP_BUILD_CPU_ONLY
   subroutine initialize_gpu()
     implicit none
 
@@ -96,6 +104,7 @@ contains
     status = cudaSetDevice(mod(local_rank, num_devices))
     if (status /= cudaSuccess) call record_failure("cudaSetDevice failed")
   end subroutine initialize_gpu
+#endif
 
   subroutine setup_halo_config(config, axis_contiguous, mem_order, rank_order)
     implicit none
