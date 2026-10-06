@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.18)
 set(CMAKE_CXX_STANDARD 17)
 
 if (CMAKE_VERSION VERSION_LESS "3.18")
@@ -24,26 +24,48 @@ option(CUDECOMP_ENABLE_NVSHMEM "Enable NVSHMEM" OFF)
 option(CUDECOMP_BUILD_TESTS "Build tests" OFF)
 option(CUDECOMP_TEST_FETCH_GTEST "Fetch GoogleTest if a system installation is unavailable" OFF)
 option(CUDECOMP_BUILD_EXTRAS "Build benchmark, examples, and tests" OFF)
-set(CUDECOMP_NCCL_HOME CACHE STRING "Path to search for NCCL installation. Use to override NVHPC provided NCCL version.")
-set(CUDECOMP_NVSHMEM_HOME CACHE STRING "Path to search for NVSHMEM installation. Use to override NVHPC provided NVSHMEM version.")
+set(CUDECOMP_CUTENSOR_HOME CACHE PATH "CUTENSOR installation root. Overrides CUTENSOR_ROOT when set.")
+set(CUDECOMP_NCCL_HOME CACHE PATH "NCCL installation root. Overrides NCCL_ROOT when set.")
+set(CUDECOMP_NVSHMEM_HOME CACHE PATH "NVSHMEM installation root. Overrides NVSHMEM_ROOT when set.")
+
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+
+if (CUDECOMP_CUTENSOR_HOME)
+  set(CUTENSOR_ROOT "${CUDECOMP_CUTENSOR_HOME}")
+endif()
+
+if (CUDECOMP_NCCL_HOME)
+  set(NCCL_ROOT "${CUDECOMP_NCCL_HOME}")
+endif()
+
+if (CUDECOMP_NVSHMEM_HOME)
+  set(NVSHMEM_ROOT "${CUDECOMP_NVSHMEM_HOME}")
+endif()
 
 if (CUDECOMP_BUILD_CPU_ONLY AND (CUDECOMP_ENABLE_NVTX OR CUDECOMP_ENABLE_NVSHMEM))
   message(FATAL_ERROR "CPU-only builds do not support NVTX or NVSHMEM")
 endif()
 
 if (NOT CUDECOMP_BUILD_CPU_ONLY)
-  # Use NVHPC compilers by default
-  find_program(NVHPC_CXX_BIN "nvc++" REQUIRED)
-  set(CMAKE_CXX_COMPILER ${NVHPC_CXX_BIN})
-
-  if (CUDECOMP_BUILD_FORTRAN)
-    find_program(NVHPC_Fortran_BIN "nvfortran" REQUIRED)
-    set(CMAKE_Fortran_COMPILER ${NVHPC_Fortran_BIN})
+  # Prefer nvc++ when available unless the user has selected a C++ compiler
+  # through CMake, the environment, or a toolchain file.
+  if (NOT CMAKE_CXX_COMPILER AND NOT CMAKE_TOOLCHAIN_FILE AND "$ENV{CXX}" STREQUAL "")
+    find_program(NVHPC_CXX_BIN "nvc++")
+    if (NVHPC_CXX_BIN)
+      set(CMAKE_CXX_COMPILER "${NVHPC_CXX_BIN}")
+    endif()
   endif()
 
-  # Locate and use NVHPC CMake configuration
-  string(REPLACE "compilers/bin/nvc++" "cmake" NVHPC_CMAKE_DIR ${NVHPC_CXX_BIN})
-  set(CMAKE_PREFIX_PATH ${NVHPC_CMAKE_DIR})
+  # GPU Fortran bindings require nvfortran. Select it when the user has not
+  # already chosen a Fortran compiler through CMake or the environment.
+  if (CUDECOMP_BUILD_FORTRAN AND NOT CMAKE_Fortran_COMPILER AND NOT CMAKE_TOOLCHAIN_FILE AND "$ENV{FC}" STREQUAL "")
+    find_program(NVHPC_Fortran_BIN "nvfortran")
+    if (NOT NVHPC_Fortran_BIN)
+      message(FATAL_ERROR "nvfortran was not found. Load an NVHPC environment or set CMAKE_Fortran_COMPILER.")
+    endif()
+    set(CMAKE_Fortran_COMPILER "${NVHPC_Fortran_BIN}")
+  endif()
+
 endif()
 
 set(LANGS CXX)
@@ -70,6 +92,11 @@ list(JOIN CUDECOMP_VERSION_COMPONENTS "." CUDECOMP_VERSION)
 set(CUDECOMP_SOVERSION 0)
 
 project(cudecomp VERSION ${CUDECOMP_VERSION} LANGUAGES ${LANGS})
+
+if (CUDECOMP_BUILD_FORTRAN AND NOT CUDECOMP_BUILD_CPU_ONLY AND
+    NOT CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
+  message(FATAL_ERROR "The cuDecomp Fortran bindings require nvfortran.")
+endif()
 
 if (CUDECOMP_BUILD_FORTRAN AND NOT CUDECOMP_BUILD_CPU_ONLY)
   # Remove debug information to enable mixed Fortran compilation with cc100 and older compute capabilities.
@@ -111,77 +138,156 @@ endif()
 find_package(MPI REQUIRED)
 
 if (NOT CUDECOMP_BUILD_CPU_ONLY)
-  if (CRAY_CC_BIN)
-    # FindMPI does not include Cray GTL (e.g. CUDA-aware) libs
-    # automatically in Cray environment. Locate it to include in linking.
-    string(REPLACE ":" ";" CRAY_LIB_PATHS $ENV{CRAY_LD_LIBRARY_PATH})
-    find_library(CRAY_MPI_GTL_CUDA_LIBRARY REQUIRED
-      NAMES mpi_gtl_cuda
-      HINTS ${CRAY_LIB_PATHS}
-    )
+if (CRAY_CC_BIN)
+  # FindMPI does not include Cray GTL (e.g. CUDA-aware) libs
+  # automatically in Cray environment. Locate it to include in linking.
+  string(REPLACE ":" ";" CRAY_LIB_PATHS $ENV{CRAY_LD_LIBRARY_PATH})
+  find_library(CRAY_MPI_GTL_CUDA_LIBRARY REQUIRED
+    NAMES mpi_gtl_cuda
+    HINTS ${CRAY_LIB_PATHS}
+  )
 
-    # Cray GTL libs benefit from linking against gdrcopy, so also
-    # locating that library.
-    find_library(GDRCOPY_LIBRARY REQUIRED
-      NAMES gdrapi
-    )
+  # Cray GTL libs benefit from linking against gdrcopy, so also
+  # locating that library.
+  find_library(GDRCOPY_LIBRARY REQUIRED
+    NAMES gdrapi
+  )
 
-    message(STATUS "Found Cray GTL library: " ${CRAY_MPI_GTL_CUDA_LIBRARY})
-    message(STATUS "Found GDRCopy library: " ${GDRCOPY_LIBRARY})
+  message(STATUS "Found Cray GTL library: " ${CRAY_MPI_GTL_CUDA_LIBRARY})
+  message(STATUS "Found GDRCopy library: " ${GDRCOPY_LIBRARY})
+endif()
+
+# Resolve every CUDA dependency independently of the compiler installation.
+# This supports both an unmodified NVHPC SDK and installations assembled from
+# components under separate prefixes.
+find_package(CUDAToolkit REQUIRED)
+find_package(CUTENSOR REQUIRED)
+
+set(CUDECOMP_CUDART_TARGET CUDA::cudart)
+set(CUDECOMP_CUTENSOR_TARGET CUTENSOR::CUTENSOR)
+set(CUDECOMP_CUFFT_TARGET CUDA::cufft)
+set(CUDECOMP_CUDA_VERSION "${CUDAToolkit_VERSION_MAJOR}.${CUDAToolkit_VERSION_MINOR}")
+set(CUDECOMP_CUDA_INCLUDE_DIR "${CUDAToolkit_INCLUDE_DIRS}")
+foreach(CUDECOMP_CUDA_INCLUDE_ROOT IN LISTS CUDAToolkit_INCLUDE_DIRS)
+  if (EXISTS "${CUDECOMP_CUDA_INCLUDE_ROOT}/cccl")
+    list(APPEND CUDECOMP_CUDA_INCLUDE_DIR "${CUDECOMP_CUDA_INCLUDE_ROOT}/cccl")
+  endif()
+endforeach()
+set(CUDECOMP_CUTENSOR_INCLUDE_DIR "${CUTENSOR_INCLUDE_DIR}")
+set(CUDECOMP_CUFFT_INCLUDE_DIR "${CUDAToolkit_INCLUDE_DIRS}")
+set(CUDECOMP_CUDA_STUBS_DIR "${CUDAToolkit_LIBRARY_DIR}/stubs")
+
+if (CUDECOMP_BUILD_FORTRAN)
+  if (NOT "$ENV{NVHPC_CUDA_HOME}" STREQUAL "" AND
+      NOT "$ENV{NVCOMPILER_CUDA_HOME}" STREQUAL "")
+    get_filename_component(CUDECOMP_NVHPC_CUDA_HOME_REAL "$ENV{NVHPC_CUDA_HOME}" REALPATH)
+    get_filename_component(CUDECOMP_NVCOMPILER_CUDA_HOME_REAL "$ENV{NVCOMPILER_CUDA_HOME}" REALPATH)
+    if (NOT CUDECOMP_NVHPC_CUDA_HOME_REAL STREQUAL CUDECOMP_NVCOMPILER_CUDA_HOME_REAL)
+      message(FATAL_ERROR
+        "NVHPC_CUDA_HOME and NVCOMPILER_CUDA_HOME specify different CUDA Toolkit installations. "
+        "Set only one override, or set both to the same installation."
+      )
+    endif()
+    set(CUDECOMP_NVFORTRAN_CUDA_HOME "${CUDECOMP_NVHPC_CUDA_HOME_REAL}")
+  elseif (NOT "$ENV{NVHPC_CUDA_HOME}" STREQUAL "")
+    set(CUDECOMP_NVFORTRAN_CUDA_HOME "$ENV{NVHPC_CUDA_HOME}")
+  elseif (NOT "$ENV{NVCOMPILER_CUDA_HOME}" STREQUAL "")
+    set(CUDECOMP_NVFORTRAN_CUDA_HOME "$ENV{NVCOMPILER_CUDA_HOME}")
   endif()
 
-  # HPC SDK
-  find_package(NVHPC REQUIRED COMPONENTS CUDA MATH)
-
-  # Set up required include directory flags, NVHPC CMake config only defined library directories
-  string(REGEX REPLACE "(.+)(\/lib64)$" "\\1/include" NVHPC_CUDA_INCLUDE_DIR ${NVHPC_CUDA_LIBRARY_DIR})
-  string(REGEX REPLACE "(.+)(\/lib64)$" "\\1/include" NVHPC_CUFFT_INCLUDE_DIR ${NVHPC_MATH_LIBRARY_DIR})
-  string(REGEX REPLACE "(.+)(\/lib64)$" "\\1/include" NVHPC_CUTENSOR_INCLUDE_DIR ${NVHPC_MATH_LIBRARY_DIR})
-
-  # Get NCCL library (with optional override)
-  if (CUDECOMP_NCCL_HOME)
-    find_path(NCCL_INCLUDE_DIR REQUIRED
-      NAMES nccl.h
-      HINTS ${CUDECOMP_NCCL_HOME}/include
-    )
-
-    find_library(NCCL_LIBRARY REQUIRED
-      NAMES nccl
-      HINTS ${CUDECOMP_NCCL_HOME}/lib
-    )
-  else()
-    find_package(NVHPC REQUIRED COMPONENTS NCCL)
-    find_library(NCCL_LIBRARY
-      NAMES nccl
-      HINTS ${NVHPC_NCCL_LIBRARY_DIR}
-    )
-    string(REGEX REPLACE "(.+)(\/lib)$" "\\1/include" NCCL_INCLUDE_DIR ${NVHPC_NCCL_LIBRARY_DIR})
-  endif()
-
-  message(STATUS "Using NCCL library: ${NCCL_LIBRARY}")
-
-  if (CUDECOMP_ENABLE_NVSHMEM)
-    # Get NVSHMEM library (with optional override)
-    if (CUDECOMP_NVSHMEM_HOME)
-      find_path(NVSHMEM_INCLUDE_DIR REQUIRED
-        NAMES nvshmem.h
-        HINTS ${CUDECOMP_NVSHMEM_HOME}/include
+  if (CUDECOMP_NVFORTRAN_CUDA_HOME)
+    set(CUDECOMP_NVFORTRAN_EXTERNAL_CUDA_OVERRIDE ON)
+    set(CUDECOMP_NVFORTRAN_NVCC "${CUDECOMP_NVFORTRAN_CUDA_HOME}/bin/nvcc")
+    if (NOT EXISTS "${CUDECOMP_NVFORTRAN_NVCC}")
+      message(FATAL_ERROR
+        "The NVHPC CUDA Toolkit override does not contain bin/nvcc: "
+        "${CUDECOMP_NVFORTRAN_CUDA_HOME}"
       )
-
-      find_path(NVSHMEM_LIBRARY_DIR REQUIRED
-        NAMES libnvshmem.a
-        HINTS ${CUDECOMP_NVSHMEM_HOME}/lib
-      )
-    else()
-      find_package(NVHPC REQUIRED COMPONENTS NVSHMEM)
-      set(NVSHMEM_LIBRARY_DIR ${NVHPC_NVSHMEM_LIBRARY_DIR})
-      string(REGEX REPLACE "(.+)(\/lib)$" "\\1/include" NVSHMEM_INCLUDE_DIR ${NVHPC_NVSHMEM_LIBRARY_DIR})
     endif()
 
-    message(STATUS "Using NVSHMEM installation at: ${NVSHMEM_LIBRARY_DIR}")
+    execute_process(
+      COMMAND "${CUDECOMP_NVFORTRAN_NVCC}" --version
+      RESULT_VARIABLE CUDECOMP_NVFORTRAN_NVCC_RESULT
+      OUTPUT_VARIABLE CUDECOMP_NVFORTRAN_NVCC_OUTPUT
+      ERROR_VARIABLE CUDECOMP_NVFORTRAN_NVCC_ERROR
+    )
+    if (NOT CUDECOMP_NVFORTRAN_NVCC_RESULT STREQUAL "0")
+      message(FATAL_ERROR
+        "Could not determine the CUDA version from ${CUDECOMP_NVFORTRAN_NVCC}: "
+        "${CUDECOMP_NVFORTRAN_NVCC_ERROR}"
+      )
+    endif()
 
+    string(REGEX MATCH "release[ \t]+([0-9]+)\\.([0-9]+)"
+           CUDECOMP_NVFORTRAN_NVCC_VERSION_MATCH
+           "${CUDECOMP_NVFORTRAN_NVCC_OUTPUT}")
+    if (NOT CUDECOMP_NVFORTRAN_NVCC_VERSION_MATCH)
+      message(FATAL_ERROR
+        "Could not determine the CUDA version from ${CUDECOMP_NVFORTRAN_NVCC}."
+      )
+    endif()
+    set(CUDECOMP_NVFORTRAN_CUDA_VERSION "${CMAKE_MATCH_1}.${CMAKE_MATCH_2}")
+
+    if (NOT CUDECOMP_NVFORTRAN_CUDA_VERSION STREQUAL CUDECOMP_CUDA_VERSION)
+      message(FATAL_ERROR
+        "The selected CUDA compiler uses CUDA ${CUDECOMP_CUDA_VERSION}, but the NVHPC CUDA "
+        "Toolkit override uses CUDA ${CUDECOMP_NVFORTRAN_CUDA_VERSION}. Set CUDACXX or "
+        "CMAKE_CUDA_COMPILER and the NVHPC CUDA override to equivalent Toolkit versions."
+      )
+    endif()
+  else()
+    set(CUDECOMP_NVFORTRAN_CUDA_VERSION_ARG "cuda${CUDECOMP_CUDA_VERSION}")
+
+    include(CheckFortranSourceCompiles)
+    include(CMakePushCheckState)
+    cmake_push_check_state(RESET)
+    set(CMAKE_REQUIRED_FLAGS "-cuda -gpu=${CUDECOMP_NVFORTRAN_CUDA_VERSION_ARG}")
+    check_fortran_source_compiles(
+      "      program test_nvfortran_cuda
+      use cudafor
+      implicit none
+      end"
+      CUDECOMP_NVFORTRAN_CUDA_VERSION_SUPPORTED
+    )
+    cmake_pop_check_state()
+
+    if (NOT CUDECOMP_NVFORTRAN_CUDA_VERSION_SUPPORTED)
+      message(FATAL_ERROR
+        "The selected CUDA compiler uses CUDA ${CUDECOMP_CUDA_VERSION}, but nvfortran "
+        "${CMAKE_Fortran_COMPILER_VERSION} cannot use that CUDA toolchain. Select a CUDA compiler "
+        "matching a CUDA version installed with NVHPC, or set NVHPC_CUDA_HOME or "
+        "NVCOMPILER_CUDA_HOME to the selected external CUDA Toolkit."
+      )
+    endif()
   endif()
+endif()
 
+find_package(NCCL MODULE REQUIRED)
+set(CUDECOMP_NCCL_TARGET NCCL::NCCL)
+
+if (CUDECOMP_ENABLE_NVSHMEM)
+  find_package(NVSHMEM REQUIRED)
+  set(CUDECOMP_NVSHMEM_HOST_TARGET NVSHMEM::host)
+  set(CUDECOMP_NVSHMEM_DEVICE_TARGET NVSHMEM::device)
+  get_filename_component(NVSHMEM_LIBRARY_DIR "${NVSHMEM_HOST_LIBRARY}" DIRECTORY)
+endif()
+
+  message(STATUS "cuDecomp dependency summary:")
+  message(STATUS "  C++ compiler: ${CMAKE_CXX_COMPILER} (${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION})")
+  message(STATUS "  CUDA compiler: ${CMAKE_CUDA_COMPILER} (${CMAKE_CUDA_COMPILER_VERSION})")
+  if (CUDECOMP_BUILD_FORTRAN)
+    message(STATUS "  Fortran compiler: ${CMAKE_Fortran_COMPILER} (${CMAKE_Fortran_COMPILER_ID} ${CMAKE_Fortran_COMPILER_VERSION})")
+    if (CUDECOMP_NVFORTRAN_EXTERNAL_CUDA_OVERRIDE)
+      message(STATUS "  NVHPC CUDA Toolkit: ${CUDECOMP_NVFORTRAN_CUDA_HOME} (${CUDECOMP_NVFORTRAN_CUDA_VERSION})")
+    endif()
+  endif()
+  message(STATUS "  CUDA Toolkit: ${CUDAToolkit_LIBRARY_ROOT} (${CUDAToolkit_VERSION})")
+  message(STATUS "  CUTENSOR: ${CUTENSOR_LIBRARY} (${CUTENSOR_VERSION})")
+  message(STATUS "  NCCL: ${NCCL_LIBRARY} (${NCCL_VERSION})")
+  if (CUDECOMP_ENABLE_NVSHMEM)
+    message(STATUS "  NVSHMEM host library: ${NVSHMEM_HOST_LIBRARY}")
+    message(STATUS "  NVSHMEM device library: ${NVSHMEM_DEVICE_LIBRARY}")
+  endif()
 endif()
 
 # Building cuDecomp shared lib
@@ -233,14 +339,14 @@ else()
     PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${MPI_CXX_INCLUDE_DIRS}
-    ${NVHPC_CUDA_INCLUDE_DIR}
-    ${NVHPC_CUTENSOR_INCLUDE_DIR}
+    ${CUDECOMP_CUDA_INCLUDE_DIR}
+    ${CUDECOMP_CUTENSOR_INCLUDE_DIR}
     ${NCCL_INCLUDE_DIR}
   )
 
-  target_link_libraries(cudecomp PUBLIC NVHPC::CUDART)
-  target_link_libraries(cudecomp PRIVATE NVHPC::CUTENSOR)
-  target_link_libraries(cudecomp PRIVATE ${NCCL_LIBRARY})
+  target_link_libraries(cudecomp PUBLIC ${CUDECOMP_CUDART_TARGET})
+  target_link_libraries(cudecomp PRIVATE ${CUDECOMP_CUTENSOR_TARGET})
+  target_link_libraries(cudecomp PRIVATE ${CUDECOMP_NCCL_TARGET})
   if (CRAY_CC_BIN)
     # In Cray environments, add links to GTL and GDRCopy libs for CUDA-aware support
     target_link_libraries(cudecomp PRIVATE ${CRAY_MPI_GTL_CUDA_LIBRARY})
@@ -286,18 +392,18 @@ else()
     if (NVSHMEM_VERSION VERSION_LESS "2.6")
       message(FATAL_ERROR "NVSHMEM versions earlier than 2.6.0 are not supported by cuDecomp.")
     else()
-      target_link_libraries(cudecomp PRIVATE ${NVSHMEM_LIBRARY_DIR}/libnvshmem_host.so)
-      target_link_libraries(cudecomp PRIVATE ${NVSHMEM_LIBRARY_DIR}/libnvshmem_device.a)
+      target_link_libraries(cudecomp PRIVATE ${CUDECOMP_NVSHMEM_HOST_TARGET})
+      target_link_libraries(cudecomp PRIVATE ${CUDECOMP_NVSHMEM_DEVICE_TARGET})
     endif()
 
     if (NVSHMEM_VERSION VERSION_LESS "2.7")
       # NVSHMEM versions before 2.7 will export NCCL symbols erroneously, need to define this flag
       target_compile_definitions(cudecomp PRIVATE NVSHMEM_USE_NCCL)
-      target_link_libraries(cudecomp PUBLIC -L${NVHPC_CUDA_LIBRARY_DIR}/stubs -lcuda)
+      target_link_libraries(cudecomp PUBLIC -L${CUDECOMP_CUDA_STUBS_DIR} -lcuda)
     endif()
 
     if (NVSHMEM_VERSION VERSION_LESS "2.11")
-      target_link_libraries(cudecomp PUBLIC -L${NVHPC_CUDA_LIBRARY_DIR}/stubs -lnvidia-ml)
+      target_link_libraries(cudecomp PUBLIC -L${CUDECOMP_CUDA_STUBS_DIR} -lnvidia-ml)
     endif()
   endif()
 
@@ -325,7 +431,9 @@ if (CUDECOMP_BUILD_FORTRAN)
     foreach(CUDA_CC ${CUDECOMP_CUDA_CC_LIST})
       list(APPEND CUF_GPU_ARG "cc${CUDA_CC}")
     endforeach()
-    list(APPEND CUF_GPU_ARG "cuda${NVHPC_CUDA_VERSION}")
+    if (CUDECOMP_NVFORTRAN_CUDA_VERSION_ARG)
+      list(APPEND CUF_GPU_ARG "${CUDECOMP_NVFORTRAN_CUDA_VERSION_ARG}")
+    endif()
     list(JOIN CUF_GPU_ARG "," CUF_GPU_ARG)
   endif()
 

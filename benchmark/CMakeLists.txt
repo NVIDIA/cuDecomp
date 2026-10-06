@@ -20,11 +20,11 @@ foreach(tgt ${benchmark_targets})
   target_include_directories(${tgt}
 	                     PRIVATE
 			     ${CMAKE_CURRENT_SOURCE_DIR}/../include
-			     ${NVHPC_CUFFT_INCLUDE_DIR}
+			     ${CUDECOMP_CUFFT_INCLUDE_DIR}
 			     ${NCCL_INCLUDE_DIR}
 			     ${MPI_CXX_INCLUDE_DIRS})
   target_link_libraries(${tgt} PRIVATE cudecomp)
-  target_link_libraries(${tgt} PRIVATE NVHPC::CUFFT)
+  target_link_libraries(${tgt} PRIVATE ${CUDECOMP_CUFFT_TARGET})
   set_target_properties(${tgt} PROPERTIES LINKER_LANGUAGE CXX)
 endforeach()
 

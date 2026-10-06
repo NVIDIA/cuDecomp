@@ -28,7 +28,24 @@ $ cmake -DCUDECOMP_BUILD_EXTRAS=1 -DCUDECOMP_ENABLE_NVSHMEM=1 ..
 
 
 ### GPU dependencies
-We strongly recommend building this library using NVHPC SDK compilers and libraries, as the SDK contains all required dependencies for this library and is the focus of our testing. GPU Fortran bindings require NVHPC SDK compilers.
+The NVHPC SDK remains the primary tested environment and provides all required
+GPU dependencies, but the C++ library does not require the NVHPC C++ compiler.
+GPU Fortran bindings require `nvfortran`. CMake 3.18 or newer is required.
+When no C++ compiler or toolchain is selected explicitly, CMake prefers
+`nvc++` when it is available.
+
+The CUDA Toolkit location is inferred from the selected NVIDIA CUDA compiler.
+To select a specific CUDA installation, set `CUDACXX` or
+`CMAKE_CUDA_COMPILER` when configuring a fresh build directory. When building
+the Fortran bindings against an external CUDA Toolkit, also set
+`NVHPC_CUDA_HOME` or `NVCOMPILER_CUDA_HOME` to an installation with the same
+CUDA major and minor version.
+
+CMake automatically searches system locations and paths exposed by the current
+environment, including `CPATH`, `LIBRARY_PATH`, and `LD_LIBRARY_PATH`. If
+dependencies cannot be found there, use `CUDECOMP_CUTENSOR_HOME`/`CUTENSOR_ROOT`,
+`CUDECOMP_NCCL_HOME`/`NCCL_ROOT`, or `CUDECOMP_NVSHMEM_HOME`/`NVSHMEM_ROOT`. The
+`CUDECOMP_*_HOME` setting takes precedence when both forms are provided.
 
 One exception is cuDecomp builds using NVSHMEM versions older than v3.0, which require the use of a bootstrapping layer that depends on your MPI distribution. The NVSHMEM library packaged within NVHPC SDK
 supports OpenMPI only. If you require usage of a different MPI implementation (e.g. Spectrum MPI or Cray MPICH), you need to either build

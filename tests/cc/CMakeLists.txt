@@ -36,11 +36,11 @@ foreach(tgt ${transpose_test_targets_cc} ${halo_test_targets_cc})
     ${CMAKE_CURRENT_SOURCE_DIR}/../../include
     ${MPI_CXX_INCLUDE_DIRS}
     ${NCCL_INCLUDE_DIR}
-    ${NVHPC_CUFFT_INCLUDE_DIR}
-    ${NVHPC_CUDA_INCLUDE_DIR}
+    ${CUDECOMP_CUFFT_INCLUDE_DIR}
+    ${CUDECOMP_CUDA_INCLUDE_DIR}
   )
   target_link_libraries(${tgt} PRIVATE MPI::MPI_CXX)
-  target_link_libraries(${tgt} PRIVATE NVHPC::CUDART)
+  target_link_libraries(${tgt} PRIVATE ${CUDECOMP_CUDART_TARGET})
   target_link_libraries(${tgt} PUBLIC cudecomp)
   target_compile_options(${tgt} PRIVATE -O3)
 endforeach()

@@ -17,10 +17,10 @@ target_include_directories(tg
   PRIVATE
   ${CMAKE_BINARY_DIR}/include
   ${MPI_CXX_INCLUDE_DIRS}
-  ${NVHPC_CUFFT_INCLUDE_DIR}
+  ${CUDECOMP_CUFFT_INCLUDE_DIR}
 )
 target_link_libraries(tg PRIVATE MPI::MPI_CXX)
-target_link_libraries(tg PRIVATE NVHPC::CUFFT)
+target_link_libraries(tg PRIVATE ${CUDECOMP_CUFFT_TARGET})
 target_link_libraries(tg PRIVATE cudecomp)
 set_target_properties(tg PROPERTIES LINKER_LANGUAGE CXX)
 
