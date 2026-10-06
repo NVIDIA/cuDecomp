@@ -72,7 +72,7 @@ jobs:
         docker run --rm --user "$(id -u):$(id -g)" --network=none --cap-drop=ALL --security-opt=no-new-privileges -v $PWD:/workspace -w /workspace ${{ matrix.image }} bash -c '
           mkdir -p build-nvshmem
           cd build-nvshmem
-          cmake -DCUDECOMP_ENABLE_NVSHMEM=1 -DCUDECOMP_BUILD_EXTRAS=1 -DCUDECOMP_BUILD_TESTS=1 -DCUDECOMP_TEST_FETCH_GTEST=ON ..
+          cmake -DCUDECOMP_ENABLE_NVSHMEM=1 -DCUDECOMP_BUILD_EXTRAS=1 ..
           make -j$(nproc)
         '
 
