@@ -47,7 +47,7 @@ configure_file(
 add_library(cudecomp_test_support STATIC)
 if (NOT CUDECOMP_BUILD_CPU_ONLY)
   target_sources(cudecomp_test_support PRIVATE gpu_test_utils.cc)
-  target_link_libraries(cudecomp_test_support PUBLIC NVHPC::CUDART ${NCCL_LIBRARY})
+  target_link_libraries(cudecomp_test_support PUBLIC ${CUDECOMP_CUDART_TARGET} ${CUDECOMP_NCCL_TARGET})
 endif()
 target_sources(cudecomp_test_support
   PRIVATE
@@ -62,7 +62,7 @@ target_include_directories(cudecomp_test_support
   ${CMAKE_CURRENT_BINARY_DIR}
   ${CMAKE_CURRENT_SOURCE_DIR}/../../include
   ${CMAKE_BINARY_DIR}/include
-  ${NVHPC_CUDA_INCLUDE_DIR}
+  ${CUDECOMP_CUDA_INCLUDE_DIR}
   ${NCCL_INCLUDE_DIR}
 )
 if (CUDECOMP_ENABLE_NVSHMEM)
@@ -76,7 +76,7 @@ if (CUDECOMP_ENABLE_NVSHMEM)
   )
   target_link_libraries(cudecomp_test_support
     PUBLIC
-    ${NVSHMEM_LIBRARY_DIR}/libnvshmem_host.so
+    ${CUDECOMP_NVSHMEM_HOST_TARGET}
   )
 endif()
 target_link_libraries(cudecomp_test_support
@@ -110,11 +110,7 @@ if (CUDECOMP_BUILD_CPU_ONLY)
       endif()
       add_executable(cudecomp_test_fortran_cpu_${kind} ${source})
       target_compile_definitions(cudecomp_test_fortran_cpu_${kind} PRIVATE CUDECOMP_BUILD_CPU_ONLY)
-      if (CMAKE_VERSION VERSION_LESS 3.18)
-        target_compile_options(cudecomp_test_fortran_cpu_${kind} PRIVATE -cpp)
-      else()
-        set_target_properties(cudecomp_test_fortran_cpu_${kind} PROPERTIES Fortran_PREPROCESS ON)
-      endif()
+      set_target_properties(cudecomp_test_fortran_cpu_${kind} PROPERTIES Fortran_PREPROCESS ON)
       target_compile_options(cudecomp_test_fortran_cpu_${kind} PRIVATE
         $<$<Fortran_COMPILER_ID:GNU>:-ffree-line-length-none>)
       target_include_directories(cudecomp_test_fortran_cpu_${kind} PRIVATE ${CMAKE_BINARY_DIR}/include)
@@ -171,7 +167,7 @@ target_link_libraries(cudecomp_test_automatic_workspace
   PRIVATE
   cudecomp
   cudecomp_test_support
-  NVHPC::CUTENSOR
+  ${CUDECOMP_CUTENSOR_TARGET}
 )
 set_target_properties(cudecomp_test_automatic_workspace PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests/ctest
@@ -209,7 +205,7 @@ target_link_libraries(cudecomp_test_transpose
   PRIVATE
   cudecomp
   cudecomp_test_support
-  NVHPC::CUTENSOR
+  ${CUDECOMP_CUTENSOR_TARGET}
 )
 set_target_properties(cudecomp_test_transpose PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests/ctest
@@ -256,7 +252,7 @@ target_link_libraries(cudecomp_test_halo
   PRIVATE
   cudecomp
   cudecomp_test_support
-  NVHPC::CUTENSOR
+  ${CUDECOMP_CUTENSOR_TARGET}
 )
 set_target_properties(cudecomp_test_halo PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests/ctest

@@ -56,5 +56,5 @@ target_compile_definitions(halo_test_C64_f PUBLIC C64)
 
 install(
   TARGETS ${transpose_test_targets_f} ${halo_test_targets_f}
-  RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}/bin/tests/fortran
+  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}/tests/fortran
 )
