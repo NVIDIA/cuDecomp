@@ -5,11 +5,7 @@ target_sources(tg
   tg.cu
 )
 
-if (CMAKE_VERSION VERSION_LESS 3.18)
-  target_compile_options(tg PRIVATE $<$<COMPILE_LANGUAGE:CUDA>: ${CUDA_CC_FLAGS}>)
-else()
-  set_target_properties(tg PROPERTIES CUDA_ARCHITECTURES "${CUDECOMP_CUDA_CC_LIST}")
-endif()
+set_target_properties(tg PROPERTIES CUDA_ARCHITECTURES "${CUDECOMP_CUDA_CC_LIST}")
 target_compile_options(tg PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-Wno-deprecated-gpu-targets >)
 target_compile_options(tg PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-diag-suppress 177>) # Silence unused function warning
 
@@ -26,5 +22,5 @@ set_target_properties(tg PROPERTIES LINKER_LANGUAGE CXX)
 
 install(
   TARGETS tg
-  RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}/bin/examples/cc/taylor_green
+  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}/examples/cc/taylor_green
 )

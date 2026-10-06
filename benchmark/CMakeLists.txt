@@ -7,11 +7,7 @@ set(benchmark_targets
 
 foreach(tgt ${benchmark_targets})
   add_executable(${tgt})
-  if (CMAKE_VERSION VERSION_LESS 3.18)
-    target_compile_options(${tgt} PRIVATE $<$<COMPILE_LANGUAGE:CUDA>: ${CUDA_CC_FLAGS}>)
-  else()
-    set_target_properties(${tgt} PROPERTIES CUDA_ARCHITECTURES "${CUDECOMP_CUDA_CC_LIST}")
-  endif()
+  set_target_properties(${tgt} PROPERTIES CUDA_ARCHITECTURES "${CUDECOMP_CUDA_CC_LIST}")
   target_compile_options(${tgt} PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-Wno-deprecated-gpu-targets >)
   target_sources(${tgt}
     PRIVATE
@@ -35,5 +31,5 @@ target_compile_definitions(benchmark_c2c_f PRIVATE C2C USE_FLOAT)
 
 install(
   TARGETS ${benchmark_targets}
-  RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}/bin/benchmark
+  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}/benchmark
 )

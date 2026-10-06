@@ -32,5 +32,5 @@ endforeach()
 
 install(
   TARGETS ${basic_usage_targets_f}
-  RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}/bin/examples/fortran/basic_usage
+  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}/examples/fortran/basic_usage
 )

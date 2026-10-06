@@ -1,11 +1,6 @@
 cmake_minimum_required(VERSION 3.18)
 set(CMAKE_CXX_STANDARD 17)
 
-if (CMAKE_VERSION VERSION_LESS "3.18")
-  # Workaround with older CMake versions to propagate C++17 standard flags
-  set(CMAKE_CUDA_FLAGS "-std=c++17")
-endif()
-
 set(CMAKE_DISABLE_SOURCE_CHANGES ON)
 set(CMAKE_DISABLE_IN_SOURCE_BUILD ON)
 if (NOT CMAKE_BUILD_TYPE)
@@ -92,6 +87,7 @@ list(JOIN CUDECOMP_VERSION_COMPONENTS "." CUDECOMP_VERSION)
 set(CUDECOMP_SOVERSION 0)
 
 project(cudecomp VERSION ${CUDECOMP_VERSION} LANGUAGES ${LANGS})
+include(GNUInstallDirs)
 
 if (CUDECOMP_BUILD_FORTRAN AND NOT CUDECOMP_BUILD_CPU_ONLY AND
     NOT CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
@@ -317,15 +313,7 @@ target_link_libraries(cudecomp PUBLIC MPI::MPI_CXX)
 if (CUDECOMP_BUILD_CPU_ONLY)
   target_sources(cudecomp PRIVATE src/cudecomp_kernels_cpu.cc)
 else()
-  # Set NVCC flags for requested compute capability
-  if (CMAKE_VERSION VERSION_LESS 3.18)
-    foreach(CUDA_CC ${CUDECOMP_CUDA_CC_LIST})
-      list(APPEND CUDA_CC_FLAGS -gencode=arch=compute_${CUDA_CC},code=sm_${CUDA_CC})
-    endforeach()
-    target_compile_options(cudecomp PRIVATE $<$<COMPILE_LANGUAGE:CUDA>: ${CUDA_CC_FLAGS}>)
-  else()
-    set_target_properties(cudecomp PROPERTIES CUDA_ARCHITECTURES "${CUDECOMP_CUDA_CC_LIST}")
-  endif()
+  set_target_properties(cudecomp PROPERTIES CUDA_ARCHITECTURES "${CUDECOMP_CUDA_CC_LIST}")
 
   target_compile_options(cudecomp PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-Wno-deprecated-gpu-targets >)
 
@@ -428,8 +416,8 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/include/cudecomp_version.h ${CMAKE_BI
 
 install(
   TARGETS cudecomp
-  LIBRARY DESTINATION lib
-  PUBLIC_HEADER DESTINATION include
+  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 
 # Building Fortran shared lib and module
@@ -470,13 +458,13 @@ if (CUDECOMP_BUILD_FORTRAN)
 
   install(
     TARGETS cudecomp_fort
-    LIBRARY DESTINATION lib
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
    )
    # Install cuDecomp modules
    install(
      FILES ${CMAKE_BINARY_DIR}/include/cudecomp.mod
            ${CMAKE_BINARY_DIR}/include/cudecomp_internal.mod
-     DESTINATION include
+     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
    )
 endif()
 

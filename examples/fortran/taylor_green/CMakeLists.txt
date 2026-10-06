@@ -19,5 +19,5 @@ target_compile_options(tg_fortran PRIVATE $<$<COMPILE_LANGUAGE:Fortran>:-cpp -cu
 target_link_options(tg_fortran PRIVATE $<$<COMPILE_LANGUAGE:Fortran>:-cpp -cuda -acc -gpu=${CUF_GPU_ARG}>)
 install(
   TARGETS tg_fortran
-  RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}/bin/examples/fortran/taylor_green
+  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}/examples/fortran/taylor_green
 )

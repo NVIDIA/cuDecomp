@@ -19,5 +19,5 @@ target_link_options(poisson PRIVATE $<$<COMPILE_LANGUAGE:Fortran>:-cpp -cuda -gp
 
 install(
   TARGETS poisson
-  RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}/bin/examples/fortran/poisson
+  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}/examples/fortran/poisson
 )

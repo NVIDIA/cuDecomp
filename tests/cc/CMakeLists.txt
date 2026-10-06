@@ -57,5 +57,5 @@ target_compile_definitions(halo_test_C64_cc PRIVATE C64)
 
 install(
   TARGETS ${transpose_test_targets_cc} ${halo_test_targets_cc}
-  RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}/bin/tests/cc
+  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}/tests/cc
 )
