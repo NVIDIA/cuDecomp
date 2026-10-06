@@ -89,6 +89,23 @@ set(CUDECOMP_SOVERSION 0)
 project(cudecomp VERSION ${CUDECOMP_VERSION} LANGUAGES ${LANGS})
 include(GNUInstallDirs)
 
+# Locate a standard NVHPC SDK root without requiring its optional environment
+# variables. Explicit dependency roots still take precedence in the find modules.
+foreach(CUDECOMP_COMPILER IN ITEMS
+        "${CMAKE_CXX_COMPILER}"
+        "${CMAKE_CUDA_COMPILER}"
+        "${CMAKE_Fortran_COMPILER}")
+  if (CUDECOMP_COMPILER)
+    get_filename_component(CUDECOMP_COMPILER_REALPATH "${CUDECOMP_COMPILER}" REALPATH)
+    if (CUDECOMP_COMPILER_REALPATH MATCHES "^(.+)/compilers/bin/[^/]+$")
+      set(CUDECOMP_NVHPC_SDK_ROOT "${CMAKE_MATCH_1}")
+      break()
+    endif()
+  endif()
+endforeach()
+unset(CUDECOMP_COMPILER)
+unset(CUDECOMP_COMPILER_REALPATH)
+
 if (CUDECOMP_BUILD_FORTRAN AND NOT CUDECOMP_BUILD_CPU_ONLY AND
     NOT CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
   message(FATAL_ERROR "The cuDecomp Fortran bindings require nvfortran.")
