@@ -37,8 +37,8 @@ jobs:
             image: "nvcr.io/nvidia/nvhpc:26.5-devel-cuda13.2-ubuntu24.04"
           - name: "NVHPC SDK 25.7, CUDA 12.9, Ubuntu 22.04"
             image: "nvcr.io/nvidia/nvhpc:25.7-devel-cuda12.9-ubuntu22.04"
-          - name: "NVHPC SDK 22.11, CUDA 11.8, Ubuntu 20.04"
-            image: "nvcr.io/nvidia/nvhpc:22.11-devel-cuda11.8-ubuntu20.04"
+          - name: "NVHPC SDK 22.11, CUDA 11.8, Ubuntu 22.04"
+            image: "nvcr.io/nvidia/nvhpc:22.11-devel-cuda11.8-ubuntu22.04"
     
     name: ${{ matrix.name }}
     runs-on: ubuntu-latest
@@ -72,7 +72,7 @@ jobs:
         docker run --rm --user "$(id -u):$(id -g)" --network=none --cap-drop=ALL --security-opt=no-new-privileges -v $PWD:/workspace -w /workspace ${{ matrix.image }} bash -c '
           mkdir -p build-nvshmem
           cd build-nvshmem
-          cmake -DCUDECOMP_ENABLE_NVSHMEM=1 -DCUDECOMP_BUILD_EXTRAS=1 ..
+          cmake -DCUDECOMP_ENABLE_NVSHMEM=1 -DCUDECOMP_BUILD_EXTRAS=1 -DCUDECOMP_BUILD_TESTS=1 -DCUDECOMP_TEST_FETCH_GTEST=ON ..
           make -j$(nproc)
         '
 
