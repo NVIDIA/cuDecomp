@@ -750,6 +750,28 @@ static void inspectNvshmemEnvVars(nvshmemRuntimeState& runtime) {
   char* vmm_str = std::getenv("NVSHMEM_DISABLE_CUDA_VMM");
   if (vmm_str) { runtime.nvshmem_vmm = std::strtol(vmm_str, nullptr, 10) == 0; }
 
+  if (runtime.nvshmem_vmm) {
+#if CUDART_VERSION >= 11030
+    int dev;
+    CUdevice cu_dev;
+    CHECK_CUDA(cudaGetDevice(&dev));
+    CHECK_CUDA_DRV(cuDeviceGet(&cu_dev, dev));
+
+    int vmm_supported = 0;
+    int rdma_vmm_supported = 0;
+    CHECK_CUDA_DRV(
+        cuDeviceGetAttribute(&vmm_supported, CU_DEVICE_ATTRIBUTE_VIRTUAL_MEMORY_MANAGEMENT_SUPPORTED, cu_dev));
+    CHECK_CUDA_DRV(
+        cuDeviceGetAttribute(&rdma_vmm_supported, CU_DEVICE_ATTRIBUTE_GPU_DIRECT_RDMA_WITH_CUDA_VMM_SUPPORTED, cu_dev));
+    // NVSHMEM falls back to a static heap if either capability is unavailable.
+    // Passing these checks establishes VMM eligibility, not the active heap mode.
+    runtime.nvshmem_vmm = vmm_supported && rdma_vmm_supported;
+#else
+    // NVSHMEM's VMM heap requires CUDA 11.3 or newer.
+    runtime.nvshmem_vmm = false;
+#endif
+  }
+
   // Check NVSHMEM_SYMMETRIC_SIZE
   char* symmetric_size_str = std::getenv("NVSHMEM_SYMMETRIC_SIZE");
   if (symmetric_size_str) {
