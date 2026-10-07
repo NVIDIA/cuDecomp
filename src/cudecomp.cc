@@ -760,8 +760,8 @@ static void inspectNvshmemEnvVars(nvshmemRuntimeState& runtime) {
     int rdma_vmm_supported = 0;
     CHECK_CUDA_DRV(
         cuDeviceGetAttribute(&vmm_supported, CU_DEVICE_ATTRIBUTE_VIRTUAL_MEMORY_MANAGEMENT_SUPPORTED, cu_dev));
-    CHECK_CUDA_DRV(cuDeviceGetAttribute(&rdma_vmm_supported,
-                                      CU_DEVICE_ATTRIBUTE_GPU_DIRECT_RDMA_WITH_CUDA_VMM_SUPPORTED, cu_dev));
+    CHECK_CUDA_DRV(
+        cuDeviceGetAttribute(&rdma_vmm_supported, CU_DEVICE_ATTRIBUTE_GPU_DIRECT_RDMA_WITH_CUDA_VMM_SUPPORTED, cu_dev));
     // NVSHMEM falls back to a static heap if either capability is unavailable.
     // Passing these checks establishes VMM eligibility, not the active heap mode.
     runtime.nvshmem_vmm = vmm_supported && rdma_vmm_supported;
