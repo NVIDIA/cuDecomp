@@ -751,6 +751,7 @@ static void inspectNvshmemEnvVars(nvshmemRuntimeState& runtime) {
   if (vmm_str) { runtime.nvshmem_vmm = std::strtol(vmm_str, nullptr, 10) == 0; }
 
   if (runtime.nvshmem_vmm) {
+#if CUDART_VERSION >= 11030
     int dev;
     CUdevice cu_dev;
     CHECK_CUDA(cudaGetDevice(&dev));
@@ -765,6 +766,10 @@ static void inspectNvshmemEnvVars(nvshmemRuntimeState& runtime) {
     // NVSHMEM falls back to a static heap if either capability is unavailable.
     // Passing these checks establishes VMM eligibility, not the active heap mode.
     runtime.nvshmem_vmm = vmm_supported && rdma_vmm_supported;
+#else
+    // NVSHMEM's VMM heap requires CUDA 11.3 or newer.
+    runtime.nvshmem_vmm = false;
+#endif
   }
 
   // Check NVSHMEM_SYMMETRIC_SIZE
