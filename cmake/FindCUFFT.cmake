@@ -8,6 +8,10 @@ include(FindPackageHandleStandardArgs)
 # finding cuFFT in the separate, versioned math_libs directory.
 if (TARGET CUDA::cufft)
   get_target_property(CUFFT_LIBRARY CUDA::cufft IMPORTED_LOCATION)
+  # Older FindCUDAToolkit versions use an interface target without a location.
+  if (NOT CUFFT_LIBRARY)
+    set(CUFFT_LIBRARY "${CUDA_cufft_LIBRARY}")
+  endif()
 else()
   set(_CUFFT_NVHPC_ROOT
       "${CUDECOMP_NVHPC_SDK_ROOT}/math_libs/${CUDAToolkit_VERSION_MAJOR}.${CUDAToolkit_VERSION_MINOR}")
