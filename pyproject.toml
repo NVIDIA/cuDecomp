@@ -1,0 +1,60 @@
+[build-system]
+requires = ["scikit-build-core>=1.0", "pybind11>=2.12"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "cudecomp"
+dynamic = ["version"]
+description = "Python bindings for cuDecomp"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+dependencies = [
+  "mpi4py>=3.1",
+  "numpy>=1.23",
+]
+
+[[tool.dynamic-metadata]]
+provider = "scikit_build_core.metadata.regex"
+field = "version"
+input = "include/cudecomp_version.h"
+regex = '''(?sx)
+\#define \s+ CUDECOMP_MAJOR \s+ (?P<major>\d+) .*?
+\#define \s+ CUDECOMP_MINOR \s+ (?P<minor>\d+) .*?
+\#define \s+ CUDECOMP_PATCH \s+ (?P<patch>\d+)
+'''
+result = "{major}.{minor}.{patch}"
+
+[[tool.dynamic-metadata]]
+provider = { path = "packaging", module = "cudecomp_build_version" }
+
+[tool.scikit-build]
+minimum-version = "1.0"
+wheel.exclude = ["cudecomp/cudecomp_py.cpp"]
+wheel.packages = ["python/cudecomp"]
+# Only ship what the wheel build needs, so untracked build trees and local tooling never land in the sdist.
+sdist.inclusion-mode = "explicit"
+sdist.include = [
+  "/CMakeLists.txt",
+  "/LICENSE",
+  "/README.md",
+  "/pyproject.toml",
+  "/cmake/",
+  "/include/",
+  "/packaging/",
+  "/python/",
+  "/src/",
+]
+sdist.exclude = ["__pycache__/", "*.pyc", "*.so"]
+
+[tool.scikit-build.cmake.define]
+CUDECOMP_BUILD_EXTRAS = "OFF"
+CUDECOMP_BUILD_FORTRAN = "OFF"
+CUDECOMP_BUILD_PYTHON = "ON"
+CUDECOMP_BUILD_CPU_ONLY = { env = "CUDECOMP_BUILD_CPU_ONLY", default = "OFF" }
+CUDECOMP_ENABLE_NVSHMEM = { env = "CUDECOMP_ENABLE_NVSHMEM" }
+CUDECOMP_ENABLE_NVTX = { env = "CUDECOMP_ENABLE_NVTX" }
+CUDECOMP_NCCL_HOME = { env = "CUDECOMP_NCCL_HOME" }
+CUDECOMP_CUTENSOR_HOME = { env = "CUDECOMP_CUTENSOR_HOME" }
+CUDECOMP_NVSHMEM_HOME = { env = "CUDECOMP_NVSHMEM_HOME" }
+CUDECOMP_CUDA_CC_LIST = { env = "CUDECOMP_CUDA_CC_LIST" }

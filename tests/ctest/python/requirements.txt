@@ -1,0 +1,7 @@
+# Python dependencies needed to build and run cuDecomp Python tests.
+cupy-cuda13x==14.1.1
+mpi4py==4.1.2
+numpy>=1.23
+# The global variant installs pybind11's CMake package under the environment prefix so in-tree builds
+# (CUDECOMP_BUILD_PYTHON=ON) find it without pybind11_DIR. NumPy 2 support requires pybind11 2.12.
+pybind11[global]>=2.12

@@ -54,5 +54,49 @@ For cuDecomp builds using NVSHMEM v3.0+, this additional MPI boostrapping layer 
 
 Additionally, this library utilizes CUDA-aware MPI and is only compatible with MPI libraries with these features enabled.
 
+### Python (experimental)
+
+The Python API requires Python 3.10 or newer and the same CUDA-aware MPI and GPU
+dependencies described above. Install from the repository root:
+
+```shell
+python -m pip install .
+```
+
+Package builds use CMake and a C++17 compiler, with Fortran bindings and examples
+disabled. Pip installs the build requirements (`scikit-build-core` and
+`pybind11>=2.12`) and runtime dependencies (`numpy>=1.23` and `mpi4py>=3.1`).
+The MPI implementation loaded by mpi4py must be ABI-compatible with the one used
+to build cuDecomp.
+
+Install CuPy separately for GPU examples and automatic transpose output
+allocation. Choose the package matching your CUDA environment, for example:
+
+```shell
+python -m pip install cupy-cuda13x  # Use cupy-cuda12x for CUDA 12.
+```
+
+Editable installs and local source/wheel builds use the same GPU configuration:
+
+```shell
+python -m pip install -e .
+python -m pip install build
+python -m build
+```
+
+`python -m build` creates an sdist and builds a wheel from it. The wheel includes
+the Python extension and cuDecomp shared library, but relies on the MPI, CUDA,
+NCCL, cuTENSOR, and enabled optional libraries in the runtime environment. Local
+wheels are intended for compatible systems or cluster environments, rather than
+as portable binary distributions.
+
+Dependency locations and optional features can be set through environment
+variables such as `CUDECOMP_NCCL_HOME`, `CUDECOMP_CUTENSOR_HOME`, and
+`CUDECOMP_ENABLE_NVSHMEM`. Other CMake settings can be passed through pip, for
+example `python -m pip install . -Ccmake.define.CUDECOMP_CUDA_CC_LIST=89`.
+
+See the [Python documentation](docs/python_api.rst) for basic usage, autotuning,
+and the API reference.
+
 ## License
 This library is released under an Apache 2.0 license, which can be found in [LICENSE](LICENSE).

@@ -31,6 +31,7 @@ Table of Contents
    cuda_graph_capture
    nvshmem
    cpu_only
+   python_api
    api
    env_vars
 

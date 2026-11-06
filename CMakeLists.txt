@@ -19,6 +19,7 @@ option(CUDECOMP_ENABLE_NVSHMEM "Enable NVSHMEM" OFF)
 option(CUDECOMP_BUILD_TESTS "Build tests" OFF)
 option(CUDECOMP_TEST_FETCH_GTEST "Fetch GoogleTest if a system installation is unavailable" OFF)
 option(CUDECOMP_BUILD_EXTRAS "Build benchmark, examples, and tests" OFF)
+option(CUDECOMP_BUILD_PYTHON "Build Python bindings" OFF)
 set(CUDECOMP_CUTENSOR_HOME CACHE PATH "CUTENSOR installation root. Overrides CUTENSOR_ROOT when set.")
 set(CUDECOMP_NCCL_HOME CACHE PATH "NCCL installation root. Overrides NCCL_ROOT when set.")
 set(CUDECOMP_NVSHMEM_HOME CACHE PATH "NVSHMEM installation root. Overrides NVSHMEM_ROOT when set.")
@@ -83,6 +84,17 @@ foreach(COMPONENT MAJOR MINOR PATCH)
 endforeach()
 list(JOIN CUDECOMP_VERSION_COMPONENTS "." CUDECOMP_VERSION)
 
+if (SKBUILD)
+  set(CUDECOMP_PYTHON_VERSION "${CUDECOMP_VERSION}")
+  if (CUDECOMP_BUILD_CPU_ONLY)
+    string(APPEND CUDECOMP_PYTHON_VERSION "+cpu")
+  endif()
+  if (NOT SKBUILD_PROJECT_VERSION_FULL STREQUAL "${CUDECOMP_PYTHON_VERSION}")
+    message(FATAL_ERROR "Python package version ${SKBUILD_PROJECT_VERSION_FULL} does not match the configured "
+                        "build (${CUDECOMP_PYTHON_VERSION}).")
+  endif()
+endif()
+
 # Increment only when a release breaks binary compatibility.
 set(CUDECOMP_SOVERSION 0)
 
@@ -144,7 +156,7 @@ if (NOT CUDECOMP_BUILD_CPU_ONLY)
 endif()
 
 # MPI
-if (CUDECOMP_BUILD_TESTS)
+if (CUDECOMP_BUILD_TESTS OR CUDECOMP_BUILD_PYTHON)
   # The CTest launcher defaults use MPI_CXX_LIBRARY_VERSION_STRING to identify Open MPI.
   set(MPI_DETERMINE_LIBRARY_VERSION ON)
 endif()
@@ -319,9 +331,10 @@ add_library(cudecomp SHARED)
 set_target_properties(
   cudecomp
   PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
-             VERSION ${PROJECT_VERSION}
-             SOVERSION ${CUDECOMP_SOVERSION}
 )
+if (NOT SKBUILD)
+  set_target_properties(cudecomp PROPERTIES VERSION ${PROJECT_VERSION} SOVERSION ${CUDECOMP_SOVERSION})
+endif()
 
 target_sources(cudecomp PRIVATE src/cudecomp.cc)
 target_include_directories(cudecomp PUBLIC
@@ -435,11 +448,22 @@ set_target_properties(
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/include/cudecomp.h ${CMAKE_BINARY_DIR}/include/cudecomp.h)
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/include/cudecomp_version.h ${CMAKE_BINARY_DIR}/include/cudecomp_version.h)
 
-install(
-  TARGETS cudecomp
-  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-  PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-)
+if (SKBUILD)
+  install(
+    TARGETS cudecomp
+    LIBRARY DESTINATION cudecomp/.libs
+  )
+else()
+  install(
+    TARGETS cudecomp
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+  )
+endif()
+
+if (CUDECOMP_BUILD_PYTHON)
+  add_subdirectory(python)
+endif()
 
 # Building Fortran shared lib and module
 if (CUDECOMP_BUILD_FORTRAN)
