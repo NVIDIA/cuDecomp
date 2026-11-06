@@ -29,6 +29,19 @@ with `find_package(GTest)` by default. If a system GoogleTest package is
 unavailable, configure with `-DCUDECOMP_TEST_FETCH_GTEST=ON` to fetch the pinned
 test dependency.
 
+Add `-DCUDECOMP_BUILD_PYTHON=ON` to also register the Python tests. This builds
+the Python extension in the build tree for CTest only; install the Python
+package with pip as described in the top-level README. The Python tests and the
+build-tree extension need the packages in
+[`ctest/python/requirements.txt`](ctest/python/requirements.txt) installed in the
+Python environment CMake finds:
+
+```shell
+python -m pip install -r tests/ctest/python/requirements.txt
+```
+
+The listed CuPy package targets CUDA 13; use `cupy-cuda12x` with CUDA 12.
+
 ### Running Tests
 
 List registered tests with:
@@ -47,10 +60,11 @@ Useful labels:
 
 | Label | Tests selected |
 | --- | --- |
-| `api` | Public C API and focused Fortran API behavior tests |
+| `api` | Public C API and focused Fortran/Python API behavior tests |
 | `transpose` | All transpose correctness tests |
 | `halo` | All halo correctness tests |
 | `fortran` | Focused Fortran API and MPI functional tests across Fortran dtypes, when built |
+| `python` | Python API, transpose, and halo tests, when Python bindings are built |
 | `mpi` | MPI-backend tests |
 | `nccl` | NCCL-backend tests |
 | `nvshmem` | NVSHMEM-backend tests, when built |

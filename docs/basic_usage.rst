@@ -136,6 +136,8 @@ halo communication (:code:`halo_comm_backend`). See documentation of :ref:`cudec
     config%transpose_comm_backend = CUDECOMP_TRANSPOSE_COMM_MPI_P2P
     config%halo_comm_backend = CUDECOMP_HALO_COMM_MPI
 
+.. _pencil-memory-layouts-ref:
+
 We can next set the values of :code:`transpose_axis_contiguous`, which are boolean flags indicating to the library
 the memory layout of the pencil buffers to use, by axis. For each axis, cuDecomp supports two possible memory layouts depending
 on the setting of these flags.

@@ -1,8 +1,12 @@
 *.o
 *.mod
 *.so
+__pycache__/
+*.pyc
 benchmark/benchmark_*
 build/
+dist/
+*.egg-info/
 examples/cc/basic_usage/basic_usage
 examples/cc/basic_usage/basic_usage_autotune
 examples/cc/taylor_green/tg
