@@ -33,6 +33,7 @@ Table of Contents
    cpu_only
    api
    env_vars
+   python_api
 
 
 Indices and tables

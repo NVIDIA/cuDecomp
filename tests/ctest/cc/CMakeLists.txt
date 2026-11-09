@@ -1,0 +1,294 @@
+find_package(GTest CONFIG QUIET)
+if (NOT GTest_FOUND)
+  find_package(GTest MODULE QUIET)
+endif()
+
+if (NOT GTest_FOUND AND CUDECOMP_TEST_FETCH_GTEST)
+  include(FetchContent)
+  FetchContent_Declare(
+    googletest
+    GIT_REPOSITORY https://github.com/google/googletest.git
+    GIT_TAG v1.14.0
+  )
+  set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
+  FetchContent_MakeAvailable(googletest)
+endif()
+
+if (TARGET GTest::gtest)
+  set(CUDECOMP_TEST_FRAMEWORK_TARGET GTest::gtest)
+elseif (TARGET GTest::GTest)
+  set(CUDECOMP_TEST_FRAMEWORK_TARGET GTest::GTest)
+endif()
+
+if (NOT CUDECOMP_TEST_FRAMEWORK_TARGET)
+  message(FATAL_ERROR
+    "GoogleTest was not found. Install a system GoogleTest package or configure with "
+    "-DCUDECOMP_TEST_FETCH_GTEST=ON to fetch the pinned test dependency."
+  )
+endif()
+
+set(CUDECOMP_TEST_ENABLE_NVSHMEM ${CUDECOMP_ENABLE_NVSHMEM})
+configure_file(
+  ${CMAKE_CURRENT_SOURCE_DIR}/backend_config.h.in
+  ${CMAKE_CURRENT_BINARY_DIR}/backend_config.h
+)
+
+add_library(cudecomp_test_support STATIC)
+if (NOT CUDECOMP_BUILD_CPU_ONLY)
+  target_sources(cudecomp_test_support PRIVATE gpu_test_utils.cc)
+  target_link_libraries(cudecomp_test_support PUBLIC ${CUDECOMP_CUDART_TARGET} ${CUDECOMP_NCCL_TARGET})
+endif()
+target_sources(cudecomp_test_support
+  PRIVATE
+  backend_test_context.cc
+  backend_utils.cc
+  mpi_test_utils.cc
+  test_utils.cc
+)
+target_include_directories(cudecomp_test_support
+  PUBLIC
+  ${CMAKE_CURRENT_SOURCE_DIR}
+  ${CMAKE_CURRENT_BINARY_DIR}
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../../include
+  ${CMAKE_BINARY_DIR}/include
+  ${CUDECOMP_CUDA_INCLUDE_DIR}
+  ${NCCL_INCLUDE_DIR}
+)
+if (CUDECOMP_ENABLE_NVSHMEM)
+  target_compile_definitions(cudecomp_test_support
+    PUBLIC
+    ENABLE_NVSHMEM
+  )
+  target_include_directories(cudecomp_test_support
+    PUBLIC
+    ${NVSHMEM_INCLUDE_DIR}
+  )
+  target_link_libraries(cudecomp_test_support
+    PUBLIC
+    ${CUDECOMP_NVSHMEM_HOST_TARGET}
+  )
+endif()
+target_link_libraries(cudecomp_test_support
+  PUBLIC
+  MPI::MPI_CXX
+  ${CUDECOMP_TEST_FRAMEWORK_TARGET}
+)
+
+if (CUDECOMP_BUILD_CPU_ONLY)
+  foreach(kind api transpose halo)
+    if (kind STREQUAL "api")
+      set(source cpu_api_tests.cc)
+    else()
+      set(source ${kind}_tests.cc)
+    endif()
+    add_executable(cudecomp_test_${kind} ${source} mpi_test_main.cc)
+    target_link_libraries(cudecomp_test_${kind} PRIVATE cudecomp cudecomp_test_support)
+    add_test(NAME cudecomp_cpu_${kind}
+      COMMAND ${MPIEXEC_EXECUTABLE} ${CUDECOMP_TEST_MPIEXEC_PREFLAGS_LIST}
+              ${MPIEXEC_NUMPROC_FLAG} 4 $<TARGET_FILE:cudecomp_test_${kind}>)
+    set_tests_properties(cudecomp_cpu_${kind} PROPERTIES
+      TIMEOUT ${CUDECOMP_TEST_TIMEOUT} LABELS "cpu;mpi")
+  endforeach()
+  return()
+endif()
+
+add_executable(cudecomp_test_api)
+target_sources(cudecomp_test_api
+  PRIVATE
+  api_tests.cc
+  mpi_test_main.cc
+)
+target_link_libraries(cudecomp_test_api
+  PRIVATE
+  cudecomp
+  cudecomp_test_support
+)
+set_target_properties(cudecomp_test_api PROPERTIES
+  RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests/ctest
+)
+
+set(CUDECOMP_TEST_API_MPI_RANKS 4)
+add_test(
+  NAME cudecomp_api
+  COMMAND ${MPIEXEC_EXECUTABLE} ${CUDECOMP_TEST_MPIEXEC_PREFLAGS_LIST}
+          ${MPIEXEC_NUMPROC_FLAG} ${CUDECOMP_TEST_API_MPI_RANKS}
+          $<TARGET_FILE:cudecomp_test_api>
+)
+set_tests_properties(cudecomp_api PROPERTIES
+  LABELS "api;mpi"
+  TIMEOUT ${CUDECOMP_TEST_TIMEOUT}
+)
+if (CUDECOMP_ENABLE_NVSHMEM)
+  set_tests_properties(cudecomp_api PROPERTIES
+    ENVIRONMENT "NVSHMEM_DISABLE_NCCL=1"
+  )
+endif()
+
+add_executable(cudecomp_test_automatic_workspace)
+target_sources(cudecomp_test_automatic_workspace
+  PRIVATE
+  automatic_workspace_tests.cc
+  mpi_test_main.cc
+)
+target_link_libraries(cudecomp_test_automatic_workspace
+  PRIVATE
+  cudecomp
+  cudecomp_test_support
+  ${CUDECOMP_CUTENSOR_TARGET}
+)
+set_target_properties(cudecomp_test_automatic_workspace PROPERTIES
+  RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests/ctest
+)
+
+set(CUDECOMP_TEST_AUTOMATIC_WORKSPACE_MPI_RANKS 4)
+add_test(
+  NAME cudecomp_automatic_workspace
+  COMMAND ${MPIEXEC_EXECUTABLE} ${CUDECOMP_TEST_MPIEXEC_PREFLAGS_LIST}
+          ${MPIEXEC_NUMPROC_FLAG} ${CUDECOMP_TEST_AUTOMATIC_WORKSPACE_MPI_RANKS}
+          $<TARGET_FILE:cudecomp_test_automatic_workspace>
+)
+set_tests_properties(cudecomp_automatic_workspace PROPERTIES
+  LABELS "workspace;mpi;nccl;nccl_ubr"
+  TIMEOUT ${CUDECOMP_TEST_TIMEOUT}
+  ENVIRONMENT "CUDECOMP_ENABLE_NCCL_UBR=1"
+)
+if (CUDECOMP_ENABLE_NVSHMEM)
+  set_property(TEST cudecomp_automatic_workspace APPEND PROPERTY
+    LABELS "nvshmem"
+  )
+  set_property(TEST cudecomp_automatic_workspace APPEND PROPERTY
+    ENVIRONMENT "NVSHMEM_DISABLE_NCCL=1"
+  )
+endif()
+
+add_executable(cudecomp_test_transpose)
+target_sources(cudecomp_test_transpose
+  PRIVATE
+  cuda_graph_tests.cc
+  mpi_test_main.cc
+  transpose_tests.cc
+)
+target_link_libraries(cudecomp_test_transpose
+  PRIVATE
+  cudecomp
+  cudecomp_test_support
+  ${CUDECOMP_CUTENSOR_TARGET}
+)
+set_target_properties(cudecomp_test_transpose PROPERTIES
+  RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests/ctest
+)
+
+set(CUDECOMP_TEST_TRANSPOSE_MPI_RANKS 4)
+function(add_cudecomp_transpose_test test_name filter labels)
+  add_test(
+    NAME ${test_name}
+    COMMAND ${MPIEXEC_EXECUTABLE} ${CUDECOMP_TEST_MPIEXEC_PREFLAGS_LIST}
+            ${MPIEXEC_NUMPROC_FLAG} ${CUDECOMP_TEST_TRANSPOSE_MPI_RANKS}
+            $<TARGET_FILE:cudecomp_test_transpose>
+            --gtest_filter=${filter}
+  )
+  set_tests_properties(${test_name} PROPERTIES
+    LABELS "${labels}"
+    TIMEOUT ${CUDECOMP_TEST_TIMEOUT}
+  )
+endfunction()
+
+add_cudecomp_transpose_test(cudecomp_transpose_mpi "MpiBackends/*" "transpose;mpi")
+add_cudecomp_transpose_test(cudecomp_transpose_nccl
+  "NcclBackends/*:NcclCommunicatorLifecycleTest.*"
+  "transpose;nccl"
+)
+set_tests_properties(cudecomp_transpose_nccl PROPERTIES
+  ENVIRONMENT "CUDECOMP_TEST_KEEPALIVE_BACKEND=nccl"
+)
+
+if (CUDECOMP_ENABLE_NVSHMEM)
+  add_cudecomp_transpose_test(cudecomp_transpose_nvshmem "NvshmemBackends/*" "transpose;nvshmem")
+  set_tests_properties(cudecomp_transpose_nvshmem PROPERTIES
+    ENVIRONMENT "CUDECOMP_TEST_KEEPALIVE_BACKEND=nvshmem;NVSHMEM_DISABLE_NCCL=1"
+  )
+endif()
+
+add_executable(cudecomp_test_halo)
+target_sources(cudecomp_test_halo
+  PRIVATE
+  mpi_test_main.cc
+  halo_tests.cc
+)
+target_link_libraries(cudecomp_test_halo
+  PRIVATE
+  cudecomp
+  cudecomp_test_support
+  ${CUDECOMP_CUTENSOR_TARGET}
+)
+set_target_properties(cudecomp_test_halo PROPERTIES
+  RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests/ctest
+)
+
+set(CUDECOMP_TEST_HALO_MPI_RANKS 4)
+function(add_cudecomp_halo_test test_name filter labels)
+  add_test(
+    NAME ${test_name}
+    COMMAND ${MPIEXEC_EXECUTABLE} ${CUDECOMP_TEST_MPIEXEC_PREFLAGS_LIST}
+            ${MPIEXEC_NUMPROC_FLAG} ${CUDECOMP_TEST_HALO_MPI_RANKS}
+            $<TARGET_FILE:cudecomp_test_halo>
+            --gtest_filter=${filter}
+  )
+  set_tests_properties(${test_name} PROPERTIES
+    LABELS "${labels}"
+    TIMEOUT ${CUDECOMP_TEST_TIMEOUT}
+  )
+endfunction()
+
+add_cudecomp_halo_test(cudecomp_halo_mpi "MpiBackends/*" "halo;mpi")
+add_cudecomp_halo_test(cudecomp_halo_nccl "NcclBackends/*" "halo;nccl")
+set_tests_properties(cudecomp_halo_nccl PROPERTIES
+  ENVIRONMENT "CUDECOMP_TEST_KEEPALIVE_BACKEND=nccl"
+)
+
+if (CUDECOMP_ENABLE_NVSHMEM)
+  add_cudecomp_halo_test(cudecomp_halo_nvshmem "NvshmemBackends/*" "halo;nvshmem")
+  set_tests_properties(cudecomp_halo_nvshmem PROPERTIES
+    ENVIRONMENT "CUDECOMP_TEST_KEEPALIVE_BACKEND=nvshmem;NVSHMEM_DISABLE_NCCL=1"
+  )
+endif()
+
+add_cudecomp_transpose_test(cudecomp_cuda_graphs_internal "CudaGraphMpiBackends/*" "cuda_graphs;mpi")
+set_tests_properties(cudecomp_cuda_graphs_internal PROPERTIES
+  ENVIRONMENT "CUDECOMP_ENABLE_CUDA_GRAPHS=1"
+)
+add_cudecomp_transpose_test(cudecomp_cuda_graphs_external_transpose_nccl
+  "ExternalCudaGraphNcclBackends/*:CudaGraphContractTest.*"
+  "cuda_graphs;workspace;nccl"
+)
+set_tests_properties(cudecomp_cuda_graphs_external_transpose_nccl PROPERTIES
+  ENVIRONMENT "CUDECOMP_TEST_KEEPALIVE_BACKEND=nccl"
+)
+add_cudecomp_halo_test(cudecomp_cuda_graphs_external_halo_nccl
+  "ExternalCudaGraphNcclBackends/*"
+  "cuda_graphs;workspace;nccl"
+)
+set_tests_properties(cudecomp_cuda_graphs_external_halo_nccl PROPERTIES
+  ENVIRONMENT "CUDECOMP_TEST_KEEPALIVE_BACKEND=nccl"
+)
+if (CUDECOMP_ENABLE_NVSHMEM)
+  add_cudecomp_transpose_test(cudecomp_cuda_graphs_external_transpose_nvshmem
+    "ExternalCudaGraphNvshmemBackends/*"
+    "cuda_graphs;workspace;nvshmem"
+  )
+  set_tests_properties(cudecomp_cuda_graphs_external_transpose_nvshmem PROPERTIES
+    ENVIRONMENT "CUDECOMP_TEST_KEEPALIVE_BACKEND=nvshmem;NVSHMEM_DISABLE_NCCL=1"
+  )
+  add_cudecomp_halo_test(cudecomp_cuda_graphs_external_halo_nvshmem
+    "ExternalCudaGraphNvshmemBackends/*"
+    "cuda_graphs;workspace;nvshmem"
+  )
+  set_tests_properties(cudecomp_cuda_graphs_external_halo_nvshmem PROPERTIES
+    ENVIRONMENT "CUDECOMP_TEST_KEEPALIVE_BACKEND=nvshmem;NVSHMEM_DISABLE_NCCL=1"
+  )
+endif()
+add_cudecomp_transpose_test(cudecomp_nccl_user_buffer_registration "NcclUserBufferRegistration/*"
+                            "nccl;nccl_ubr")
+set_tests_properties(cudecomp_nccl_user_buffer_registration PROPERTIES
+  ENVIRONMENT "CUDECOMP_ENABLE_NCCL_UBR=1;CUDECOMP_TEST_KEEPALIVE_BACKEND=nccl"
+)

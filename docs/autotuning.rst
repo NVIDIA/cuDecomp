@@ -11,6 +11,8 @@ and compute cluster topology. The autotuner aims to select decomposition and
 communication backend options that minimize transpose and halo communication time.
 
 
+.. _autotuning-process-ref:
+
 Autotuning process
 ------------------
 The autotuning process in cuDecomp can be logically split into two categories:
@@ -355,6 +357,8 @@ we can now create the grid descriptor with autotuning.
 
     istat = cudecompGridDescCreate(handle, grid_desc, config, options)
     call CHECK_CUDECOMP_EXIT(istat)
+
+.. _autotuning-output-ref:
 
 Autotuner output and querying results
 _________________________________________________
