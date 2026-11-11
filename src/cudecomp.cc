@@ -2040,7 +2040,9 @@ cudecompResult_t cudecompGetShiftedRank(cudecompHandle_t handle, cudecompGridDes
     if (!periodic && (shifted < 0 || shifted >= grid_desc->config.pdims[comm_axis])) {
       *shifted_rank = -1; // "null" case
     } else {
-      int comm_peer = (shifted + grid_desc->config.pdims[comm_axis]) % grid_desc->config.pdims[comm_axis];
+      // Wrap into [0, pdims) for displacements of any magnitude; shifted may be more negative than -pdims.
+      int comm_nranks = grid_desc->config.pdims[comm_axis];
+      int comm_peer = ((shifted % comm_nranks) + comm_nranks) % comm_nranks;
       int global_peer = getGlobalRank(handle, grid_desc, comm_axis, comm_peer);
       *shifted_rank = global_peer;
     }
