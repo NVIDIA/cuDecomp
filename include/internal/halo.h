@@ -113,6 +113,10 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
   if (neighbors[0] == handle->rank && neighbors[1] == handle->rank) {
     // Single rank in this dimension and periodic. Use periodic self-copy case.
     c = 0;
+    // The self-copy fills the halo regions from the pencil interior, so the halo cannot be wider than the interior.
+    if (halo_extents[dim] > shape_g_h[dim] - 2 * halo_extents[dim]) {
+      THROW_INVALID_USAGE("halo is wider than the periodic domain extent, this is not currently supported.");
+    }
   } else if (neighbors[0] == -1 && neighbors[1] == -1) {
     // Single rank in this dimension and not periodic. Return.
 #if !CUDECOMP_BUILD_CPU_ONLY
