@@ -1527,6 +1527,43 @@ TEST_F(ApiHaloTest, RejectsInvalidArguments) {
                                  kHaloExtents.data(), kHaloPeriods.data(), 0, nullptr, 0));
 }
 
+TEST_F(ApiHaloTest, RejectsPeriodicHaloWiderThanSingleRankExtent) {
+  auto config = distributedConfig();
+  config.gdims[0] = 2;
+  cudecompGridDesc_t grid_desc = nullptr;
+  CHECK_CUDECOMP_GLOBAL(active_comm_, cudecompGridDescCreate(handle_, &grid_desc, &config, nullptr));
+  cudecomp_test::gridDescGuard grid_desc_guard(handle_, grid_desc);
+
+  // X-pencils are not decomposed along X, so a periodic X halo update copies from the interior of the same pencil.
+  // A halo wider than that interior cannot be filled from it.
+  const std::array<int32_t, 3> wide_halo_extents{3, 0, 0};
+  const std::array<int32_t, 3> full_halo_extents{2, 0, 0};
+  const std::array<bool, 3> halo_periods{true, false, false};
+
+  cudecompPencilInfo_t pinfo;
+  CHECK_CUDECOMP_GLOBAL(active_comm_,
+                        cudecompGetPencilInfo(handle_, grid_desc, &pinfo, 0, wide_halo_extents.data(), nullptr));
+  int64_t workspace_size = 0;
+  CHECK_CUDECOMP_GLOBAL(active_comm_,
+                        cudecompGetHaloWorkspaceSize(handle_, grid_desc, 0, wide_halo_extents.data(), &workspace_size));
+
+  void* input = nullptr;
+  const cudecompResult_t input_result = cudecompMalloc(handle_, grid_desc, &input, pinfo.size * sizeof(float));
+  cudecomp_test::cudecompBufferGuard input_guard(handle_, grid_desc, input);
+  CHECK_CUDECOMP_GLOBAL(active_comm_, input_result);
+  void* work = nullptr;
+  const cudecompResult_t work_result = cudecompMalloc(handle_, grid_desc, &work, workspace_size * sizeof(float));
+  cudecomp_test::cudecompBufferGuard work_guard(handle_, grid_desc, work);
+  CHECK_CUDECOMP_GLOBAL(active_comm_, work_result);
+
+  EXPECT_EQ(CUDECOMP_RESULT_INVALID_USAGE,
+            cudecompUpdateHalosX(handle_, grid_desc, input, work, CUDECOMP_FLOAT, wide_halo_extents.data(),
+                                 halo_periods.data(), 0, nullptr, 0));
+  EXPECT_EQ(CUDECOMP_RESULT_SUCCESS,
+            cudecompUpdateHalosX(handle_, grid_desc, input, work, CUDECOMP_FLOAT, full_halo_extents.data(),
+                                 halo_periods.data(), 0, nullptr, 0));
+}
+
 TEST_F(ApiHaloTest, RejectsEmptyPencilDecomposition) {
   auto config = emptyPencilConfig();
   cudecompGridDesc_t grid_desc = nullptr;
