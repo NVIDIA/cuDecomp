@@ -1433,6 +1433,25 @@ TEST_F(ApiGetShiftedRankTest, HandlesAxisAlignedAndZeroDisplacements) {
   EXPECT_EQ(-1, shifted_rank);
 }
 
+TEST_F(ApiGetShiftedRankTest, WrapsPeriodicDisplacementsLargerThanProcessGrid) {
+  auto config = distributedConfig();
+  cudecompGridDesc_t grid_desc = nullptr;
+  CHECK_CUDECOMP_GLOBAL(active_comm_, cudecompGridDescCreate(handle_, &grid_desc, &config, nullptr));
+  cudecomp_test::gridDescGuard grid_desc_guard(handle_, grid_desc);
+
+  // With two ranks per process grid dimension, odd displacements select the other rank and even displacements
+  // select the calling rank, for either sign.
+  expectShiftedRanks(active_comm_, handle_, grid_desc, 0, 1, 3, true, {2, 3, 0, 1});
+  expectShiftedRanks(active_comm_, handle_, grid_desc, 0, 1, -3, true, {2, 3, 0, 1});
+  expectShiftedRanks(active_comm_, handle_, grid_desc, 0, 1, -5, true, {2, 3, 0, 1});
+  expectShiftedRanks(active_comm_, handle_, grid_desc, 0, 1, -4, true, {0, 1, 2, 3});
+
+  expectShiftedRanks(active_comm_, handle_, grid_desc, 0, 2, 3, true, {1, 0, 3, 2});
+  expectShiftedRanks(active_comm_, handle_, grid_desc, 0, 2, -3, true, {1, 0, 3, 2});
+  expectShiftedRanks(active_comm_, handle_, grid_desc, 0, 2, -5, true, {1, 0, 3, 2});
+  expectShiftedRanks(active_comm_, handle_, grid_desc, 0, 2, -4, true, {0, 1, 2, 3});
+}
+
 TEST_F(ApiGetShiftedRankTest, RejectsInvalidArguments) {
   auto config = distributedConfig();
   cudecompGridDesc_t grid_desc = nullptr;
