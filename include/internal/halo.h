@@ -192,9 +192,9 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
     memcpy_params.dest[1] = input + getPencilPtrOffset(pinfo_h_p, lx);
 
     for (int i = 0; i < 2; ++i) {
-      memcpy_params.src_strides[0][i] = pinfo_h_p.shape[0] * pinfo_h_p.shape[1];
+      memcpy_params.src_strides[0][i] = static_cast<int64_t>(pinfo_h_p.shape[0]) * pinfo_h_p.shape[1];
       memcpy_params.src_strides[1][i] = pinfo_h_p.shape[0];
-      memcpy_params.dest_strides[0][i] = pinfo_h_p.shape[0] * pinfo_h_p.shape[1];
+      memcpy_params.dest_strides[0][i] = static_cast<int64_t>(pinfo_h_p.shape[0]) * pinfo_h_p.shape[1];
       memcpy_params.dest_strides[1][i] = pinfo_h_p.shape[0];
       memcpy_params.extents[0][i] = (dim == pinfo_h.order[2]) ? halo_extents[dim] : pinfo_h.shape[2];
       memcpy_params.extents[1][i] = (dim == pinfo_h.order[1]) ? halo_extents[dim] : pinfo_h.shape[1];
@@ -210,7 +210,7 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
     cudecompBatchedD2DMemcpy3DParams<T> memcpy_params;
     std::array<int32_t, 3> lx{};
 
-    int64_t halo_size = shape_g_h[(dim + 1) % 3] * shape_g_h[(dim + 2) % 3] * halo_extents[dim];
+    int64_t halo_size = static_cast<int64_t>(shape_g_h[(dim + 1) % 3]) * shape_g_h[(dim + 2) % 3] * halo_extents[dim];
     T* send_buff = work;
     T* recv_buff = work + 2 * alignCountToBytes(halo_size, CUDECOMP_WORKSPACE_ALIGN_BYTES);
 
@@ -226,7 +226,7 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
     memcpy_params.dest[1] = send_buff + alignCountToBytes(halo_size, CUDECOMP_WORKSPACE_ALIGN_BYTES);
 
     for (int i = 0; i < 2; ++i) {
-      memcpy_params.src_strides[0][i] = pinfo_h_p.shape[0] * pinfo_h_p.shape[1];
+      memcpy_params.src_strides[0][i] = static_cast<int64_t>(pinfo_h_p.shape[0]) * pinfo_h_p.shape[1];
       memcpy_params.src_strides[1][i] = pinfo_h_p.shape[0];
       memcpy_params.dest_strides[1][i] = (dim == pinfo_h.order[0]) ? halo_extents[dim] : pinfo_h.shape[0];
       memcpy_params.dest_strides[0][i] =
@@ -265,7 +265,7 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
     memcpy_params.dest[1] = input + getPencilPtrOffset(pinfo_h_p, lx);
 
     for (int i = 0; i < 2; ++i) {
-      memcpy_params.dest_strides[0][i] = pinfo_h_p.shape[0] * pinfo_h_p.shape[1];
+      memcpy_params.dest_strides[0][i] = static_cast<int64_t>(pinfo_h_p.shape[0]) * pinfo_h_p.shape[1];
       memcpy_params.dest_strides[1][i] = pinfo_h_p.shape[0];
       memcpy_params.src_strides[1][i] = (dim == pinfo_h.order[0]) ? halo_extents[dim] : pinfo_h.shape[0];
       memcpy_params.src_strides[0][i] =
@@ -294,7 +294,7 @@ void cudecompUpdateHalos_(int ax, const cudecompHandle_t handle, const cudecompG
     // Contiguous (direct send/recv)
     std::array<int32_t, 3> lx{};
 
-    int64_t halo_size = shape_g_h[(dim + 1) % 3] * shape_g_h[(dim + 2) % 3] * halo_extents[dim];
+    int64_t halo_size = static_cast<int64_t>(shape_g_h[(dim + 1) % 3]) * shape_g_h[(dim + 2) % 3] * halo_extents[dim];
     std::array<comm_count_t, 2> counts{static_cast<comm_count_t>(halo_size), static_cast<comm_count_t>(halo_size)};
     std::array<size_t, 2> send_offsets;
     std::array<size_t, 2> recv_offsets;
