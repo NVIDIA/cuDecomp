@@ -120,7 +120,7 @@ static void localPermute(const cudecompHandle_t handle, const std::array<int64_t
   // Workaround for an out-of-bounds host write bug in cuTENSOR triggered when the
   // total number of tensor elements exceeds INT32_MAX/2. We split the tensor so each
   // cuTENSOR call stays below that limit.
-  static constexpr int64_t CUTENSOR_EXTENT_LIMIT = (int64_t)std::numeric_limits<int32_t>::max() / 2;
+  static constexpr int64_t CUTENSOR_EXTENT_LIMIT = static_cast<int64_t>(std::numeric_limits<int32_t>::max()) / 2;
   int64_t total_elems = extent_in[0] * extent_in[1] * extent_in[2];
   if (handle->cutensor_needs_permute_chunking && total_elems > CUTENSOR_EXTENT_LIMIT) {
 
