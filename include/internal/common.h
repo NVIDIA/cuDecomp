@@ -429,8 +429,11 @@ static inline int64_t getGlobalMaxPencilSize(const cudecompHandle_t handle, cons
 
 // Helper function to return pointer offset at local index lx (in global order)
 static size_t getPencilPtrOffset(const cudecompPencilInfo_t& pinfo, const std::array<int32_t, 3>& lx) {
-  return lx[pinfo.order[0]] + lx[pinfo.order[1]] * pinfo.shape[0] +
-         lx[pinfo.order[2]] * pinfo.shape[0] * pinfo.shape[1];
+  // Use 64-bit arithmetic to avoid int32 overflow for large pencils
+  return static_cast<size_t>(lx[pinfo.order[0]]) +
+         static_cast<size_t>(lx[pinfo.order[1]]) * static_cast<size_t>(pinfo.shape[0]) +
+         static_cast<size_t>(lx[pinfo.order[2]]) * static_cast<size_t>(pinfo.shape[0]) *
+             static_cast<size_t>(pinfo.shape[1]);
 }
 
 // Helper function to return shape in global order

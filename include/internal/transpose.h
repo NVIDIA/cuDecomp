@@ -120,7 +120,7 @@ static void localPermute(const cudecompHandle_t handle, const std::array<int64_t
   // Workaround for an out-of-bounds host write bug in cuTENSOR triggered when the
   // total number of tensor elements exceeds INT32_MAX/2. We split the tensor so each
   // cuTENSOR call stays below that limit.
-  static constexpr int64_t CUTENSOR_EXTENT_LIMIT = (int64_t)std::numeric_limits<int32_t>::max() / 2;
+  static constexpr int64_t CUTENSOR_EXTENT_LIMIT = static_cast<int64_t>(std::numeric_limits<int32_t>::max()) / 2;
   int64_t total_elems = extent_in[0] * extent_in[1] * extent_in[2];
   if (handle->cutensor_needs_permute_chunking && total_elems > CUTENSOR_EXTENT_LIMIT) {
 
@@ -451,10 +451,10 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
   for (int i = 0; i < splits_a.size(); ++i) {
     send_offsets[i] = offsets_a[i] * shape_g_a[ax_b] * shape_g_a[ax_c];
     recv_offsets[i] = offsets_b[i] * shape_g_b[ax_a] * shape_g_b[ax_c];
-    send_counts[i] = splits_a[i] * shape_g_a[ax_b] * shape_g_a[ax_c];
-    recv_counts[i] = splits_b[i] * shape_g_b[ax_a] * shape_g_b[ax_c];
+    send_counts[i] = static_cast<int64_t>(splits_a[i]) * shape_g_a[ax_b] * shape_g_a[ax_c];
+    recv_counts[i] = static_cast<int64_t>(splits_b[i]) * shape_g_b[ax_a] * shape_g_b[ax_c];
 
-    recv_offsets_nvshmem[i] = rank_offset * shape_g_a[ax_c] * splits_a[i];
+    recv_offsets_nvshmem[i] = rank_offset * static_cast<int64_t>(shape_g_a[ax_c]) * splits_a[i];
   }
 
   bool data_transposed = false;
@@ -623,7 +623,7 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
 
           memcpy_params.src[memcpy_count] = src;
           memcpy_params.dest[memcpy_count] = dst;
-          memcpy_params.src_strides[0][memcpy_count] = pinfo_a_h.shape[0] * pinfo_a_h.shape[1];
+          memcpy_params.src_strides[0][memcpy_count] = static_cast<int64_t>(pinfo_a_h.shape[0]) * pinfo_a_h.shape[1];
           memcpy_params.src_strides[1][memcpy_count] = pinfo_a_h.shape[0];
           if (!direct_pack) {
             memcpy_params.dest_strides[1][memcpy_count] =
@@ -632,7 +632,7 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
                 memcpy_params.dest_strides[1][memcpy_count] *
                 ((ax_a == pinfo_a.order[1]) ? splits_a[dst_rank] : pinfo_a.shape[1]);
           } else {
-            memcpy_params.dest_strides[0][memcpy_count] = pinfo_b_h.shape[0] * pinfo_b_h.shape[1];
+            memcpy_params.dest_strides[0][memcpy_count] = static_cast<int64_t>(pinfo_b_h.shape[0]) * pinfo_b_h.shape[1];
             memcpy_params.dest_strides[1][memcpy_count] = pinfo_b_h.shape[0];
           }
           memcpy_params.extents[2][memcpy_count] = (ax_a == pinfo_a.order[0]) ? splits_a[dst_rank] : pinfo_a.shape[0];
@@ -932,7 +932,7 @@ static void cudecompTranspose_(int ax, int dir, const cudecompHandle_t handle, c
         memcpy_params.src_strides[0][memcpy_count] =
             memcpy_params.src_strides[1][memcpy_count] *
             ((ax_b == pinfo_b.order[1]) ? splits_b[src_rank] : pinfo_b.shape[1]);
-        memcpy_params.dest_strides[0][memcpy_count] = pinfo_b_h.shape[0] * pinfo_b_h.shape[1];
+        memcpy_params.dest_strides[0][memcpy_count] = static_cast<int64_t>(pinfo_b_h.shape[0]) * pinfo_b_h.shape[1];
         memcpy_params.dest_strides[1][memcpy_count] = pinfo_b_h.shape[0];
         memcpy_params.extents[2][memcpy_count] = (ax_b == pinfo_b.order[0]) ? splits_b[src_rank] : pinfo_b.shape[0];
         memcpy_params.extents[1][memcpy_count] = (ax_b == pinfo_b.order[1]) ? splits_b[src_rank] : pinfo_b.shape[1];
