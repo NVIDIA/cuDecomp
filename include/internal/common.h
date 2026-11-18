@@ -160,7 +160,7 @@ struct cudecompHandle {
 #if CUTENSOR_MAJOR >= 2
   cutensorHandle_t cutensor_handle = nullptr;            // cuTENSOR handle;
   cutensorPlanPreference_t cutensor_plan_pref = nullptr; // cuTENSOR plan preference;
-  bool cutensor_needs_permute_chunking = false;          // Flag to enable large tensor workaround
+  bool cutensor_needs_permute_chunking = false;          // Flag to always chunk large permutes (cuTENSOR 2.3-2.5 bug)
 #else
   cutensorHandle_t cutensor_handle; // cuTENSOR handle;
 #endif
